@@ -32,6 +32,12 @@ export const Header = () => {
           <Link to="/projects" className="text-foreground hover:text-primary transition-colors">
             Projets
           </Link>
+          <Link to="/project-tracking" className="text-foreground hover:text-primary transition-colors">
+            Suivi
+          </Link>
+          <Link to="/financing" className="text-foreground hover:text-primary transition-colors">
+            Financement
+          </Link>
           <Link to="/pricing" className="text-foreground hover:text-primary transition-colors">
             Tarifs
           </Link>

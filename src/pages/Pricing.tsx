@@ -84,8 +84,7 @@ export default function Pricing() {
 
   const serviceOptions = [
     { id: 1, name: 'Score seul', price: 2.9 },
-    { id: 2, name: 'Score + Recommandations', price: 4.9 },
-    { id: 3, name: 'Score + Reco + CCTP', price: 5.9 }
+    { id: 2, name: 'Score + Recommandations', price: 4.9 }
   ];
 
   const limitOptions = [
