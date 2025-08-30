@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
-import { CheckCircle, AlertTriangle, Lightbulb, TrendingUp, Download, Eye, ArrowLeft } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Lightbulb, TrendingUp, Download, Eye, ArrowLeft, MessageSquare } from 'lucide-react';
 
 export default function Results() {
   const { currentProject } = useApp();
@@ -134,6 +134,10 @@ export default function Results() {
                       <Eye className="w-4 h-4 mr-2" />
                       Voir tous mes projets
                     </Button>
+                    <Button variant="outline" className="w-full" onClick={() => navigate('/results-interactive')}>
+                      <MessageSquare className="w-4 h-4 mr-2" />
+                      Accompagnement personnalisé
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -252,6 +256,52 @@ export default function Results() {
                   </CardContent>
                 </Card>
               )}
+
+              {/* Actions post-analyse */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Actions disponibles</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <Button 
+                      variant="outline" 
+                      className="h-auto p-4 flex flex-col items-center gap-2"
+                      onClick={() => {
+                        // Logique pour accepter le devis
+                        console.log('Accepter le devis');
+                      }}
+                    >
+                      <CheckCircle className="w-6 h-6 text-success" />
+                      <span>Accepter le devis</span>
+                    </Button>
+                    
+                    <Button 
+                      variant="outline" 
+                      className="h-auto p-4 flex flex-col items-center gap-2"
+                      onClick={() => {
+                        // Logique pour négocier
+                        console.log('Négocier le devis');
+                      }}
+                    >
+                      <Lightbulb className="w-6 h-6 text-warning" />
+                      <span>Négocier</span>
+                    </Button>
+                    
+                    <Button 
+                      variant="outline" 
+                      className="h-auto p-4 flex flex-col items-center gap-2"
+                      onClick={() => {
+                        // Logique pour refuser
+                        console.log('Refuser le devis');
+                      }}
+                    >
+                      <AlertTriangle className="w-6 h-6 text-destructive" />
+                      <span>Refuser</span>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>

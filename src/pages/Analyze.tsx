@@ -29,7 +29,10 @@ export default function Analyze() {
     budget: '',
     startDate: '',
     endDate: '',
-    description: ''
+    description: '',
+    surface: '',
+    urgency: '',
+    constraints: ''
   });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
@@ -319,6 +322,14 @@ export default function Analyze() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
+                <div className="mb-6 p-4 bg-info/10 border border-info/20 rounded-lg">
+                  <h4 className="font-semibold text-info mb-2">Analyse de cohérence projet/devis</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Ces informations permettent à notre IA de vérifier la cohérence entre vos besoins, 
+                    le projet proposé et le prix du devis pour détecter d'éventuelles incohérences.
+                  </p>
+                </div>
+
                 <div className="grid md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="project-name">Nom du projet *</Label>
@@ -350,13 +361,13 @@ export default function Analyze() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Budget estimé</Label>
+                    <Label>Budget estimé prévu</Label>
                     <Select
                       value={projectData.budget}
                       onValueChange={(value) => setProjectData({...projectData, budget: value})}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Fourchette de budget" />
+                        <SelectValue placeholder="Votre budget initial" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="0-5000">Moins de 5 000 €</SelectItem>
@@ -369,21 +380,60 @@ export default function Analyze() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Délai souhaité</Label>
+                    <Label>Surface concernée (m²)</Label>
+                    <Input
+                      type="number"
+                      placeholder="Ex: 15"
+                      value={projectData.surface || ''}
+                      onChange={(e) => setProjectData({...projectData, surface: e.target.value})}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Délai souhaité de début</Label>
                     <Input
                       type="date"
                       value={projectData.startDate}
                       onChange={(e) => setProjectData({...projectData, startDate: e.target.value})}
                     />
                   </div>
+
+                  <div className="space-y-2">
+                    <Label>Urgence du projet</Label>
+                    <Select
+                      value={projectData.urgency || ''}
+                      onValueChange={(value) => setProjectData({...projectData, urgency: value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Niveau d'urgence" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="faible">Pas pressé</SelectItem>
+                        <SelectItem value="moyenne">Dans les 3-6 mois</SelectItem>
+                        <SelectItem value="forte">Urgent (&lt; 3 mois)</SelectItem>
+                        <SelectItem value="critique">Très urgent (&lt; 1 mois)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Description complémentaire</Label>
+                  <Label>Description de vos besoins</Label>
                   <Textarea
-                    placeholder="Détails supplémentaires sur votre projet..."
+                    placeholder="Décrivez précisément vos attentes et besoins pour ce projet..."
                     value={projectData.description}
                     onChange={(e) => setProjectData({...projectData, description: e.target.value})}
+                    rows={4}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Contraintes particulières</Label>
+                  <Textarea
+                    placeholder="Contraintes techniques, budgétaires, délais spécifiques..."
+                    value={projectData.constraints || ''}
+                    onChange={(e) => setProjectData({...projectData, constraints: e.target.value})}
+                    rows={3}
                   />
                 </div>
 
