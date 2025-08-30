@@ -8,7 +8,8 @@ import { Header } from '@/components/Header';
 import { ChatAI } from '@/components/ChatAI';
 import { PaymentManager } from '@/components/PaymentManager';
 import { ProjectComparison } from '@/components/ProjectComparison';
-import { ArrowLeft, MessageSquare, CreditCard, BarChart3 } from 'lucide-react';
+import { CCTPGenerator } from '@/components/CCTPGenerator';
+import { ArrowLeft, MessageSquare, CreditCard, BarChart3, FileText } from 'lucide-react';
 
 export default function ResultsInteractive() {
   const { currentProject, userType } = useApp();
@@ -37,15 +38,19 @@ export default function ResultsInteractive() {
               Accompagnement personnalisé
             </h1>
             <p className="text-lg text-muted-foreground">
-              Posez vos questions, gérez les paiements et comparez vos devis
+              Posez vos questions, gérez les paiements, comparez vos devis et générez votre CCTP
             </p>
           </div>
 
           <Tabs defaultValue="chat" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="chat" className="flex items-center gap-2">
                 <MessageSquare className="w-4 h-4" />
                 Assistant IA
+              </TabsTrigger>
+              <TabsTrigger value="cctp" className="flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                CCTP
               </TabsTrigger>
               <TabsTrigger value="payments" className="flex items-center gap-2">
                 <CreditCard className="w-4 h-4" />
@@ -59,6 +64,13 @@ export default function ResultsInteractive() {
 
             <TabsContent value="chat">
               <ChatAI 
+                projectId={currentProject.id} 
+                analysisResult={currentProject.analysisResult} 
+              />
+            </TabsContent>
+
+            <TabsContent value="cctp">
+              <CCTPGenerator 
                 projectId={currentProject.id} 
                 analysisResult={currentProject.analysisResult} 
               />
