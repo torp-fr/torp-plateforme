@@ -32,9 +32,11 @@ export const Hero = () => {
                   Analyser un devis
                 </Button>
               </Link>
-              <Button variant="outline" size="lg" className="border-white text-white hover:bg-white/10">
-                Voir la démo
-              </Button>
+              <Link to="/demo">
+                <Button variant="outline" size="lg" className="border-white text-white hover:bg-white/10">
+                  Voir la démo
+                </Button>
+              </Link>
             </div>
 
             <div className="grid sm:grid-cols-3 gap-4 pt-8">

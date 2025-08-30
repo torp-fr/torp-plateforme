@@ -12,6 +12,7 @@ import ResultsInteractive from "./pages/ResultsInteractive";
 import DashboardPage from "./pages/DashboardPage";
 import Projects from "./pages/Projects";
 import Pricing from "./pages/Pricing";
+import Demo from "./pages/Demo";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/pricing" element={<Pricing />} />
+            <Route path="/demo" element={<Demo />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
