@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import torpLogo from "@/assets/torp-logo-red.png";
 
 export const Header = () => {
@@ -27,12 +28,16 @@ export const Header = () => {
           </a>
         </nav>
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm">
-            Connexion
-          </Button>
-          <Button variant="hero" size="sm">
-            Essai gratuit
-          </Button>
+          <Link to="/login">
+            <Button variant="outline" size="sm">
+              Connexion
+            </Button>
+          </Link>
+          <Link to="/analyze">
+            <Button variant="hero" size="sm">
+              Analyser un devis
+            </Button>
+          </Link>
         </div>
       </div>
     </header>

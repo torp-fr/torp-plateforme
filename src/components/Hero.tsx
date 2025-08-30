@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Upload, BarChart3, Shield, CheckCircle } from "lucide-react";
+import { Link } from "react-router-dom";
 import heroImage from "@/assets/hero-image.jpg";
 
 export const Hero = () => {
@@ -25,10 +26,12 @@ export const Hero = () => {
             </div>
             
             <div className="flex flex-col sm:flex-row gap-4">
-              <Button variant="secondary" size="lg" className="bg-white text-primary hover:bg-white/90">
-                <Upload className="mr-2 h-5 w-5" />
-                Analyser un devis
-              </Button>
+              <Link to="/analyze">
+                <Button variant="secondary" size="lg" className="bg-white text-primary hover:bg-white/90">
+                  <Upload className="mr-2 h-5 w-5" />
+                  Analyser un devis
+                </Button>
+              </Link>
               <Button variant="outline" size="lg" className="border-white text-white hover:bg-white/10">
                 Voir la démo
               </Button>
@@ -40,7 +43,7 @@ export const Hero = () => {
                 <div className="text-sm text-white/80">Notation claire</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold">24h</div>
+                <div className="text-3xl font-bold">3min</div>
                 <div className="text-sm text-white/80">Analyse rapide</div>
               </div>
               <div className="text-center">
