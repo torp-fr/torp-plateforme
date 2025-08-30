@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Header } from '@/components/Header';
-import { Check, Star, ArrowLeft, Zap, Shield, Headphones, BarChart3, Users, Building } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { BackButton } from '@/components/BackButton';
+import { Check, Star, Zap, Shield, Headphones, BarChart3, Users, Building } from 'lucide-react';
 
 export default function Pricing() {
   const [isAnnual, setIsAnnual] = useState(false);
@@ -136,10 +136,9 @@ export default function Pricing() {
         <div className="max-w-7xl mx-auto">
           {/* En-tête */}
           <div className="text-center mb-12">
-            <Link to="/dashboard" className="inline-flex items-center text-muted-foreground hover:text-foreground mb-6">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Retour au dashboard
-            </Link>
+            <div className="mb-6">
+              <BackButton to="/dashboard" label="Dashboard" />
+            </div>
             
             <h1 className="text-4xl font-bold text-foreground mb-4">
               Tarifs transparents pour tous

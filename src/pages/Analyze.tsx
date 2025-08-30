@@ -10,6 +10,7 @@ import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, FileText, Clock, Shield, CheckCircle, Home, Zap, Droplet, Paintbrush, Download } from 'lucide-react';
 import { Header } from '@/components/Header';
+import { BackButton } from '@/components/BackButton';
 
 const projectTypes = [
   { id: 'plomberie', label: 'Plomberie', icon: Droplet },
@@ -205,13 +206,16 @@ export default function Analyze() {
       
       <div className="container mx-auto px-4 py-12">
         <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-12">
-            <h1 className="text-4xl font-bold text-foreground mb-4">
-              Analyser votre devis BTP
-            </h1>
-            <p className="text-xl text-muted-foreground">
-              Obtenez un score de confiance en quelques clics
-            </p>
+          <div className="flex items-center gap-4 mb-8">
+            <BackButton />
+            <div>
+              <h1 className="text-4xl font-bold text-foreground">
+                Analyser votre devis BTP
+              </h1>
+              <p className="text-xl text-muted-foreground">
+                Obtenez un score de confiance en quelques clics
+              </p>
+            </div>
           </div>
 
           {step === 1 && (

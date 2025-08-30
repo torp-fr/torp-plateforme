@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
-import { FileText, TrendingUp, PiggyBank, Hammer, Eye, Plus, BarChart3, Users, Building, Clock } from 'lucide-react';
+import { BackButton } from '@/components/BackButton';
+import { FileText, TrendingUp, PiggyBank, Hammer, Eye, Plus, BarChart3, Users, Building, Clock, Activity, Target, Calendar } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function DashboardPage() {
@@ -47,14 +48,17 @@ export default function DashboardPage() {
         <div className="max-w-7xl mx-auto">
           {/* En-tête avec salutation */}
           <div className="flex justify-between items-start mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">
-                {userType === 'particulier' ? 'Tableau de bord' : 'Espace Professionnel'}
-              </h1>
-              <p className="text-muted-foreground mt-2">
-                {user ? `Bonjour ${user.name}` : 'Bienvenue sur TORP'}
-                {userType === 'entreprise' && user?.company && ` - ${user.company}`}
-              </p>
+            <div className="flex items-center gap-4">
+              <BackButton />
+              <div>
+                <h1 className="text-3xl font-bold text-foreground">
+                  {userType === 'particulier' ? 'Tableau de bord' : 'Espace Professionnel'}
+                </h1>
+                <p className="text-muted-foreground mt-2">
+                  {user ? `Bonjour ${user.name}` : 'Bienvenue sur TORP'}
+                  {userType === 'entreprise' && user?.company && ` - ${user.company}`}
+                </p>
+              </div>
             </div>
             <Link to="/analyze">
               <Button size="lg">
@@ -66,87 +70,135 @@ export default function DashboardPage() {
 
           {/* Statistiques principales */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Devis analysés</p>
-                    <p className="text-2xl font-bold text-foreground">{projects.length}</p>
-                  </div>
-                  <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                    <FileText className="w-6 h-6 text-primary" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            {/* Métriques spécifiques pour entreprises */}
+            {userType === 'entreprise' && (
+              <>
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Chiffre d'affaires</p>
+                        <p className="text-2xl font-bold text-foreground">€142.5K</p>
+                        <p className="text-xs text-success">+12% ce mois</p>
+                      </div>
+                      <div className="w-12 h-12 bg-success/10 rounded-full flex items-center justify-center">
+                        <TrendingUp className="w-6 h-6 text-success" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Score moyen</p>
-                    <p className={`text-2xl font-bold ${getScoreColor(avgScore)}`}>
-                      {avgScore > 0 ? `${avgScore}/100` : 'N/A'}
-                    </p>
-                  </div>
-                  <div className="w-12 h-12 bg-success/10 rounded-full flex items-center justify-center">
-                    <TrendingUp className="w-6 h-6 text-success" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Taux conversion</p>
+                        <p className="text-2xl font-bold text-foreground">73%</p>
+                        <p className="text-xs text-success">+5% ce mois</p>
+                      </div>
+                      <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
+                        <Target className="w-6 h-6 text-primary" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
-            {userType === 'particulier' ? (
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Économies détectées</p>
-                      <p className="text-2xl font-bold text-primary">{totalSavings}€</p>
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Délai moyen réponse</p>
+                        <p className="text-2xl font-bold text-foreground">2.3j</p>
+                        <p className="text-xs text-warning">Objectif: 2j</p>
+                      </div>
+                      <div className="w-12 h-12 bg-warning/10 rounded-full flex items-center justify-center">
+                        <Clock className="w-6 h-6 text-warning" />
+                      </div>
                     </div>
-                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                      <PiggyBank className="w-6 h-6 text-primary" />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Projets actifs</p>
+                        <p className="text-2xl font-bold text-foreground">18</p>
+                        <p className="text-xs text-info">6 en cours</p>
+                      </div>
+                      <div className="w-12 h-12 bg-info/10 rounded-full flex items-center justify-center">
+                        <Activity className="w-6 h-6 text-info" />
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Clients analysés</p>
-                      <p className="text-2xl font-bold text-foreground">47</p>
-                    </div>
-                    <div className="w-12 h-12 bg-info/10 rounded-full flex items-center justify-center">
-                      <Users className="w-6 h-6 text-info" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </>
             )}
 
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      {userType === 'particulier' ? 'Projets en cours' : 'Devis en attente'}
-                    </p>
-                    <p className="text-2xl font-bold text-foreground">
-                      {projects.filter(p => p.status === 'analyzing' || p.status === 'draft').length}
-                    </p>
-                  </div>
-                  <div className="w-12 h-12 bg-warning/10 rounded-full flex items-center justify-center">
-                    {userType === 'particulier' ? (
-                      <Hammer className="w-6 h-6 text-warning" />
-                    ) : (
-                      <Clock className="w-6 h-6 text-warning" />
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            {/* Métriques générales pour particuliers */}
+            {userType === 'particulier' && (
+              <>
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Devis analysés</p>
+                        <p className="text-2xl font-bold text-foreground">{projects.length}</p>
+                      </div>
+                      <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
+                        <FileText className="w-6 h-6 text-primary" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Score moyen</p>
+                        <p className={`text-2xl font-bold ${getScoreColor(avgScore)}`}>
+                          {avgScore > 0 ? `${avgScore}/100` : 'N/A'}
+                        </p>
+                      </div>
+                      <div className="w-12 h-12 bg-success/10 rounded-full flex items-center justify-center">
+                        <TrendingUp className="w-6 h-6 text-success" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Économies détectées</p>
+                        <p className="text-2xl font-bold text-primary">{totalSavings}€</p>
+                      </div>
+                      <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
+                        <PiggyBank className="w-6 h-6 text-primary" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Projets en cours</p>
+                        <p className="text-2xl font-bold text-foreground">
+                          {projects.filter(p => p.status === 'analyzing' || p.status === 'draft').length}
+                        </p>
+                      </div>
+                      <div className="w-12 h-12 bg-warning/10 rounded-full flex items-center justify-center">
+                        <Hammer className="w-6 h-6 text-warning" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </div>
 
           <div className="grid lg:grid-cols-3 gap-8">

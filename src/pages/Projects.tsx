@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
-import { FileText, Search, Filter, Eye, Download, Calendar, MapPin, Plus, ArrowLeft } from 'lucide-react';
+import { BackButton } from '@/components/BackButton';
+import { FileText, Search, Filter, Eye, Download, Calendar, MapPin, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function Projects() {
@@ -61,12 +62,7 @@ export default function Projects() {
           {/* En-tête */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
             <div className="flex items-center gap-4">
-              <Link to="/dashboard">
-                <Button variant="outline" size="sm">
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Dashboard
-                </Button>
-              </Link>
+              <BackButton to="/dashboard" label="Dashboard" />
               <div>
                 <h1 className="text-3xl font-bold text-foreground">
                   {userType === 'particulier' ? 'Mes projets' : 'Projets clients'}
