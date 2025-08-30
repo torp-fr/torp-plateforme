@@ -13,6 +13,8 @@ import DashboardPage from "./pages/DashboardPage";
 import Projects from "./pages/Projects";
 import Pricing from "./pages/Pricing";
 import Demo from "./pages/Demo";
+import ProjectTracking from "./pages/ProjectTracking";
+import FinancingPlatform from "./pages/FinancingPlatform";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +36,8 @@ const App = () => (
             <Route path="/projects" element={<Projects />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/demo" element={<Demo />} />
+            <Route path="/project-tracking" element={<ProjectTracking />} />
+            <Route path="/financing" element={<FinancingPlatform />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

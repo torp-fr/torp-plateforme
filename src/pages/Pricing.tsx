@@ -14,19 +14,19 @@ export default function Pricing() {
   const particularPacks = [
     {
       name: 'Pack Sécurité',
-      description: 'Est-ce que je me fais arnaquer ?',
+      description: 'Première évaluation rapide',
       price: 9.90,
       period: '/ devis',
       features: [
-        'Réponse immédiate : "Arnaque détectée" ou "Semble fiable"',
-        'Score de confiance A-E',
+        'Score de confiance A-E instantané',
         '3 alertes principales identifiées',
         'Vérification SIREN/SIRET & adresse entreprise',
+        'Détection des risques majeurs',
         'Export PDF inclus',
       ],
       buttonText: 'Vérifier maintenant',
       popular: false,
-      ideal: 'Première évaluation, détection d\'arnaques'
+      ideal: 'Première évaluation, détection rapide des risques'
     },
     {
       name: 'Pack Analyse',
@@ -85,7 +85,7 @@ export default function Pricing() {
   const serviceOptions = [
     { id: 1, name: 'Score seul', price: 2.9 },
     { id: 2, name: 'Score + Recommandations', price: 4.9 },
-    { id: 3, name: 'Score + Reco + Audit complet', price: 5.9 }
+    { id: 3, name: 'Score + Reco + CCTP', price: 5.9 }
   ];
 
   const limitOptions = [
