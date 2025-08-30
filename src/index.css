@@ -8,35 +8,68 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* TORP Professional Design System */
+    --background: 248 250% 99%;
+    --foreground: 215 25% 27%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 215 25% 27%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 215 25% 27%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Primary: Professional Blue */
+    --primary: 214 84% 56%;
+    --primary-foreground: 0 0% 100%;
+    --primary-light: 214 84% 96%;
+    --primary-dark: 214 84% 45%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Secondary: Neutral Gray */
+    --secondary: 210 11% 96%;
+    --secondary-foreground: 215 25% 27%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 210 11% 96%;
+    --muted-foreground: 215 16% 47%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 210 11% 96%;
+    --accent-foreground: 215 25% 27%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Success: Professional Green */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --success-light: 142 76% 96%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    /* Warning: Professional Orange */
+    --warning: 25 95% 53%;
+    --warning-foreground: 0 0% 100%;
+    --warning-light: 25 95% 96%;
 
-    --radius: 0.5rem;
+    /* Destructive: Professional Red */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 214 84% 56%;
+
+    --radius: 0.75rem;
+
+    /* TORP Specific Colors */
+    --grade-a: 142 76% 36%;
+    --grade-b: 142 76% 45%;
+    --grade-c: 45 93% 47%;
+    --grade-d: 25 95% 53%;
+    --grade-e: 0 84% 60%;
+
+    /* Gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(214 84% 56%), hsl(214 84% 45%));
+    --gradient-card: linear-gradient(135deg, hsl(214 84% 96%), hsl(0 0% 100%));
+    --gradient-success: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 45%));
+
+    /* Shadows */
+    --shadow-soft: 0 2px 8px hsl(214 84% 56% / 0.08);
+    --shadow-medium: 0 4px 16px hsl(214 84% 56% / 0.12);
+    --shadow-strong: 0 8px 32px hsl(214 84% 56% / 0.16);
 
     --sidebar-background: 0 0% 98%;
 
