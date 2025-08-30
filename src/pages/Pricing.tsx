@@ -11,74 +11,65 @@ export default function Pricing() {
   const [isAnnual, setIsAnnual] = useState(false);
   const [userType, setUserType] = useState<'particulier' | 'entreprise'>('particulier');
 
-  const particularPlans = [
+  const particularPacks = [
     {
-      name: 'Analyse Rapide',
+      name: 'Pack Sécurité',
+      description: 'Est-ce que je me fais arnaquer ?',
       price: 9.90,
       period: '/ devis',
-      description: 'Pour une première évaluation rapide',
       features: [
-        'Score A-E du devis',
-        '3 drapeaux majeurs identifiés',
-        'Mini-résumé technique',
+        'Réponse immédiate : "Arnaque détectée" ou "Semble fiable"',
+        'Score de confiance A-E',
+        '3 alertes principales identifiées',
         'Vérification SIREN/SIRET & adresse entreprise',
+        'Export PDF inclus',
       ],
-      options: [
-        'Export PDF : +0,90€/devis'
-      ],
-      buttonText: 'Analyser maintenant',
+      buttonText: 'Vérifier maintenant',
       popular: false,
-      ideal: 'Première approche, budget serré, projet simple'
+      ideal: 'Première évaluation, détection d\'arnaques'
     },
     {
-      name: 'Analyse Complète',
+      name: 'Pack Analyse',
+      description: 'Analyse technique complète',
       price: 19.90,
       period: '/ devis',
-      description: 'L\'offre la plus populaire',
       features: [
-        'Checklist détaillée (30-50 points)',
+        'Checklist technique détaillée (30-50 points)',
         'Écarts vs prix locaux du marché',
         '5 recommandations IA personnalisées',
         'Rapport PDF professionnel',
         'Support prioritaire',
       ],
-      options: [
-        'Comparatif devis supplémentaires : +4,90€/devis',
-        'Ré-analyse après ajustements : +1,90€/devis'
-      ],
-      buttonText: 'Choisir Complète',
+      buttonText: 'Analyser en détail',
       popular: true,
       ideal: 'Projets moyens, besoin de détails techniques'
     },
     {
-      name: 'Complète + CBP',
+      name: 'Pack Complet + CCTP',
+      description: 'Analyse + Document contractuel',
       price: 39.90,
       period: '/ devis',
-      description: 'Pour une signature sereine',
       features: [
-        'Tous les avantages de l\'Analyse Complète',
-        'CBP (Contrat/Charte) personnalisé inclus',
-        '1 comparatif devis inclus',
+        'Tous les avantages du Pack Analyse',
+        'CCTP personnalisé et contextuel',
+        'Document contractuel téléchargeable',
+        'Suivi interactif depuis votre espace',
         'Support prioritaire téléphonique',
       ],
-      options: [
-        'Comparatifs supplémentaires : +4,90€ (après le 1er inclus)',
-        'Ré-analyse après ajustements : +1,90€/devis'
-      ],
-      buttonText: 'Choisir Premium',
+      buttonText: 'Pack Complet',
       popular: false,
-      ideal: 'Gros projets, clients exigeants, besoin de sécurisation'
+      ideal: 'Gros projets, besoin de sécurisation contractuelle'
     },
     {
-      name: 'Comparaison Devis',
+      name: 'Pack Comparaison',
+      description: 'Choisir entre plusieurs devis',
       price: 29.90,
       period: '',
-      description: 'Pour choisir entre plusieurs propositions',
       features: [
-        'Analyse de 2-3 devis simultanément',
-        'Comparaison détaillée point par point',
+        'Analyse comparative de 2-3 devis',
+        'Tableau de comparaison détaillé',
         'Recommandation du meilleur choix',
-        'Tableau synthétique des avantages/inconvénients',
+        'Points forts/faibles de chaque devis',
       ],
       buttonText: 'Comparer mes devis',
       popular: false,
@@ -86,14 +77,55 @@ export default function Pricing() {
     }
   ];
 
+  const [devisCount, setDevisCount] = useState(30);
+  const [serviceLevel, setServiceLevel] = useState(2);
+  const [projectLimit, setProjectLimit] = useState(2);
+  const [cctpPackage, setCctpPackage] = useState(false);
+
+  const serviceOptions = [
+    { id: 1, name: 'Score seul', price: 2.9 },
+    { id: 2, name: 'Score + Recommandations', price: 4.9 },
+    { id: 3, name: 'Score + Reco + Audit complet', price: 5.9 }
+  ];
+
+  const limitOptions = [
+    { id: 1, name: '≤ 5 000€', coeff: 1.0 },
+    { id: 2, name: '≤ 15 000€', coeff: 1.3 },
+    { id: 3, name: '≤ 50 000€', coeff: 1.7 },
+    { id: 4, name: '> 50 000€', coeff: 2.4 }
+  ];
+
+  const getVolumeDiscount = (count: number) => {
+    if (count >= 100) return 0.8;
+    if (count >= 50) return 0.85;
+    if (count >= 30) return 0.9;
+    if (count >= 20) return 0.95;
+    return 1.0;
+  };
+
+  const calculatePrice = () => {
+    const basePrice = 19;
+    const selectedService = serviceOptions.find(s => s.id === serviceLevel);
+    const selectedLimit = limitOptions.find(l => l.id === projectLimit);
+    const discount = getVolumeDiscount(devisCount);
+    
+    const monthlyPrice = Math.max(
+      49,
+      basePrice + (devisCount * selectedService!.price * selectedLimit!.coeff * discount)
+    );
+    
+    const cctpPrice = cctpPackage ? 99 : 0;
+    return Math.round(monthlyPrice + cctpPrice);
+  };
+
   const enterprisePlans = [
     {
       name: 'TORP Starter',
       price: 49,
       period: '€ HT/mois',
       subtitle: 'À partir de 49€ HT/mois',
-      description: 'Idéal pour TPE et artisans indépendants',
-      configuration: '10 devis/mois • Score seul (2,9€/devis) • Limite ≤ 5 000€',
+      description: 'Fonctionnalités de base pour TPE',
+      configuration: '10 devis/mois • Score seul • Limite ≤ 5 000€',
       features: [
         'Scoring automatique A-E',
         'Audit pré-envoi',
@@ -107,60 +139,53 @@ export default function Pricing() {
       icon: '⚡'
     },
     {
-      name: 'TORP Business',
-      price: 192,
+      name: 'Configurateur B2B',
+      price: calculatePrice(),
       period: '€ HT/mois',
-      subtitle: 'Configuration type',
-      description: 'Pour PME en développement',
-      configuration: '30 devis/mois • Score + recommandations (4,9€/devis) • Limite ≤ 15 000€ • Remise -10%',
+      subtitle: 'Tarif personnalisé',
+      description: 'Configurez selon vos besoins',
+      isCustom: true,
       features: [
-        'Analyses illimitées',
-        'Recommandations d\'amélioration',
+        'Fonctionnalités adaptées à votre usage',
         'Tableau de bord & exports',
-        'Formation équipe 4h',
-        'Support email + téléphone 12h',
-        'Multi-utilisateurs (5 comptes inclus)',
+        'Support selon configuration',
+        'Multi-utilisateurs disponible',
+        'API et intégrations possibles',
       ],
-      additionalServices: [
-        'Utilisateur supplémentaire : +2€/mois',
-        'Certification TORP : 149€/an'
-      ],
-      target: 'PME 3-10 personnes, projets structurés',
-      buttonText: 'Choisir Business',
+      target: 'Toutes tailles d\'entreprise',
+      buttonText: 'Configurer mon offre',
       popular: true,
       icon: '📊'
     },
     {
-      name: 'TORP Pro',
-      price: 'À partir de 450',
-      period: '€ HT/mois',
-      subtitle: 'Configuration type',
-      description: 'Pour grandes entreprises',
-      configuration: '100+ devis/mois • Score + Reco + CBP (5,9€/devis) • Limite > 50 000€ • Remise -20%',
+      name: 'TORP Enterprise',
+      price: 'Sur devis',
+      period: '',
+      subtitle: 'Solution sur-mesure',
+      description: 'Offre personnalisée pour grandes entreprises',
+      configuration: 'Volume élevé • Fonctionnalités avancées • Support dédié',
       features: [
         'Utilisateurs illimités',
-        'Génération CBP automatique',
         'White label personnalisé',
         'API complète + intégrations ERP/CRM',
         'Account manager dédié',
         'Formation sur-site',
-        'Support prioritaire < 4h',
-        'SLA 99,5% garanti',
+        'Support prioritaire',
       ],
       additionalServices: [
-        'Setup initial : 500€',
-        'Consulting personnalisé : 800€/jour',
-        'Intégration sur-mesure : 2 500€',
-        'Support premium : +50€/mois (< 2h)'
+        'Setup initial inclus',
+        'Consulting personnalisé',
+        'Intégration sur-mesure',
+        'Support premium'
       ],
-      target: 'Grandes entreprises 10+ personnes',
+      target: 'Grandes entreprises 50+ personnes',
       buttonText: 'Contacter l\'équipe',
       popular: false,
       icon: '🎯'
     }
   ];
 
-  const currentPlans = userType === 'particulier' ? particularPlans : enterprisePlans;
+  const currentPlans = userType === 'particulier' ? particularPacks : enterprisePlans;
 
   return (
     <div className="min-h-screen bg-background">
@@ -278,20 +303,83 @@ export default function Pricing() {
                 </CardHeader>
 
                 <CardContent className="space-y-6">
+                  {/* Configurateur B2B */}
+                  {plan.isCustom && userType === 'entreprise' && (
+                    <div className="space-y-4 p-4 bg-muted/20 rounded-lg">
+                      <h4 className="font-semibold text-sm">Configurez votre offre :</h4>
+                      
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-xs font-medium">Nombre de devis/mois</label>
+                          <select 
+                            value={devisCount} 
+                            onChange={(e) => setDevisCount(Number(e.target.value))}
+                            className="w-full mt-1 p-2 text-xs border rounded"
+                          >
+                            <option value={10}>10 devis/mois</option>
+                            <option value={20}>20 devis/mois</option>
+                            <option value={30}>30 devis/mois</option>
+                            <option value={50}>50 devis/mois</option>
+                            <option value={100}>100 devis/mois</option>
+                            <option value={200}>200+ devis/mois</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-medium">Niveau de service</label>
+                          <select 
+                            value={serviceLevel} 
+                            onChange={(e) => setServiceLevel(Number(e.target.value))}
+                            className="w-full mt-1 p-2 text-xs border rounded"
+                          >
+                            {serviceOptions.map(option => (
+                              <option key={option.id} value={option.id}>
+                                {option.name} ({option.price}€/devis)
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-medium">Limite de projet</label>
+                          <select 
+                            value={projectLimit} 
+                            onChange={(e) => setProjectLimit(Number(e.target.value))}
+                            className="w-full mt-1 p-2 text-xs border rounded"
+                          >
+                            {limitOptions.map(option => (
+                              <option key={option.id} value={option.id}>
+                                {option.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="checkbox" 
+                            id="cctp-package"
+                            checked={cctpPackage}
+                            onChange={(e) => setCctpPackage(e.target.checked)}
+                            className="w-3 h-3"
+                          />
+                          <label htmlFor="cctp-package" className="text-xs">
+                            Package CCTP (+99€/mois)
+                          </label>
+                        </div>
+
+                        <div className="text-center p-2 bg-primary/10 rounded">
+                          <span className="text-sm font-bold">Votre tarif : {calculatePrice()}€ HT/mois</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-3">
                     {plan.features.map((feature, featureIndex) => (
                       <div key={featureIndex} className="flex items-start gap-3">
                         <Check className="w-4 h-4 text-success mt-0.5 flex-shrink-0" />
                         <span className="text-sm text-foreground">{feature}</span>
-                      </div>
-                    ))}
-                    
-                    {plan.options?.map((option, optionIndex) => (
-                      <div key={optionIndex} className="flex items-start gap-3 opacity-75">
-                        <div className="w-4 h-4 mt-0.5 flex-shrink-0">
-                          <div className="w-2 h-2 bg-warning rounded-full mt-1 mx-auto"></div>
-                        </div>
-                        <span className="text-xs text-muted-foreground">{option}</span>
                       </div>
                     ))}
                     
@@ -356,7 +444,7 @@ export default function Pricing() {
                         <span className="font-medium">4,9€/devis</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>+ CBP</span>
+                        <span>+ Audit complet</span>
                         <span className="font-medium">5,9€/devis</span>
                       </div>
                     </div>
@@ -426,9 +514,18 @@ export default function Pricing() {
 
               <div className="mt-8 p-4 bg-info/10 rounded-lg">
                 <p className="text-sm text-center text-info-foreground">
-                  <span className="font-semibold">Formule de calcul :</span> Prix mensuel = max(49€, 19€ + N × U × g × r)
+                  <span className="font-semibold">Information :</span> Nous proposons des fonctionnalités avancées mais ne garantissons aucun retour spécifique sur investissement.
                   <br />
-                  <span className="text-xs">N=devis/mois, U=niveau service, g=coeff limite, r=remise volume</span>
+                  <span className="text-xs">Formule : Prix mensuel = max(49€, 19€ + N × U × g × r) + Package CCTP optionnel</span>
+                </p>
+              </div>
+
+              <div className="mt-6 p-4 bg-warning/10 rounded-lg">
+                <h4 className="font-semibold text-sm mb-2">Package CCTP optionnel :</h4>
+                <p className="text-xs text-muted-foreground">
+                  Le package CCTP (Cahier des Charges Techniques Personnalisé) est disponible en option pour 99€/mois. 
+                  Il inclut la génération automatique de documents contractuels personnalisés et contextuels, 
+                  ainsi que le suivi interactif depuis votre espace client.
                 </p>
               </div>
             </div>
