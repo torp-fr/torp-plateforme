@@ -41,6 +41,7 @@ export default function Results() {
   }
 
   const { analysisResult, score = 0, grade = 'C' } = currentProject;
+  
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-success';
     if (score >= 60) return 'text-warning';

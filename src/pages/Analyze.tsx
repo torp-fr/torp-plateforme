@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, FileText, Clock, Shield, CheckCircle, Home, Zap, Droplet, Paintbrush } from 'lucide-react';
+import { Upload, FileText, Clock, Shield, CheckCircle, Home, Zap, Droplet, Paintbrush, Download } from 'lucide-react';
 import { Header } from '@/components/Header';
 
 const projectTypes = [
@@ -116,24 +116,27 @@ export default function Analyze() {
         strengths: [
           'Entreprise certifiée RGE avec 15 ans d\'expérience',
           'Prix dans la fourchette marché pour ce type de travaux',
-          'Garanties décennale et biennale mentionnées'
+          'Garanties décennale et biennale mentionnées',
+          'Matériaux de qualité spécifiés dans le devis'
         ],
         warnings: [
           'Délais de livraison non précisés dans le devis',
-          'Modalités de paiement à négocier (30% d\'acompte élevé)'
+          'Modalités de paiement à négocier (30% d\'acompte élevé)',
+          'Pas de plan détaillé des interventions'
         ],
         recommendations: {
           questions: [
             'Quel est le délai exact de réalisation des travaux ?',
             'Puis-je obtenir des références de chantiers similaires ?',
-            'Les matériaux sont-ils garantis séparément ?'
+            'Les matériaux sont-ils garantis séparément ?',
+            'Un plan détaillé peut-il être fourni ?'
           ],
-          negotiation: 'L\'acompte de 30% peut être ramené à 20%.'
+          negotiation: 'L\'acompte de 30% peut être ramené à 20%. Demandez un échelonnement des paiements selon l\'avancement des travaux.'
         },
         priceComparison: {
-          low: Math.floor(Math.random() * 5000) + 10000,
-          current: parseInt(projectData.budget?.replace(/[^0-9]/g, '') || '15000'),
-          high: Math.floor(Math.random() * 5000) + 20000
+          low: Math.floor(Math.random() * 3000) + 10000,
+          current: parseInt(projectData.budget?.split('-')[1]?.replace(/[^0-9]/g, '') || '15000'),
+          high: Math.floor(Math.random() * 5000) + 18000
         }
       };
 
@@ -246,9 +249,28 @@ export default function Analyze() {
                         <p className="text-muted-foreground mb-4">
                           ou cliquez pour sélectionner un fichier
                         </p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-muted-foreground mb-4">
                           Formats acceptés : PDF, JPG, PNG (max 10MB)
                         </p>
+                        <div className="mt-4">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Simuler l'upload d'un devis exemple
+                              const mockFile = new File(['mock content'], 'devis-exemple-salle-de-bain.pdf', { type: 'application/pdf' });
+                              Object.defineProperty(mockFile, 'size', { value: 2548736 }); // 2.5MB
+                              setUploadedFile(mockFile);
+                              toast({
+                                title: 'Devis exemple chargé',
+                                description: 'Vous pouvez maintenant tester l\'analyse.',
+                              });
+                            }}
+                            className="text-sm text-primary hover:text-primary/80 underline"
+                          >
+                            Ou essayez avec notre devis d'exemple
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}

@@ -220,12 +220,17 @@ export default function Projects() {
                       <div className="flex gap-2">
                         {project.status === 'completed' && (
                           <>
-                            <Link to="/results">
-                              <Button variant="outline" size="sm">
-                                <Eye className="w-4 h-4 mr-1" />
-                                Voir
-                              </Button>
-                            </Link>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => {
+                                // Simuler la navigation vers les résultats de ce projet
+                                window.location.href = '/results';
+                              }}
+                            >
+                              <Eye className="w-4 h-4 mr-1" />
+                              Voir
+                            </Button>
                             <Button variant="outline" size="sm">
                               <Download className="w-4 h-4 mr-1" />
                               PDF
