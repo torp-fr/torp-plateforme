@@ -159,13 +159,15 @@ export default function FormulaPicker() {
 
     setIsProcessingPayment(true);
 
-    // Simulation du processus de paiement
+    // Simulation du processus de paiement (2 secondes)
     setTimeout(() => {
       toast({
         title: 'Paiement simulé avec succès !',
         description: `Formule ${selectedFormulaData?.name} activée pour ${totalPrice.toFixed(2)}€`,
       });
 
+      setIsProcessingPayment(false);
+      
       // Stocker les données de la formule pour l'analyse
       const formulaData = {
         formula: selectedFormula,
@@ -176,11 +178,12 @@ export default function FormulaPicker() {
       
       sessionStorage.setItem('selectedFormula', JSON.stringify(formulaData));
       
-      // Rediriger vers l'analyse avec la formule sélectionnée
-      navigate('/analyze', { 
+      // Rediriger directement vers l'analyse en cours
+      navigate('/analyzing', { 
         state: { 
           ...location.state,
-          formula: formulaData
+          formula: formulaData,
+          paymentCompleted: true
         }
       });
     }, 2000);
