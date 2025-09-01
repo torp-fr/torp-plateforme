@@ -307,11 +307,13 @@ export default function Analyze() {
                 </div>
 
                 {uploadedFile && (
-                  <div className="mt-8 text-center">
-                    <Button onClick={() => setStep(2)} size="lg">
-                      Continuer
-                    </Button>
-                  </div>
+                <div className="mt-8 text-center">
+                  <Button onClick={() => navigate('/formula-picker', { 
+                    state: { uploadedFile, projectData } 
+                  })} size="lg">
+                    Choisir ma formule d'analyse
+                  </Button>
+                </div>
                 )}
               </CardContent>
             </Card>
