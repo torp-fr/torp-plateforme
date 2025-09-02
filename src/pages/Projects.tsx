@@ -216,17 +216,12 @@ export default function Projects() {
                       <div className="flex gap-2">
                         {project.status === 'completed' && (
                           <>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => {
-                                // Simuler la navigation vers les résultats de ce projet
-                                window.location.href = '/results';
-                              }}
-                            >
-                              <Eye className="w-4 h-4 mr-1" />
-                              Voir
-                            </Button>
+                            <Link to="/project-dashboard">
+                              <Button variant="outline" size="sm">
+                                <Eye className="w-4 h-4 mr-1" />
+                                Gérer
+                              </Button>
+                            </Link>
                             <Button variant="outline" size="sm">
                               <Download className="w-4 h-4 mr-1" />
                               PDF
