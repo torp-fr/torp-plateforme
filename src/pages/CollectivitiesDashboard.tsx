@@ -28,11 +28,11 @@ import {
   Zap,
   Award,
   Target,
+  Brain,
   Activity,
   FileText,
   Clock,
   CreditCard,
-  Brain,
   Hammer,
   Landmark,
   MapIcon
