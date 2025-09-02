@@ -216,24 +216,48 @@ const CollectivitesDashboard = () => {
                 <Building2 className="w-8 h-8 text-primary" />
                 Observatoire Territorial BTP
               </h1>
-              <Select value={selectedVille} onValueChange={setSelectedVille}>
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Sélectionner une ville" />
-                </SelectTrigger>
-                <SelectContent>
-                  {villes.map((ville) => (
-                    <SelectItem key={ville.value} value={ville.value}>
-                      <div className="flex items-center justify-between w-full">
-                        <span>{ville.label}</span>
-                        <span className="text-muted-foreground text-xs ml-2">{ville.population} hab.</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
             <p className="text-muted-foreground">Dashboard Collectivités - Pilotage intelligent du territoire</p>
           </div>
+        </div>
+
+        {/* Sélecteur de ville en évidence */}
+        <Card className="mb-6 bg-gradient-to-r from-primary/5 to-secondary/5 border-primary/20">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <MapPin className="w-5 h-5 text-primary" />
+                <div>
+                  <h3 className="font-medium">Territoire sélectionné</h3>
+                  <p className="text-sm text-muted-foreground">Choisissez la ville pour personnaliser les données</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <Select value={selectedVille} onValueChange={setSelectedVille}>
+                  <SelectTrigger className="w-56 border-primary/30">
+                    <SelectValue placeholder="Sélectionner une ville" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {villes.map((ville) => (
+                      <SelectItem key={ville.value} value={ville.value}>
+                        <div className="flex items-center justify-between w-full">
+                          <span className="font-medium">{ville.label}</span>
+                          <span className="text-muted-foreground text-xs ml-2">{ville.population} hab.</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                  {villes.find(v => v.value === selectedVille)?.population} habitants
+                </Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-between items-center mb-6">
+          <div></div>
           <div className="flex gap-3">
             <Button variant="outline" size="sm">
               <Download className="w-4 h-4 mr-2" />
@@ -257,7 +281,10 @@ const CollectivitesDashboard = () => {
             <TabsTrigger value="citizens">Citoyens</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="alerts">Alertes</TabsTrigger>
-            <TabsTrigger value="ia-assistant">Assistant IA</TabsTrigger>
+            <TabsTrigger value="ia-assistant" className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950 border border-primary/20">
+              <Brain className="w-4 h-4 mr-2" />
+              Assistant IA
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="executive" className="space-y-6">
