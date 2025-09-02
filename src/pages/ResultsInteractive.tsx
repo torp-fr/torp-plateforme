@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
-import { ChatAI } from '@/components/ChatAI';
+import ChatAI from '@/components/ChatAI';
 import { PaymentManager } from '@/components/PaymentManager';
 import { ProjectComparison } from '@/components/ProjectComparison';
 import { CCTPGenerator } from '@/components/CCTPGenerator';

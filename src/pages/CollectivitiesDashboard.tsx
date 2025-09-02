@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import ChatAI from "@/components/ChatAI";
+import { useState } from "react";
 import { 
   Building2, 
   TrendingUp, 
@@ -25,10 +28,26 @@ import {
   Zap,
   Award,
   Target,
-  Activity
+  Activity,
+  FileText,
+  Clock,
+  CreditCard,
+  Brain,
+  Hammer,
+  Landmark,
+  MapIcon
 } from "lucide-react";
 
 const CollectivitesDashboard = () => {
+  const [selectedVille, setSelectedVille] = useState("toulouse");
+
+  const villes = [
+    { value: "toulouse", label: "Toulouse", population: "471,000" },
+    { value: "colomiers", label: "Colomiers", population: "39,000" },
+    { value: "tournefeuille", label: "Tournefeuille", population: "28,000" },
+    { value: "cugnaux", label: "Cugnaux", population: "17,000" },
+    { value: "plaisance", label: "Plaisance-du-Touch", population: "19,000" }
+  ];
   const kpisTerritoriaux = [
     {
       title: "Devis Analysés",
@@ -103,6 +122,81 @@ const CollectivitesDashboard = () => {
     }
   ];
 
+  const dossiersAides = [
+    {
+      numero: "DA-2024-1847",
+      type: "Ma Prime Rénov'",
+      montant: "€8,500",
+      statut: "retard_paiement",
+      delai: "32 jours",
+      priorite: "haute"
+    },
+    {
+      numero: "DA-2024-1923",
+      type: "CEE",
+      montant: "€3,200",
+      statut: "dossier_incomplet",
+      delai: "18 jours",
+      priorite: "moyenne"
+    },
+    {
+      numero: "DA-2024-2001",
+      type: "Aide locale isolation",
+      montant: "€4,800",
+      statut: "controle_technique",
+      delai: "5 jours",
+      priorite: "normale"
+    }
+  ];
+
+  const elementsUrbanisme = [
+    {
+      zone: "ZAC Centre-Ville",
+      projets: 23,
+      surface: "2.3 ha",
+      status: "En cours",
+      typeDominant: "Rénovation énergétique"
+    },
+    {
+      zone: "Secteur Nord",
+      projets: 45,
+      surface: "5.7 ha", 
+      status: "Planifié",
+      typeDominant: "Construction neuve"
+    },
+    {
+      zone: "Zone Périphérique",
+      projets: 12,
+      surface: "8.2 ha",
+      status: "Étude",
+      typeDominant: "Extension habitat"
+    }
+  ];
+
+  const recommandationsIA = [
+    {
+      type: "urgent",
+      titre: "Optimisation processus aides",
+      description: "Réduire les délais de traitement Ma Prime Rénov' de 15 jours",
+      impact: "Satisfaction +12%, Efficacité +25%",
+      actions: ["Numérisation complète", "Formation équipes", "Partenariat banques"]
+    },
+    {
+      type: "strategic",
+      titre: "Plan vigilance renforcée",
+      description: "Surveiller le secteur isolation suite aux hausses tarifaires", 
+      impact: "Protection citoyens, Stabilisation marché",
+      actions: ["Alertes automatiques", "Communication préventive", "Contrôles renforcés"]
+    },
+    {
+      type: "opportunity",
+      titre: "Transition énergétique accélérée",
+      description: "Potentiel +40% projets rénovation avec campagne ciblée",
+      impact: "Objectifs climat, Économies citoyens",
+      actions: ["Campagne communication", "Aide bonifiée", "Accompagnement renforcé"]
+    }
+  ];
+
   const entreprisesLocales = [
     { nom: "EcoBat Solutions", score: "A", projets: 87, specialite: "Rénovation énergétique" },
     { nom: "Constructions Durables", score: "A-", projets: 65, specialite: "Construction neuve" },
@@ -117,11 +211,28 @@ const CollectivitesDashboard = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-              <Building2 className="w-8 h-8 text-primary" />
-              Observatoire Territorial BTP
-            </h1>
-            <p className="text-muted-foreground mt-2">Dashboard Collectivités - Pilotage intelligent du territoire</p>
+            <div className="flex items-center gap-4 mb-2">
+              <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+                <Building2 className="w-8 h-8 text-primary" />
+                Observatoire Territorial BTP
+              </h1>
+              <Select value={selectedVille} onValueChange={setSelectedVille}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Sélectionner une ville" />
+                </SelectTrigger>
+                <SelectContent>
+                  {villes.map((ville) => (
+                    <SelectItem key={ville.value} value={ville.value}>
+                      <div className="flex items-center justify-between w-full">
+                        <span>{ville.label}</span>
+                        <span className="text-muted-foreground text-xs ml-2">{ville.population} hab.</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-muted-foreground">Dashboard Collectivités - Pilotage intelligent du territoire</p>
           </div>
           <div className="flex gap-3">
             <Button variant="outline" size="sm">
@@ -140,12 +251,13 @@ const CollectivitesDashboard = () => {
         </div>
 
         <Tabs defaultValue="executive" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="executive">Vue Exécutive</TabsTrigger>
             <TabsTrigger value="operational">Opérationnel</TabsTrigger>
             <TabsTrigger value="citizens">Citoyens</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="alerts">Alertes</TabsTrigger>
+            <TabsTrigger value="ia-assistant">Assistant IA</TabsTrigger>
           </TabsList>
 
           <TabsContent value="executive" className="space-y-6">
@@ -247,7 +359,7 @@ const CollectivitesDashboard = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <MapPin className="w-5 h-5" />
-                  Observatoire Géographique
+                  Observatoire Géographique - {villes.find(v => v.value === selectedVille)?.label}
                 </CardTitle>
                 <CardDescription>Répartition des projets par secteur territorial</CardDescription>
               </CardHeader>
@@ -265,6 +377,91 @@ const CollectivitesDashboard = () => {
                       <div className="text-xs text-muted-foreground">montant moyen</div>
                     </div>
                   ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Éléments d'urbanisme */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Landmark className="w-5 h-5" />
+                  Planification Urbaine & BTP
+                </CardTitle>
+                <CardDescription>Zones d'aménagement et projets d'urbanisme</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 md:grid-cols-3">
+                  {elementsUrbanisme.map((zone, index) => (
+                    <div key={index} className="p-4 border rounded-lg space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium">{zone.zone}</h4>
+                        <Badge variant={zone.status === 'En cours' ? 'default' : zone.status === 'Planifié' ? 'secondary' : 'outline'}>
+                          {zone.status}
+                        </Badge>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span>Projets BTP</span>
+                          <span className="font-medium">{zone.projets}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span>Surface</span>
+                          <span className="font-medium">{zone.surface}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-2">
+                          <MapIcon className="w-3 h-3 inline mr-1" />
+                          {zone.typeDominant}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Gestion des aides et dossiers */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="w-5 h-5" />
+                  Suivi Dossiers d'Aides (Anonymisé)
+                </CardTitle>
+                <CardDescription>Monitoring des délais et retards de traitement</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {dossiersAides.map((dossier, index) => (
+                    <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center gap-4">
+                        <Badge variant={
+                          dossier.priorite === 'haute' ? 'destructive' : 
+                          dossier.priorite === 'moyenne' ? 'default' : 'secondary'
+                        }>
+                          {dossier.numero}
+                        </Badge>
+                        <div>
+                          <h4 className="font-medium">{dossier.type}</h4>
+                          <p className="text-sm text-muted-foreground">{dossier.montant}</p>
+                        </div>
+                      </div>
+                      <div className="text-right space-y-1">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">{dossier.delai}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">{dossier.statut.replace('_', ' ')}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-6 p-4 bg-muted rounded-lg">
+                  <h4 className="font-medium mb-2">Actions Recommandées</h4>
+                  <div className="space-y-1 text-sm text-muted-foreground">
+                    <p>• Contact entreprise DA-2024-1847 (retard paiement critique)</p>
+                    <p>• Relance pièces manquantes DA-2024-1923</p>
+                    <p>• Programmer contrôle technique DA-2024-2001</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -538,6 +735,119 @@ const CollectivitesDashboard = () => {
               </Card>
             </div>
           </TabsContent>
+
+          <TabsContent value="ia-assistant" className="space-y-6">
+            {/* Recommandations IA */}
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Brain className="w-5 h-5" />
+                      Recommandations Automatisées
+                    </CardTitle>
+                    <CardDescription>Intelligence artificielle pour l'optimisation territoriale</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {recommandationsIA.map((rec, index) => (
+                        <div key={index} className="border rounded-lg p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-medium">{rec.titre}</h4>
+                            <Badge variant={
+                              rec.type === 'urgent' ? 'destructive' :
+                              rec.type === 'strategic' ? 'default' : 'secondary'
+                            }>
+                              {rec.type}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{rec.description}</p>
+                          <div className="text-xs text-primary font-medium">
+                            Impact attendu: {rec.impact}
+                          </div>
+                          <div className="space-y-1">
+                            <h5 className="text-xs font-medium">Actions suggérées:</h5>
+                            {rec.actions.map((action, actionIndex) => (
+                              <div key={actionIndex} className="text-xs text-muted-foreground">
+                                • {action}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="space-y-6">
+                <ChatAI context="collectivite" />
+              </div>
+            </div>
+
+            {/* Tableau de bord prédictif */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="w-5 h-5" />
+                  Prédictions & Tendances IA
+                </CardTitle>
+                <CardDescription>Analyses prédictives basées sur l'intelligence artificielle</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-6 md:grid-cols-3">
+                  <div className="space-y-4">
+                    <h4 className="font-medium">Prévisions Activité</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">Mois prochain</span>
+                        <div className="text-right">
+                          <div className="font-medium">+23%</div>
+                          <div className="text-xs text-green-600">Hausse prévue</div>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">Trimestre</span>
+                        <div className="text-right">
+                          <div className="font-medium">€3.2M</div>
+                          <div className="text-xs text-blue-600">Volume estimé</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="font-medium">Alertes Préventives</h4>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-orange-500" />
+                        <span className="text-sm">Risque tension matériaux</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-green-500" />
+                        <span className="text-sm">Opportunité aides énergétiques</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="font-medium">Optimisations Suggérées</h4>
+                    <div className="space-y-3">
+                      <div className="text-sm">
+                        <div className="font-medium">Processus accéléré</div>
+                        <div className="text-xs text-muted-foreground">-15 jours délai moyen</div>
+                      </div>
+                      <div className="text-sm">
+                        <div className="font-medium">Communication ciblée</div>
+                        <div className="text-xs text-muted-foreground">+40% adoption prévue</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
         </Tabs>
       </div>
     </div>

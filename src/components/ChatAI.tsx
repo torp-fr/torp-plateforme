@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { MessageSquare, Send, Bot, User, Lightbulb } from 'lucide-react';
+import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Bot, MessageCircle, Send, Lightbulb, TrendingUp, AlertTriangle } from "lucide-react";
 
 interface Message {
   id: string;
@@ -12,205 +13,171 @@ interface Message {
 }
 
 interface ChatAIProps {
-  projectId: string;
-  analysisResult: any;
+  projectId?: string;
+  analysisResult?: any;
+  context?: 'collectivite' | 'project';
 }
 
-const suggestedQuestions = [
-  "Comment puis-je négocier le prix de ce devis ?",
-  "Quels sont les points de vigilance principaux ?",
-  "Ce prix est-il justifié pour ce type de travaux ?",
-  "Que faire si l'entreprise refuse mes demandes ?",
-  "Comment vérifier la qualité des matériaux proposés ?"
-];
-
-export function ChatAI({ projectId, analysisResult }: ChatAIProps) {
+const ChatAI: React.FC<ChatAIProps> = ({ projectId, analysisResult, context = 'collectivite' }) => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
       type: 'ai',
-      content: `Bonjour ! Je suis votre assistant TORP. J'ai analysé votre devis et je peux vous aider à mieux comprendre les résultats, négocier avec l'entreprise, ou répondre à toutes vos questions sur ce projet.
-
-Votre devis a obtenu un score de ${analysisResult.score || 'N/A'}/100. Comment puis-je vous aider ?`,
-      timestamp: new Date()
+      content: context === 'collectivite' 
+        ? "Bonjour ! Je suis votre assistant IA pour l'observatoire territorial. Comment puis-je vous aider à optimiser vos politiques publiques BTP ?"
+        : "Bonjour ! Je peux répondre à vos questions sur l'analyse de ce projet.",
+      timestamp: new Date(),
     }
   ]);
-  const [currentMessage, setCurrentMessage] = useState('');
+  const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+
+  const collectiviteQuestions = [
+    "Quelles sont les tendances BTP sur mon territoire ?",
+    "Comment optimiser les aides publiques ?",
+    "Quels secteurs nécessitent une vigilance accrue ?",
+    "Recommandations pour le plan d'urbanisme"
+  ];
 
   const handleSendMessage = async (message: string) => {
     if (!message.trim()) return;
 
-    // Ajouter le message utilisateur
     const userMessage: Message = {
       id: Date.now().toString(),
       type: 'user',
       content: message,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
 
     setMessages(prev => [...prev, userMessage]);
-    setCurrentMessage('');
+    setInputValue('');
     setIsTyping(true);
 
-    // Simuler la réponse de l'IA
+    // Simuler une réponse IA
     setTimeout(() => {
-      const aiResponse = generateAIResponse(message, analysisResult);
+      const aiResponse = generateAIResponse(message, context);
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
         content: aiResponse,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
-
       setMessages(prev => [...prev, aiMessage]);
       setIsTyping(false);
     }, 1500);
   };
 
-  const generateAIResponse = (userMessage: string, analysis: any): string => {
-    const lowerMessage = userMessage.toLowerCase();
+  const generateAIResponse = (userInput: string, context: string): string => {
+    const input = userInput.toLowerCase();
+    
+    if (context === 'collectivite') {
+      if (input.includes('tendance') || input.includes('évolution')) {
+        return "📈 **Tendances observées :**\n\n• **Rénovation énergétique** : +42% ce trimestre\n• **Prix matériaux** : Stabilisation après hausse de 18%\n• **Délais chantiers** : Amélioration de 15%\n• **Satisfaction citoyens** : 94% (excellent)\n\n💡 **Recommandation** : Renforcez la communication sur les aides à la rénovation énergétique.";
+      }
+      
+      if (input.includes('aide') || input.includes('subvention')) {
+        return "🎯 **Optimisation des aides publiques :**\n\n• **Taux d'utilisation actuel** : 67% des budgets alloués\n• **Secteurs sous-exploités** : Isolation combles (-23%)\n• **Délais de traitement** : Moyenne 18 jours\n\n✅ **Actions recommandées** :\n1. Campagne ciblée sur l'isolation\n2. Simplification des dossiers\n3. Accompagnement renforcé seniors";
+      }
 
-    if (lowerMessage.includes('négocier') || lowerMessage.includes('prix')) {
-      return `Pour négocier ce devis efficacement :
+      if (input.includes('vigilance') || input.includes('arnaque')) {
+        return "🚨 **Zones de vigilance détectées :**\n\n• **Quartier Nord** : 3 signalements démarchage abusif\n• **Secteur Est** : Prix pompes à chaleur +35% vs marché\n• **Entreprise surveillée** : \"Rénov Express\" (acomptes élevés)\n\n🛡️ **Actions en cours** :\n1. Alertes citoyens automatiques\n2. Renforcement contrôles\n3. Communication préventive";
+      }
 
-🔸 **Points de négociation identifiés :**
-- L'acompte de 30% peut être réduit à 20%
-- Demandez un échelonnement des paiements selon l'avancement
-- Le délai de livraison doit être précisé contractuellement
+      if (input.includes('urbanisme') || input.includes('plan')) {
+        return "🏗️ **Recommandations urbanisme :**\n\n• **Zone à densifier** : Centre-ville (potentiel +180 logements)\n• **Secteurs en tension** : Manque artisans qualifiés Sud\n• **Transition énergétique** : Objectif 85% logements rénovés d'ici 2030\n\n📋 **Intégration PLU** :\n1. Bonus constructibilité pour BBC\n2. Zones préférentielles rénovation\n3. Pôles d'excellence BTP";
+      }
 
-🔸 **Arguments à utiliser :**
-- Votre budget initial était plus bas
-- Demandez des références récentes
-- Exigez des garanties écrites sur les matériaux
-
-💡 **Conseil TORP :** Préparez 2-3 alternatives avant la négociation pour avoir plus de leviers.`;
+      return "Je peux vous aider sur de nombreux sujets : tendances territoriales, optimisation des aides, vigilance contre les arnaques, urbanisme, ou toute autre question liée à l'observatoire BTP. N'hésitez pas à être plus précis !";
     }
 
-    if (lowerMessage.includes('vigilance') || lowerMessage.includes('attention')) {
-      return `Voici les points de vigilance principaux sur ce devis :
-
-⚠️ **Points critiques détectés :**
-${analysis.warnings?.map((w: string) => `- ${w}`).join('\n') || '- Aucun point critique majeur'}
-
-🔍 **Ce que vous devez vérifier :**
-- Assurance décennale à jour (demandez l'attestation)
-- Références d'entreprise récentes
-- Détail précis des matériaux utilisés
-- Planning détaillé des interventions
-
-📋 **Questions essentielles à poser :**
-${analysis.recommendations?.questions?.map((q: string) => `- ${q}`).join('\n') || '- Demandez des clarifications sur les garanties'}`;
+    // Context projet (existant)
+    if (analysisResult) {
+      if (input.includes('négocier') || input.includes('prix')) {
+        return `💰 **Conseils de négociation :**\n\n${analysisResult.recommendations?.negotiation || 'Les conseils de négociation ne sont pas disponibles pour ce projet.'}\n\n📊 **Positionnement prix :** Votre devis se situe ${analysisResult.priceComparison ? 'dans la moyenne du marché local' : 'dans une fourchette acceptable'}.`;
+      }
+      
+      if (input.includes('vigilance') || input.includes('attention')) {
+        return `⚠️ **Points de vigilance identifiés :**\n\n${analysisResult.warnings?.map((w: string) => `• ${w}`).join('\n') || 'Aucun point de vigilance majeur détecté.'}\n\n🔍 **Recommandation :** Vérifiez ces éléments avant de signer.`;
+      }
+      
+      if (input.includes('justification') || input.includes('pourquoi')) {
+        return `📋 **Justification du prix :**\n\nLe montant proposé s'explique par :\n• Qualité des matériaux spécifiés\n• Expertise de l'entreprise (certification, expérience)\n• Complexité technique du projet\n• Conditions de marché actuelles\n\n${analysisResult.priceComparison ? `💡 Votre prix (${analysisResult.priceComparison.current}€) vs marché : ${analysisResult.priceComparison.low}€ - ${analysisResult.priceComparison.high}€` : ''}`;
+      }
     }
 
-    if (lowerMessage.includes('justifié') || lowerMessage.includes('prix')) {
-      return `Analyse du prix de votre devis :
-
-💰 **Positionnement prix :**
-- Votre devis : ${analysis.priceComparison?.current?.toLocaleString() || 'N/A'}€
-- Marché local : ${analysis.priceComparison?.low?.toLocaleString() || 'N/A'}€ - ${analysis.priceComparison?.high?.toLocaleString() || 'N/A'}€
-
-✅ **Le prix semble ${analysis.score >= 70 ? 'justifié' : 'élevé'} car :**
-${analysis.strengths?.slice(0, 2).map((s: string) => `- ${s}`).join('\n') || '- Analyse en cours...'}
-
-🎯 **Recommandation :** ${analysis.score >= 80 ? 'Prix compétitif, vous pouvez accepter' : 'Négociation recommandée, marge de 5-10% possible'}`;
-    }
-
-    // Réponse générale
-    return `Je comprends votre question. Basé sur l'analyse de votre devis (score ${analysis.score}/100), voici ce que je peux vous dire :
-
-${analysis.recommendations?.negotiation || 'Votre projet présente un bon niveau de qualité dans l\'ensemble.'}
-
-💡 **Pour aller plus loin :**
-- Consultez le rapport PDF complet
-- Comparez avec d'autres devis si disponibles
-- N'hésitez pas à me poser des questions plus spécifiques
-
-Que souhaitez-vous savoir d'autre sur ce devis ?`;
+    return "Je peux vous aider à mieux comprendre cette analyse. Posez-moi des questions sur la négociation, les points de vigilance, ou la justification des prix.";
   };
 
   return (
-    <Card className="h-[600px] flex flex-col">
+    <Card className="h-full">
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2">
-          <MessageSquare className="w-5 h-5" />
-          Assistant IA TORP
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Bot className="w-5 h-5 text-primary" />
+          Assistant IA {context === 'collectivite' ? 'Territorial' : 'Projet'}
         </CardTitle>
       </CardHeader>
-      
-      <CardContent className="flex-1 flex flex-col space-y-4">
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+      <CardContent className="space-y-4">
+        <div className="h-64 overflow-y-auto space-y-3 border rounded-lg p-3">
           {messages.map((message) => (
             <div
               key={message.id}
               className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[80%] rounded-lg p-3 ${
+                className={`max-w-[80%] p-3 rounded-lg ${
                   message.type === 'user'
                     ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-foreground'
-                }`}
+                    : 'bg-muted'
+                } text-sm whitespace-pre-wrap`}
               >
-                <div className="flex items-start gap-2">
-                  {message.type === 'ai' && <Bot className="w-4 h-4 mt-0.5 text-primary" />}
-                  {message.type === 'user' && <User className="w-4 h-4 mt-0.5" />}
-                  <div className="text-sm whitespace-pre-line">{message.content}</div>
-                </div>
+                {message.content}
               </div>
             </div>
           ))}
-          
           {isTyping && (
             <div className="flex justify-start">
-              <div className="bg-muted rounded-lg p-3">
+              <div className="bg-muted p-3 rounded-lg text-sm">
                 <div className="flex items-center gap-2">
-                  <Bot className="w-4 h-4 text-primary" />
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
-                    <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                    <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                  </div>
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" />
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Questions suggérées */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Lightbulb className="w-4 h-4" />
-            Questions suggérées :
+        {context === 'collectivite' && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium">Questions suggérées :</h4>
+            <div className="flex flex-wrap gap-2">
+              {collectiviteQuestions.map((question, index) => (
+                <Button
+                  key={index}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleSendMessage(question)}
+                  className="text-xs h-8"
+                >
+                  {question}
+                </Button>
+              ))}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {suggestedQuestions.slice(0, 3).map((question, index) => (
-              <Button
-                key={index}
-                variant="outline"
-                size="sm"
-                className="text-xs h-auto py-2"
-                onClick={() => handleSendMessage(question)}
-              >
-                {question}
-              </Button>
-            ))}
-          </div>
-        </div>
+        )}
 
-        {/* Input */}
         <div className="flex gap-2">
           <Input
-            placeholder="Posez votre question sur ce devis..."
-            value={currentMessage}
-            onChange={(e) => setCurrentMessage(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage(currentMessage)}
-            className="flex-1"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder="Posez votre question..."
+            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage(inputValue)}
+            className="text-sm"
           />
-          <Button 
-            onClick={() => handleSendMessage(currentMessage)}
-            disabled={!currentMessage.trim() || isTyping}
+          <Button
+            onClick={() => handleSendMessage(inputValue)}
+            disabled={!inputValue.trim() || isTyping}
+            size="sm"
           >
             <Send className="w-4 h-4" />
           </Button>
@@ -218,4 +185,6 @@ Que souhaitez-vous savoir d'autre sur ce devis ?`;
       </CardContent>
     </Card>
   );
-}
+};
+
+export default ChatAI;
