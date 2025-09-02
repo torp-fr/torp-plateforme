@@ -529,7 +529,7 @@ const CollectivitesDashboard = () => {
                   <CardTitle className="text-sm">Temps Réponse</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-purple-600">< 30s</div>
+                  <div className="text-2xl font-bold text-purple-600">{"< 30s"}</div>
                   <p className="text-sm text-muted-foreground">Moyenne</p>
                   <div className="mt-2 h-2 bg-secondary rounded">
                     <div className="h-2 bg-purple-500 rounded w-4/5"></div>

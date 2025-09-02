@@ -4,7 +4,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  type: 'particulier' | 'entreprise';
+  type: 'particulier' | 'entreprise' | 'admin' | 'collectivites';
   company?: string;
 }
 
@@ -23,12 +23,12 @@ export interface Project {
 
 interface AppContextType {
   user: User | null;
-  userType: 'particulier' | 'entreprise';
+  userType: 'particulier' | 'entreprise' | 'admin' | 'collectivites';
   projects: Project[];
   currentProject: Project | null;
   isAnalyzing: boolean;
   setUser: (user: User | null) => void;
-  setUserType: (type: 'particulier' | 'entreprise') => void;
+  setUserType: (type: 'particulier' | 'entreprise' | 'admin' | 'collectivites') => void;
   setProjects: (projects: Project[]) => void;
   setCurrentProject: (project: Project | null) => void;
   setIsAnalyzing: (analyzing: boolean) => void;
@@ -172,7 +172,7 @@ const mockProjects: Project[] = [
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [userType, setUserType] = useState<'particulier' | 'entreprise'>('particulier');
+  const [userType, setUserType] = useState<'particulier' | 'entreprise' | 'admin' | 'collectivites'>('particulier');
   const [projects, setProjects] = useState<Project[]>(mockProjects);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);

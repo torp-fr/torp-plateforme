@@ -33,7 +33,7 @@ interface PaymentRequest {
 
 interface PaymentManagerProps {
   projectId: string;
-  userType: 'particulier' | 'entreprise';
+  userType: 'particulier' | 'entreprise' | 'admin' | 'collectivites';
   projectAmount: string;
 }
 
