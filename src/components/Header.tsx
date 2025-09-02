@@ -23,39 +23,72 @@ export const Header = () => {
           </div>
         </div>
         <nav className="hidden md:flex items-center gap-6">
-          <Link to="/analyze" className="text-foreground hover:text-primary transition-colors">
-            Analyser
-          </Link>
-          <Link to="/dashboard" className="text-foreground hover:text-primary transition-colors">
-            Dashboard
-          </Link>
-          <Link to="/projects" className="text-foreground hover:text-primary transition-colors">
-            Projets
-          </Link>
-          <Link to="/project-tracking" className="text-foreground hover:text-primary transition-colors">
-            Suivi
-          </Link>
-          <Link to="/financing" className="text-foreground hover:text-primary transition-colors">
-            Financement
-          </Link>
-          <Link to="/pricing" className="text-foreground hover:text-primary transition-colors">
-            Tarifs
-          </Link>
+          {userType === 'admin' ? (
+            <>
+              <Link to="/admin-dashboard" className="text-foreground hover:text-primary transition-colors">
+                Analytics
+              </Link>
+              <Link to="/dashboard" className="text-foreground hover:text-primary transition-colors">
+                Système
+              </Link>
+            </>
+          ) : userType === 'collectivites' ? (
+            <>
+              <Link to="/collectivites-dashboard" className="text-foreground hover:text-primary transition-colors">
+                Observatoire
+              </Link>
+              <Link to="/analyze" className="text-foreground hover:text-primary transition-colors">
+                Analyser
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link to="/analyze" className="text-foreground hover:text-primary transition-colors">
+                Analyser
+              </Link>
+              <Link to="/dashboard" className="text-foreground hover:text-primary transition-colors">
+                Dashboard
+              </Link>
+              <Link to="/projects" className="text-foreground hover:text-primary transition-colors">
+                Projets
+              </Link>
+              <Link to="/project-tracking" className="text-foreground hover:text-primary transition-colors">
+                Suivi
+              </Link>
+              <Link to="/financing" className="text-foreground hover:text-primary transition-colors">
+                Financement
+              </Link>
+              <Link to="/pricing" className="text-foreground hover:text-primary transition-colors">
+                Tarifs
+              </Link>
+            </>
+          )}
         </nav>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground hidden md:block">Profil:</span>
             <Select value={userType} onValueChange={setUserType}>
-              <SelectTrigger className="w-32 h-9">
+              <SelectTrigger className="w-36 h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="particulier">Particulier</SelectItem>
                 <SelectItem value="entreprise">Entreprise</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="collectivites">Collectivités</SelectItem>
               </SelectContent>
             </Select>
-            <Badge variant={userType === 'particulier' ? 'secondary' : 'outline'} className="hidden md:inline-flex">
-              {userType === 'particulier' ? '👤' : '🏢'}
+            <Badge 
+              variant={
+                userType === 'particulier' ? 'secondary' : 
+                userType === 'admin' ? 'destructive' :
+                userType === 'collectivites' ? 'default' : 'outline'
+              } 
+              className="hidden md:inline-flex"
+            >
+              {userType === 'particulier' ? '👤' : 
+               userType === 'entreprise' ? '🏢' :
+               userType === 'admin' ? '⚙️' : '🏛️'}
             </Badge>
           </div>
           <Link to="/login">

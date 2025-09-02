@@ -17,6 +17,8 @@ import ProjectTracking from "./pages/ProjectTracking";
 import FinancingPlatform from "./pages/FinancingPlatform";
 import FormulaPicker from "./pages/FormulaPicker";
 import AnalyzingPage from "./pages/AnalyzingPage";
+import AdminDashboard from "./pages/AdminDashboard";
+import CollectivitesDashboard from "./pages/CollectivitesDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,8 +42,10 @@ const App = () => (
             <Route path="/demo" element={<Demo />} />
             <Route path="/project-tracking" element={<ProjectTracking />} />
             <Route path="/financing" element={<FinancingPlatform />} />
-          <Route path="/formula-picker" element={<FormulaPicker />} />
-          <Route path="/analyzing" element={<AnalyzingPage />} />
+            <Route path="/formula-picker" element={<FormulaPicker />} />
+            <Route path="/analyzing" element={<AnalyzingPage />} />
+            <Route path="/admin-dashboard" element={<AdminDashboard />} />
+            <Route path="/collectivites-dashboard" element={<CollectivitesDashboard />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
