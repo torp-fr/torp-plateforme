@@ -223,7 +223,7 @@ export function PaymentManager({ projectId, userType, projectAmount }: PaymentMa
       </Card>
 
       {/* Actions selon le type d'utilisateur */}
-      {userType === 'entreprise' && (
+      {userType === 'B2B' && (
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center">
@@ -363,7 +363,7 @@ export function PaymentManager({ projectId, userType, projectAmount }: PaymentMa
                     </div>
                   )}
                   
-                  {userType === 'entreprise' && (
+                  {userType === 'B2B' && (
                     <div className="flex gap-2 pt-3 border-t">
                       <Button variant="outline" size="sm">
                         <FileText className="w-4 h-4 mr-2" />
