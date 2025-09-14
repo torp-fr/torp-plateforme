@@ -65,7 +65,7 @@ export default function Pricing() {
       name: 'Pack Comparaison',
       description: 'Choisir entre plusieurs devis',
       price: 29.90,
-      period: '',
+      period: '(pack de 3 devis)',
       features: [
         'Analyse comparative de 2-3 devis',
         'Tableau de comparaison détaillé',
@@ -85,14 +85,16 @@ export default function Pricing() {
 
   const serviceOptions = [
     { id: 1, name: 'Score seul', price: 2.9 },
-    { id: 2, name: 'Score + Recommandations', price: 4.9 }
+    { id: 2, name: 'Score + Recommandations', price: 4.9 },
+    { id: 3, name: 'Audit complet', price: 5.9 }
   ];
 
   const limitOptions = [
-    { id: 1, name: '≤ 5 000€', coeff: 1.0 },
-    { id: 2, name: '≤ 15 000€', coeff: 1.3 },
-    { id: 3, name: '≤ 50 000€', coeff: 1.7 },
-    { id: 4, name: '> 50 000€', coeff: 2.4 }
+    { id: 1, name: '≤ 1 000€', coeff: 0.9 },
+    { id: 2, name: '≤ 5 000€', coeff: 1.0 },
+    { id: 3, name: '≤ 15 000€', coeff: 1.3 },
+    { id: 4, name: '≤ 50 000€', coeff: 1.7 },
+    { id: 5, name: '> 50 000€', coeff: 2.4 }
   ];
 
   const getVolumeDiscount = (count: number) => {
@@ -412,8 +414,13 @@ export default function Pricing() {
                       {typeof plan.price === 'number' ? (
                         <>
                           <span className="text-4xl font-bold text-foreground">
-                            {plan.price}€
+                            {userType === 'B2B' && typeof plan.price === 'number' && !plan.isCustom && isAnnual ? 
+                              Math.round(plan.price * 10) : 
+                              plan.price}€
                           </span>
+                          {userType === 'B2B' && !plan.isCustom && isAnnual && (
+                            <span className="text-base text-muted-foreground">/an</span>
+                          )}
                         </>
                       ) : (
                         <span className="text-3xl font-bold text-foreground">
@@ -421,7 +428,11 @@ export default function Pricing() {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground">{plan.period}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {userType === 'B2B' && typeof plan.price === 'number' && !plan.isCustom && isAnnual ? 
+                        'Facturé annuellement (-2 mois)' : 
+                        plan.period}
+                    </p>
                   </div>
                   <p className="text-muted-foreground">{plan.description}</p>
                   
