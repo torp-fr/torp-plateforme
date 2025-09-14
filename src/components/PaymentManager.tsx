@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { useApp, UserType } from '@/context/AppContext';
 import { 
   CreditCard, 
   Calendar, 
@@ -33,7 +34,7 @@ interface PaymentRequest {
 
 interface PaymentManagerProps {
   projectId: string;
-  userType: 'particulier' | 'entreprise' | 'admin' | 'collectivites';
+  userType: UserType;
   projectAmount: string;
 }
 
@@ -349,7 +350,7 @@ export function PaymentManager({ projectId, userType, projectAmount }: PaymentMa
                     </div>
                   </div>
                   
-                  {userType === 'particulier' && request.status === 'pending' && (
+                  {userType === 'B2C' && request.status === 'pending' && (
                     <div className="flex gap-2 pt-3 border-t">
                       <Button onClick={() => handlePayment(request.id)}>
                         <CreditCard className="w-4 h-4 mr-2" />

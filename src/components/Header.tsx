@@ -32,7 +32,7 @@ export const Header = () => {
                 Système
               </Link>
             </>
-          ) : userType === 'collectivites' ? (
+          ) : userType === 'B2G' ? (
             <>
               <Link to="/collectivites-dashboard" className="text-foreground hover:text-primary transition-colors">
                 Observatoire
@@ -41,22 +41,40 @@ export const Header = () => {
                 Analyser
               </Link>
             </>
+          ) : userType === 'B2B2C' ? (
+            <>
+              <Link to="/prescripteurs-dashboard" className="text-foreground hover:text-primary transition-colors">
+                Dashboard Prescripteur
+              </Link>
+              <Link to="/analyze" className="text-foreground hover:text-primary transition-colors">
+                Certifier Devis
+              </Link>
+              <Link to="/pricing" className="text-foreground hover:text-primary transition-colors">
+                Abonnements
+              </Link>
+            </>
+          ) : userType === 'B2B' ? (
+            <>
+              <Link to="/dashboard" className="text-foreground hover:text-primary transition-colors">
+                Dashboard Pro
+              </Link>
+              <Link to="/analyze" className="text-foreground hover:text-primary transition-colors">
+                Analyser
+              </Link>
+              <Link to="/pricing" className="text-foreground hover:text-primary transition-colors">
+                Solutions B2B
+              </Link>
+            </>
           ) : (
             <>
               <Link to="/analyze" className="text-foreground hover:text-primary transition-colors">
                 Analyser
               </Link>
-              <Link to="/dashboard" className="text-foreground hover:text-primary transition-colors">
-                Dashboard
-              </Link>
               <Link to="/projects" className="text-foreground hover:text-primary transition-colors">
-                Projets
+                Mes Projets
               </Link>
               <Link to="/project-tracking" className="text-foreground hover:text-primary transition-colors">
                 Suivi
-              </Link>
-              <Link to="/financing" className="text-foreground hover:text-primary transition-colors">
-                Financement
               </Link>
               <Link to="/pricing" className="text-foreground hover:text-primary transition-colors">
                 Tarifs
@@ -72,23 +90,28 @@ export const Header = () => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="particulier">Particulier</SelectItem>
-                <SelectItem value="entreprise">Entreprise</SelectItem>
+                <SelectItem value="B2C">B2C - Particuliers</SelectItem>
+                <SelectItem value="B2B">B2B - Entreprises BTP</SelectItem>
+                <SelectItem value="B2G">B2G - Collectivités</SelectItem>
+                <SelectItem value="B2B2C">B2B2C - Prescripteurs</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="collectivites">Collectivités</SelectItem>
               </SelectContent>
             </Select>
             <Badge 
               variant={
-                userType === 'particulier' ? 'secondary' : 
-                userType === 'admin' ? 'destructive' :
-                userType === 'collectivites' ? 'default' : 'outline'
+                userType === 'B2C' ? 'secondary' : 
+                userType === 'B2B' ? 'outline' :
+                userType === 'B2G' ? 'default' :
+                userType === 'B2B2C' ? 'default' :
+                userType === 'admin' ? 'destructive' : 'secondary'
               } 
               className="hidden md:inline-flex"
             >
-              {userType === 'particulier' ? '👤' : 
-               userType === 'entreprise' ? '🏢' :
-               userType === 'admin' ? '⚙️' : '🏛️'}
+              {userType === 'B2C' ? '👤' : 
+               userType === 'B2B' ? '🏢' :
+               userType === 'B2G' ? '🏛️' :
+               userType === 'B2B2C' ? '🎯' :
+               userType === 'admin' ? '⚙️' : '👤'}
             </Badge>
           </div>
           <Link to="/login">

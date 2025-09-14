@@ -178,7 +178,7 @@ export function CCTPGenerator({ projectId, analysisResult }: CCTPGeneratorProps)
               <div className="flex items-center gap-4">
                 <Badge variant="outline" className="flex items-center gap-1">
                   <Building className="w-3 h-3" />
-                  {userType === 'particulier' ? 'Client particulier' : 'Client entreprise'}
+                  {userType === 'B2C' ? 'Client particulier' : 'Client professionnel'}
                 </Badge>
                 <Badge variant="outline">
                   Projet : {currentProject?.name}
@@ -304,7 +304,7 @@ export function CCTPGenerator({ projectId, analysisResult }: CCTPGeneratorProps)
           </div>
 
           {/* Résumé pour profil entreprise */}
-          {userType === 'entreprise' && (
+          {userType === 'B2B' && (
             <Card className="mt-6">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

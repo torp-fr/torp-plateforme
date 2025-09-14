@@ -65,10 +65,10 @@ export default function Projects() {
               <BackButton to="/dashboard" label="Dashboard" />
               <div>
                 <h1 className="text-3xl font-bold text-foreground">
-                  {userType === 'particulier' ? 'Mes projets' : 'Projets clients'}
+                  {userType === 'B2C' ? 'Mes projets' : 'Projets clients'}
                 </h1>
                 <p className="text-muted-foreground mt-1">
-                  Gérez et suivez tous vos {userType === 'particulier' ? 'projets de travaux' : 'devis clients'}
+                  Gérez et suivez tous vos {userType === 'B2C' ? 'projets de travaux' : 'devis clients'}
                 </p>
               </div>
             </div>
@@ -104,7 +104,7 @@ export default function Projects() {
                     <SelectItem value="completed">Analysé</SelectItem>
                     <SelectItem value="analyzing">En cours</SelectItem>
                     <SelectItem value="draft">Brouillon</SelectItem>
-                    {userType === 'particulier' && (
+                    {userType === 'B2C' && (
                       <>
                         <SelectItem value="accepted">Accepté</SelectItem>
                         <SelectItem value="rejected">Refusé</SelectItem>
@@ -235,7 +235,7 @@ export default function Projects() {
                             </Button>
                           </Link>
                         )}
-                        {userType === 'particulier' && project.status === 'completed' && (
+                        {userType === 'B2C' && project.status === 'completed' && (
                           <>
                             <Button variant="outline" size="sm" className="text-success border-success">
                               Accepter

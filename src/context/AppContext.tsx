@@ -1,10 +1,13 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
+// User types - Nouveau modèle commercial TORP
+export type UserType = 'B2C' | 'B2B' | 'B2G' | 'B2B2C' | 'admin';
+
 export interface User {
   id: string;
   email: string;
   name: string;
-  type: 'particulier' | 'entreprise' | 'admin' | 'collectivites';
+  type: UserType;
   company?: string;
 }
 
@@ -23,12 +26,12 @@ export interface Project {
 
 interface AppContextType {
   user: User | null;
-  userType: 'particulier' | 'entreprise' | 'admin' | 'collectivites';
+  userType: UserType;
   projects: Project[];
   currentProject: Project | null;
   isAnalyzing: boolean;
   setUser: (user: User | null) => void;
-  setUserType: (type: 'particulier' | 'entreprise' | 'admin' | 'collectivites') => void;
+  setUserType: (type: UserType) => void;
   setProjects: (projects: Project[]) => void;
   setCurrentProject: (project: Project | null) => void;
   setIsAnalyzing: (analyzing: boolean) => void;
@@ -172,7 +175,7 @@ const mockProjects: Project[] = [
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [userType, setUserType] = useState<'particulier' | 'entreprise' | 'admin' | 'collectivites'>('particulier');
+  const [userType, setUserType] = useState<UserType>('B2C');
   const [projects, setProjects] = useState<Project[]>(mockProjects);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);

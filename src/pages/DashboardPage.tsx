@@ -51,13 +51,26 @@ export default function DashboardPage() {
             <div className="flex items-center gap-4">
               <BackButton />
               <div>
-                <h1 className="text-3xl font-bold text-foreground">
-                  {userType === 'particulier' ? 'Tableau de bord' : 'Espace Professionnel'}
-                </h1>
-                <p className="text-muted-foreground mt-2">
-                  {user ? `Bonjour ${user.name}` : 'Bienvenue sur TORP'}
-                  {userType === 'entreprise' && user?.company && ` - ${user.company}`}
-                </p>
+                {userType === 'B2C' ? (
+                  <>
+                    <h1 className="text-3xl font-bold text-foreground">
+                      Tableau de bord
+                    </h1>
+                    <p className="text-muted-foreground mt-2">
+                      {user ? `Bonjour ${user.name}` : 'Bienvenue sur TORP'}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <h1 className="text-3xl font-bold text-foreground">
+                      Espace Professionnel
+                    </h1>
+                    <p className="text-muted-foreground mt-2">
+                      {user ? `Bonjour ${user.name}` : 'Bienvenue sur TORP'}
+                      {(userType === 'B2B' || userType === 'B2B2C') && user?.company && ` - ${user.company}`}
+                    </p>
+                  </>
+                )}
               </div>
             </div>
             <Link to="/analyze">
@@ -71,7 +84,7 @@ export default function DashboardPage() {
           {/* Statistiques principales */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             {/* Métriques spécifiques pour entreprises */}
-            {userType === 'entreprise' && (
+            {(userType === 'B2B' || userType === 'B2B2C') && (
               <>
                 <Card>
                   <CardContent className="p-6">
@@ -136,7 +149,7 @@ export default function DashboardPage() {
             )}
 
             {/* Métriques générales pour particuliers */}
-            {userType === 'particulier' && (
+            {userType === 'B2C' && (
               <>
                 <Card>
                   <CardContent className="p-6">
@@ -209,7 +222,7 @@ export default function DashboardPage() {
                   <div className="flex justify-between items-center">
                     <CardTitle className="flex items-center gap-2">
                       <BarChart3 className="w-5 h-5" />
-                      {userType === 'particulier' ? 'Mes analyses' : 'Analyses clients'}
+                      {userType === 'B2C' ? 'Mes analyses' : 'Analyses clients'}
                     </CardTitle>
                     <Link to="/projects">
                       <Button variant="outline" size="sm">
@@ -308,7 +321,7 @@ export default function DashboardPage() {
                   <CardTitle>Recommandations</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {userType === 'particulier' ? (
+                  {userType === 'B2C' ? (
                     <>
                       <div className="p-3 bg-info/10 rounded-lg">
                         <p className="text-sm font-medium text-info">Conseil du jour</p>
