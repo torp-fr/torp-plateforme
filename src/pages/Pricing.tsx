@@ -11,8 +11,8 @@ export default function Pricing() {
   const [isAnnual, setIsAnnual] = useState(false);
   const [userType, setUserType] = useState<'B2C' | 'B2B' | 'B2G' | 'B2B2C'>('B2C');
 
-  // Offres B2C (Particuliers)
-  const b2cPacks = [
+  // Offres B2C (Particuliers) - Prix fixes et clairs
+  const b2cPlans = [
     {
       name: 'Pack Sécurité',
       description: 'Première évaluation rapide',
@@ -46,22 +46,6 @@ export default function Pricing() {
       ideal: 'Projets moyens, besoin de détails techniques'
     },
     {
-      name: 'Pack Complet + CCTP',
-      description: 'Analyse + Document contractuel',
-      price: 39.90,
-      period: '/ devis',
-      features: [
-        'Tous les avantages du Pack Analyse',
-        'CCTP personnalisé et contextuel',
-        'Document contractuel téléchargeable',
-        'Suivi interactif depuis votre espace',
-        'Support prioritaire téléphonique',
-      ],
-      buttonText: 'Pack Complet',
-      popular: false,
-      ideal: 'Gros projets, besoin de sécurisation contractuelle'
-    },
-    {
       name: 'Pack Comparaison',
       description: 'Choisir entre plusieurs devis',
       price: 29.90,
@@ -75,66 +59,41 @@ export default function Pricing() {
       buttonText: 'Comparer mes devis',
       popular: false,
       ideal: 'Hésitation entre plusieurs entreprises'
+    },
+    {
+      name: 'Pack Complet + CCTP',
+      description: 'Analyse + Document contractuel',
+      price: 44.90,
+      period: '/ devis',
+      features: [
+        'Analyse technique complète',
+        'CCTP personnalisé et contextuel',
+        'Document contractuel téléchargeable',
+        'Suivi interactif depuis votre espace',
+        'Support prioritaire téléphonique',
+        'Garantie de conformité',
+      ],
+      buttonText: 'Pack Complet',
+      popular: false,
+      ideal: 'Gros projets, besoin de sécurisation contractuelle'
     }
   ];
 
-  const [devisCount, setDevisCount] = useState(30);
-  const [serviceLevel, setServiceLevel] = useState(2);
-  const [projectLimit, setProjectLimit] = useState(2);
-  const [cctpPackage, setCctpPackage] = useState(false);
-
-  const serviceOptions = [
-    { id: 1, name: 'Score seul', price: 2.9 },
-    { id: 2, name: 'Score + Recommandations', price: 4.9 },
-    { id: 3, name: 'Audit complet', price: 5.9 }
-  ];
-
-  const limitOptions = [
-    { id: 1, name: '≤ 1 000€', coeff: 0.9 },
-    { id: 2, name: '≤ 5 000€', coeff: 1.0 },
-    { id: 3, name: '≤ 15 000€', coeff: 1.3 },
-    { id: 4, name: '≤ 50 000€', coeff: 1.7 },
-    { id: 5, name: '> 50 000€', coeff: 2.4 }
-  ];
-
-  const getVolumeDiscount = (count: number) => {
-    if (count >= 100) return 0.8;
-    if (count >= 50) return 0.85;
-    if (count >= 30) return 0.9;
-    if (count >= 20) return 0.95;
-    return 1.0;
-  };
-
-  const calculatePrice = () => {
-    const basePrice = 19;
-    const selectedService = serviceOptions.find(s => s.id === serviceLevel);
-    const selectedLimit = limitOptions.find(l => l.id === projectLimit);
-    const discount = getVolumeDiscount(devisCount);
-    
-    const monthlyPrice = Math.max(
-      49,
-      basePrice + (devisCount * selectedService!.price * selectedLimit!.coeff * discount)
-    );
-    
-    const cctpPrice = cctpPackage ? 99 : 0;
-    return Math.round(monthlyPrice + cctpPrice);
-  };
-
-  // Offres B2B (Entreprises BTP)
+  // Offres B2B (Entreprises BTP) - Plans fixes sans configurateur complexe
   const b2bPlans = [
     {
       name: 'TORP Starter',
-      price: 49,
-      period: '€ HT/mois',
-      subtitle: 'À partir de 49€ HT/mois',
       description: 'Fonctionnalités de base pour TPE',
-      configuration: '10 devis/mois • Score seul • Limite ≤ 5 000€',
+      price: isAnnual ? 490 : 49,
+      period: isAnnual ? '€ HT/an' : '€ HT/mois',
+      subtitle: isAnnual ? 'Économisez 98€ par an' : '49€ HT/mois',
       features: [
+        '10 analyses/mois incluses',
         'Scoring automatique A-E',
-        'Audit pré-envoi',
         'Dashboard basique',
         'Support email',
         'Formation onboarding 2h',
+        'Export PDF des rapports'
       ],
       target: 'Artisans 1-2 personnes, < 30 devis/mois',
       buttonText: 'Commencer Starter',
@@ -142,44 +101,39 @@ export default function Pricing() {
       icon: '⚡'
     },
     {
-      name: 'Configurateur B2B',
-      price: calculatePrice(),
-      period: '€ HT/mois',
-      subtitle: 'Tarif personnalisé',
-      description: 'Configurez selon vos besoins',
-      isCustom: true,
+      name: 'TORP Business',
+      description: 'Solution complète pour PME',
+      price: isAnnual ? 1490 : 149,
+      period: isAnnual ? '€ HT/an' : '€ HT/mois',
+      subtitle: isAnnual ? 'Économisez 298€ par an' : '149€ HT/mois',
       features: [
-        'Fonctionnalités adaptées à votre usage',
-        'Tableau de bord & exports',
-        'Support selon configuration',
-        'Multi-utilisateurs disponible',
-        'API et intégrations possibles',
+        '50 analyses/mois incluses',
+        'Analytics avancés & KPIs',
+        'Gestion équipe (5 utilisateurs)',
+        'API & intégrations',
+        'Support téléphonique prioritaire',
+        'Formation équipe incluse',
+        'Rapports personnalisés'
       ],
-      target: 'Toutes tailles d\'entreprise',
-      buttonText: 'Configurer mon offre',
+      target: 'PME BTP 3-15 personnes',
+      buttonText: 'Choisir Business',
       popular: true,
       icon: '📊'
     },
     {
       name: 'TORP Enterprise',
+      description: 'Solution sur-mesure pour grandes entreprises',
       price: 'Sur devis',
       period: '',
-      subtitle: 'Solution sur-mesure',
-      description: 'Offre personnalisée pour grandes entreprises',
-      configuration: 'Volume élevé • Fonctionnalités avancées • Support dédié',
+      subtitle: 'À partir de 500€ HT/mois',
       features: [
+        'Analyses illimitées',
         'Utilisateurs illimités',
         'White label personnalisé',
         'API complète + intégrations ERP/CRM',
         'Account manager dédié',
         'Formation sur-site',
-        'Support prioritaire',
-      ],
-      additionalServices: [
-        'Setup initial inclus',
-        'Consulting personnalisé',
-        'Intégration sur-mesure',
-        'Support premium'
+        'Support premium 24/7'
       ],
       target: 'Grandes entreprises 50+ personnes',
       buttonText: 'Contacter l\'équipe',
@@ -192,11 +146,10 @@ export default function Pricing() {
   const b2b2cPlans = [
     {
       name: 'Standard',
-      price: 649,
-      period: '€ HT/an',
-      subtitle: '64,90€ HT/mois',
+      price: isAnnual ? 649 : 64.90,
+      period: isAnnual ? '€ HT/an' : '€ HT/mois',
+      subtitle: isAnnual ? 'Économisez 129€ par an' : '64,90€ HT/mois',
       description: 'Analyses illimitées pour certification',
-      configuration: '200 analyses/mois • Score TORP • Certification PDF',
       features: [
         'Analyses TORP illimitées (max 200/mois)',
         'Score TORP 0-10 avec justification',
@@ -212,13 +165,13 @@ export default function Pricing() {
     },
     {
       name: 'Premium',
-      price: 1490,
-      period: '€ HT/an',
-      subtitle: '149€ HT/mois',
+      price: isAnnual ? 1490 : 149,
+      period: isAnnual ? '€ HT/an' : '€ HT/mois',
+      subtitle: isAnnual ? 'Économisez 298€ par an' : '149€ HT/mois',
       description: 'Analyse détaillée + rapports personnalisés',
-      configuration: '500 analyses/mois • Analyse complète • Rapports personnalisés',
       features: [
         'Tous les avantages Standard',
+        'Analyses illimitées (max 500/mois)',
         'Analyse détaillée (conformité DTU, normes)',
         'Recommandations d\'amélioration',
         'Comparaison prix marché régional',
@@ -242,7 +195,6 @@ export default function Pricing() {
       period: '',
       subtitle: 'À partir de 2 500€ HT/mois',
       description: 'Gestion patrimoine immobilier public',
-      configuration: 'Volume adapté • Analytics avancés • Support dédié',
       features: [
         'Crédits d\'analyse prépayés',
         'Dashboard patrimoine immobilier',
@@ -263,7 +215,6 @@ export default function Pricing() {
       period: '',
       subtitle: 'Solution sur-mesure',
       description: 'Plateforme complète + services',
-      configuration: 'Illimité • IA prédictive • Consulting inclus',
       features: [
         'Tous les avantages Standard',
         'IA prédictive maintenance',
@@ -283,11 +234,11 @@ export default function Pricing() {
 
   const getCurrentPlans = () => {
     switch (userType) {
-      case 'B2C': return b2cPacks;
+      case 'B2C': return b2cPlans;
       case 'B2B': return b2bPlans;
       case 'B2G': return b2gPlans;
       case 'B2B2C': return b2b2cPlans;
-      default: return b2cPacks;
+      default: return b2cPlans;
     }
   };
 
@@ -362,24 +313,26 @@ export default function Pricing() {
               </div>
             </div>
 
-            {/* Toggle annuel/mensuel */}
-            <div className="flex items-center justify-center gap-4">
-              <span className={`text-sm ${!isAnnual ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
-                Mensuel
-              </span>
-              <Switch
-                checked={isAnnual}
-                onCheckedChange={setIsAnnual}
-              />
-              <span className={`text-sm ${isAnnual ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
-                Annuel
-              </span>
-              {isAnnual && (
-                <Badge variant="outline" className="bg-success/10 text-success border-success">
-                  -25%
-                </Badge>
-              )}
-            </div>
+            {/* Toggle annuel/mensuel - seulement pour B2B et B2B2C */}
+            {(userType === 'B2B' || userType === 'B2B2C') && (
+              <div className="flex items-center justify-center gap-4">
+                <span className={`text-sm ${!isAnnual ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+                  Mensuel
+                </span>
+                <Switch
+                  checked={isAnnual}
+                  onCheckedChange={setIsAnnual}
+                />
+                <span className={`text-sm ${isAnnual ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+                  Annuel
+                </span>
+                {isAnnual && (
+                  <Badge variant="outline" className="bg-success/10 text-success border-success">
+                    -17%
+                  </Badge>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Grille des tarifs */}
@@ -412,148 +365,53 @@ export default function Pricing() {
                   <div className="space-y-2">
                     <div className="flex items-baseline justify-center gap-2">
                       {typeof plan.price === 'number' ? (
-                        <>
-                          <span className="text-4xl font-bold text-foreground">
-                            {userType === 'B2B' && typeof plan.price === 'number' && !plan.isCustom && isAnnual ? 
-                              Math.round(plan.price * 10) : 
-                              plan.price}€
-                          </span>
-                          {userType === 'B2B' && !plan.isCustom && isAnnual && (
-                            <span className="text-base text-muted-foreground">/an</span>
-                          )}
-                        </>
+                        <span className="text-4xl font-bold text-foreground">
+                          {plan.price}€
+                        </span>
                       ) : (
                         <span className="text-3xl font-bold text-foreground">
                           {plan.price}
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {userType === 'B2B' && typeof plan.price === 'number' && !plan.isCustom && isAnnual ? 
-                        'Facturé annuellement (-2 mois)' : 
-                        plan.period}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{plan.period}</p>
                   </div>
                   <p className="text-muted-foreground">{plan.description}</p>
-                  
-                  {plan.configuration && (
-                    <p className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-                      {plan.configuration}
-                    </p>
-                  )}
                 </CardHeader>
 
                 <CardContent className="space-y-6">
-                  {/* Configurateur B2B */}
-                  {plan.isCustom && userType === 'B2B' && (
-                    <div className="space-y-4 p-4 bg-muted/20 rounded-lg">
-                      <h4 className="font-semibold text-sm">Configurez votre offre :</h4>
-                      
-                      <div className="space-y-3">
-                        <div>
-                          <label className="text-xs font-medium">Nombre de devis/mois</label>
-                          <select 
-                            value={devisCount} 
-                            onChange={(e) => setDevisCount(Number(e.target.value))}
-                            className="w-full mt-1 p-2 text-xs border rounded"
-                          >
-                            <option value={10}>10 devis/mois</option>
-                            <option value={20}>20 devis/mois</option>
-                            <option value={30}>30 devis/mois</option>
-                            <option value={50}>50 devis/mois</option>
-                            <option value={100}>100 devis/mois</option>
-                            <option value={200}>200+ devis/mois</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="text-xs font-medium">Niveau de service</label>
-                          <select 
-                            value={serviceLevel} 
-                            onChange={(e) => setServiceLevel(Number(e.target.value))}
-                            className="w-full mt-1 p-2 text-xs border rounded"
-                          >
-                            {serviceOptions.map(option => (
-                              <option key={option.id} value={option.id}>
-                                {option.name} ({option.price}€/devis)
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="text-xs font-medium">Limite de projet</label>
-                          <select 
-                            value={projectLimit} 
-                            onChange={(e) => setProjectLimit(Number(e.target.value))}
-                            className="w-full mt-1 p-2 text-xs border rounded"
-                          >
-                            {limitOptions.map(option => (
-                              <option key={option.id} value={option.id}>
-                                {option.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <input 
-                            type="checkbox" 
-                            id="cctp-package"
-                            checked={cctpPackage}
-                            onChange={(e) => setCctpPackage(e.target.checked)}
-                            className="w-3 h-3"
-                          />
-                          <label htmlFor="cctp-package" className="text-xs">
-                            Package CCTP (+99€/mois)
-                          </label>
-                        </div>
-
-                        <div className="text-center p-2 bg-primary/10 rounded">
-                          <span className="text-sm font-bold">Votre tarif : {calculatePrice()}€ HT/mois</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="space-y-3">
+                  {/* Liste des fonctionnalités */}
+                  <ul className="space-y-3">
                     {plan.features.map((feature, featureIndex) => (
-                      <div key={featureIndex} className="flex items-start gap-3">
-                        <Check className="w-4 h-4 text-success mt-0.5 flex-shrink-0" />
-                        <span className="text-sm text-foreground">{feature}</span>
-                      </div>
+                      <li key={featureIndex} className="flex items-start gap-3">
+                        <Check className="w-5 h-5 text-success mt-0.5 flex-shrink-0" />
+                        <span className="text-sm text-muted-foreground">{feature}</span>
+                      </li>
                     ))}
-                    
-                    {plan.additionalServices?.map((service, serviceIndex) => (
-                      <div key={serviceIndex} className="flex items-start gap-3 opacity-60">
-                        <div className="w-4 h-4 mt-0.5 flex-shrink-0">
-                          <div className="w-2 h-2 bg-info rounded-full mt-1 mx-auto"></div>
-                        </div>
-                        <span className="text-xs text-muted-foreground">{service}</span>
-                      </div>
-                    ))}
-                  </div>
+                  </ul>
 
-                  {plan.ideal && (
-                    <div className="bg-muted/30 p-3 rounded-lg">
-                      <p className="text-xs text-muted-foreground">
-                        <span className="font-medium">Idéal pour :</span> {plan.ideal}
-                      </p>
-                    </div>
-                  )}
-
+                  {/* Target audience */}
                   {plan.target && (
-                    <div className="bg-muted/30 p-3 rounded-lg">
+                    <div className="p-3 bg-muted/30 rounded-lg">
                       <p className="text-xs text-muted-foreground">
-                        <span className="font-medium">Cible :</span> {plan.target}
+                        <strong>Idéal pour :</strong> {plan.target}
                       </p>
                     </div>
                   )}
 
+                  {/* Ideal use case pour B2C */}
+                  {plan.ideal && (
+                    <div className="p-3 bg-muted/30 rounded-lg">
+                      <p className="text-xs text-muted-foreground">
+                        <strong>Usage :</strong> {plan.ideal}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Bouton d'action */}
                   <Button 
-                    className={`w-full ${plan.popular ? '' : 'variant-outline'}`}
-                    variant={plan.popular ? 'default' : 'outline'}
-                    size="lg"
+                    className="w-full"
+                    variant={plan.popular ? "default" : "outline"}
                   >
                     {plan.buttonText}
                   </Button>
@@ -562,314 +420,63 @@ export default function Pricing() {
             ))}
           </div>
 
-          {/* Section tarification détaillée B2B */}
+          {/* Section complémentaire selon le type d'utilisateur */}
           {userType === 'B2B' && (
-            <div className="mb-16 bg-muted/20 rounded-lg p-8">
-              <h3 className="text-2xl font-bold text-center text-foreground mb-8">
-                Tarification détaillée B2B
-              </h3>
-              
-              <div className="grid md:grid-cols-3 gap-8">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Niveaux de Service</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3 text-sm">
-                      <div className="flex justify-between">
-                        <span>Score seul</span>
-                        <span className="font-medium">2,9€/devis</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Score + Reco</span>
-                        <span className="font-medium">4,9€/devis</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>+ Audit complet</span>
-                        <span className="font-medium">5,9€/devis</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Limites de Devis</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3 text-sm">
-                      <div className="flex justify-between">
-                        <span>≤ 1 000€</span>
-                        <span className="font-medium">x0,9</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>≤ 5 000€</span>
-                        <span className="font-medium">x1,0</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>≤ 15 000€</span>
-                        <span className="font-medium">x1,3</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>≤ 50 000€</span>
-                        <span className="font-medium">x1,7</span>
-                      </div>
-                       <div className="flex justify-between">
-                         <span>&gt; 50 000€</span>
-                         <span className="font-medium">x2,4</span>
-                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Remises Volume</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3 text-sm">
-                      <div className="flex justify-between">
-                        <span>10 devis/mois</span>
-                        <span className="font-medium">0%</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>20 devis/mois</span>
-                        <span className="font-medium">-5%</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>30 devis/mois</span>
-                        <span className="font-medium">-10%</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>50 devis/mois</span>
-                        <span className="font-medium">-15%</span>
-                      </div>
-                       <div className="flex justify-between">
-                         <span>100+ devis/mois</span>
-                         <span className="font-medium">-20%</span>
-                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="mt-8 p-4 bg-info/10 rounded-lg">
-                <p className="text-sm text-center text-info-foreground">
-                  <span className="font-semibold">Information :</span> Nous proposons des fonctionnalités avancées mais ne garantissons aucun retour spécifique sur investissement.
-                  <br />
-                  <span className="text-xs">Formule : Prix mensuel = max(49€, 19€ + N × U × g × r) + Package CCTP optionnel</span>
+            <div className="text-center space-y-6">
+              <div className="bg-muted/20 rounded-lg p-8">
+                <h3 className="text-2xl font-bold text-foreground mb-4">
+                  Besoin d'une solution personnalisée ?
+                </h3>
+                <p className="text-muted-foreground mb-6">
+                  Contactez notre équipe pour une démonstration personnalisée et un devis adapté à vos besoins spécifiques.
                 </p>
-              </div>
-
-              <div className="mt-6 p-4 bg-warning/10 rounded-lg">
-                <h4 className="font-semibold text-sm mb-2">Package CCTP optionnel :</h4>
-                <p className="text-xs text-muted-foreground">
-                  Le package CCTP (Cahier des Charges Techniques Personnalisé) est disponible en option pour 99€/mois. 
-                  Il inclut la génération automatique de documents contractuels personnalisés et contextuels, 
-                  ainsi que le suivi interactif depuis votre espace client.
-                </p>
+                <div className="flex flex-wrap justify-center gap-4">
+                  <Button>
+                    <Headphones className="w-4 h-4 mr-2" />
+                    Demander une démo
+                  </Button>
+                  <Button variant="outline">
+                    Parler à un expert
+                  </Button>
+                </div>
               </div>
             </div>
           )}
 
-          {/* Section offres promotionnelles */}
-          <div className="mb-16">
+          {/* FAQ Section */}
+          <div className="mt-16">
             <h3 className="text-2xl font-bold text-center text-foreground mb-8">
-              🎁 Offres Promotionnelles
-            </h3>
-            
-            <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-              <Card className="border-success">
-                <CardHeader>
-                  <CardTitle className="text-lg text-success">
-                    {userType === 'B2C' ? 'B2C - Offre Lancement' : 'B2B - Early Adopter'}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {userType === 'B2C' ? (
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <Check className="w-4 h-4 text-success" />
-                        <span>3 premiers mois : Analyse Rapide à 4,99€ (-50%)</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Check className="w-4 h-4 text-success" />
-                        <span>Pack découverte : 3 analyses pour 19,99€ (-20%)</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <Check className="w-4 h-4 text-success" />
-                        <span>3 premiers mois : -50% sur abonnement choisi</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Check className="w-4 h-4 text-success" />
-                        <span>Certification TORP : Offerte (valeur 149€)</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Check className="w-4 h-4 text-success" />
-                        <span>Formation équipe : Incluse (valeur 500€)</span>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="border-primary">
-                <CardHeader>
-                  <CardTitle className="text-lg text-primary">
-                    {userType === 'B2C' ? 'Garantie Satisfaction' : 'POC Gratuit'}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {userType === 'B2C' ? (
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <Shield className="w-4 h-4 text-primary" />
-                        <span>7 jours ou remboursé</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Shield className="w-4 h-4 text-primary" />
-                        <span>RGPD stricte, suppression sur demande</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-primary" />
-                        <span>30 jours d'essai B2B</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-primary" />
-                        <span>Formation équipe incluse</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-primary" />
-                        <span>Accompagnement dédié</span>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          {/* Section fonctionnalités */}
-          <div className="mb-16">
-            <h2 className="text-3xl font-bold text-center text-foreground mb-12">
-              Toutes les fonctionnalités TORP
-            </h2>
-            
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Zap className="w-8 h-8 text-primary" />
-                </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">Analyse instantanée</h3>
-                <p className="text-muted-foreground text-sm">
-                  Résultats en moins de 3 minutes grâce à notre IA
-                </p>
-              </div>
-
-              <div className="text-center">
-                <div className="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Shield className="w-8 h-8 text-success" />
-                </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">100% sécurisé</h3>
-                <p className="text-muted-foreground text-sm">
-                  Vos données sont chiffrées et protégées
-                </p>
-              </div>
-
-              <div className="text-center">
-                <div className="w-16 h-16 bg-info/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <BarChart3 className="w-8 h-8 text-info" />
-                </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">Analytics avancés</h3>
-                <p className="text-muted-foreground text-sm">
-                  Statistiques détaillées sur vos analyses
-                </p>
-              </div>
-
-              <div className="text-center">
-                <div className="w-16 h-16 bg-warning/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Headphones className="w-8 h-8 text-warning" />
-                </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">Support expert</h3>
-                <p className="text-muted-foreground text-sm">
-                  Équipe d'experts BTP à votre écoute
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* FAQ */}
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-foreground mb-8">
               Questions fréquentes
-            </h2>
-            
-            <div className="max-w-3xl mx-auto space-y-6">
-              <Card>
-                <CardContent className="p-6 text-left">
-                  <h3 className="font-semibold text-foreground mb-2">
-                    Comment fonctionne la tarification B2B ?
-                  </h3>
-                  <p className="text-muted-foreground">
-                    Notre tarification B2B utilise une formule basée sur le volume de devis, 
-                    le niveau de service et la complexité des projets, avec des remises dégressives.
+            </h3>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-semibold text-foreground mb-2">Puis-je changer d'offre ?</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Oui, vous pouvez upgrader ou downgrader votre abonnement à tout moment depuis votre espace client.
                   </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6 text-left">
-                  <h3 className="font-semibold text-foreground mb-2">
-                    Que comprend le CBP personnalisé ?
-                  </h3>
-                  <p className="text-muted-foreground">
-                    Le Cahier des Charges Techniques Personnalisé (CBP) détaille l'intégralité 
-                    des modalités, process, normes et fournitures de votre projet pour sécuriser votre chantier.
+                </div>
+                <div>
+                  <h4 className="font-semibold text-foreground mb-2">Les prix incluent-ils la TVA ?</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Les prix B2C incluent la TVA. Les prix B2B, B2G et B2B2C sont HT.
                   </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6 text-left">
-                  <h3 className="font-semibold text-foreground mb-2">
-                    Y a-t-il des garanties ?
-                  </h3>
-                  <p className="text-muted-foreground">
-                    Oui, nous offrons 7 jours satisfaction ou remboursé pour les particuliers, 
-                    et 30 jours d'essai gratuit pour les entreprises.
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-semibold text-foreground mb-2">Puis-je tester gratuitement ?</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Oui, nous proposons une période d'essai gratuite pour toutes nos offres professionnelles.
                   </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6 text-left">
-                  <h3 className="font-semibold text-foreground mb-2">
-                    Proposez-vous des formations ?
-                  </h3>
-                  <p className="text-muted-foreground">
-                    Oui, nous incluons des formations selon l'offre : 2h pour Starter, 
-                    4h pour Business et formation sur-site pour Pro.
+                </div>
+                <div>
+                  <h4 className="font-semibold text-foreground mb-2">Support client inclus ?</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Le support est inclus dans toutes nos offres, avec des niveaux de service différents selon votre plan.
                   </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6 text-left">
-                  <h3 className="font-semibold text-foreground mb-2">
-                    Comment contacter l'équipe commerciale ?
-                  </h3>
-                  <p className="text-muted-foreground">
-                    Contactez-nous à contact@torp.fr pour une démo personnalisée 
-                    ou un conseil sur l'offre la plus adaptée à vos besoins.
-                  </p>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
           </div>
         </div>
