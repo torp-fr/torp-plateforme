@@ -21,6 +21,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import CollectivitesDashboard from "./pages/CollectivitesDashboard";
 import ProjectDashboard from "./pages/ProjectDashboard";
 import PrescripteursDashboard from "./pages/PrescripteursDashboard";
+import ImprovedB2BDashboard from "@/pages/ImprovedB2BDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -50,6 +51,7 @@ const App = () => (
             <Route path="/collectivites-dashboard" element={<CollectivitesDashboard />} />
             <Route path="/project-dashboard" element={<ProjectDashboard />} />
             <Route path="/prescripteurs-dashboard" element={<PrescripteursDashboard />} />
+            <Route path="/improved-b2b-dashboard" element={<ImprovedB2BDashboard />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

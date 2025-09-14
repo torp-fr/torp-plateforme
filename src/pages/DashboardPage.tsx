@@ -4,7 +4,9 @@ import { Badge } from '@/components/ui/badge';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
 import { BackButton } from '@/components/BackButton';
-import { FileText, TrendingUp, PiggyBank, Hammer, Eye, Plus, BarChart3, Users, Building, Clock, Activity, Target, Calendar } from 'lucide-react';
+import { AdvancedAnalytics } from '@/components/AdvancedAnalytics';
+import { ActiveAssistant } from '@/components/ActiveAssistant';
+import { FileText, TrendingUp, PiggyBank, Hammer, Eye, Plus, BarChart3, Users, Building, Clock, Activity, Target, Calendar, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function DashboardPage() {
@@ -73,12 +75,27 @@ export default function DashboardPage() {
                 )}
               </div>
             </div>
-            <Link to="/analyze">
-              <Button size="lg">
-                <Plus className="w-4 h-4 mr-2" />
-                Analyser un devis
-              </Button>
-            </Link>
+            {userType === 'B2B' ? (
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm">
+                  <Download className="h-4 w-4 mr-2" />
+                  Exporter
+                </Button>
+                <Link to="/improved-b2b-dashboard">
+                  <Button size="sm">
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    Dashboard Avancé
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <Link to="/analyze">
+                <Button size="lg">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Analyser un devis
+                </Button>
+              </Link>
+            )}
           </div>
 
           {/* Statistiques principales */}
@@ -213,6 +230,81 @@ export default function DashboardPage() {
               </>
             )}
           </div>
+
+          {/* Redirection vers dashboard spécialisé pour B2B */}
+          {userType === 'B2B' && (
+            <div className="mb-8">
+              <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Building className="h-5 w-5 text-primary" />
+                    Dashboard Entreprise Avancé
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground mb-4">
+                    Accédez à votre dashboard professionnel avec analytics avancés, gestion d'équipe et suivi commercial.
+                  </p>
+                  <Link to="/improved-b2b-dashboard">
+                    <Button>
+                      <BarChart3 className="w-4 h-4 mr-2" />
+                      Accéder au dashboard avancé
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Redirection vers dashboard spécialisé pour B2G */}
+          {userType === 'B2G' && (
+            <div className="mb-8">
+              <Card className="border-success/20 bg-gradient-to-r from-success/5 to-success/10">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    🏛️
+                    Dashboard Collectivités
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground mb-4">
+                    Gestion intelligente de votre patrimoine immobilier avec maintenance prédictive et optimisation énergétique.
+                  </p>
+                  <Link to="/collectivites-dashboard">
+                    <Button className="bg-success hover:bg-success/90">
+                      <Building className="w-4 h-4 mr-2" />
+                      Accéder au dashboard patrimoine
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Redirection vers dashboard spécialisé pour B2B2C */}
+          {userType === 'B2B2C' && (
+            <div className="mb-8">
+              <Card className="border-warning/20 bg-gradient-to-r from-warning/5 to-warning/10">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    🎯
+                    Dashboard Prescripteurs
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground mb-4">
+                    Certifiez la qualité des entreprises que vous recommandez avec les analyses TORP illimitées.
+                  </p>
+                  <Link to="/prescripteurs-dashboard">
+                    <Button className="bg-warning hover:bg-warning/90 text-warning-foreground">
+                      <Target className="w-4 h-4 mr-2" />
+                      Accéder au dashboard prescripteur
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           <div className="grid lg:grid-cols-3 gap-8">
             {/* Historique des analyses */}
@@ -355,7 +447,27 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Analytics avancés pour B2B */}
+            {userType === 'B2B' && (
+              <div className="lg:col-span-3 mt-8">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5" />
+                      Analytics Commercial - Aperçu
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <AdvancedAnalytics userType="B2B" />
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
+
+          {/* Assistant IA actif */}
+          {userType !== 'admin' && <ActiveAssistant userType={userType as 'B2C' | 'B2B' | 'B2G' | 'B2B2C'} />}
         </div>
       </div>
     </div>
