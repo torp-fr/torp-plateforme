@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdvancedAnalytics } from "@/components/AdvancedAnalytics";
 import { ActiveAssistant } from "@/components/ActiveAssistant";
 import { PaymentManager } from "@/components/PaymentManager";
+import { MarketplaceTab } from "@/components/marketplace/MarketplaceTab";
 import { 
   Building2, 
   Users, 
@@ -22,7 +23,8 @@ import {
   BarChart3,
   UserCheck,
   Truck,
-  Receipt
+  Receipt,
+  ShoppingCart
 } from "lucide-react";
 
 export default function ImprovedB2BDashboard() {
@@ -140,11 +142,12 @@ export default function ImprovedB2BDashboard() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="team">Équipe</TabsTrigger>
             <TabsTrigger value="suppliers">Fournitures</TabsTrigger>
+            <TabsTrigger value="marketplace">Marketplace</TabsTrigger>
             <TabsTrigger value="invoicing">Facturation</TabsTrigger>
             <TabsTrigger value="payments">Paiements</TabsTrigger>
           </TabsList>
@@ -375,7 +378,17 @@ export default function ImprovedB2BDashboard() {
             <PaymentManager 
               projectId="1" 
               userType="B2B" 
-              projectAmount="156 780€" 
+              projectAmount="150000"
+            />
+          </TabsContent>
+
+          <TabsContent value="marketplace" className="space-y-6">
+            <MarketplaceTab 
+              userType="B2B" 
+              projectContext={{
+                projectType: "commercial",
+                analysisResult: { score: companyStats.averageScore }
+              }}
             />
           </TabsContent>
         </Tabs>
