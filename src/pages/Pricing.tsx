@@ -9,9 +9,10 @@ import { Check, Star, Zap, Shield, Headphones, BarChart3, Users, Building } from
 
 export default function Pricing() {
   const [isAnnual, setIsAnnual] = useState(false);
-  const [userType, setUserType] = useState<'particulier' | 'entreprise'>('particulier');
+  const [userType, setUserType] = useState<'B2C' | 'B2B' | 'B2G' | 'B2B2C'>('B2C');
 
-  const particularPacks = [
+  // Offres B2C (Particuliers)
+  const b2cPacks = [
     {
       name: 'Pack Sécurité',
       description: 'Première évaluation rapide',
@@ -117,7 +118,8 @@ export default function Pricing() {
     return Math.round(monthlyPrice + cctpPrice);
   };
 
-  const enterprisePlans = [
+  // Offres B2B (Entreprises BTP)
+  const b2bPlans = [
     {
       name: 'TORP Starter',
       price: 49,
@@ -184,7 +186,110 @@ export default function Pricing() {
     }
   ];
 
-  const currentPlans = userType === 'particulier' ? particularPacks : enterprisePlans;
+  // Offres B2B2C (Prescripteurs)  
+  const b2b2cPlans = [
+    {
+      name: 'Standard',
+      price: 649,
+      period: '€ HT/an',
+      subtitle: '64,90€ HT/mois',
+      description: 'Analyses illimitées pour certification',
+      configuration: '200 analyses/mois • Score TORP • Certification PDF',
+      features: [
+        'Analyses TORP illimitées (max 200/mois)',
+        'Score TORP 0-10 avec justification',
+        'Certificat PDF basique à joindre',
+        'Dashboard prescripteur (historique 6 mois)',
+        '2 utilisateurs maximum',
+        'Support email standard',
+      ],
+      target: 'Syndics, Architectes indépendants, Agences locales',
+      buttonText: 'Choisir Standard',
+      popular: true,
+      icon: '⚡'
+    },
+    {
+      name: 'Premium',
+      price: 1490,
+      period: '€ HT/an',
+      subtitle: '149€ HT/mois',
+      description: 'Analyse détaillée + rapports personnalisés',
+      configuration: '500 analyses/mois • Analyse complète • Rapports personnalisés',
+      features: [
+        'Tous les avantages Standard',
+        'Analyse détaillée (conformité DTU, normes)',
+        'Recommandations d\'amélioration',
+        'Comparaison prix marché régional',
+        'Rapports personnalisés (logo prescripteur)',
+        'Historique analyses illimité',
+        '5 utilisateurs maximum',
+        'Support téléphonique prioritaire',
+      ],
+      target: 'Maîtres d\'œuvre, Bureaux d\'études, Syndics pro',
+      buttonText: 'Choisir Premium',
+      popular: false,
+      icon: '🎯'
+    }
+  ];
+
+  // Offres B2G (Collectivités)
+  const b2gPlans = [
+    {
+      name: 'Collectivité Standard',
+      price: 'Sur devis',
+      period: '',
+      subtitle: 'À partir de 2 500€ HT/mois',
+      description: 'Gestion patrimoine immobilier public',
+      configuration: 'Volume adapté • Analytics avancés • Support dédié',
+      features: [
+        'Crédits d\'analyse prépayés',
+        'Dashboard patrimoine immobilier',
+        'Suivi maintenance prédictive',
+        'Rapports conformité réglementaire',
+        'Interface multi-utilisateurs',
+        'Formation équipes incluse',
+        'Support prioritaire',
+      ],
+      target: 'Mairies, Départements, Régions, Bailleurs sociaux',
+      buttonText: 'Demander un devis',
+      popular: true,
+      icon: '🏛️'
+    },
+    {
+      name: 'Collectivité Premium',
+      price: 'Sur devis',
+      period: '',
+      subtitle: 'Solution sur-mesure',
+      description: 'Plateforme complète + services',
+      configuration: 'Illimité • IA prédictive • Consulting inclus',
+      features: [
+        'Tous les avantages Standard',
+        'IA prédictive maintenance',
+        'Optimisation énergétique assistée',
+        'Intégration ERP/SIRH existant',
+        'Account manager dédié',
+        'Consulting spécialisé inclus',
+        'API complète',
+        'White label possible',
+      ],
+      target: 'Grandes collectivités, Métropoles, EPIC',
+      buttonText: 'Contacter l\'équipe',
+      popular: false,
+      icon: '🌟'
+    }
+  ];
+
+  const getCurrentPlans = () => {
+    switch (userType) {
+      case 'B2C': return b2cPacks;
+      case 'B2B': return b2bPlans;
+      case 'B2G': return b2gPlans;
+      case 'B2B2C': return b2b2cPlans;
+      default: return b2cPacks;
+    }
+  };
+
+  const currentPlans = getCurrentPlans();
 
   return (
     <div className="min-h-screen bg-background">
@@ -207,28 +312,50 @@ export default function Pricing() {
 
             {/* Toggle type d'utilisateur */}
             <div className="flex items-center justify-center gap-4 mb-8">
-              <div className="flex bg-muted rounded-lg p-1">
+              <div className="grid grid-cols-4 bg-muted rounded-lg p-1">
                 <button
-                  onClick={() => setUserType('particulier')}
-                  className={`px-6 py-3 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
-                    userType === 'particulier' 
+                  onClick={() => setUserType('B2C')}
+                  className={`px-4 py-3 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
+                    userType === 'B2C' 
                       ? 'bg-background text-foreground shadow-soft' 
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   <Users className="w-4 h-4" />
-                  Particulier
+                  B2C
                 </button>
                 <button
-                  onClick={() => setUserType('entreprise')}
-                  className={`px-6 py-3 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
-                    userType === 'entreprise' 
+                  onClick={() => setUserType('B2B')}
+                  className={`px-4 py-3 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
+                    userType === 'B2B' 
                       ? 'bg-background text-foreground shadow-soft' 
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   <Building className="w-4 h-4" />
-                  Entreprise
+                  B2B
+                </button>
+                <button
+                  onClick={() => setUserType('B2G')}
+                  className={`px-4 py-3 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
+                    userType === 'B2G' 
+                      ? 'bg-background text-foreground shadow-soft' 
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  🏛️
+                  B2G
+                </button>
+                <button
+                  onClick={() => setUserType('B2B2C')}
+                  className={`px-4 py-3 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
+                    userType === 'B2B2C' 
+                      ? 'bg-background text-foreground shadow-soft' 
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  🎯
+                  B2B2C
                 </button>
               </div>
             </div>
@@ -254,7 +381,11 @@ export default function Pricing() {
           </div>
 
           {/* Grille des tarifs */}
-          <div className={`grid gap-8 ${userType === 'particulier' ? 'lg:grid-cols-2 xl:grid-cols-4' : 'lg:grid-cols-3'} mb-16`}>
+          <div className={`grid gap-8 ${
+            userType === 'B2C' ? 'lg:grid-cols-2 xl:grid-cols-4' : 
+            userType === 'B2B' ? 'lg:grid-cols-3' :
+            'lg:grid-cols-2'
+          } mb-16`}>
             {currentPlans.map((plan, index) => (
               <Card key={index} className={`relative ${plan.popular ? 'border-primary shadow-strong' : 'border-border'}`}>
                 {plan.popular && (
@@ -303,7 +434,7 @@ export default function Pricing() {
 
                 <CardContent className="space-y-6">
                   {/* Configurateur B2B */}
-                  {plan.isCustom && userType === 'entreprise' && (
+                  {plan.isCustom && userType === 'B2B' && (
                     <div className="space-y-4 p-4 bg-muted/20 rounded-lg">
                       <h4 className="font-semibold text-sm">Configurez votre offre :</h4>
                       
@@ -421,7 +552,7 @@ export default function Pricing() {
           </div>
 
           {/* Section tarification détaillée B2B */}
-          {userType === 'entreprise' && (
+          {userType === 'B2B' && (
             <div className="mb-16 bg-muted/20 rounded-lg p-8">
               <h3 className="text-2xl font-bold text-center text-foreground mb-8">
                 Tarification détaillée B2B
@@ -540,11 +671,11 @@ export default function Pricing() {
               <Card className="border-success">
                 <CardHeader>
                   <CardTitle className="text-lg text-success">
-                    {userType === 'particulier' ? 'B2C - Offre Lancement' : 'B2B - Early Adopter'}
+                    {userType === 'B2C' ? 'B2C - Offre Lancement' : 'B2B - Early Adopter'}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {userType === 'particulier' ? (
+                  {userType === 'B2C' ? (
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center gap-2">
                         <Check className="w-4 h-4 text-success" />
@@ -577,11 +708,11 @@ export default function Pricing() {
               <Card className="border-primary">
                 <CardHeader>
                   <CardTitle className="text-lg text-primary">
-                    {userType === 'particulier' ? 'Garantie Satisfaction' : 'POC Gratuit'}
+                    {userType === 'B2C' ? 'Garantie Satisfaction' : 'POC Gratuit'}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {userType === 'particulier' ? (
+                  {userType === 'B2C' ? (
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center gap-2">
                         <Shield className="w-4 h-4 text-primary" />
