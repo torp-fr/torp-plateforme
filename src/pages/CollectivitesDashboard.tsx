@@ -123,7 +123,11 @@ const CollectivitesDashboard = () => {
               <Building2 className="w-8 h-8 text-primary" />
               Observatoire Territorial BTP
             </h1>
-            <p className="text-muted-foreground mt-2">Dashboard Collectivités - Pilotage intelligent du territoire</p>
+            <p className="text-muted-foreground mt-2">Premier service public numérique BTP territorial</p>
+            <div className="flex items-center gap-2 mt-2">
+              <Badge variant="success">Observatoire: 10k€/an</Badge>
+              <Badge variant="outline">Participation: 70% active</Badge>
+            </div>
           </div>
           <div className="flex gap-3">
             <Button variant="outline" size="sm">
@@ -142,10 +146,11 @@ const CollectivitesDashboard = () => {
         </div>
 
         <Tabs defaultValue="executive" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="executive">Vue Exécutive</TabsTrigger>
             <TabsTrigger value="operational">Opérationnel</TabsTrigger>
             <TabsTrigger value="citizens">Citoyens</TabsTrigger>
+            <TabsTrigger value="participation">Participation</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="alerts">Alertes</TabsTrigger>
           </TabsList>
