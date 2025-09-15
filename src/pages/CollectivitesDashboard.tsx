@@ -527,6 +527,8 @@ const CollectivitesDashboard = () => {
               </Card>
             </div>
           </TabsContent>
+
+          <TabsContent value="analytics" className="space-y-6">
             {/* Analytics avancées */}
             <div className="grid gap-6 md:grid-cols-2">
               <Card>
