@@ -6,7 +6,7 @@ import { Header } from '@/components/Header';
 import { BackButton } from '@/components/BackButton';
 import { AdvancedAnalytics } from '@/components/AdvancedAnalytics';
 import { ActiveAssistant } from '@/components/ActiveAssistant';
-import { FileText, TrendingUp, PiggyBank, Hammer, Eye, Plus, BarChart3, Users, Building, Clock, Activity, Target, Calendar, Download } from 'lucide-react';
+import { FileText, TrendingUp, PiggyBank, Hammer, Eye, Plus, BarChart3, Users, Building, Clock, Activity, Target, Calendar, Download, Home } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function DashboardPage() {

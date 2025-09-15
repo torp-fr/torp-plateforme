@@ -114,7 +114,7 @@ export default function B2CDashboard() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed': return 'success';
-      case 'tracking': return 'primary';
+      case 'tracking': return 'default';
       case 'pending': return 'warning';
       case 'upcoming': return 'secondary';
       default: return 'secondary';
@@ -298,7 +298,7 @@ export default function B2CDashboard() {
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
                             <Badge variant="outline">{analysis.type}</Badge>
-                            <Badge variant={getStatusColor(analysis.status) === 'primary' ? 'default' : getStatusColor(analysis.status)}>
+                            <Badge variant={getStatusColor(analysis.status)}>
                               {analysis.status === 'tracking' ? 'Suivi actif' : 'Terminé'}
                             </Badge>
                           </div>
