@@ -7,6 +7,33 @@ export interface UserData {
   source?: TrafficSource;
 }
 
+export interface ParcelData {
+  surfaceTotale: number;
+  surfaceConstruiteExistante: number;
+  zone: string;
+  cosMaximum: number;
+  cesMaximum: number;
+  hauteurMax: string;
+  retraitVoirie: number;
+  retraitLimites: number;
+  potentielConstructible: {
+    surfacePlancherMax: number;
+    surfacePlancherDisponible: number;
+    emprisesolMax: number;
+    emprisesolDisponible: number;
+  };
+}
+
+export interface RiskAnalysis {
+  zoneInondable: 'rouge' | 'bleue' | 'verte';
+  argileGonflante: 'fort' | 'moyen' | 'faible';
+  distanceRaccordementEgout: number;
+  largeurAcces: number;
+  score: number;
+  alerts: string[];
+  surcouts: { description: string; montant: number }[];
+}
+
 export interface LocationData {
   region: string;
   prixMoyenM2: number;
@@ -100,4 +127,117 @@ export interface Alert {
   niveau: 'info' | 'warning' | 'danger';
   message: string;
   dateCreation: Date;
+}
+
+// Phase 3: Système de Paiements Avancé
+export interface PaymentMethod {
+  type: 'cb' | 'virement' | 'cheque' | 'especes';
+  details: string;
+  commission: number;
+}
+
+export interface PaymentSequestre {
+  id: string;
+  projetId: string;
+  montant: number;
+  dateCreation: Date;
+  dateLiberationPrevue: Date;
+  dateLiberationReelle?: Date;
+  status: 'en_attente' | 'bloque' | 'libere' | 'litige';
+  commissionTorp: number;
+  justificationLiberation: string[];
+}
+
+export interface PaymentReminder {
+  id: string;
+  paiementId: string;
+  type: 'soft' | 'urgent' | 'formal' | 'legal';
+  canal: 'sms' | 'email' | 'push' | 'courrier';
+  message: string;
+  dateEnvoi: Date;
+  status: 'envoye' | 'lu' | 'ignore' | 'repondu';
+}
+
+export interface PaymentDispute {
+  id: string;
+  projetId: string;
+  initiateur: 'client' | 'artisan';
+  motif: 'qualite' | 'delai' | 'prix' | 'abandon';
+  description: string;
+  preuves: string[];
+  status: 'ouvert' | 'mediation' | 'resolu' | 'escalade';
+  dateCreation: Date;
+  resolution?: string;
+}
+
+export interface TorpAnalysisResult {
+  id: string;
+  devisId: string;
+  scoreGlobal: number;
+  grade: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F';
+  
+  // Analyse entreprise (250 points)
+  scoreEntreprise: {
+    fiabilite: number;
+    santeFinnaciere: number;
+    anciennete: number;
+    assurances: number;
+    certifications: number;
+    reputation: number;
+    risques: string[];
+    benefices: string[];
+  };
+  
+  // Analyse prix (300 points)
+  scorePrix: {
+    vsMarche: number;
+    transparence: number;
+    coherence: number;
+    margeEstimee: number;
+    ajustementQualite: number;
+    economiesPotentielles: number;
+  };
+  
+  // Complétude technique (200 points)
+  scoreCompletude: {
+    elementsManquants: string[];
+    incohérences: string[];
+    conformiteNormes: number;
+    risquesTechniques: string[];
+  };
+  
+  // Conformité réglementaire (150 points)
+  scoreConformite: {
+    assurances: boolean;
+    plu: boolean;
+    normes: boolean;
+    accessibilite: boolean;
+    defauts: string[];
+  };
+  
+  // Délais (100 points)
+  scoreDelais: {
+    realisme: number;
+    vsMarche: number;
+    planningDetaille: boolean;
+    penalitesRetard: boolean;
+  };
+  
+  recommandations: Recommendation[];
+  surcoutsDetectes: number;
+  budgetRealEstime: number;
+  margeNegociation: { min: number; max: number };
+  
+  dateAnalyse: Date;
+  dureeAnalyse: number; // en secondes
+}
+
+export interface Recommendation {
+  type: 'negociation' | 'verification' | 'protection' | 'amelioration';
+  priorite: 'haute' | 'moyenne' | 'faible';
+  titre: string;
+  description: string;
+  actionSuggeree: string;
+  impactBudget?: number;
+  delaiAction?: number; // en jours
 }
