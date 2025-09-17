@@ -14,7 +14,11 @@ import {
   ArrowRight,
   CheckCircle,
   Clock,
-  Shield
+  Shield,
+  BarChart3,
+  ShoppingCart,
+  Users,
+  Bot
 } from 'lucide-react';
 
 import QualificationQuiz from '@/components/QualificationQuiz';
@@ -22,6 +26,9 @@ import ScoringResult from '@/components/ScoringResult';
 import ParcelAnalysis from '@/components/ParcelAnalysis';
 import DevisAnalyzer from '@/components/DevisAnalyzer';
 import PaymentSystem from '@/components/PaymentSystem';
+import { AdvancedAnalytics } from '@/components/AdvancedAnalytics';
+import { ProjectComparison } from '@/components/ProjectComparison';
+import { ActiveAssistant } from '@/components/ActiveAssistant';
 
 import { 
   type ScoringResult as ScoringData, 
@@ -40,7 +47,10 @@ type FlowPhase =
   | 'parcel_analysis' 
   | 'devis_analysis'
   | 'payment_management'
-  | 'project_tracking'
+  | 'advanced_analytics'
+  | 'marketplace'
+  | 'project_comparison'
+  | 'active_assistant'
   | 'complete';
 
 const TorpCompleteFlow: React.FC = () => {
@@ -60,7 +70,10 @@ const TorpCompleteFlow: React.FC = () => {
     { id: 'parcel_analysis', title: 'Foncière', icon: MapPin, description: 'Analyse parcelle & PLU' },
     { id: 'devis_analysis', title: 'Analyse IA', icon: FileText, description: '47 critères analysés' },
     { id: 'payment_management', title: 'Paiements', icon: CreditCard, description: 'Séquestre & jalons' },
-    { id: 'project_tracking', title: 'Suivi', icon: Shield, description: 'Tracking temps réel' }
+    { id: 'advanced_analytics', title: 'Analytics', icon: BarChart3, description: 'Insights avancés' },
+    { id: 'marketplace', title: 'Marketplace', icon: ShoppingCart, description: 'IA professionnels' },
+    { id: 'project_comparison', title: 'Comparaison', icon: Users, description: 'Moteur recommandations' },
+    { id: 'active_assistant', title: 'Assistant IA', icon: Bot, description: 'Écosystème complet' }
   ];
 
   // Handlers pour chaque phase
@@ -363,12 +376,196 @@ const TorpCompleteFlow: React.FC = () => {
                 size="lg" 
                 onClick={() => {
                   setCompletedPhases(prev => [...prev, 'payment_management']);
-                  setCurrentPhase('complete');
+                  setCurrentPhase('advanced_analytics');
                 }}
               >
-                Finaliser le Parcours TORP
+                Continuer vers Analytics Avancé
               </Button>
             </div>
+          </div>
+        )}
+
+        {currentPhase === 'advanced_analytics' && scoringResult && (
+          <div className="space-y-8">
+            <div className="text-center">
+              <Badge variant="outline" className="mb-4">Phase 5 : Analytics Avancé</Badge>
+              <h2 className="text-2xl font-bold mb-2">Tableau de Bord Intelligent</h2>
+              <p className="text-muted-foreground">Analyses prédictives et insights personnalisés</p>
+            </div>
+            <AdvancedAnalytics userType={userData?.profileType || 'B2C'} />
+            <div className="text-center">
+              <Button 
+                size="lg" 
+                onClick={() => {
+                  setCompletedPhases(prev => [...prev, 'advanced_analytics']);
+                  setCurrentPhase('marketplace');
+                }}
+              >
+                Accéder au Marketplace IA
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {currentPhase === 'marketplace' && (
+          <div className="space-y-8">
+            <div className="text-center">
+              <Badge variant="outline" className="mb-4">Phase 6 : Marketplace IA</Badge>
+              <h2 className="text-2xl font-bold mb-2">Professionnels Recommandés</h2>
+              <p className="text-muted-foreground">Sélection intelligente basée sur votre profil TORP</p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <Badge className="bg-green-100 text-green-800 border-green-200">Score TORP 9.2/10</Badge>
+                  <div className="text-2xl">⭐</div>
+                </div>
+                <h3 className="font-bold text-lg mb-2">SAS Bâti Excellence</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Spécialisé rénovation énergétique • 15 ans d'expérience
+                </p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Délai moyen:</span>
+                    <span className="font-medium">2.3 mois</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Satisfaction client:</span>
+                    <span className="font-medium">4.8/5</span>
+                  </div>
+                </div>
+                <Button className="w-full mt-4" size="sm">Contacter</Button>
+              </Card>
+
+              <Card className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <Badge className="bg-blue-100 text-blue-800 border-blue-200">Score TORP 8.9/10</Badge>
+                  <div className="text-2xl">🏗️</div>
+                </div>
+                <h3 className="font-bold text-lg mb-2">Artisans Pros</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Multi-spécialités • Certification RGE
+                </p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Délai moyen:</span>
+                    <span className="font-medium">3.1 mois</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Satisfaction client:</span>
+                    <span className="font-medium">4.6/5</span>
+                  </div>
+                </div>
+                <Button className="w-full mt-4" size="sm" variant="outline">Voir profil</Button>
+              </Card>
+
+              <Card className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <Badge className="bg-purple-100 text-purple-800 border-purple-200">Score TORP 8.7/10</Badge>
+                  <div className="text-2xl">🔨</div>
+                </div>
+                <h3 className="font-bold text-lg mb-2">Réno Smart</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Innovation BIM • Garantie 12 ans
+                </p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Délai moyen:</span>
+                    <span className="font-medium">2.8 mois</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Satisfaction client:</span>
+                    <span className="font-medium">4.7/5</span>
+                  </div>
+                </div>
+                <Button className="w-full mt-4" size="sm" variant="outline">Comparer</Button>
+              </Card>
+            </div>
+
+            <div className="text-center">
+              <Button 
+                size="lg" 
+                onClick={() => {
+                  setCompletedPhases(prev => [...prev, 'marketplace']);
+                  setCurrentPhase('project_comparison');
+                }}
+              >
+                Lancer la Comparaison Projet
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {currentPhase === 'project_comparison' && scoringResult && (
+          <div className="space-y-8">
+            <div className="text-center">
+              <Badge variant="outline" className="mb-4">Phase 7 : Comparaison Intelligente</Badge>
+              <h2 className="text-2xl font-bold mb-2">Moteur de Recommandations</h2>
+              <p className="text-muted-foreground">Analyse comparative basée sur l'IA TORP</p>
+            </div>
+            <ProjectComparison currentProjectId="torp-demo" />
+            <div className="text-center">
+              <Button 
+                size="lg" 
+                onClick={() => {
+                  setCompletedPhases(prev => [...prev, 'project_comparison']);
+                  setCurrentPhase('active_assistant');
+                }}
+              >
+                Activer l'Assistant IA 24/7
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {currentPhase === 'active_assistant' && userData && scoringResult && (
+          <div className="space-y-8">
+            <div className="text-center">
+              <Badge variant="outline" className="mb-4">Phase 8 : Assistant IA Actif</Badge>
+              <h2 className="text-2xl font-bold mb-2">Écosystème Complet TORP</h2>
+              <p className="text-muted-foreground">Intelligence artificielle 24/7 pour l'optimisation continue</p>
+            </div>
+            
+            <ActiveAssistant
+              userType={userData.profileType}
+              context="torp-complete-phase-8"
+            />
+
+            <Card className="bg-gradient-to-r from-primary/10 to-success/10 border-primary/20">
+              <CardContent className="p-8 text-center">
+                <Award className="h-12 w-12 text-primary mx-auto mb-4" />
+                <h3 className="text-2xl font-bold mb-4">Parcours TORP Intégral Terminé</h3>
+                <p className="text-lg text-muted-foreground mb-6">
+                  Votre projet bénéficie maintenant de l'écosystème complet TORP avec 
+                  intelligence artificielle, paiements sécurisés et suivi en temps réel.
+                </p>
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <div>
+                    <div className="text-2xl font-bold text-primary">8/8</div>
+                    <div className="text-sm text-muted-foreground">Phases Complétées</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-success">{scoringResult.total}/100</div>
+                    <div className="text-sm text-muted-foreground">Score Final</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-warning">24/7</div>
+                    <div className="text-sm text-muted-foreground">Support IA</div>
+                  </div>
+                </div>
+                <Button 
+                  size="lg" 
+                  onClick={() => {
+                    setCompletedPhases(prev => [...prev, 'active_assistant']);
+                    setCurrentPhase('complete');
+                  }}
+                  className="px-8"
+                >
+                  Finaliser et Accéder au Dashboard
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         )}
 

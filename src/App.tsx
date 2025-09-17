@@ -27,6 +27,7 @@ import B2B2CDashboard from "./pages/B2B2CDashboard";
 import Marketplace from "./pages/Marketplace";
 import NotFound from "./pages/NotFound";
 import DiscoveryFlow from "./pages/DiscoveryFlow";
+import TorpCompleteFlow from "./pages/TorpCompleteFlow";
 
 const queryClient = new QueryClient();
 
@@ -59,6 +60,7 @@ const App = () => (
             <Route path="/marketplace" element={<Marketplace />} />
             <Route path="/b2c-dashboard" element={<B2CDashboard />} />
             <Route path="/discovery" element={<DiscoveryFlow />} />
+            <Route path="/torp-complete" element={<TorpCompleteFlow />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

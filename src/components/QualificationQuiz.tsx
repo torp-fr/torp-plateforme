@@ -175,7 +175,8 @@ const QualificationQuiz: React.FC<QualificationQuizProps> = ({ onComplete }) => 
           id: `user_${Date.now()}`,
           scoreInitial: scoringResult.total,
           location: locationData || undefined,
-          source: { type: 'direct', points: 10 }
+          source: { type: 'direct', points: 10 },
+          profileType: 'B2C'
         };
         
         onComplete(scoringResult, userData);
