@@ -67,6 +67,9 @@ export const Header = () => {
             </>
           ) : (
             <>
+              <Link to="/torp-complete" className="text-foreground hover:text-primary transition-colors font-semibold">
+                TORP Complet
+              </Link>
               <Link to="/discovery" className="text-foreground hover:text-primary transition-colors">
                 Découverte
               </Link>
