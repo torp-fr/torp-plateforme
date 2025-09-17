@@ -26,6 +26,7 @@ import B2CDashboard from "./pages/B2CDashboard";
 import B2B2CDashboard from "./pages/B2B2CDashboard";
 import Marketplace from "./pages/Marketplace";
 import NotFound from "./pages/NotFound";
+import DiscoveryFlow from "./pages/DiscoveryFlow";
 
 const queryClient = new QueryClient();
 
@@ -57,6 +58,7 @@ const App = () => (
             <Route path="/improved-b2b-dashboard" element={<ImprovedB2BDashboard />} />
             <Route path="/marketplace" element={<Marketplace />} />
             <Route path="/b2c-dashboard" element={<B2CDashboard />} />
+            <Route path="/discovery" element={<DiscoveryFlow />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
