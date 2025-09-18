@@ -70,6 +70,9 @@ export const Header = () => {
               <Link to="/torp-complete" className="text-foreground hover:text-primary transition-colors font-semibold">
                 TORP Complet
               </Link>
+              <Link to="/segments" className="text-foreground hover:text-primary transition-colors">
+                Segments IA
+              </Link>
               <Link to="/discovery" className="text-foreground hover:text-primary transition-colors">
                 Découverte
               </Link>

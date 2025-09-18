@@ -28,6 +28,7 @@ import Marketplace from "./pages/Marketplace";
 import NotFound from "./pages/NotFound";
 import DiscoveryFlow from "./pages/DiscoveryFlow";
 import TorpCompleteFlow from "./pages/TorpCompleteFlow";
+import AlgorithmicSegments from "./pages/AlgorithmicSegments";
 
 const queryClient = new QueryClient();
 
@@ -61,6 +62,7 @@ const App = () => (
             <Route path="/b2c-dashboard" element={<B2CDashboard />} />
             <Route path="/discovery" element={<DiscoveryFlow />} />
             <Route path="/torp-complete" element={<TorpCompleteFlow />} />
+            <Route path="/segments" element={<AlgorithmicSegments />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
