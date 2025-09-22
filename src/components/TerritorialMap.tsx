@@ -66,11 +66,11 @@ const TerritorialMap = () => {
     return 'bg-red-500';
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string): "default" | "secondary" | "outline" | "destructive" => {
     const variants = {
-      'termine': 'default',
-      'en-cours': 'secondary',
-      'alerte': 'destructive'
+      'termine': 'default' as const,
+      'en-cours': 'secondary' as const,
+      'alerte': 'destructive' as const
     };
     return variants[status as keyof typeof variants] || 'outline';
   };

@@ -128,7 +128,7 @@ const CollectivitesDashboard = () => {
             </h1>
             <p className="text-muted-foreground mt-2">Premier service public numérique BTP territorial</p>
             <div className="flex items-center gap-2 mt-2">
-              <Badge variant="success">Observatoire: 10k€/an</Badge>
+              <Badge variant="default">Observatoire: 10k€/an</Badge>
               <Badge variant="outline">Participation: 70% active</Badge>
             </div>
           </div>
@@ -314,6 +314,10 @@ const CollectivitesDashboard = () => {
             </Card>
           </TabsContent>
 
+          <TabsContent value="cartographie" className="space-y-6">
+            <TerritorialMap />
+          </TabsContent>
+
           <TabsContent value="citizens" className="space-y-6">
             {/* Baromètre citoyen */}
             <div className="grid gap-6 md:grid-cols-3">
@@ -418,164 +422,17 @@ const CollectivitesDashboard = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="cartographie">
-            <TerritorialMap />
-          </TabsContent>
-
           <TabsContent value="participation" className="space-y-6">
             <ParticipationManager />
           </TabsContent>
 
-          <TabsContent value="permissions" className="space-y-6">
-            <UserPermissionsManager />
-          </TabsContent>
-            {/* Mécanisme de participation */}
-            <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Euro className="h-5 w-5 text-primary" />
-                  Mécanisme Participation Habitants
-                </CardTitle>
-                <CardDescription>
-                  Enveloppe budgétaire pour soutenir les analyses TORP des citoyens
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid md:grid-cols-3 gap-6">
-                  <div className="p-4 border rounded-lg">
-                    <h4 className="font-medium mb-2">Package Minimal (10%)</h4>
-                    <div className="text-2xl font-bold text-foreground mb-2">€30,000</div>
-                    <p className="text-sm text-muted-foreground">Capture 10% du marché local</p>
-                  </div>
-                  <div className="p-4 border rounded-lg border-primary bg-primary/5">
-                    <h4 className="font-medium mb-2">Package Recommandé (20%)</h4>
-                    <div className="text-2xl font-bold text-primary mb-2">€60,000</div>
-                    <p className="text-sm text-muted-foreground">Capture 20% - Équilibre optimal</p>
-                    <Badge variant="default" className="mt-2">Recommandé</Badge>
-                  </div>
-                  <div className="p-4 border rounded-lg">
-                    <h4 className="font-medium mb-2">Package Optimal (40%)</h4>
-                    <div className="text-2xl font-bold text-foreground mb-2">€120,000</div>
-                    <p className="text-sm text-muted-foreground">Capture 40% - Impact maximum</p>
-                  </div>
-                </div>
-                
-                <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-                  <h4 className="font-medium mb-3">Configuration Active</h4>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm">Taux de participation</span>
-                        <Badge variant="success">70%</Badge>
-                      </div>
-                      <Progress value={70} className="h-2" />
-                    </div>
-                    <div>
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm">Budget consommé</span>
-                        <span className="font-medium">€18,450 / €60,000</span>
-                      </div>
-                      <Progress value={31} className="h-2" />
-                    </div>
-                  </div>
-                  
-                  <div className="mt-4 grid grid-cols-3 gap-4 text-center">
-                    <div>
-                      <div className="text-lg font-bold">287</div>
-                      <div className="text-xs text-muted-foreground">Analyses financées</div>
-                    </div>
-                    <div>
-                      <div className="text-lg font-bold">€47k</div>
-                      <div className="text-xs text-muted-foreground">Économies citoyens</div>
-                    </div>
-                    <div>
-                      <div className="text-lg font-bold">94%</div>
-                      <div className="text-xs text-muted-foreground">Satisfaction</div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <div className="grid md:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Algorithme de Calcul</CardTitle>
-                  <CardDescription>Formule de calcul de l'enveloppe participation</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="p-4 bg-code rounded-lg font-mono text-sm">
-                    <div className="text-primary">Budget = Foyers × 12% × Taux × 15€</div>
-                    <div className="mt-2 text-muted-foreground">
-                      <div>• Foyers: 500,000</div>
-                      <div>• Taux travaux annuel: 12%</div>
-                      <div>• Taux capture: 20%</div>
-                      <div>• Prix moyen analyse: 15€</div>
-                    </div>
-                    <div className="mt-3 pt-3 border-t text-success">
-                      = 500k × 12% × 20% × 15€ = 180,000€
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>Tableau de Bord Participation</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <Button className="w-full">
-                      <Settings className="h-4 w-4 mr-2" />
-                      Modifier le taux participation
-                    </Button>
-                    <Button variant="outline" className="w-full">
-                      <Download className="h-4 w-4 mr-2" />
-                      Exporter rapport mensuel
-                    </Button>
-                    <Button variant="outline" className="w-full">
-                      <Activity className="h-4 w-4 mr-2" />
-                      Historique consommation
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
           <TabsContent value="analytics" className="space-y-6">
-            <Card>
-              <CardContent className="p-6">
-                <div className="text-center text-muted-foreground">
-                  Analytics avancés - Module existant conservé
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="alerts" className="space-y-6">
-            <Card>
-              <CardContent className="p-6">
-                <div className="text-center text-muted-foreground">
-                  Système d'alertes - Module existant conservé
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
-    </div>
-  );
-};
-
-export default CollectivitesDashboard;
-            {/* Analytics avancées */}
             <div className="grid gap-6 md:grid-cols-2">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <TreePine className="w-5 h-5" />
-                    Transition Énergétique
+                    Impact Environnemental
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -627,6 +484,10 @@ export default CollectivitesDashboard;
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="permissions" className="space-y-6">
+            <UserPermissionsManager />
           </TabsContent>
 
           <TabsContent value="alerts" className="space-y-6">

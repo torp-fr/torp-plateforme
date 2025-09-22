@@ -8,7 +8,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle } from 'lucide-react';
+import { 
+  CheckCircle, 
+  Crown, 
+  Eye, 
+  Settings, 
+  UserCheck, 
+  Users, 
+  Plus, 
+  MapPin, 
+  Calendar, 
+  Edit, 
+  Trash2, 
+  Lock, 
+  Shield, 
+  Unlock, 
+  Building, 
+  Download 
+} from 'lucide-react';
 
 interface User {
   id: string;
@@ -115,21 +132,21 @@ const UserPermissionsManager = () => {
     return icons[role as keyof typeof icons] || Users;
   };
 
-  const getRoleBadgeVariant = (role: string) => {
+  const getRoleBadgeVariant = (role: string): "default" | "secondary" | "outline" | "destructive" => {
     const variants = {
-      'super-admin': 'default',
-      'analyste': 'secondary',
-      'gestionnaire-budget': 'outline',
-      'invite': 'destructive'
+      'super-admin': 'default' as const,
+      'analyste': 'secondary' as const,
+      'gestionnaire-budget': 'outline' as const,
+      'invite': 'destructive' as const
     };
     return variants[role as keyof typeof variants] || 'outline';
   };
 
-  const getStatusBadgeVariant = (status: string) => {
+  const getStatusBadgeVariant = (status: string): "default" | "secondary" | "outline" => {
     const variants = {
-      'active': 'default',
-      'inactive': 'secondary',
-      'pending': 'outline'
+      'active': 'default' as const,
+      'inactive': 'secondary' as const,
+      'pending': 'outline' as const
     };
     return variants[status as keyof typeof variants] || 'outline';
   };
@@ -472,7 +489,7 @@ const UserPermissionsManager = () => {
                   <Shield className="h-4 w-4" />
                   <AlertDescription>
                     Les utilisateurs héritent automatiquement des permissions selon la hiérarchie : 
-                    Région > Département > Métropole > Commune
+                    Région {'>'}  Département {'>'}  Métropole {'>'}  Commune
                   </AlertDescription>
                 </Alert>
 
