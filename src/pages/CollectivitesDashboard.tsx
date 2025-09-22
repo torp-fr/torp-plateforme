@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import TerritorialMap from "@/components/TerritorialMap";
+import ParticipationManager from "@/components/ParticipationManager";
+import UserPermissionsManager from "@/components/UserPermissionsManager";
 import { 
   Building2, 
   TrendingUp, 
@@ -146,12 +149,14 @@ const CollectivitesDashboard = () => {
         </div>
 
         <Tabs defaultValue="executive" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-8">
             <TabsTrigger value="executive">Vue Exécutive</TabsTrigger>
             <TabsTrigger value="operational">Opérationnel</TabsTrigger>
+            <TabsTrigger value="cartographie">Cartographie</TabsTrigger>
             <TabsTrigger value="citizens">Citoyens</TabsTrigger>
             <TabsTrigger value="participation">Participation</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
+            <TabsTrigger value="permissions">Permissions</TabsTrigger>
             <TabsTrigger value="alerts">Alertes</TabsTrigger>
           </TabsList>
 
@@ -413,7 +418,17 @@ const CollectivitesDashboard = () => {
             </Card>
           </TabsContent>
 
+          <TabsContent value="cartographie">
+            <TerritorialMap />
+          </TabsContent>
+
           <TabsContent value="participation" className="space-y-6">
+            <ParticipationManager />
+          </TabsContent>
+
+          <TabsContent value="permissions" className="space-y-6">
+            <UserPermissionsManager />
+          </TabsContent>
             {/* Mécanisme de participation */}
             <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10">
               <CardHeader>
@@ -529,6 +544,31 @@ const CollectivitesDashboard = () => {
           </TabsContent>
 
           <TabsContent value="analytics" className="space-y-6">
+            <Card>
+              <CardContent className="p-6">
+                <div className="text-center text-muted-foreground">
+                  Analytics avancés - Module existant conservé
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="alerts" className="space-y-6">
+            <Card>
+              <CardContent className="p-6">
+                <div className="text-center text-muted-foreground">
+                  Système d'alertes - Module existant conservé
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
+};
+
+export default CollectivitesDashboard;
             {/* Analytics avancées */}
             <div className="grid gap-6 md:grid-cols-2">
               <Card>
