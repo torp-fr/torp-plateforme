@@ -8,6 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { useApp } from '@/context/AppContext';
 import { Link } from 'react-router-dom';
+import { ProjectTimeline } from "@/components/ProjectTimeline";
+import { ProjectBudget } from "@/components/ProjectBudget";
+import { ProjectDocuments } from "@/components/ProjectDocuments";
 import { 
   Home,
   FileText, 
@@ -187,12 +190,15 @@ export default function B2CDashboard() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-8">
             <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
             <TabsTrigger value="analysis">Mes Analyses</TabsTrigger>
-            <TabsTrigger value="payments">Suivi Paiements</TabsTrigger>
-            <TabsTrigger value="projects">Projets Actifs</TabsTrigger>
-            <TabsTrigger value="services">Services TORP</TabsTrigger>
+            <TabsTrigger value="timeline">Planning</TabsTrigger>
+            <TabsTrigger value="budget">Budget</TabsTrigger>
+            <TabsTrigger value="documents">Documents</TabsTrigger>
+            <TabsTrigger value="payments">Paiements</TabsTrigger>
+            <TabsTrigger value="projects">Projets</TabsTrigger>
+            <TabsTrigger value="services">Services</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -330,6 +336,22 @@ export default function B2CDashboard() {
             </Card>
           </TabsContent>
 
+          {/* TAB: TIMELINE */}
+          <TabsContent value="timeline" className="space-y-6">
+            <ProjectTimeline projectId={activePaymentTracking[0]?.id?.toString() || "demo"} />
+          </TabsContent>
+
+          {/* TAB: BUDGET */}
+          <TabsContent value="budget" className="space-y-6">
+            <ProjectBudget projectId={activePaymentTracking[0]?.id?.toString() || "demo"} />
+          </TabsContent>
+
+          {/* TAB: DOCUMENTS */}
+          <TabsContent value="documents" className="space-y-6">
+            <ProjectDocuments projectId={activePaymentTracking[0]?.id?.toString() || "demo"} />
+          </TabsContent>
+
+          {/* TAB: PAYMENTS */}
           <TabsContent value="payments" className="space-y-6">
             <Card>
               <CardHeader>
