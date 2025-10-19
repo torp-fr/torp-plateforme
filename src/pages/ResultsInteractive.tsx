@@ -70,10 +70,7 @@ export default function ResultsInteractive() {
             </TabsContent>
 
             <TabsContent value="cctp">
-              <CCTPGenerator 
-                projectId={currentProject.id} 
-                analysisResult={currentProject.analysisResult} 
-              />
+              <CCTPGenerator />
             </TabsContent>
 
             <TabsContent value="payments">

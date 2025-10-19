@@ -13,6 +13,7 @@ import { ProjectBudget } from "@/components/ProjectBudget";
 import { ProjectDocuments } from "@/components/ProjectDocuments";
 import { ConstructionTracking } from "@/components/ConstructionTracking";
 import { DOEGenerator } from "@/components/DOEGenerator";
+import { CCTPGenerator } from "@/components/CCTPGenerator";
 import { 
   Home,
   FileText, 
@@ -193,7 +194,7 @@ export default function B2CDashboard() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 gap-2 h-auto p-2">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 lg:grid-cols-11 gap-2 h-auto p-2">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <Home className="h-4 w-4" />
               <span className="hidden md:inline">Vue d'ensemble</span>
@@ -203,6 +204,12 @@ export default function B2CDashboard() {
               <FileText className="h-4 w-4" />
               <span className="hidden md:inline">Mes Analyses</span>
               <span className="md:hidden">Analyses</span>
+            </TabsTrigger>
+            <TabsTrigger value="cctp" className="flex items-center gap-2 bg-purple-50 dark:bg-purple-950/20">
+              <FileText className="h-4 w-4 text-purple-600" />
+              <span className="hidden md:inline font-semibold text-purple-700 dark:text-purple-400">Générateur CCTP</span>
+              <span className="md:hidden font-semibold text-purple-700 dark:text-purple-400">CCTP</span>
+              <Badge variant="destructive" className="ml-1 text-xs">NEW</Badge>
             </TabsTrigger>
             <TabsTrigger value="timeline" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
@@ -386,6 +393,11 @@ export default function B2CDashboard() {
           {/* TAB: TIMELINE */}
           <TabsContent value="timeline" className="space-y-6">
             <ProjectTimeline projectId={activePaymentTracking[0]?.id?.toString() || "demo"} />
+          </TabsContent>
+
+          {/* TAB: CCTP GENERATOR */}
+          <TabsContent value="cctp" className="space-y-6">
+            <CCTPGenerator />
           </TabsContent>
 
           {/* TAB: BUDGET */}
