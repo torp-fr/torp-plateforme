@@ -11,6 +11,8 @@ import { Link } from 'react-router-dom';
 import { ProjectTimeline } from "@/components/ProjectTimeline";
 import { ProjectBudget } from "@/components/ProjectBudget";
 import { ProjectDocuments } from "@/components/ProjectDocuments";
+import { ConstructionTracking } from "@/components/ConstructionTracking";
+import { DOEGenerator } from "@/components/DOEGenerator";
 import { 
   Home,
   FileText, 
@@ -34,7 +36,8 @@ import {
   Activity,
   BarChart3,
   Target,
-  Calendar
+  Calendar,
+  FileCheck
 } from "lucide-react";
 
 export default function B2CDashboard() {
@@ -190,12 +193,14 @@ export default function B2CDashboard() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-8">
+          <TabsList className="grid w-full grid-cols-5 lg:grid-cols-10">
             <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
             <TabsTrigger value="analysis">Mes Analyses</TabsTrigger>
             <TabsTrigger value="timeline">Planning</TabsTrigger>
             <TabsTrigger value="budget">Budget</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
+            <TabsTrigger value="tracking">Suivi Chantier</TabsTrigger>
+            <TabsTrigger value="doe">DOE</TabsTrigger>
             <TabsTrigger value="payments">Paiements</TabsTrigger>
             <TabsTrigger value="projects">Projets</TabsTrigger>
             <TabsTrigger value="services">Services</TabsTrigger>
@@ -349,6 +354,16 @@ export default function B2CDashboard() {
           {/* TAB: DOCUMENTS */}
           <TabsContent value="documents" className="space-y-6">
             <ProjectDocuments projectId={activePaymentTracking[0]?.id?.toString() || "demo"} />
+          </TabsContent>
+
+          {/* TAB: CONSTRUCTION TRACKING */}
+          <TabsContent value="tracking" className="space-y-6">
+            <ConstructionTracking />
+          </TabsContent>
+
+          {/* TAB: DOE GENERATOR */}
+          <TabsContent value="doe" className="space-y-6">
+            <DOEGenerator />
           </TabsContent>
 
           {/* TAB: PAYMENTS */}
