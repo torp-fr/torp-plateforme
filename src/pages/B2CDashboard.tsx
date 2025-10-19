@@ -14,6 +14,7 @@ import { ProjectDocuments } from "@/components/ProjectDocuments";
 import { ConstructionTracking } from "@/components/ConstructionTracking";
 import { DOEGenerator } from "@/components/DOEGenerator";
 import { CCTPGenerator } from "@/components/CCTPGenerator";
+import { DigitalHomeBook } from "@/components/DigitalHomeBook";
 import { 
   Home,
   FileText, 
@@ -194,66 +195,111 @@ export default function B2CDashboard() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 lg:grid-cols-11 gap-2 h-auto p-2">
-            <TabsTrigger value="overview" className="flex items-center gap-2">
-              <Home className="h-4 w-4" />
-              <span className="hidden md:inline">Vue d'ensemble</span>
-              <span className="md:hidden">Accueil</span>
-            </TabsTrigger>
-            <TabsTrigger value="analysis" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              <span className="hidden md:inline">Mes Analyses</span>
-              <span className="md:hidden">Analyses</span>
-            </TabsTrigger>
-            <TabsTrigger value="cctp" className="flex items-center gap-2 bg-purple-50 dark:bg-purple-950/20">
-              <FileText className="h-4 w-4 text-purple-600" />
-              <span className="hidden md:inline font-semibold text-purple-700 dark:text-purple-400">Générateur CCTP</span>
-              <span className="md:hidden font-semibold text-purple-700 dark:text-purple-400">CCTP</span>
-              <Badge variant="destructive" className="ml-1 text-xs">NEW</Badge>
-            </TabsTrigger>
-            <TabsTrigger value="timeline" className="flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              <span className="hidden md:inline">Planning</span>
-              <span className="md:hidden">Planning</span>
-            </TabsTrigger>
-            <TabsTrigger value="budget" className="flex items-center gap-2">
-              <PiggyBank className="h-4 w-4" />
-              <span className="hidden md:inline">Budget</span>
-              <span className="md:hidden">Budget</span>
-            </TabsTrigger>
-            <TabsTrigger value="documents" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              <span className="hidden md:inline">Documents</span>
-              <span className="md:hidden">Docs</span>
-            </TabsTrigger>
-            <TabsTrigger value="tracking" className="flex items-center gap-2 bg-orange-50 dark:bg-orange-950/20">
-              <Hammer className="h-4 w-4 text-orange-600" />
-              <span className="hidden md:inline font-semibold text-orange-700 dark:text-orange-400">Suivi Chantier</span>
-              <span className="md:hidden font-semibold text-orange-700 dark:text-orange-400">Suivi</span>
-              <Badge variant="destructive" className="ml-1 text-xs">NEW</Badge>
-            </TabsTrigger>
-            <TabsTrigger value="doe" className="flex items-center gap-2 bg-green-50 dark:bg-green-950/20">
-              <FileCheck className="h-4 w-4 text-green-600" />
-              <span className="hidden md:inline font-semibold text-green-700 dark:text-green-400">DOE</span>
-              <span className="md:hidden font-semibold text-green-700 dark:text-green-400">DOE</span>
-              <Badge variant="destructive" className="ml-1 text-xs">NEW</Badge>
-            </TabsTrigger>
-            <TabsTrigger value="payments" className="flex items-center gap-2">
-              <CreditCard className="h-4 w-4" />
-              <span className="hidden md:inline">Paiements</span>
-              <span className="md:hidden">€</span>
-            </TabsTrigger>
-            <TabsTrigger value="projects" className="flex items-center gap-2">
-              <Building className="h-4 w-4" />
-              <span className="hidden md:inline">Projets</span>
-              <span className="md:hidden">Projets</span>
-            </TabsTrigger>
-            <TabsTrigger value="services" className="flex items-center gap-2">
-              <Shield className="h-4 w-4" />
-              <span className="hidden md:inline">Services</span>
-              <span className="md:hidden">Services</span>
-            </TabsTrigger>
-          </TabsList>
+          <div className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
+              <TabsList className="inline-flex h-auto min-w-full w-max p-2 bg-transparent gap-1">
+                <TabsTrigger 
+                  value="overview" 
+                  className="flex items-center gap-2 whitespace-nowrap data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                >
+                  <Home className="h-4 w-4" />
+                  <span>Vue d'ensemble</span>
+                </TabsTrigger>
+                
+                <TabsTrigger 
+                  value="analysis" 
+                  className="flex items-center gap-2 whitespace-nowrap data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                >
+                  <FileText className="h-4 w-4" />
+                  <span>Mes Analyses</span>
+                </TabsTrigger>
+                
+                <TabsTrigger 
+                  value="cctp" 
+                  className="flex items-center gap-2 whitespace-nowrap relative data-[state=active]:bg-purple-100 dark:data-[state=active]:bg-purple-950/30 data-[state=active]:text-purple-700 dark:data-[state=active]:text-purple-400"
+                >
+                  <FileText className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                  <span className="font-semibold">Générateur CCTP</span>
+                  <Badge variant="destructive" className="ml-1 text-[10px] px-1.5 py-0.5">NEW</Badge>
+                </TabsTrigger>
+                
+                <TabsTrigger 
+                  value="timeline" 
+                  className="flex items-center gap-2 whitespace-nowrap data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                >
+                  <Calendar className="h-4 w-4" />
+                  <span>Planning</span>
+                </TabsTrigger>
+                
+                <TabsTrigger 
+                  value="budget" 
+                  className="flex items-center gap-2 whitespace-nowrap data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                >
+                  <PiggyBank className="h-4 w-4" />
+                  <span>Budget</span>
+                </TabsTrigger>
+                
+                <TabsTrigger 
+                  value="documents" 
+                  className="flex items-center gap-2 whitespace-nowrap data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                >
+                  <FileText className="h-4 w-4" />
+                  <span>Documents</span>
+                </TabsTrigger>
+                
+                <TabsTrigger 
+                  value="tracking" 
+                  className="flex items-center gap-2 whitespace-nowrap relative data-[state=active]:bg-orange-100 dark:data-[state=active]:bg-orange-950/30 data-[state=active]:text-orange-700 dark:data-[state=active]:text-orange-400"
+                >
+                  <Hammer className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                  <span className="font-semibold">Suivi Chantier</span>
+                  <Badge variant="destructive" className="ml-1 text-[10px] px-1.5 py-0.5">NEW</Badge>
+                </TabsTrigger>
+                
+                <TabsTrigger 
+                  value="doe" 
+                  className="flex items-center gap-2 whitespace-nowrap relative data-[state=active]:bg-green-100 dark:data-[state=active]:bg-green-950/30 data-[state=active]:text-green-700 dark:data-[state=active]:text-green-400"
+                >
+                  <FileCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  <span className="font-semibold">DOE</span>
+                  <Badge variant="destructive" className="ml-1 text-[10px] px-1.5 py-0.5">NEW</Badge>
+                </TabsTrigger>
+                
+                <TabsTrigger 
+                  value="carnet" 
+                  className="flex items-center gap-2 whitespace-nowrap relative data-[state=active]:bg-blue-100 dark:data-[state=active]:bg-blue-950/30 data-[state=active]:text-blue-700 dark:data-[state=active]:text-blue-400"
+                >
+                  <Home className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <span className="font-semibold">Carnet Logement</span>
+                  <Badge variant="destructive" className="ml-1 text-[10px] px-1.5 py-0.5">NEW</Badge>
+                </TabsTrigger>
+                
+                <TabsTrigger 
+                  value="payments" 
+                  className="flex items-center gap-2 whitespace-nowrap data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                >
+                  <CreditCard className="h-4 w-4" />
+                  <span>Paiements</span>
+                </TabsTrigger>
+                
+                <TabsTrigger 
+                  value="projects" 
+                  className="flex items-center gap-2 whitespace-nowrap data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                >
+                  <Building className="h-4 w-4" />
+                  <span>Projets</span>
+                </TabsTrigger>
+                
+                <TabsTrigger 
+                  value="services" 
+                  className="flex items-center gap-2 whitespace-nowrap data-[state=active]:bg-primary/10 data-[state=active]:text-primary"
+                >
+                  <Shield className="h-4 w-4" />
+                  <span>Services</span>
+                </TabsTrigger>
+              </TabsList>
+            </div>
+          </div>
 
           <TabsContent value="overview" className="space-y-6">
             {/* Innovation Suivi Paiements */}
@@ -418,6 +464,11 @@ export default function B2CDashboard() {
           {/* TAB: DOE GENERATOR */}
           <TabsContent value="doe" className="space-y-6">
             <DOEGenerator />
+          </TabsContent>
+
+          {/* TAB: DIGITAL HOME BOOK */}
+          <TabsContent value="carnet" className="space-y-6">
+            <DigitalHomeBook />
           </TabsContent>
 
           {/* TAB: PAYMENTS */}
