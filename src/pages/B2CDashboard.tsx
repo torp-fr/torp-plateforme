@@ -193,17 +193,59 @@ export default function B2CDashboard() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5 lg:grid-cols-10">
-            <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
-            <TabsTrigger value="analysis">Mes Analyses</TabsTrigger>
-            <TabsTrigger value="timeline">Planning</TabsTrigger>
-            <TabsTrigger value="budget">Budget</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
-            <TabsTrigger value="tracking">Suivi Chantier</TabsTrigger>
-            <TabsTrigger value="doe">DOE</TabsTrigger>
-            <TabsTrigger value="payments">Paiements</TabsTrigger>
-            <TabsTrigger value="projects">Projets</TabsTrigger>
-            <TabsTrigger value="services">Services</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 gap-2 h-auto p-2">
+            <TabsTrigger value="overview" className="flex items-center gap-2">
+              <Home className="h-4 w-4" />
+              <span className="hidden md:inline">Vue d'ensemble</span>
+              <span className="md:hidden">Accueil</span>
+            </TabsTrigger>
+            <TabsTrigger value="analysis" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              <span className="hidden md:inline">Mes Analyses</span>
+              <span className="md:hidden">Analyses</span>
+            </TabsTrigger>
+            <TabsTrigger value="timeline" className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              <span className="hidden md:inline">Planning</span>
+              <span className="md:hidden">Planning</span>
+            </TabsTrigger>
+            <TabsTrigger value="budget" className="flex items-center gap-2">
+              <PiggyBank className="h-4 w-4" />
+              <span className="hidden md:inline">Budget</span>
+              <span className="md:hidden">Budget</span>
+            </TabsTrigger>
+            <TabsTrigger value="documents" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              <span className="hidden md:inline">Documents</span>
+              <span className="md:hidden">Docs</span>
+            </TabsTrigger>
+            <TabsTrigger value="tracking" className="flex items-center gap-2 bg-orange-50 dark:bg-orange-950/20">
+              <Hammer className="h-4 w-4 text-orange-600" />
+              <span className="hidden md:inline font-semibold text-orange-700 dark:text-orange-400">Suivi Chantier</span>
+              <span className="md:hidden font-semibold text-orange-700 dark:text-orange-400">Suivi</span>
+              <Badge variant="destructive" className="ml-1 text-xs">NEW</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="doe" className="flex items-center gap-2 bg-green-50 dark:bg-green-950/20">
+              <FileCheck className="h-4 w-4 text-green-600" />
+              <span className="hidden md:inline font-semibold text-green-700 dark:text-green-400">DOE</span>
+              <span className="md:hidden font-semibold text-green-700 dark:text-green-400">DOE</span>
+              <Badge variant="destructive" className="ml-1 text-xs">NEW</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="payments" className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4" />
+              <span className="hidden md:inline">Paiements</span>
+              <span className="md:hidden">€</span>
+            </TabsTrigger>
+            <TabsTrigger value="projects" className="flex items-center gap-2">
+              <Building className="h-4 w-4" />
+              <span className="hidden md:inline">Projets</span>
+              <span className="md:hidden">Projets</span>
+            </TabsTrigger>
+            <TabsTrigger value="services" className="flex items-center gap-2">
+              <Shield className="h-4 w-4" />
+              <span className="hidden md:inline">Services</span>
+              <span className="md:hidden">Services</span>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
