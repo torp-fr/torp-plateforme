@@ -67,23 +67,17 @@ export const Header = () => {
             </>
           ) : (
             <>
-              <Link to="/torp-complete" className="text-foreground hover:text-primary transition-colors font-semibold">
+              <Link to="/b2c-dashboard" className="text-foreground hover:text-primary transition-colors font-semibold">
+                Mon Dashboard
+              </Link>
+              <Link to="/torp-complete" className="text-foreground hover:text-primary transition-colors">
                 TORP Complet
-              </Link>
-              <Link to="/segments" className="text-foreground hover:text-primary transition-colors">
-                Segments IA
-              </Link>
-              <Link to="/discovery" className="text-foreground hover:text-primary transition-colors">
-                Découverte
               </Link>
               <Link to="/analyze" className="text-foreground hover:text-primary transition-colors">
                 Analyser
               </Link>
               <Link to="/projects" className="text-foreground hover:text-primary transition-colors">
                 Mes Projets
-              </Link>
-              <Link to="/project-tracking" className="text-foreground hover:text-primary transition-colors">
-                Suivi
               </Link>
               <Link to="/pricing" className="text-foreground hover:text-primary transition-colors">
                 Tarifs
