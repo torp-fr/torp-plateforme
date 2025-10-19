@@ -7,6 +7,8 @@ import { Progress } from "@/components/ui/progress";
 import TerritorialMap from "@/components/TerritorialMap";
 import ParticipationManager from "@/components/ParticipationManager";
 import UserPermissionsManager from "@/components/UserPermissionsManager";
+import { CitizenDashboard } from "@/components/CitizenDashboard";
+import { AutoAlerts } from "@/components/AutoAlerts";
 import { 
   Building2, 
   TrendingUp, 
@@ -149,16 +151,28 @@ const CollectivitesDashboard = () => {
         </div>
 
         <Tabs defaultValue="executive" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-8">
-            <TabsTrigger value="executive">Vue Exécutive</TabsTrigger>
-            <TabsTrigger value="operational">Opérationnel</TabsTrigger>
-            <TabsTrigger value="cartographie">Cartographie</TabsTrigger>
-            <TabsTrigger value="citizens">Citoyens</TabsTrigger>
-            <TabsTrigger value="participation">Participation</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
-            <TabsTrigger value="permissions">Permissions</TabsTrigger>
-            <TabsTrigger value="alerts">Alertes</TabsTrigger>
-          </TabsList>
+          <div className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
+              <TabsList className="inline-flex h-auto min-w-full w-max p-2 bg-transparent gap-1">
+                <TabsTrigger value="executive" className="whitespace-nowrap">Vue Exécutive</TabsTrigger>
+                <TabsTrigger value="dashboard-citoyen" className="whitespace-nowrap relative">
+                  <span className="font-semibold">Tableau Citoyen</span>
+                  <Badge variant="destructive" className="ml-1 text-[10px] px-1.5 py-0.5">NEW</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="alertes-auto" className="whitespace-nowrap relative">
+                  <span className="font-semibold">Alertes IA</span>
+                  <Badge variant="destructive" className="ml-1 text-[10px] px-1.5 py-0.5">NEW</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="operational" className="whitespace-nowrap">Opérationnel</TabsTrigger>
+                <TabsTrigger value="cartographie" className="whitespace-nowrap">Cartographie</TabsTrigger>
+                <TabsTrigger value="citizens" className="whitespace-nowrap">Citoyens</TabsTrigger>
+                <TabsTrigger value="participation" className="whitespace-nowrap">Participation</TabsTrigger>
+                <TabsTrigger value="analytics" className="whitespace-nowrap">Analytics</TabsTrigger>
+                <TabsTrigger value="permissions" className="whitespace-nowrap">Permissions</TabsTrigger>
+                <TabsTrigger value="alerts" className="whitespace-nowrap">Alertes</TabsTrigger>
+              </TabsList>
+            </div>
+          </div>
 
           <TabsContent value="executive" className="space-y-6">
             {/* KPIs Territoriaux */}
@@ -251,6 +265,14 @@ const CollectivitesDashboard = () => {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="dashboard-citoyen" className="space-y-6">
+            <CitizenDashboard />
+          </TabsContent>
+
+          <TabsContent value="alertes-auto" className="space-y-6">
+            <AutoAlerts />
           </TabsContent>
 
           <TabsContent value="operational" className="space-y-6">
