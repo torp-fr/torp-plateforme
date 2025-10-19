@@ -6,6 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { ClientPortfolio } from "@/components/ClientPortfolio";
+import { AutoRecommendations } from "@/components/AutoRecommendations";
 import { 
   Target,
   Users, 
@@ -211,14 +213,26 @@ export default function B2B2CDashboard() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
-            <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
-            <TabsTrigger value="analyses">Certifications</TabsTrigger>
-            <TabsTrigger value="clients">Clients</TabsTrigger>
-            <TabsTrigger value="network">Réseau Entreprises</TabsTrigger>
-            <TabsTrigger value="performance">Performance</TabsTrigger>
-            <TabsTrigger value="settings">Paramètres</TabsTrigger>
-          </TabsList>
+          <div className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
+              <TabsList className="inline-flex h-auto min-w-full w-max p-2 bg-transparent gap-1">
+                <TabsTrigger value="overview" className="whitespace-nowrap">Vue d'ensemble</TabsTrigger>
+                <TabsTrigger value="portfolio" className="whitespace-nowrap relative">
+                  <span className="font-semibold">Portefeuille Clients</span>
+                  <Badge variant="destructive" className="ml-1 text-[10px] px-1.5 py-0.5">NEW</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="recommendations" className="whitespace-nowrap relative">
+                  <span className="font-semibold">Recommandations IA</span>
+                  <Badge variant="destructive" className="ml-1 text-[10px] px-1.5 py-0.5">NEW</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="analyses" className="whitespace-nowrap">Certifications</TabsTrigger>
+                <TabsTrigger value="clients" className="whitespace-nowrap">Clients</TabsTrigger>
+                <TabsTrigger value="network" className="whitespace-nowrap">Réseau Entreprises</TabsTrigger>
+                <TabsTrigger value="performance" className="whitespace-nowrap">Performance</TabsTrigger>
+                <TabsTrigger value="settings" className="whitespace-nowrap">Paramètres</TabsTrigger>
+              </TabsList>
+            </div>
+          </div>
 
           <TabsContent value="overview" className="space-y-6">
             {/* Performance metrics */}
@@ -310,6 +324,14 @@ export default function B2B2CDashboard() {
                 </p>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="portfolio" className="space-y-6">
+            <ClientPortfolio />
+          </TabsContent>
+
+          <TabsContent value="recommendations" className="space-y-6">
+            <AutoRecommendations />
           </TabsContent>
 
           <TabsContent value="analyses" className="space-y-6">
