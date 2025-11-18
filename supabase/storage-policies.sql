@@ -1,5 +1,14 @@
 -- Storage Policies for devis-uploads bucket
--- Run this in Supabase SQL Editor after creating the bucket
+-- Run this in Supabase SQL Editor AFTER creating the bucket
+
+-- IMPORTANT: Create the bucket first via the Supabase Dashboard:
+-- Storage → Create bucket → Name: "devis-uploads", Public: NO
+
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can upload devis to their folder" ON storage.objects;
+DROP POLICY IF EXISTS "Users can view their own devis files" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete their own devis files" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update their own devis files" ON storage.objects;
 
 -- Policy 1: Allow authenticated users to upload files to their own folder
 CREATE POLICY "Users can upload devis to their folder"
@@ -36,3 +45,6 @@ USING (
   bucket_id = 'devis-uploads' AND
   (storage.foldername(name))[1] = auth.uid()::text
 );
+
+-- Success message
+SELECT 'Storage policies created successfully for devis-uploads bucket.' as status;
