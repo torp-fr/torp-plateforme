@@ -121,11 +121,6 @@ export const Header = () => {
           <div className="hidden lg:flex items-center gap-3">
             {user ? (
               <>
-                <Link to="/dashboard">
-                  <Button variant="ghost" size="sm">
-                    Dashboard
-                  </Button>
-                </Link>
                 <Button
                   onClick={handleAnalyzeClick}
                   variant="default"
@@ -134,12 +129,45 @@ export const Header = () => {
                 >
                   Analyser un devis
                 </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      {user.name || user.email}
+                      <ChevronDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                      📊 Dashboard
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/projects')}>
+                      📁 Mes Projets
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/profile')}>
+                      👤 Mon Profil
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        // TODO: Implement logout via AppContext
+                        window.location.href = '/login';
+                      }}
+                      className="text-red-600"
+                    >
+                      🚪 Déconnexion
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </>
             ) : (
               <>
                 <Link to="/login">
                   <Button variant="ghost" size="sm">
                     Connexion
+                  </Button>
+                </Link>
+                <Link to="/register">
+                  <Button variant="outline" size="sm">
+                    Inscription
                   </Button>
                 </Link>
                 <Button
@@ -234,9 +262,17 @@ export const Header = () => {
             <div className="pt-4 space-y-2">
               {user ? (
                 <>
+                  <div className="px-2 py-2 text-sm font-medium text-muted-foreground border-b mb-2">
+                    {user.name || user.email}
+                  </div>
                   <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
-                    <Button variant="outline" size="sm" className="w-full">
-                      Dashboard
+                    <Button variant="outline" size="sm" className="w-full justify-start">
+                      📊 Dashboard
+                    </Button>
+                  </Link>
+                  <Link to="/projects" onClick={() => setMobileMenuOpen(false)}>
+                    <Button variant="outline" size="sm" className="w-full justify-start">
+                      📁 Mes Projets
                     </Button>
                   </Link>
                   <Button
@@ -250,12 +286,28 @@ export const Header = () => {
                   >
                     Analyser un devis
                   </Button>
+                  <Button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      window.location.href = '/login';
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-red-600 hover:text-red-700"
+                  >
+                    🚪 Déconnexion
+                  </Button>
                 </>
               ) : (
                 <>
                   <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
                     <Button variant="outline" size="sm" className="w-full">
                       Connexion
+                    </Button>
+                  </Link>
+                  <Link to="/register" onClick={() => setMobileMenuOpen(false)}>
+                    <Button variant="outline" size="sm" className="w-full">
+                      Inscription
                     </Button>
                   </Link>
                   <Button
