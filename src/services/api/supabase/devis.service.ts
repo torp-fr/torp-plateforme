@@ -67,35 +67,15 @@ export class SupabaseDevisService {
     }
   ): Promise<{ id: string; status: string }> {
     console.log('[DevisService] uploadDevis called with userId:', userId);
-    console.log('[DevisService] Supabase client:', { supabase: !!supabase, auth: !!supabase?.auth });
 
-    // Verify Supabase session exists
-    console.log('[DevisService] About to call getSession()...');
-
-    const sessionPromise = supabase.auth.getSession();
-    console.log('[DevisService] getSession() called, waiting for response...');
-
-    const { data: { session }, error: sessionError } = await sessionPromise;
-    console.log('[DevisService] getSession() returned!');
-
-    console.log('[DevisService] Session check:', {
-      hasSession: !!session,
-      sessionError,
-      userId: session?.user?.id
-    });
-
-    if (sessionError) {
-      console.error('[DevisService] Session error:', sessionError);
-      throw new Error(`Session error: ${sessionError.message}`);
+    // Use the userId passed from the authenticated context
+    // Note: Session check was causing timeout on Vercel, so we trust the React context authentication
+    if (!userId) {
+      throw new Error('User ID is required to upload a devis');
     }
 
-    if (!session) {
-      console.error('[DevisService] No active session found');
-      throw new Error('You must be logged in to upload a devis');
-    }
-
-    // Use authenticated user ID from session
-    const authenticatedUserId = session.user.id;
+    const authenticatedUserId = userId;
+    console.log('[DevisService] Using authenticated userId:', authenticatedUserId);
 
     // Validate file
     if (file.size > env.upload.maxFileSize) {
