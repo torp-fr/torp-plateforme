@@ -100,18 +100,29 @@ export class SupabaseDevisService {
       fileType: file.type
     });
 
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('devis-uploads')
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false,
-      });
+    // Use direct REST API instead of SDK to avoid blocking issue
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-    if (uploadError) {
-      console.error('[DevisService] Storage upload error:', uploadError);
-      throw new Error(`Failed to upload file: ${uploadError.message}`);
+    console.log('[DevisService] Using direct API upload...');
+    const uploadUrl = `${supabaseUrl}/storage/v1/object/devis-uploads/${filePath}`;
+
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Content-Type': file.type,
+      },
+      body: file,
+    });
+
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      console.error('[DevisService] Storage upload error:', errorText);
+      throw new Error(`Failed to upload file: ${uploadResponse.status} ${errorText}`);
     }
 
+    const uploadData = await uploadResponse.json();
     console.log('[DevisService] File uploaded successfully:', uploadData);
 
     // Get public URL for the file
