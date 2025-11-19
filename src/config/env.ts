@@ -105,8 +105,8 @@ export const env: EnvConfig = {
   auth: {
     provider: (getEnv('VITE_AUTH_PROVIDER', 'mock') as EnvConfig['auth']['provider']),
     supabase: {
-      url: getEnv('VITE_AUTH_SUPABASE_URL'),
-      anonKey: getEnv('VITE_AUTH_SUPABASE_ANON_KEY'),
+      url: getEnv('VITE_SUPABASE_URL') || getEnv('VITE_AUTH_SUPABASE_URL'),
+      anonKey: getEnv('VITE_SUPABASE_ANON_KEY') || getEnv('VITE_AUTH_SUPABASE_ANON_KEY'),
     },
   },
 
