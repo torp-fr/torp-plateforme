@@ -15,11 +15,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { authService } from "@/services/api";
+import { useToast } from "@/hooks/use-toast";
 
 export const Header = () => {
-  const { user } = useApp();
+  const { user, setUser } = useApp();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { toast } = useToast();
 
   const handleAnalyzeClick = () => {
     if (user) {
@@ -27,6 +30,23 @@ export const Header = () => {
     } else {
       // Pour les non-connectés, on propose le parcours découverte
       navigate('/discovery');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+      setUser(null);
+      toast({
+        title: 'Déconnexion réussie',
+        description: 'À bientôt!',
+      });
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Even if logout fails, clear local user state
+      setUser(null);
+      navigate('/login');
     }
   };
 
@@ -147,10 +167,7 @@ export const Header = () => {
                       👤 Mon Profil
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      onClick={() => {
-                        // TODO: Implement logout via AppContext
-                        window.location.href = '/login';
-                      }}
+                      onClick={handleLogout}
                       className="text-red-600"
                     >
                       🚪 Déconnexion
@@ -289,7 +306,7 @@ export const Header = () => {
                   <Button
                     onClick={() => {
                       setMobileMenuOpen(false);
-                      window.location.href = '/login';
+                      handleLogout();
                     }}
                     variant="outline"
                     size="sm"
