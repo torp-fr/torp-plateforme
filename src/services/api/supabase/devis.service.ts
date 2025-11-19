@@ -66,8 +66,17 @@ export class SupabaseDevisService {
       contraintes?: string;
     }
   ): Promise<{ id: string; status: string }> {
+    console.log('[DevisService] uploadDevis called with userId:', userId);
+    console.log('[DevisService] Supabase client:', { supabase: !!supabase, auth: !!supabase?.auth });
+
     // Verify Supabase session exists
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    console.log('[DevisService] About to call getSession()...');
+
+    const sessionPromise = supabase.auth.getSession();
+    console.log('[DevisService] getSession() called, waiting for response...');
+
+    const { data: { session }, error: sessionError } = await sessionPromise;
+    console.log('[DevisService] getSession() returned!');
 
     console.log('[DevisService] Session check:', {
       hasSession: !!session,
