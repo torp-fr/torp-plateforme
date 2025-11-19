@@ -102,7 +102,27 @@ export class SupabaseDevisService {
 
     // Use direct REST API instead of SDK to avoid blocking issue
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+    // Get user session token from localStorage (where Supabase stores it)
+    const supabaseAuthKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
+    const sessionData = localStorage.getItem(supabaseAuthKey);
+
+    let accessToken;
+    if (sessionData) {
+      try {
+        const session = JSON.parse(sessionData);
+        accessToken = session.access_token;
+        console.log('[DevisService] Using user session token for upload');
+      } catch (e) {
+        console.error('[DevisService] Failed to parse session:', e);
+      }
+    }
+
+    // Fallback to anon key if no session token
+    if (!accessToken) {
+      accessToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      console.log('[DevisService] Using anon key as fallback');
+    }
 
     console.log('[DevisService] Using direct API upload...');
     const uploadUrl = `${supabaseUrl}/storage/v1/object/devis-uploads/${filePath}`;
@@ -110,7 +130,7 @@ export class SupabaseDevisService {
     const uploadResponse = await fetch(uploadUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${supabaseKey}`,
+        'Authorization': `Bearer ${accessToken}`,
         'Content-Type': file.type,
       },
       body: file,
