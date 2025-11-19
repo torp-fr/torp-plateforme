@@ -335,6 +335,10 @@ CREATE POLICY "Users can view their own data"
   ON public.users FOR SELECT
   USING (auth.uid() = id);
 
+CREATE POLICY "Users can create their own profile during registration"
+  ON public.users FOR INSERT
+  WITH CHECK (auth.uid() = id);
+
 CREATE POLICY "Users can update their own data"
   ON public.users FOR UPDATE
   USING (auth.uid() = id);
