@@ -14,6 +14,12 @@ const supabaseUrl = env.app.env === 'production'
 
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
+console.log('[Supabase Config] URL:', supabaseUrl);
+console.log('[Supabase Config] Key exists:', !!supabaseAnonKey);
+console.log('[Supabase Config] Key length:', supabaseAnonKey ? supabaseAnonKey.length : 0);
+console.log('[Supabase Config] env.app.env:', env.app.env);
+console.log('[Supabase Config] env.api.useMock:', env.api.useMock);
+
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn(
     '⚠️  Supabase credentials not found. Using mock services.\n' +
