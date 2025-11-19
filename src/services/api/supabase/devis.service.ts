@@ -47,8 +47,25 @@ function mapDbDevisToAppDevis(dbDevis: DbDevis): DevisData {
 export class SupabaseDevisService {
   /**
    * Upload and analyze a devis file
+   * @param userId - User ID who owns the devis
+   * @param file - PDF file to analyze
+   * @param projectName - Name of the project
+   * @param metadata - Optional metadata (type, budget, etc.)
    */
-  async uploadDevis(file: File, projectId: string, userId: string): Promise<{ id: string; status: string }> {
+  async uploadDevis(
+    userId: string,
+    file: File,
+    projectName: string,
+    metadata?: {
+      typeTravaux?: string;
+      budget?: string;
+      surface?: number;
+      description?: string;
+      delaiSouhaite?: string;
+      urgence?: string;
+      contraintes?: string;
+    }
+  ): Promise<{ id: string; status: string }> {
     // Validate file
     if (file.size > env.upload.maxFileSize) {
       throw new Error(`File size exceeds ${env.upload.maxFileSize / 1024 / 1024}MB limit`);
@@ -62,7 +79,7 @@ export class SupabaseDevisService {
     // Generate unique file path
     const timestamp = Date.now();
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const filePath = `${userId}/${projectId}/${timestamp}_${sanitizedFileName}`;
+    const filePath = `${userId}/${timestamp}_${sanitizedFileName}`;
 
     // Upload file to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -83,8 +100,10 @@ export class SupabaseDevisService {
 
     // Create devis record in database
     const devisInsert: DbDevisInsert = {
-      project_id: projectId,
-      amount: 0, // Will be updated after analysis
+      user_id: userId,
+      nom_projet: projectName,
+      type_travaux: metadata?.typeTravaux || null,
+      montant_total: 0, // Will be updated after analysis
       file_url: publicUrl,
       file_name: file.name,
       file_size: file.size,
@@ -111,7 +130,7 @@ export class SupabaseDevisService {
       .eq('id', devisData.id);
 
     // Start analysis in background (don't await to avoid blocking upload response)
-    this.analyzeDevisById(devisData.id, file).catch((error) => {
+    this.analyzeDevisById(devisData.id, file, metadata).catch((error) => {
       console.error(`[Devis] Analysis failed for ${devisData.id}:`, error);
       // Update status to failed
       supabase
