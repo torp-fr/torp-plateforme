@@ -66,6 +66,15 @@ export class SupabaseDevisService {
       contraintes?: string;
     }
   ): Promise<{ id: string; status: string }> {
+    // Verify Supabase session exists
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session) {
+      throw new Error('You must be logged in to upload a devis');
+    }
+
+    // Use authenticated user ID from session
+    const authenticatedUserId = session.user.id;
+
     // Validate file
     if (file.size > env.upload.maxFileSize) {
       throw new Error(`File size exceeds ${env.upload.maxFileSize / 1024 / 1024}MB limit`);
@@ -79,7 +88,7 @@ export class SupabaseDevisService {
     // Generate unique file path
     const timestamp = Date.now();
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const filePath = `${userId}/${timestamp}_${sanitizedFileName}`;
+    const filePath = `${authenticatedUserId}/${timestamp}_${sanitizedFileName}`;
 
     // Upload file to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -100,7 +109,7 @@ export class SupabaseDevisService {
 
     // Create devis record in database
     const devisInsert: DbDevisInsert = {
-      user_id: userId,
+      user_id: authenticatedUserId,
       nom_projet: projectName,
       type_travaux: metadata?.typeTravaux || null,
       montant_total: 0, // Will be updated after analysis
