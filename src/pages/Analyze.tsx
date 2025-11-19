@@ -125,7 +125,9 @@ export default function Analyze() {
       // Upload devis and start analysis
       setAnalysisProgress(prev => [...prev, 'Upload du devis en cours...']);
       console.log('[Analyze] Calling uploadDevis NOW...');
-      const devis = await devisService.uploadDevis(
+
+      // Add timeout to avoid infinite wait
+      const uploadPromise = devisService.uploadDevis(
         user.id,
         uploadedFile,
         projectData.name,
@@ -139,6 +141,12 @@ export default function Analyze() {
           contraintes: projectData.constraints,
         }
       );
+
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Upload timeout after 30 seconds')), 30000);
+      });
+
+      const devis = await Promise.race([uploadPromise, timeoutPromise]);
 
       setCurrentDevisId(devis.id);
       setAnalysisProgress(prev => [...prev, 'Devis uploadé avec succès', 'Analyse TORP en cours...']);
@@ -243,7 +251,12 @@ export default function Analyze() {
       }, 300000);
 
     } catch (error) {
-      console.error('Analysis error:', error);
+      console.error('[Analyze] ===== CATCH BLOCK REACHED =====');
+      console.error('[Analyze] Analysis error:', error);
+      console.error('[Analyze] Error type:', typeof error);
+      console.error('[Analyze] Error message:', error instanceof Error ? error.message : String(error));
+      console.error('[Analyze] Error stack:', error instanceof Error ? error.stack : 'No stack');
+
       setIsAnalyzing(false);
       toast({
         title: 'Erreur d\'analyse',
