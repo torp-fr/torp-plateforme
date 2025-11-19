@@ -119,9 +119,12 @@ export default function Analyze() {
       console.log('[Analyze] Starting upload with user:', user.id);
       console.log('[Analyze] File:', { name: uploadedFile.name, size: uploadedFile.size, type: uploadedFile.type });
       console.log('[Analyze] Project data:', projectData);
+      console.log('[Analyze] devisService:', devisService);
+      console.log('[Analyze] About to call uploadDevis...');
 
       // Upload devis and start analysis
       setAnalysisProgress(prev => [...prev, 'Upload du devis en cours...']);
+      console.log('[Analyze] Calling uploadDevis NOW...');
       const devis = await devisService.uploadDevis(
         user.id,
         uploadedFile,
