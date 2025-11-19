@@ -165,26 +165,46 @@ export class SupabaseDevisService {
 
     console.log('[DevisService] Inserting devis record:', devisInsert);
 
-    const { data: devisData, error: devisError } = await supabase
-      .from('devis')
-      .insert(devisInsert)
-      .select()
-      .single();
+    // Use direct REST API for insert as well (SDK blocks like storage.upload did)
+    const insertUrl = `${supabaseUrl}/rest/v1/devis`;
+    const insertResponse = await fetch(insertUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify(devisInsert),
+    });
 
-    if (devisError) {
-      console.error('[DevisService] Database insert error:', devisError);
+    if (!insertResponse.ok) {
+      const errorText = await insertResponse.text();
+      console.error('[DevisService] Database insert error:', errorText);
       // Clean up uploaded file if database insert fails
-      await supabase.storage.from('devis-uploads').remove([filePath]);
-      throw new Error(`Failed to create devis record: ${devisError.message}`);
+      const deleteUrl = `${supabaseUrl}/storage/v1/object/devis-uploads/${filePath}`;
+      await fetch(deleteUrl, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+      throw new Error(`Failed to create devis record: ${insertResponse.status} ${errorText}`);
     }
 
+    const devisDataArray = await insertResponse.json();
+    const devisData = devisDataArray[0];
     console.log('[DevisService] Devis record created successfully:', devisData);
 
-    // Trigger async analysis
-    await supabase
-      .from('devis')
-      .update({ status: 'analyzing' })
-      .eq('id', devisData.id);
+    // Trigger async analysis - update status to analyzing
+    const updateUrl = `${supabaseUrl}/rest/v1/devis?id=eq.${devisData.id}`;
+    await fetch(updateUrl, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ status: 'analyzing' }),
+    });
 
     // Start analysis in background (don't await to avoid blocking upload response)
     this.analyzeDevisById(devisData.id, file, metadata).catch((error) => {
