@@ -13,10 +13,19 @@ export default function DashboardPage() {
   const { user, userType, projects } = useApp();
 
   const completedProjects = projects.filter(p => p.status === 'completed');
-  const avgScore = completedProjects.length > 0 
+  const avgScore = completedProjects.length > 0
     ? Math.round(completedProjects.reduce((sum, p) => sum + (p.score || 0), 0) / completedProjects.length)
     : 0;
-  const totalSavings = 2850; // Mock data
+
+  // Calculate total savings from completed projects based on price comparisons
+  const totalSavings = completedProjects.reduce((sum, p) => {
+    if (p.analysisResult?.priceComparison) {
+      const current = p.analysisResult.priceComparison.current;
+      const high = p.analysisResult.priceComparison.high;
+      return sum + Math.max(0, high - current);
+    }
+    return sum;
+  }, 0);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -165,7 +174,7 @@ export default function DashboardPage() {
               </>
             )}
 
-            {/* Métriques générales pour particuliers */}
+            {/* Métriques simplifiées pour particuliers B2C */}
             {userType === 'B2C' && (
               <>
                 <Card>
@@ -173,7 +182,7 @@ export default function DashboardPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm text-muted-foreground">Devis analysés</p>
-                        <p className="text-2xl font-bold text-foreground">{projects.length}</p>
+                        <p className="text-2xl font-bold text-foreground">{completedProjects.length}</p>
                       </div>
                       <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
                         <FileText className="w-6 h-6 text-primary" />
@@ -182,51 +191,61 @@ export default function DashboardPage() {
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Score moyen</p>
-                        <p className={`text-2xl font-bold ${getScoreColor(avgScore)}`}>
-                          {avgScore > 0 ? `${avgScore}/100` : 'N/A'}
-                        </p>
-                      </div>
-                      <div className="w-12 h-12 bg-success/10 rounded-full flex items-center justify-center">
-                        <TrendingUp className="w-6 h-6 text-success" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                {completedProjects.length > 0 && (
+                  <>
+                    <Card>
+                      <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-muted-foreground">Score moyen</p>
+                            <p className={`text-2xl font-bold ${getScoreColor(avgScore)}`}>
+                              {avgScore}/100
+                            </p>
+                          </div>
+                          <div className="w-12 h-12 bg-success/10 rounded-full flex items-center justify-center">
+                            <TrendingUp className="w-6 h-6 text-success" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
 
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Économies détectées</p>
-                        <p className="text-2xl font-bold text-primary">{totalSavings}€</p>
-                      </div>
-                      <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                        <PiggyBank className="w-6 h-6 text-primary" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    {totalSavings > 0 && (
+                      <Card>
+                        <CardContent className="p-6">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm text-muted-foreground">Économies détectées</p>
+                              <p className="text-2xl font-bold text-primary">
+                                {Math.round(totalSavings).toLocaleString()}€
+                              </p>
+                            </div>
+                            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
+                              <PiggyBank className="w-6 h-6 text-primary" />
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </>
+                )}
 
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Projets en cours</p>
-                        <p className="text-2xl font-bold text-foreground">
-                          {projects.filter(p => p.status === 'analyzing' || p.status === 'draft').length}
-                        </p>
+                {projects.filter(p => p.status === 'analyzing' || p.status === 'draft').length > 0 && (
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Projets en cours</p>
+                          <p className="text-2xl font-bold text-foreground">
+                            {projects.filter(p => p.status === 'analyzing' || p.status === 'draft').length}
+                          </p>
+                        </div>
+                        <div className="w-12 h-12 bg-warning/10 rounded-full flex items-center justify-center">
+                          <Hammer className="w-6 h-6 text-warning" />
+                        </div>
                       </div>
-                      <div className="w-12 h-12 bg-warning/10 rounded-full flex items-center justify-center">
-                        <Hammer className="w-6 h-6 text-warning" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                )}
               </>
             )}
           </div>

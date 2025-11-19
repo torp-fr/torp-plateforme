@@ -17,7 +17,6 @@ import Demo from "./pages/Demo";
 import ProjectTracking from "./pages/ProjectTracking";
 import FinancingPlatform from "./pages/FinancingPlatform";
 import FormulaPicker from "./pages/FormulaPicker";
-import AnalyzingPage from "./pages/AnalyzingPage";
 import AdminDashboard from "./pages/AdminDashboard";
 import CollectivitesDashboard from "./pages/CollectivitesDashboard";
 import ProjectDashboard from "./pages/ProjectDashboard";
@@ -54,7 +53,6 @@ const App = () => (
             <Route path="/project-tracking" element={<ProjectTracking />} />
             <Route path="/financing" element={<FinancingPlatform />} />
             <Route path="/formula-picker" element={<FormulaPicker />} />
-            <Route path="/analyzing" element={<AnalyzingPage />} />
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
             <Route path="/collectivites-dashboard" element={<CollectivitesDashboard />} />
             <Route path="/project-dashboard" element={<ProjectDashboard />} />
