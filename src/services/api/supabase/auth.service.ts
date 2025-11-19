@@ -101,7 +101,7 @@ export class SupabaseAuthService {
       throw new Error('Password must be at least 8 characters');
     }
 
-    // Create auth user
+    // Create auth user (profile will be created automatically by database trigger)
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
@@ -123,27 +123,10 @@ export class SupabaseAuthService {
       throw new Error('Registration failed');
     }
 
-    // Create user profile in users table
-    const { error: profileError } = await supabase
-      .from('users')
-      .insert({
-        id: authData.user.id,
-        email: data.email,
-        name: data.name,
-        user_type: data.type,
-        company: data.company,
-        phone: data.phone,
-        email_verified: false,
-        onboarding_completed: false,
-      });
+    // Wait a moment for the trigger to create the profile
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-    if (profileError) {
-      // If profile creation fails, we should clean up the auth user
-      // but for now we'll just throw the error
-      throw new Error(`Failed to create user profile: ${profileError.message}`);
-    }
-
-    // Fetch the created profile
+    // Fetch the created profile (created automatically by database trigger)
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('*')
@@ -151,7 +134,21 @@ export class SupabaseAuthService {
       .single();
 
     if (userError) {
-      throw new Error('Failed to fetch user profile');
+      console.error('Failed to fetch user profile after registration:', userError);
+      // Profile might not exist yet if trigger failed, but user was created
+      // Return a basic user object based on auth data
+      return {
+        user: {
+          id: authData.user.id,
+          email: data.email,
+          name: data.name,
+          type: data.type,
+          company: data.company,
+          phone: data.phone,
+        },
+        token: authData.session?.access_token || '',
+        refreshToken: authData.session?.refresh_token,
+      };
     }
 
     return {

@@ -331,13 +331,11 @@ ALTER TABLE public.market_data ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
 
 -- Policies USERS
+-- Note: No INSERT policy needed - user profiles are created automatically
+-- by the handle_new_user() trigger function with SECURITY DEFINER
 CREATE POLICY "Users can view their own data"
   ON public.users FOR SELECT
   USING (auth.uid() = id);
-
-CREATE POLICY "Users can create their own profile during registration"
-  ON public.users FOR INSERT
-  WITH CHECK (auth.uid() = id);
 
 CREATE POLICY "Users can update their own data"
   ON public.users FOR UPDATE
@@ -413,22 +411,45 @@ CREATE POLICY "Authenticated users can view companies"
 
 -- Function: Auto-create user profile on signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public
+LANGUAGE plpgsql
+AS $$
 BEGIN
-  INSERT INTO public.users (id, email, name, user_type)
+  INSERT INTO public.users (
+    id,
+    email,
+    name,
+    user_type,
+    company,
+    phone,
+    email_verified,
+    onboarding_completed,
+    created_at,
+    updated_at
+  )
   VALUES (
     NEW.id,
     NEW.email,
-    NEW.raw_user_meta_data->>'name',
-    COALESCE((NEW.raw_user_meta_data->>'user_type')::user_type, 'B2C')
+    COALESCE(NEW.raw_user_meta_data->>'name', ''),
+    COALESCE((NEW.raw_user_meta_data->>'user_type')::user_type, 'B2C'),
+    NEW.raw_user_meta_data->>'company',
+    NEW.raw_user_meta_data->>'phone',
+    NEW.email_confirmed_at IS NOT NULL,
+    FALSE,
+    NOW(),
+    NOW()
   );
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_new_user();
 
 -- Function: Calculate TORP score
 CREATE OR REPLACE FUNCTION public.calculate_torp_score(devis_id UUID)
