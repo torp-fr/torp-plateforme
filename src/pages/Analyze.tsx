@@ -103,7 +103,10 @@ export default function Analyze() {
       setAnalysisProgress(['Préparation de l\'analyse...']);
 
       // Check if user is authenticated
+      console.log('[Analyze] User check:', { hasUser: !!user, userId: user?.id, email: user?.email });
+
       if (!user) {
+        console.error('[Analyze] No user found in context');
         toast({
           title: 'Non authentifié',
           description: 'Veuillez vous connecter pour analyser un devis.',
@@ -112,6 +115,10 @@ export default function Analyze() {
         navigate('/login');
         return;
       }
+
+      console.log('[Analyze] Starting upload with user:', user.id);
+      console.log('[Analyze] File:', { name: uploadedFile.name, size: uploadedFile.size, type: uploadedFile.type });
+      console.log('[Analyze] Project data:', projectData);
 
       // Upload devis and start analysis
       setAnalysisProgress(prev => [...prev, 'Upload du devis en cours...']);
