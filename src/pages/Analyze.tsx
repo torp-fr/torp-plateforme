@@ -11,7 +11,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Upload, FileText, Clock, Shield, CheckCircle, Home, Zap, Droplet, Paintbrush, Download, Loader2 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { BackButton } from '@/components/BackButton';
-import { authService } from '@/services/api/supabase/auth.service';
 import { devisService } from '@/services/api/supabase/devis.service';
 import { supabase } from '@/lib/supabase';
 
@@ -42,7 +41,7 @@ export default function Analyze() {
   const [analysisProgress, setAnalysisProgress] = useState<string[]>([]);
   const [currentDevisId, setCurrentDevisId] = useState<string | null>(null);
 
-  const { addProject, setCurrentProject } = useApp();
+  const { user, addProject, setCurrentProject } = useApp();
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -103,9 +102,8 @@ export default function Analyze() {
       setIsAnalyzing(true);
       setAnalysisProgress(['Préparation de l\'analyse...']);
 
-      // Get authenticated user
-      const currentUser = await authService.getCurrentUser();
-      if (!currentUser) {
+      // Check if user is authenticated
+      if (!user) {
         toast({
           title: 'Non authentifié',
           description: 'Veuillez vous connecter pour analyser un devis.',
@@ -118,7 +116,7 @@ export default function Analyze() {
       // Upload devis and start analysis
       setAnalysisProgress(prev => [...prev, 'Upload du devis en cours...']);
       const devis = await devisService.uploadDevis(
-        currentUser.id,
+        user.id,
         uploadedFile,
         projectData.name,
         {

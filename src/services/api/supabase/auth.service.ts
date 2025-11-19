@@ -106,6 +106,7 @@ export class SupabaseAuthService {
       email: data.email,
       password: data.password,
       options: {
+        emailRedirectTo: `${window.location.origin}/dashboard`,
         data: {
           name: data.name,
           user_type: data.type,
