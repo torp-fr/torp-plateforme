@@ -68,7 +68,20 @@ export class SupabaseDevisService {
   ): Promise<{ id: string; status: string }> {
     // Verify Supabase session exists
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session) {
+
+    console.log('[DevisService] Session check:', {
+      hasSession: !!session,
+      sessionError,
+      userId: session?.user?.id
+    });
+
+    if (sessionError) {
+      console.error('[DevisService] Session error:', sessionError);
+      throw new Error(`Session error: ${sessionError.message}`);
+    }
+
+    if (!session) {
+      console.error('[DevisService] No active session found');
       throw new Error('You must be logged in to upload a devis');
     }
 
