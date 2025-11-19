@@ -1,22 +1,82 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
 import { CheckCircle, AlertTriangle, Lightbulb, TrendingUp, Download, Eye, ArrowLeft, MessageSquare } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import type { Project } from '@/context/AppContext';
 
 export default function Results() {
-  const { currentProject } = useApp();
+  const { currentProject, setCurrentProject } = useApp();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [displayScore, setDisplayScore] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (!currentProject || !currentProject.analysisResult) {
-      navigate('/analyze');
-      return;
-    }
+    const loadProjectData = async () => {
+      // If currentProject is available, use it
+      if (currentProject && currentProject.analysisResult) {
+        return;
+      }
+
+      // Try to get devisId from URL params
+      const devisId = searchParams.get('devisId');
+      if (!devisId) {
+        navigate('/analyze');
+        return;
+      }
+
+      // Load project data from Supabase
+      setIsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('devis')
+          .select('*')
+          .eq('id', devisId)
+          .single();
+
+        if (error || !data) {
+          console.error('Error loading devis:', error);
+          navigate('/analyze');
+          return;
+        }
+
+        // Convert Supabase data to Project format
+        const project: Project = {
+          id: data.id,
+          name: data.nom_projet,
+          type: data.type_travaux || 'Non spécifié',
+          status: data.status === 'analyzed' ? 'completed' : data.status as any,
+          score: data.score_total || 0,
+          grade: data.grade || 'C',
+          amount: `${data.montant_total || 0} €`,
+          createdAt: data.created_at,
+          analysisResult: {
+            strengths: data.points_forts || [],
+            warnings: data.points_vigilance || [],
+            recommendations: data.recommandations || {},
+            priceComparison: data.comparaison_prix || null,
+          }
+        };
+
+        setCurrentProject(project);
+      } catch (error) {
+        console.error('Error loading project:', error);
+        navigate('/analyze');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadProjectData();
+  }, [currentProject, searchParams, navigate, setCurrentProject]);
+
+  useEffect(() => {
+    if (!currentProject) return;
 
     // Animation du score
     const timer = setTimeout(() => {
@@ -34,7 +94,20 @@ export default function Results() {
       return () => clearInterval(interval);
     }, 500);
     return () => clearTimeout(timer);
-  }, [currentProject, navigate]);
+  }, [currentProject]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto px-4 py-12 text-center">
+          <div className="animate-pulse">
+            <h2 className="text-2xl font-bold mb-4">Chargement des résultats...</h2>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentProject || !currentProject.analysisResult) {
     return null;

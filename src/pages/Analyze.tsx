@@ -8,9 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, FileText, Clock, Shield, CheckCircle, Home, Zap, Droplet, Paintbrush, Download } from 'lucide-react';
+import { Upload, FileText, Clock, Shield, CheckCircle, Home, Zap, Droplet, Paintbrush, Download, Loader2 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { BackButton } from '@/components/BackButton';
+import { authService } from '@/services/api/supabase/auth.service';
+import { devisService } from '@/services/api/supabase/devis.service';
+import { supabase } from '@/lib/supabase';
 
 const projectTypes = [
   { id: 'plomberie', label: 'Plomberie', icon: Droplet },
@@ -36,7 +39,9 @@ export default function Analyze() {
     constraints: ''
   });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  
+  const [analysisProgress, setAnalysisProgress] = useState<string[]>([]);
+  const [currentDevisId, setCurrentDevisId] = useState<string | null>(null);
+
   const { addProject, setCurrentProject } = useApp();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -94,76 +99,150 @@ export default function Analyze() {
       return;
     }
 
-    setIsAnalyzing(true);
+    try {
+      setIsAnalyzing(true);
+      setAnalysisProgress(['Préparation de l\'analyse...']);
 
-    // Créer le projet
-    const newProject = {
-      id: Date.now().toString(),
-      name: projectData.name,
-      type: projectData.type,
-      status: 'analyzing' as const,
-      amount: projectData.budget || 'Non spécifié',
-      createdAt: new Date().toISOString().split('T')[0],
-      company: `Entreprise ${Math.floor(Math.random() * 1000)}`
-    };
+      // Get authenticated user
+      const currentUser = await authService.getCurrentUser();
+      if (!currentUser) {
+        toast({
+          title: 'Non authentifié',
+          description: 'Veuillez vous connecter pour analyser un devis.',
+          variant: 'destructive'
+        });
+        navigate('/login');
+        return;
+      }
 
-    addProject(newProject);
-    setCurrentProject(newProject);
-
-    // Simulation d'analyse (3 secondes)
-    setTimeout(() => {
-      const score = Math.floor(Math.random() * 40) + 60; // Score entre 60-100
-      const grade = score >= 80 ? 'A' : score >= 70 ? 'B' : score >= 60 ? 'C' : 'D';
-      
-      const analysisResult = {
-        score,
-        grade,
-        strengths: [
-          'Entreprise certifiée RGE avec 15 ans d\'expérience',
-          'Prix dans la fourchette marché pour ce type de travaux',
-          'Garanties décennale et biennale mentionnées',
-          'Matériaux de qualité spécifiés dans le devis'
-        ],
-        warnings: [
-          'Délais de livraison non précisés dans le devis',
-          'Modalités de paiement à négocier (30% d\'acompte élevé)',
-          'Pas de plan détaillé des interventions'
-        ],
-        recommendations: {
-          questions: [
-            'Quel est le délai exact de réalisation des travaux ?',
-            'Puis-je obtenir des références de chantiers similaires ?',
-            'Les matériaux sont-ils garantis séparément ?',
-            'Un plan détaillé peut-il être fourni ?'
-          ],
-          negotiation: 'L\'acompte de 30% peut être ramené à 20%. Demandez un échelonnement des paiements selon l\'avancement des travaux.'
-        },
-        priceComparison: {
-          low: Math.floor(Math.random() * 3000) + 10000,
-          current: parseInt(projectData.budget?.split('-')[1]?.replace(/[^0-9]/g, '') || '15000'),
-          high: Math.floor(Math.random() * 5000) + 18000
+      // Upload devis and start analysis
+      setAnalysisProgress(prev => [...prev, 'Upload du devis en cours...']);
+      const devis = await devisService.uploadDevis(
+        currentUser.id,
+        uploadedFile,
+        projectData.name,
+        {
+          typeTravaux: projectData.type,
+          budget: projectData.budget,
+          surface: projectData.surface ? parseFloat(projectData.surface) : undefined,
+          description: projectData.description,
+          delaiSouhaite: projectData.startDate,
+          urgence: projectData.urgency,
+          contraintes: projectData.constraints,
         }
+      );
+
+      setCurrentDevisId(devis.id);
+      setAnalysisProgress(prev => [...prev, 'Devis uploadé avec succès', 'Analyse TORP en cours...']);
+
+      // Poll for analysis completion
+      const checkAnalysisStatus = async () => {
+        const { data, error } = await supabase
+          .from('devis')
+          .select('*')
+          .eq('id', devis.id)
+          .single();
+
+        if (error) {
+          console.error('Error checking analysis status:', error);
+          return null;
+        }
+
+        return data;
       };
 
-      const updatedProject = {
-        ...newProject,
-        status: 'completed' as const,
-        score,
-        grade,
-        analysisResult
-      };
+      // Poll every 3 seconds
+      const pollInterval = setInterval(async () => {
+        const devisData = await checkAnalysisStatus();
 
-      addProject(updatedProject);
-      setCurrentProject(updatedProject);
+        if (!devisData) return;
+
+        // Update progress based on status
+        if (devisData.status === 'analyzing') {
+          // Show random progress step
+          const steps = [
+            'Extraction des données du devis...',
+            'Analyse de l\'entreprise (250 pts)...',
+            'Vérification des prix du marché (300 pts)...',
+            'Analyse de la complétude technique (200 pts)...',
+            'Vérification de la conformité (150 pts)...',
+            'Analyse des délais (100 pts)...',
+            'Génération de la synthèse finale...'
+          ];
+          const randomStep = steps[Math.floor(Math.random() * steps.length)];
+          setAnalysisProgress(prev => {
+            if (!prev.includes(randomStep)) {
+              return [...prev, randomStep];
+            }
+            return prev;
+          });
+        } else if (devisData.status === 'analyzed') {
+          clearInterval(pollInterval);
+          setAnalysisProgress(prev => [...prev, 'Analyse terminée !']);
+
+          // Create project with real data
+          const newProject = {
+            id: devis.id,
+            name: projectData.name,
+            type: projectData.type,
+            status: 'completed' as const,
+            score: devisData.score_total || 0,
+            grade: devisData.grade || 'C',
+            amount: `${devisData.montant_total || 0} €`,
+            createdAt: devisData.created_at,
+            analysisResult: {
+              strengths: devisData.points_forts || [],
+              warnings: devisData.points_vigilance || [],
+              recommendations: devisData.recommandations || {},
+              priceComparison: devisData.comparaison_prix || null,
+            }
+          };
+
+          addProject(newProject);
+          setCurrentProject(newProject);
+          setIsAnalyzing(false);
+
+          toast({
+            title: 'Analyse terminée !',
+            description: `Score TORP: ${newProject.score}/100 (${newProject.grade})`,
+          });
+
+          navigate(`/results?devisId=${devis.id}`);
+        } else if (devisData.status === 'uploaded') {
+          // Still waiting for analysis to start
+          setAnalysisProgress(prev => {
+            const lastMsg = 'En attente de traitement...';
+            if (!prev.includes(lastMsg)) {
+              return [...prev, lastMsg];
+            }
+            return prev;
+          });
+        }
+      }, 3000);
+
+      // Timeout after 5 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        if (isAnalyzing) {
+          setIsAnalyzing(false);
+          toast({
+            title: 'Délai d\'analyse dépassé',
+            description: 'L\'analyse prend plus de temps que prévu. Consultez votre dashboard.',
+            variant: 'destructive'
+          });
+          navigate('/dashboard');
+        }
+      }, 300000);
+
+    } catch (error) {
+      console.error('Analysis error:', error);
       setIsAnalyzing(false);
-
       toast({
-        title: 'Analyse terminée !',
-        description: `Votre devis a obtenu la note ${grade} (${score}/100)`,
+        title: 'Erreur d\'analyse',
+        description: error instanceof Error ? error.message : 'Une erreur est survenue lors de l\'analyse',
+        variant: 'destructive'
       });
-
-      navigate('/results');
-    }, 3000);
+    }
   };
 
   if (isAnalyzing) {
@@ -186,10 +265,14 @@ export default function Analyze() {
             </div>
 
             <div className="space-y-4">
-              {['Extraction des données du document', 'Vérification de l\'entreprise', 'Analyse des prix et prestations', 'Génération du rapport'].map((step, index) => (
-                <div key={index} className="flex items-center space-x-3 p-4 bg-card rounded-lg">
+              {analysisProgress.map((step, index) => (
+                <div key={index} className="flex items-center space-x-3 p-4 bg-card rounded-lg animate-fade-in">
                   <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-                    <CheckCircle className="w-4 h-4 text-white" />
+                    {index === analysisProgress.length - 1 && !step.includes('terminée') ? (
+                      <Loader2 className="w-4 h-4 text-white animate-spin" />
+                    ) : (
+                      <CheckCircle className="w-4 h-4 text-white" />
+                    )}
                   </div>
                   <span className="text-foreground font-medium">{step}</span>
                 </div>
@@ -309,10 +392,8 @@ export default function Analyze() {
 
                 {uploadedFile && (
                 <div className="mt-8 text-center">
-                  <Button onClick={() => navigate('/formula-picker', { 
-                    state: { uploadedFile, projectData } 
-                  })} size="lg">
-                    Choisir ma formule d'analyse
+                  <Button onClick={() => setStep(2)} size="lg">
+                    Continuer vers les détails du projet
                   </Button>
                 </div>
                 )}
