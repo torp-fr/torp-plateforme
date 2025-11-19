@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase';
 import { env } from '@/config/env';
 import { DevisData, TorpAnalysisResult } from '@/types/torp';
 import type { Database } from '@/types/supabase';
+import { pdfExtractorService } from '@/services/pdf/pdf-extractor.service';
+import { torpAnalyzerService } from '@/services/ai/torp-analyzer.service';
 
 type DbDevis = Database['public']['Tables']['devis']['Row'];
 type DbDevisInsert = Database['public']['Tables']['devis']['Insert'];
@@ -102,17 +104,113 @@ export class SupabaseDevisService {
       throw new Error(`Failed to create devis record: ${devisError.message}`);
     }
 
-    // TODO: Trigger async analysis job (Edge Function or webhook)
-    // For now, we'll set status to analyzing and you can manually trigger analysis later
+    // Trigger async analysis
     await supabase
       .from('devis')
       .update({ status: 'analyzing' })
       .eq('id', devisData.id);
 
+    // Start analysis in background (don't await to avoid blocking upload response)
+    this.analyzeDevisById(devisData.id, file).catch((error) => {
+      console.error(`[Devis] Analysis failed for ${devisData.id}:`, error);
+      // Update status to failed
+      supabase
+        .from('devis')
+        .update({ status: 'uploaded' })
+        .eq('id', devisData.id);
+    });
+
     return {
       id: devisData.id,
       status: 'analyzing',
     };
+  }
+
+  /**
+   * Analyze a devis file using AI (TORP methodology)
+   */
+  async analyzeDevisById(devisId: string, file?: File, metadata?: { region?: string; typeTravaux?: string }): Promise<void> {
+    const startTime = Date.now();
+
+    try {
+      console.log(`[Devis] Starting analysis for ${devisId}...`);
+
+      // If file not provided, fetch it from storage
+      let devisFile = file;
+      if (!devisFile) {
+        const { data: devisData } = await supabase
+          .from('devis')
+          .select('file_url, file_name')
+          .eq('id', devisId)
+          .single();
+
+        if (!devisData) {
+          throw new Error('Devis not found');
+        }
+
+        // Download file from storage
+        const filePath = new URL(devisData.file_url).pathname.split('/').slice(-3).join('/');
+        const { data: fileData, error: downloadError } = await supabase.storage
+          .from('devis-uploads')
+          .download(filePath);
+
+        if (downloadError || !fileData) {
+          throw new Error('Failed to download devis file');
+        }
+
+        devisFile = new File([fileData], devisData.file_name, { type: 'application/pdf' });
+      }
+
+      // Step 1: Extract text from PDF
+      console.log(`[Devis] Extracting text from PDF...`);
+      const devisText = await pdfExtractorService.extractText(devisFile);
+
+      // Step 2: Run TORP analysis
+      console.log(`[Devis] Running TORP analysis...`);
+      const analysis = await torpAnalyzerService.analyzeDevis(devisText, metadata);
+
+      // Step 3: Save results to database
+      console.log(`[Devis] Saving analysis results...`);
+      const { error: updateError } = await supabase
+        .from('devis')
+        .update({
+          status: 'analyzed',
+          analyzed_at: new Date().toISOString(),
+          analysis_duration: analysis.dureeAnalyse,
+          score_total: analysis.scoreGlobal,
+          grade: analysis.grade,
+          score_entreprise: analysis.scoreEntreprise as any,
+          score_prix: analysis.scorePrix as any,
+          score_completude: analysis.scoreCompletude as any,
+          score_conformite: analysis.scoreConformite as any,
+          score_delais: analysis.scoreDelais as any,
+          recommendations: analysis.recommandations as any,
+          detected_overcosts: analysis.surcoutsDetectes,
+          potential_savings: analysis.scorePrix.economiesPotentielles || 0,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', devisId);
+
+      if (updateError) {
+        throw new Error(`Failed to save analysis: ${updateError.message}`);
+      }
+
+      const totalDuration = Math.round((Date.now() - startTime) / 1000);
+      console.log(`[Devis] Analysis complete for ${devisId} - ${totalDuration}s total - Score: ${analysis.scoreGlobal}/1000 (${analysis.grade})`);
+    } catch (error) {
+      console.error(`[Devis] Analysis failed for ${devisId}:`, error);
+
+      // Update status to indicate failure
+      await supabase
+        .from('devis')
+        .update({
+          status: 'uploaded',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', devisId);
+
+      throw error;
+    }
   }
 
   /**

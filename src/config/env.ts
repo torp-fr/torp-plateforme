@@ -42,6 +42,18 @@ interface EnvConfig {
     analyticsEnabled: boolean;
   };
 
+  // AI / LLM Configuration
+  ai: {
+    openai?: {
+      apiKey: string;
+    };
+    anthropic?: {
+      apiKey: string;
+    };
+    primaryProvider: 'openai' | 'claude';
+    fallbackEnabled: boolean;
+  };
+
   // Third-party services
   services: {
     sentry?: {
@@ -120,6 +132,17 @@ export const env: EnvConfig = {
     chatAIEnabled: getBoolEnv('VITE_FEATURE_CHAT_AI_ENABLED', true),
     marketplaceEnabled: getBoolEnv('VITE_FEATURE_MARKETPLACE_ENABLED', true),
     analyticsEnabled: getBoolEnv('VITE_FEATURE_ANALYTICS_ENABLED', false),
+  },
+
+  ai: {
+    openai: getEnv('VITE_OPENAI_API_KEY') ? {
+      apiKey: getEnv('VITE_OPENAI_API_KEY'),
+    } : undefined,
+    anthropic: getEnv('VITE_ANTHROPIC_API_KEY') ? {
+      apiKey: getEnv('VITE_ANTHROPIC_API_KEY'),
+    } : undefined,
+    primaryProvider: (getEnv('VITE_AI_PRIMARY_PROVIDER', 'claude') as 'openai' | 'claude'),
+    fallbackEnabled: getBoolEnv('VITE_AI_FALLBACK_ENABLED', true),
   },
 
   services: {
