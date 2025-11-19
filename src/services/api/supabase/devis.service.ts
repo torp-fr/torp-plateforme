@@ -104,6 +104,13 @@ export class SupabaseDevisService {
     const filePath = `${authenticatedUserId}/${timestamp}_${sanitizedFileName}`;
 
     // Upload file to Supabase Storage
+    console.log('[DevisService] Uploading file to Storage:', {
+      bucket: 'devis-uploads',
+      filePath,
+      fileSize: file.size,
+      fileType: file.type
+    });
+
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('devis-uploads')
       .upload(filePath, file, {
@@ -112,8 +119,11 @@ export class SupabaseDevisService {
       });
 
     if (uploadError) {
+      console.error('[DevisService] Storage upload error:', uploadError);
       throw new Error(`Failed to upload file: ${uploadError.message}`);
     }
+
+    console.log('[DevisService] File uploaded successfully:', uploadData);
 
     // Get public URL for the file
     const { data: { publicUrl } } = supabase.storage
@@ -133,6 +143,8 @@ export class SupabaseDevisService {
       status: 'uploaded',
     };
 
+    console.log('[DevisService] Inserting devis record:', devisInsert);
+
     const { data: devisData, error: devisError } = await supabase
       .from('devis')
       .insert(devisInsert)
@@ -140,10 +152,13 @@ export class SupabaseDevisService {
       .single();
 
     if (devisError) {
+      console.error('[DevisService] Database insert error:', devisError);
       // Clean up uploaded file if database insert fails
       await supabase.storage.from('devis-uploads').remove([filePath]);
       throw new Error(`Failed to create devis record: ${devisError.message}`);
     }
+
+    console.log('[DevisService] Devis record created successfully:', devisData);
 
     // Trigger async analysis
     await supabase
