@@ -70,29 +70,48 @@ export default function Results() {
           return;
         }
 
-        // Debug: Log the raw data to understand structure
-        console.log('[Results] Raw devis data:', data);
-        console.log('[Results] score_entreprise:', data.score_entreprise);
-        console.log('[Results] score_prix:', data.score_prix);
-        console.log('[Results] recommendations:', data.recommendations);
+        // Helper function to parse JSON if it's a string, or return as-is if already parsed
+        const parseIfString = (value: any) => {
+          if (typeof value === 'string') {
+            try {
+              return JSON.parse(value);
+            } catch (e) {
+              console.error('[Results] Failed to parse JSON:', e);
+              return {};
+            }
+          }
+          return value || {};
+        };
+
+        // Parse JSON fields (Supabase may return them as strings or objects)
+        const scoreEntrepriseData = parseIfString(data.score_entreprise);
+        const scorePrixData = parseIfString(data.score_prix);
+        const scoreCompletudeData = parseIfString(data.score_completude);
+        const scoreConformiteData = parseIfString(data.score_conformite);
+        const scoreDelaisData = parseIfString(data.score_delais);
+        const recommendationsData = parseIfString(data.recommendations);
+
+        console.log('[Results] Parsed score_entreprise:', scoreEntrepriseData);
+        console.log('[Results] Parsed recommendations:', recommendationsData);
 
         // Extract scores from analysis objects and convert to percentages
         // TORP scores: Entreprise /250, Prix /300, Complétude /200, Conformité /150, Délais /100
-        const scoreEntreprise = Math.round(((data.score_entreprise?.scoreTotal || 0) / 250) * 100);
-        const scorePrix = Math.round(((data.score_prix?.scoreTotal || 0) / 300) * 100);
-        const scoreCompletude = Math.round(((data.score_completude?.scoreTotal || 0) / 200) * 100);
-        const scoreConformite = Math.round(((data.score_conformite?.scoreTotal || 0) / 150) * 100);
-        const scoreDelais = Math.round(((data.score_delais?.scoreTotal || 0) / 100) * 100);
+        const scoreEntreprise = Math.round(((scoreEntrepriseData?.scoreTotal || 0) / 250) * 100);
+        const scorePrix = Math.round(((scorePrixData?.scoreTotal || 0) / 300) * 100);
+        const scoreCompletude = Math.round(((scoreCompletudeData?.scoreTotal || 0) / 200) * 100);
+        const scoreConformite = Math.round(((scoreConformiteData?.scoreTotal || 0) / 150) * 100);
+        const scoreDelais = Math.round(((scoreDelaisData?.scoreTotal || 0) / 100) * 100);
 
-        // Get recommendations from analysis synthesis
-        const recommendations = data.recommendations || {};
+        console.log('[Results] Calculated scores:', { scoreEntreprise, scorePrix, scoreCompletude, scoreConformite, scoreDelais });
 
-        // Extract different types of information
-        const pointsForts = recommendations.pointsForts || [];
-        const pointsFaibles = recommendations.pointsFaibles || [];
-        const questionsAPoser = recommendations.questionsAPoser || [];
-        const pointsNegociation = recommendations.pointsNegociation || [];
-        const recommandationsActions = recommendations.recommandations || [];
+        // Extract different types of information from recommendations
+        const pointsForts = recommendationsData.pointsForts || [];
+        const pointsFaibles = recommendationsData.pointsFaibles || [];
+        const questionsAPoser = recommendationsData.questionsAPoser || [];
+        const pointsNegociation = recommendationsData.pointsNegociation || [];
+        const recommandationsActions = recommendationsData.recommandations || [];
+
+        console.log('[Results] Recommendations data:', { pointsForts, pointsFaibles, questionsAPoser });
 
         // Convert Supabase data to Project format
         const project: Project = {

@@ -196,6 +196,8 @@ export default function Analyze() {
 
         if (!devisData) return;
 
+        console.log('[Analyze] Polling status:', devisData.status);
+
         // Update progress based on status
         if (devisData.status === 'analyzing') {
           // Show random progress step
@@ -216,34 +218,16 @@ export default function Analyze() {
             return prev;
           });
         } else if (devisData.status === 'analyzed') {
+          console.log('[Analyze] Analysis complete! Navigating to results...');
           clearInterval(pollInterval);
           setAnalysisProgress(prev => [...prev, 'Analyse terminée !']);
 
-          // Create project with real data
-          const newProject = {
-            id: devis.id,
-            name: projectData.name,
-            type: projectData.type,
-            status: 'completed' as const,
-            score: devisData.score_total || 0,
-            grade: devisData.grade || 'C',
-            amount: `${devisData.montant_total || 0} €`,
-            createdAt: devisData.created_at,
-            analysisResult: {
-              strengths: devisData.points_forts || [],
-              warnings: devisData.points_vigilance || [],
-              recommendations: devisData.recommandations || {},
-              priceComparison: devisData.comparaison_prix || null,
-            }
-          };
-
-          addProject(newProject);
-          setCurrentProject(newProject);
+          // Navigate directly to results page - let it load the data
           setIsAnalyzing(false);
 
           toast({
             title: 'Analyse terminée !',
-            description: `Score TORP: ${newProject.score}/100 (${newProject.grade})`,
+            description: `Score TORP: ${devisData.score_total}/1000 (${devisData.grade})`,
           });
 
           navigate(`/results?devisId=${devis.id}`);
