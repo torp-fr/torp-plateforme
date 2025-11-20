@@ -12,7 +12,6 @@ import { Upload, FileText, Clock, Shield, CheckCircle, Home, Zap, Droplet, Paint
 import { Header } from '@/components/Header';
 import { BackButton } from '@/components/BackButton';
 import { devisService } from '@/services/api/supabase/devis.service';
-import { supabase } from '@/lib/supabase';
 
 const projectTypes = [
   { id: 'plomberie', label: 'Plomberie', icon: Droplet },
@@ -153,18 +152,42 @@ export default function Analyze() {
 
       // Poll for analysis completion
       const checkAnalysisStatus = async () => {
-        const { data, error } = await supabase
-          .from('devis')
-          .select('*')
-          .eq('id', devis.id)
-          .single();
+        try {
+          // Use direct REST API to avoid SDK blocking issues
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          const supabaseAuthKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
+          const sessionData = localStorage.getItem(supabaseAuthKey);
 
-        if (error) {
+          let accessToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
+          if (sessionData) {
+            try {
+              const session = JSON.parse(sessionData);
+              accessToken = session.access_token;
+            } catch (e) {
+              console.error('Failed to parse session:', e);
+            }
+          }
+
+          const queryUrl = `${supabaseUrl}/rest/v1/devis?id=eq.${devis.id}&select=*`;
+          const response = await fetch(queryUrl, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            },
+          });
+
+          if (!response.ok) {
+            console.error('Error checking analysis status:', response.status);
+            return null;
+          }
+
+          const dataArray = await response.json();
+          return dataArray[0] || null;
+        } catch (error) {
           console.error('Error checking analysis status:', error);
           return null;
         }
-
-        return data;
       };
 
       // Poll every 3 seconds
