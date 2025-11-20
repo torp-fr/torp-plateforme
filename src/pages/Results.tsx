@@ -70,6 +70,12 @@ export default function Results() {
           return;
         }
 
+        // Debug: Log the raw data to understand structure
+        console.log('[Results] Raw devis data:', data);
+        console.log('[Results] score_entreprise:', data.score_entreprise);
+        console.log('[Results] score_prix:', data.score_prix);
+        console.log('[Results] recommendations:', data.recommendations);
+
         // Extract scores from analysis objects and convert to percentages
         // TORP scores: Entreprise /250, Prix /300, Complétude /200, Conformité /150, Délais /100
         const scoreEntreprise = Math.round(((data.score_entreprise?.scoreTotal || 0) / 250) * 100);
