@@ -191,7 +191,6 @@ export class TorpAnalyzerService {
     const { data } = await hybridAIService.generateJSON<ExtractedDevisData>(prompt, {
       systemPrompt: TORP_SYSTEM_PROMPT,
       temperature: 0.2, // Low temperature for accurate extraction
-      preferredProvider: 'openai', // OpenAI is faster and more cost-effective
     });
 
     return data;
@@ -206,7 +205,6 @@ export class TorpAnalyzerService {
     const { data } = await hybridAIService.generateJSON(prompt, {
       systemPrompt: TORP_SYSTEM_PROMPT,
       temperature: 0.4,
-      preferredProvider: 'openai', // OpenAI is faster and more cost-effective
     });
 
     return data;
@@ -221,7 +219,6 @@ export class TorpAnalyzerService {
     const { data } = await hybridAIService.generateJSON(prompt, {
       systemPrompt: TORP_SYSTEM_PROMPT,
       temperature: 0.4,
-      preferredProvider: 'openai', // GPT-4 is good at price comparison
     });
 
     return data;
@@ -236,7 +233,6 @@ export class TorpAnalyzerService {
     const { data } = await hybridAIService.generateJSON(prompt, {
       systemPrompt: TORP_SYSTEM_PROMPT,
       temperature: 0.4,
-      preferredProvider: 'openai', // OpenAI is faster and more cost-effective
     });
 
     return data;
@@ -251,7 +247,6 @@ export class TorpAnalyzerService {
     const { data } = await hybridAIService.generateJSON(prompt, {
       systemPrompt: TORP_SYSTEM_PROMPT,
       temperature: 0.3,
-      preferredProvider: 'openai', // OpenAI is faster and more cost-effective
     });
 
     return data;
@@ -266,7 +261,6 @@ export class TorpAnalyzerService {
     const { data } = await hybridAIService.generateJSON(prompt, {
       systemPrompt: TORP_SYSTEM_PROMPT,
       temperature: 0.4,
-      preferredProvider: 'openai', // OpenAI is faster and more cost-effective
     });
 
     return data;
@@ -306,7 +300,6 @@ export class TorpAnalyzerService {
     const { data } = await hybridAIService.generateJSON(prompt, {
       systemPrompt: TORP_SYSTEM_PROMPT,
       temperature: 0.5,
-      preferredProvider: 'openai', // OpenAI is faster and more cost-effective
     });
 
     return data;
