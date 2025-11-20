@@ -118,6 +118,7 @@ export class TorpAnalyzerService {
         grade: synthesis.grade as any,
 
         scoreEntreprise: {
+          scoreTotal: entrepriseAnalysis.scoreTotal,
           fiabilite: entrepriseAnalysis.details.fiabilite.score,
           santeFinnaciere: entrepriseAnalysis.details.santeFinnaciere.score,
           anciennete: 0, // Included in fiabilité
@@ -129,6 +130,7 @@ export class TorpAnalyzerService {
         },
 
         scorePrix: {
+          scoreTotal: prixAnalysis.scoreTotal,
           vsMarche: prixAnalysis.vsMarche.score,
           transparence: prixAnalysis.transparence.score,
           coherence: prixAnalysis.coherence.score,
@@ -138,6 +140,7 @@ export class TorpAnalyzerService {
         },
 
         scoreCompletude: {
+          scoreTotal: completudeAnalysis.scoreTotal,
           elementsManquants: completudeAnalysis.elementsManquants,
           incohérences: [], // TODO: extract from analysis
           conformiteNormes: completudeAnalysis.conformiteNormes.score,
@@ -145,6 +148,7 @@ export class TorpAnalyzerService {
         },
 
         scoreConformite: {
+          scoreTotal: conformiteAnalysis.scoreTotal,
           assurances: conformiteAnalysis.assurances.conforme,
           plu: conformiteAnalysis.plu.conforme ?? false,
           normes: conformiteAnalysis.normes.respectees.length > 0,
@@ -153,13 +157,14 @@ export class TorpAnalyzerService {
         },
 
         scoreDelais: {
+          scoreTotal: delaisAnalysis.scoreTotal,
           realisme: delaisAnalysis.realisme.score,
           vsMarche: 0, // Included in realisme
           planningDetaille: delaisAnalysis.planning.detaille,
           penalitesRetard: delaisAnalysis.penalites.mentionnees,
         },
 
-        recommandations: synthesis.recommandations,
+        recommandations: synthesis, // Store entire synthesis object
         surcoutsDetectes: extractedData.devis.montantTotal - (synthesis.budgetRealEstime || extractedData.devis.montantTotal),
         budgetRealEstime: synthesis.budgetRealEstime || extractedData.devis.montantTotal,
         margeNegociation: synthesis.margeNegociation,
