@@ -12,7 +12,6 @@ import { Upload, FileText, Clock, Shield, CheckCircle, Home, Zap, Droplet, Paint
 import { Header } from '@/components/Header';
 import { BackButton } from '@/components/BackButton';
 import { devisService } from '@/services/api/supabase/devis.service';
-import { supabase } from '@/lib/supabase';
 
 const projectTypes = [
   { id: 'plomberie', label: 'Plomberie', icon: Droplet },
@@ -153,18 +152,42 @@ export default function Analyze() {
 
       // Poll for analysis completion
       const checkAnalysisStatus = async () => {
-        const { data, error } = await supabase
-          .from('devis')
-          .select('*')
-          .eq('id', devis.id)
-          .single();
+        try {
+          // Use direct REST API to avoid SDK blocking issues
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          const supabaseAuthKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
+          const sessionData = localStorage.getItem(supabaseAuthKey);
 
-        if (error) {
+          let accessToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
+          if (sessionData) {
+            try {
+              const session = JSON.parse(sessionData);
+              accessToken = session.access_token;
+            } catch (e) {
+              console.error('Failed to parse session:', e);
+            }
+          }
+
+          const queryUrl = `${supabaseUrl}/rest/v1/devis?id=eq.${devis.id}&select=*`;
+          const response = await fetch(queryUrl, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            },
+          });
+
+          if (!response.ok) {
+            console.error('Error checking analysis status:', response.status);
+            return null;
+          }
+
+          const dataArray = await response.json();
+          return dataArray[0] || null;
+        } catch (error) {
           console.error('Error checking analysis status:', error);
           return null;
         }
-
-        return data;
       };
 
       // Poll every 3 seconds
@@ -172,6 +195,8 @@ export default function Analyze() {
         const devisData = await checkAnalysisStatus();
 
         if (!devisData) return;
+
+        console.log('[Analyze] Polling status:', devisData.status);
 
         // Update progress based on status
         if (devisData.status === 'analyzing') {
@@ -193,34 +218,16 @@ export default function Analyze() {
             return prev;
           });
         } else if (devisData.status === 'analyzed') {
+          console.log('[Analyze] Analysis complete! Navigating to results...');
           clearInterval(pollInterval);
           setAnalysisProgress(prev => [...prev, 'Analyse terminée !']);
 
-          // Create project with real data
-          const newProject = {
-            id: devis.id,
-            name: projectData.name,
-            type: projectData.type,
-            status: 'completed' as const,
-            score: devisData.score_total || 0,
-            grade: devisData.grade || 'C',
-            amount: `${devisData.montant_total || 0} €`,
-            createdAt: devisData.created_at,
-            analysisResult: {
-              strengths: devisData.points_forts || [],
-              warnings: devisData.points_vigilance || [],
-              recommendations: devisData.recommandations || {},
-              priceComparison: devisData.comparaison_prix || null,
-            }
-          };
-
-          addProject(newProject);
-          setCurrentProject(newProject);
+          // Navigate directly to results page - let it load the data
           setIsAnalyzing(false);
 
           toast({
             title: 'Analyse terminée !',
-            description: `Score TORP: ${newProject.score}/100 (${newProject.grade})`,
+            description: `Score TORP: ${devisData.score_total}/1000 (${devisData.grade})`,
           });
 
           navigate(`/results?devisId=${devis.id}`);

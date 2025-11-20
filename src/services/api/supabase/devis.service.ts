@@ -267,43 +267,94 @@ export class SupabaseDevisService {
 
       // Step 3: Save results to database
       console.log(`[Devis] Saving analysis results...`);
-      const { error: updateError } = await supabase
-        .from('devis')
-        .update({
+
+      // Get user session token (same approach as uploadDevis)
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAuthKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
+      const sessionData = localStorage.getItem(supabaseAuthKey);
+
+      let accessToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      if (sessionData) {
+        try {
+          const session = JSON.parse(sessionData);
+          accessToken = session.access_token;
+        } catch (e) {
+          console.error('[DevisService] Failed to parse session:', e);
+        }
+      }
+
+      // Use direct REST API to avoid blocking issue
+      const updateUrl = `${supabaseUrl}/rest/v1/devis?id=eq.${devisId}`;
+      const updateResponse = await fetch(updateUrl, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
           status: 'analyzed',
           analyzed_at: new Date().toISOString(),
           analysis_duration: analysis.dureeAnalyse,
           score_total: analysis.scoreGlobal,
           grade: analysis.grade,
-          score_entreprise: analysis.scoreEntreprise as any,
-          score_prix: analysis.scorePrix as any,
-          score_completude: analysis.scoreCompletude as any,
-          score_conformite: analysis.scoreConformite as any,
-          score_delais: analysis.scoreDelais as any,
-          recommendations: analysis.recommandations as any,
+          score_entreprise: analysis.scoreEntreprise,
+          score_prix: analysis.scorePrix,
+          score_completude: analysis.scoreCompletude,
+          score_conformite: analysis.scoreConformite,
+          score_delais: analysis.scoreDelais,
+          recommendations: analysis.recommandations,
           detected_overcosts: analysis.surcoutsDetectes,
           potential_savings: analysis.scorePrix.economiesPotentielles || 0,
           updated_at: new Date().toISOString(),
-        })
-        .eq('id', devisId);
+        }),
+      });
 
-      if (updateError) {
-        throw new Error(`Failed to save analysis: ${updateError.message}`);
+      if (!updateResponse.ok) {
+        const errorText = await updateResponse.text();
+        console.error('[DevisService] Database update error:', errorText);
+        throw new Error(`Failed to save analysis: ${updateResponse.status} ${errorText}`);
       }
+
+      console.log('[DevisService] Analysis results saved successfully');
 
       const totalDuration = Math.round((Date.now() - startTime) / 1000);
       console.log(`[Devis] Analysis complete for ${devisId} - ${totalDuration}s total - Score: ${analysis.scoreGlobal}/1000 (${analysis.grade})`);
     } catch (error) {
       console.error(`[Devis] Analysis failed for ${devisId}:`, error);
 
-      // Update status to indicate failure
-      await supabase
-        .from('devis')
-        .update({
-          status: 'uploaded',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', devisId);
+      // Update status to indicate failure using REST API
+      try {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAuthKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
+        const sessionData = localStorage.getItem(supabaseAuthKey);
+
+        let accessToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        if (sessionData) {
+          try {
+            const session = JSON.parse(sessionData);
+            accessToken = session.access_token;
+          } catch (e) {
+            console.error('[DevisService] Failed to parse session:', e);
+          }
+        }
+
+        const updateUrl = `${supabaseUrl}/rest/v1/devis?id=eq.${devisId}`;
+        await fetch(updateUrl, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            status: 'uploaded',
+            updated_at: new Date().toISOString(),
+          }),
+        });
+      } catch (updateError) {
+        console.error('[DevisService] Failed to update status after error:', updateError);
+      }
 
       throw error;
     }

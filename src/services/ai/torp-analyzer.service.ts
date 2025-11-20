@@ -118,6 +118,7 @@ export class TorpAnalyzerService {
         grade: synthesis.grade as any,
 
         scoreEntreprise: {
+          scoreTotal: entrepriseAnalysis.scoreTotal,
           fiabilite: entrepriseAnalysis.details.fiabilite.score,
           santeFinnaciere: entrepriseAnalysis.details.santeFinnaciere.score,
           anciennete: 0, // Included in fiabilité
@@ -129,6 +130,7 @@ export class TorpAnalyzerService {
         },
 
         scorePrix: {
+          scoreTotal: prixAnalysis.scoreTotal,
           vsMarche: prixAnalysis.vsMarche.score,
           transparence: prixAnalysis.transparence.score,
           coherence: prixAnalysis.coherence.score,
@@ -138,6 +140,7 @@ export class TorpAnalyzerService {
         },
 
         scoreCompletude: {
+          scoreTotal: completudeAnalysis.scoreTotal,
           elementsManquants: completudeAnalysis.elementsManquants,
           incohérences: [], // TODO: extract from analysis
           conformiteNormes: completudeAnalysis.conformiteNormes.score,
@@ -145,6 +148,7 @@ export class TorpAnalyzerService {
         },
 
         scoreConformite: {
+          scoreTotal: conformiteAnalysis.scoreTotal,
           assurances: conformiteAnalysis.assurances.conforme,
           plu: conformiteAnalysis.plu.conforme ?? false,
           normes: conformiteAnalysis.normes.respectees.length > 0,
@@ -153,13 +157,14 @@ export class TorpAnalyzerService {
         },
 
         scoreDelais: {
+          scoreTotal: delaisAnalysis.scoreTotal,
           realisme: delaisAnalysis.realisme.score,
           vsMarche: 0, // Included in realisme
           planningDetaille: delaisAnalysis.planning.detaille,
           penalitesRetard: delaisAnalysis.penalites.mentionnees,
         },
 
-        recommandations: synthesis.recommandations,
+        recommandations: synthesis, // Store entire synthesis object
         surcoutsDetectes: extractedData.devis.montantTotal - (synthesis.budgetRealEstime || extractedData.devis.montantTotal),
         budgetRealEstime: synthesis.budgetRealEstime || extractedData.devis.montantTotal,
         margeNegociation: synthesis.margeNegociation,
@@ -186,7 +191,6 @@ export class TorpAnalyzerService {
     const { data } = await hybridAIService.generateJSON<ExtractedDevisData>(prompt, {
       systemPrompt: TORP_SYSTEM_PROMPT,
       temperature: 0.2, // Low temperature for accurate extraction
-      preferredProvider: 'claude', // Claude is better for data extraction
     });
 
     return data;
@@ -215,7 +219,6 @@ export class TorpAnalyzerService {
     const { data } = await hybridAIService.generateJSON(prompt, {
       systemPrompt: TORP_SYSTEM_PROMPT,
       temperature: 0.4,
-      preferredProvider: 'openai', // GPT-4 is good at price comparison
     });
 
     return data;
@@ -297,7 +300,6 @@ export class TorpAnalyzerService {
     const { data } = await hybridAIService.generateJSON(prompt, {
       systemPrompt: TORP_SYSTEM_PROMPT,
       temperature: 0.5,
-      preferredProvider: 'claude', // Claude is better for synthesis and recommendations
     });
 
     return data;
