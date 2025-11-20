@@ -17,12 +17,8 @@ export default function Results() {
 
   useEffect(() => {
     const loadProjectData = async () => {
-      // If currentProject is available, use it
-      if (currentProject && currentProject.analysisResult) {
-        return;
-      }
-
-      // Try to get devisId from URL params
+      // Always load from database if we have a devisId in URL
+      // This ensures we get the complete, up-to-date analysis data
       const devisId = searchParams.get('devisId');
       if (!devisId) {
         navigate('/analyze');
@@ -363,22 +359,54 @@ export default function Results() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {analysisResult.recommendations?.questions && (
+                  {/* Recommandations détaillées avec priorités */}
+                  {analysisResult.recommendations?.actions && Array.isArray(analysisResult.recommendations.actions) && analysisResult.recommendations.actions.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-foreground">Actions prioritaires</h4>
+                      {analysisResult.recommendations.actions.map((action: any, index: number) => (
+                        <div key={index} className={`p-4 rounded-lg border-l-4 ${
+                          action.priorite === 'haute' ? 'bg-destructive/5 border-destructive' :
+                          action.priorite === 'moyenne' ? 'bg-warning/5 border-warning' :
+                          'bg-muted/30 border-muted'
+                        }`}>
+                          <div className="flex items-start justify-between mb-2">
+                            <h5 className="font-semibold text-foreground">{action.titre}</h5>
+                            <Badge variant={action.priorite === 'haute' ? 'destructive' : action.priorite === 'moyenne' ? 'default' : 'secondary'}>
+                              {action.priorite}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-2">{action.description}</p>
+                          <p className="text-sm font-medium text-foreground">→ {action.actionSuggeree}</p>
+                          {action.impactBudget && (
+                            <p className="text-sm text-success mt-2">💰 Économie potentielle : {action.impactBudget}€</p>
+                          )}
+                          {action.delaiAction && (
+                            <p className="text-xs text-muted-foreground mt-1">⏱️ À faire sous {action.delaiAction} jours</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Questions à poser */}
+                  {analysisResult.recommendations?.questions && analysisResult.recommendations.questions.length > 0 && (
                     <div className="p-4 bg-background rounded-lg border">
-                      <h4 className="font-semibold text-foreground mb-3">Questions à poser à l'entreprise</h4>
+                      <h4 className="font-semibold text-foreground mb-3">❓ Questions à poser à l'entreprise</h4>
                       <ul className="space-y-2">
                         {analysisResult.recommendations.questions.map((question: string, index: number) => (
-                          <li key={index} className="text-sm text-muted-foreground">
-                            • {question}
+                          <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
+                            <span className="text-info mt-0.5">•</span>
+                            <span>{question}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
                   )}
-                  
+
+                  {/* Points de négociation */}
                   {analysisResult.recommendations?.negotiation && (
                     <div className="p-4 bg-background rounded-lg border">
-                      <h4 className="font-semibold text-foreground mb-2">Négociation suggérée</h4>
+                      <h4 className="font-semibold text-foreground mb-2">💬 Points de négociation</h4>
                       <p className="text-sm text-muted-foreground">
                         {analysisResult.recommendations.negotiation}
                       </p>
