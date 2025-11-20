@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/badge';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
 import { CheckCircle, AlertTriangle, Lightbulb, TrendingUp, Download, Eye, ArrowLeft, MessageSquare } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import type { Project } from '@/context/AppContext';
 
 export default function Results() {
@@ -30,20 +29,64 @@ export default function Results() {
         return;
       }
 
-      // Load project data from Supabase
+      // Load project data from Supabase using REST API to avoid blocking
       setIsLoading(true);
       try {
-        const { data, error } = await supabase
-          .from('devis')
-          .select('*')
-          .eq('id', devisId)
-          .single();
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAuthKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
+        const sessionData = localStorage.getItem(supabaseAuthKey);
 
-        if (error || !data) {
-          console.error('Error loading devis:', error);
+        let accessToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        if (sessionData) {
+          try {
+            const session = JSON.parse(sessionData);
+            accessToken = session.access_token;
+          } catch (e) {
+            console.error('Failed to parse session:', e);
+          }
+        }
+
+        const queryUrl = `${supabaseUrl}/rest/v1/devis?id=eq.${devisId}&select=*`;
+        const response = await fetch(queryUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+        });
+
+        if (!response.ok) {
+          console.error('Error loading devis:', response.status);
           navigate('/analyze');
           return;
         }
+
+        const dataArray = await response.json();
+        const data = dataArray[0];
+
+        if (!data) {
+          console.error('No devis found');
+          navigate('/analyze');
+          return;
+        }
+
+        // Extract scores from analysis objects and convert to percentages
+        // TORP scores: Entreprise /250, Prix /300, Complétude /200, Conformité /150, Délais /100
+        const scoreEntreprise = Math.round(((data.score_entreprise?.scoreTotal || 0) / 250) * 100);
+        const scorePrix = Math.round(((data.score_prix?.scoreTotal || 0) / 300) * 100);
+        const scoreCompletude = Math.round(((data.score_completude?.scoreTotal || 0) / 200) * 100);
+        const scoreConformite = Math.round(((data.score_conformite?.scoreTotal || 0) / 150) * 100);
+        const scoreDelais = Math.round(((data.score_delais?.scoreTotal || 0) / 100) * 100);
+
+        // Get recommendations from analysis synthesis
+        const recommendations = data.recommendations || {};
+
+        // Extract different types of information
+        const pointsForts = recommendations.pointsForts || [];
+        const pointsFaibles = recommendations.pointsFaibles || [];
+        const questionsAPoser = recommendations.questionsAPoser || [];
+        const pointsNegociation = recommendations.pointsNegociation || [];
+        const recommandationsActions = recommendations.recommandations || [];
 
         // Convert Supabase data to Project format
         const project: Project = {
@@ -56,10 +99,21 @@ export default function Results() {
           amount: `${data.montant_total || 0} €`,
           createdAt: data.created_at,
           analysisResult: {
-            strengths: data.points_forts || [],
-            warnings: data.points_vigilance || [],
-            recommendations: data.recommandations || {},
+            strengths: pointsForts.length > 0 ? pointsForts : ['Analyse complétée avec succès'],
+            warnings: pointsFaibles.length > 0 ? pointsFaibles : [],
+            recommendations: {
+              questions: questionsAPoser,
+              negotiation: pointsNegociation.length > 0 ? pointsNegociation.join(', ') : null,
+              actions: recommandationsActions
+            },
             priceComparison: data.comparaison_prix || null,
+            detailedScores: {
+              entreprise: scoreEntreprise,
+              prix: scorePrix,
+              completude: scoreCompletude,
+              conformite: scoreConformite,
+              delais: scoreDelais,
+            }
           }
         };
 
@@ -114,6 +168,13 @@ export default function Results() {
   }
 
   const { analysisResult, score = 0, grade = 'C' } = currentProject;
+  const detailedScores = analysisResult?.detailedScores || {
+    entreprise: 0,
+    prix: 0,
+    completude: 0,
+    conformite: 0,
+    delais: 0
+  };
   
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-success';
@@ -186,15 +247,23 @@ export default function Results() {
                   <div className="space-y-3">
                     <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
                       <span className="text-muted-foreground">Fiabilité entreprise</span>
-                      <Badge variant="secondary" className={getScoreColor(85)}>85%</Badge>
+                      <Badge variant="secondary" className={getScoreColor(detailedScores.entreprise)}>{detailedScores.entreprise}%</Badge>
                     </div>
                     <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
                       <span className="text-muted-foreground">Prix cohérent</span>
-                      <Badge variant="secondary" className={getScoreColor(78)}>78%</Badge>
+                      <Badge variant="secondary" className={getScoreColor(detailedScores.prix)}>{detailedScores.prix}%</Badge>
                     </div>
                     <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                      <span className="text-muted-foreground">Conformité technique</span>
-                      <Badge variant="secondary" className={getScoreColor(72)}>72%</Badge>
+                      <span className="text-muted-foreground">Complétude</span>
+                      <Badge variant="secondary" className={getScoreColor(detailedScores.completude)}>{detailedScores.completude}%</Badge>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
+                      <span className="text-muted-foreground">Conformité</span>
+                      <Badge variant="secondary" className={getScoreColor(detailedScores.conformite)}>{detailedScores.conformite}%</Badge>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
+                      <span className="text-muted-foreground">Délais</span>
+                      <Badge variant="secondary" className={getScoreColor(detailedScores.delais)}>{detailedScores.delais}%</Badge>
                     </div>
                   </div>
 

@@ -186,7 +186,7 @@ export class TorpAnalyzerService {
     const { data } = await hybridAIService.generateJSON<ExtractedDevisData>(prompt, {
       systemPrompt: TORP_SYSTEM_PROMPT,
       temperature: 0.2, // Low temperature for accurate extraction
-      preferredProvider: 'claude', // Claude is better for data extraction
+      preferredProvider: 'openai', // OpenAI is faster and more cost-effective
     });
 
     return data;
@@ -297,7 +297,7 @@ export class TorpAnalyzerService {
     const { data } = await hybridAIService.generateJSON(prompt, {
       systemPrompt: TORP_SYSTEM_PROMPT,
       temperature: 0.5,
-      preferredProvider: 'claude', // Claude is better for synthesis and recommendations
+      preferredProvider: 'openai', // OpenAI is faster and more cost-effective
     });
 
     return data;
