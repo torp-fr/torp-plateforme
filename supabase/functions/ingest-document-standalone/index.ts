@@ -18,6 +18,76 @@ function handleCors(req: Request) {
 }
 
 // ============================================
+// OCR avec Claude Vision (Multimodal)
+// ============================================
+async function extractTextWithClaudeVision(
+  fileData: ArrayBuffer,
+  mimeType: string,
+  apiKey: string
+): Promise<string> {
+  const base64 = btoa(
+    new Uint8Array(fileData).reduce((data, byte) => data + String.fromCharCode(byte), '')
+  );
+
+  // Claude accepte les images directement
+  const mediaType = mimeType.startsWith('image/') ? mimeType : 'image/png';
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 8000,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: mediaType,
+              data: base64,
+            },
+          },
+          {
+            type: 'text',
+            text: `Extrais TOUT le texte de ce document de manière structurée.
+
+Conserve:
+- Les titres et sous-titres (marque-les avec # ou ##)
+- Les listes et énumérations
+- Les tableaux (format markdown)
+- Les références normatives (DTU, NF, etc.)
+- Les valeurs techniques (épaisseurs, résistances thermiques, etc.)
+
+Retourne UNIQUEMENT le texte extrait, sans commentaire ni introduction.`
+          }
+        ]
+      }]
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Claude Vision error: ${response.status} - ${error}`);
+  }
+
+  const data = await response.json();
+  return data.content[0]?.text || '';
+}
+
+// Convertir PDF en images via pdf.js ou API externe
+async function convertPdfToImages(pdfBuffer: ArrayBuffer): Promise<Uint8Array[]> {
+  // Pour les PDFs, on retourne le buffer tel quel pour traitement ultérieur
+  // En production, utiliser pdf.js ou une API de conversion
+  return [new Uint8Array(pdfBuffer)];
+}
+
+// ============================================
 // EMBEDDINGS (OpenAI)
 // ============================================
 async function generateEmbedding(text: string, apiKey: string) {
@@ -187,6 +257,23 @@ async function handleFileUpload(req: Request, supabase: any) {
     return errorResponse('Fichier requis');
   }
 
+  // Valider le type de fichier (PDF, images, texte)
+  const allowedTypes = [
+    'application/pdf',
+    'text/plain',
+    'text/markdown',
+    'image/png',
+    'image/jpeg',
+    'image/jpg',
+    'image/webp',
+    'image/gif'
+  ];
+  const fileType = file.type || 'application/octet-stream';
+  if (!allowedTypes.some(t => fileType.includes(t.split('/')[1])) &&
+      !file.name.match(/\.(pdf|txt|md|png|jpg|jpeg|webp|gif)$/i)) {
+    return errorResponse('Type non supporté. Utilisez PDF, images (PNG/JPG) ou TXT.');
+  }
+
   const timestamp = Date.now();
   const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
   const storagePath = `knowledge/${timestamp}_${safeName}`;
@@ -257,7 +344,29 @@ async function handleProcess(body: any, supabase: any) {
     if (dlError) throw dlError;
 
     let text: string;
-    if (doc.mime_type === 'application/pdf') {
+    const claudeApiKey = Deno.env.get('CLAUDE_API_KEY');
+    const isImage = doc.mime_type.startsWith('image/');
+    const isPdf = doc.mime_type === 'application/pdf';
+
+    // Utiliser OCR Claude Vision pour images et PDFs
+    if (claudeApiKey && (isImage || isPdf)) {
+      console.log('Using Claude Vision OCR for:', doc.mime_type);
+      const buffer = await fileData.arrayBuffer();
+
+      if (isImage) {
+        // Images: envoyer directement à Claude Vision
+        text = await extractTextWithClaudeVision(buffer, doc.mime_type, claudeApiKey);
+      } else {
+        // PDF: essayer extraction basique, fallback sur message d'erreur
+        text = extractTextFromPdf(buffer);
+        if (!text || text.length < 100) {
+          // Texte trop court = extraction échouée
+          // Note: Pour les PDFs, convertir en images d'abord serait idéal
+          console.log('PDF extraction failed, text too short');
+          text = `[Extraction PDF limitée - Convertir en images PNG pour OCR complet]\n\nContenu partiel:\n${text}`;
+        }
+      }
+    } else if (isPdf) {
       const buffer = await fileData.arrayBuffer();
       text = extractTextFromPdf(buffer);
     } else {
