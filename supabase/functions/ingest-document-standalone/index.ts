@@ -77,11 +77,38 @@ Retourne UNIQUEMENT le texte extrait, sans commentaire ni introduction.`
   return data.choices[0]?.message?.content || '';
 }
 
-// Convertir PDF en images via pdf.js ou API externe
-async function convertPdfToImages(pdfBuffer: ArrayBuffer): Promise<Uint8Array[]> {
-  // Pour les PDFs, on retourne le buffer tel quel pour traitement ultérieur
-  // En production, utiliser pdf.js ou une API de conversion
-  return [new Uint8Array(pdfBuffer)];
+// Convertir PDF en images via pdf.co API
+async function convertPdfToImages(pdfBuffer: ArrayBuffer, apiKey: string): Promise<string[]> {
+  // Upload PDF to pdf.co
+  const base64Pdf = btoa(
+    new Uint8Array(pdfBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+  );
+
+  const response = await fetch('https://api.pdf.co/v1/pdf/convert/to/png', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      url: `data:application/pdf;base64,${base64Pdf}`,
+      pages: '0-9', // Max 10 premières pages
+      async: false
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`pdf.co error: ${response.status}`);
+  }
+
+  const data = await response.json();
+
+  if (data.error) {
+    throw new Error(`pdf.co error: ${data.message}`);
+  }
+
+  // Retourne les URLs des images générées
+  return data.urls || [];
 }
 
 // ============================================
@@ -345,19 +372,43 @@ async function handleProcess(body: any, supabase: any) {
     const isImage = doc.mime_type.startsWith('image/');
     const isPdf = doc.mime_type === 'application/pdf';
 
+    const pdfcoApiKey = Deno.env.get('PDFCO_API_KEY');
+
     // Utiliser OCR OpenAI Vision (GPT-4o) pour images
     if (openaiApiKey && isImage) {
       console.log('Using OpenAI Vision OCR for:', doc.mime_type);
       const buffer = await fileData.arrayBuffer();
       text = await extractTextWithOpenAIVision(buffer, doc.mime_type, openaiApiKey);
-    } else if (openaiApiKey && isPdf) {
-      // PDF: essayer extraction basique d'abord
+
+    } else if (openaiApiKey && isPdf && pdfcoApiKey) {
+      // PDF avec conversion via pdf.co + OCR OpenAI Vision
+      console.log('Converting PDF to images via pdf.co...');
       const buffer = await fileData.arrayBuffer();
-      text = extractTextFromPdf(buffer);
-      if (!text || text.length < 100) {
-        console.log('PDF extraction limited, text too short');
-        text = `[Extraction PDF limitée - Convertir en images PNG pour OCR complet]\n\nContenu partiel:\n${text}`;
+
+      try {
+        const imageUrls = await convertPdfToImages(buffer, pdfcoApiKey);
+        console.log(`PDF converted to ${imageUrls.length} images`);
+
+        // OCR chaque page
+        const pageTexts: string[] = [];
+        for (let i = 0; i < imageUrls.length; i++) {
+          console.log(`Processing page ${i + 1}/${imageUrls.length}`);
+          const imgResponse = await fetch(imageUrls[i]);
+          const imgBuffer = await imgResponse.arrayBuffer();
+          const pageText = await extractTextWithOpenAIVision(imgBuffer, 'image/png', openaiApiKey);
+          pageTexts.push(`## Page ${i + 1}\n\n${pageText}`);
+        }
+        text = pageTexts.join('\n\n---\n\n');
+
+      } catch (pdfError) {
+        console.error('PDF conversion failed:', pdfError);
+        // Fallback: extraction basique
+        text = extractTextFromPdf(buffer);
+        if (!text || text.length < 100) {
+          text = `[Extraction PDF limitée]\n\n${text}`;
+        }
       }
+
     } else if (isPdf) {
       const buffer = await fileData.arrayBuffer();
       text = extractTextFromPdf(buffer);
