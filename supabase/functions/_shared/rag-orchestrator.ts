@@ -20,6 +20,12 @@ import {
   type APIEntrepriseConfig
 } from './api-clients.ts';
 import { callClaude } from './ai-client.ts';
+import {
+  searchKnowledgeForDevis,
+  generateKnowledgeContext,
+  identifyApplicableDTU,
+  type KnowledgeSearchResult
+} from './knowledge-search.ts';
 
 // ============================================
 // TYPES & INTERFACES
@@ -100,6 +106,13 @@ export interface RAGContext {
     applicables: any[];
     conformite: string[];
     alertes: string[];
+  };
+  // Base de connaissances (DTU, normes, guides)
+  knowledgeBase?: {
+    dtu: KnowledgeSearchResult[];
+    normes: KnowledgeSearchResult[];
+    guides: KnowledgeSearchResult[];
+    dtuApplicables: string[];
   };
   // Métadonnées RAG
   sources: string[];
@@ -381,7 +394,36 @@ export async function orchestrateRAG(query: RAGQuery): Promise<RAGContext> {
     alertes: []
   };
 
-  // 9. Calcul de la fiabilité globale
+  // 9. Recherche dans la base de connaissances (DTU, normes, guides)
+  try {
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (supabaseUrl && supabaseKey) {
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      const travaux = extractedData.travaux.map(t => ({
+        type: t.type,
+        description: t.description
+      }));
+
+      const knowledgeResults = await searchKnowledgeForDevis(supabase, travaux);
+      const dtuApplicables = identifyApplicableDTU(categories);
+
+      context.knowledgeBase = {
+        ...knowledgeResults,
+        dtuApplicables
+      };
+
+      if (knowledgeResults.dtu.length > 0 || knowledgeResults.normes.length > 0) {
+        sources.push('Base de connaissances (DTU/Normes)');
+      }
+    }
+  } catch (kbError) {
+    console.error('Knowledge base search failed:', kbError);
+  }
+
+  // 10. Calcul de la fiabilité globale
   context.fiabilite = calculateReliability(sources, context as RAGContext);
   context.sources = sources;
 
@@ -651,6 +693,7 @@ function calculateReliability(sources: string[], context: RAGContext): number {
   if (sources.includes('ADEME - Liste RGE')) reliability += 15;
   if (sources.includes('BODACC - Annonces légales')) reliability += 10;
   if (sources.includes('INSEE - Indices BTP')) reliability += 5;
+  if (sources.includes('Base de connaissances (DTU/Normes)')) reliability += 10;
 
   // Données entreprise complètes
   if (context.entreprise?.identite?.siren) reliability += 5;
@@ -695,6 +738,26 @@ ${context.aides?.conditions?.join('\n') || 'N/A'}
 ## CONFORMITÉ RÉGLEMENTAIRE
 ${context.reglementations?.conformite?.join('\n') || 'Non vérifié'}
 
+${context.knowledgeBase ? `## RÉFÉRENCES TECHNIQUES (Base de connaissances)
+
+### DTU Applicables
+${context.knowledgeBase.dtuApplicables?.join(', ') || 'Non identifiés'}
+
+### DTU Pertinents
+${context.knowledgeBase.dtu?.slice(0, 3).map(d =>
+    `- **${d.codeReference || d.title}** (${Math.round(d.similarity * 100)}%): ${d.content.substring(0, 200)}...`
+  ).join('\n') || 'Aucun'}
+
+### Normes
+${context.knowledgeBase.normes?.slice(0, 3).map(n =>
+    `- **${n.codeReference || n.title}** (${Math.round(n.similarity * 100)}%): ${n.content.substring(0, 200)}...`
+  ).join('\n') || 'Aucune'}
+
+### Guides et bonnes pratiques
+${context.knowledgeBase.guides?.slice(0, 2).map(g =>
+    `- **${g.title}**: ${g.content.substring(0, 150)}...`
+  ).join('\n') || 'Aucun'}
+` : ''}
 ---
 FIABILITÉ DONNÉES: ${context.fiabilite}%
 SOURCES: ${context.sources?.join(', ')}
