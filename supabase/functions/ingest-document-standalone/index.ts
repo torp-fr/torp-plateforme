@@ -18,9 +18,9 @@ function handleCors(req: Request) {
 }
 
 // ============================================
-// OCR avec Claude Vision (Multimodal)
+// OCR avec OpenAI Vision (GPT-4o)
 // ============================================
-async function extractTextWithClaudeVision(
+async function extractTextWithOpenAIVision(
   fileData: ArrayBuffer,
   mimeType: string,
   apiKey: string
@@ -29,29 +29,26 @@ async function extractTextWithClaudeVision(
     new Uint8Array(fileData).reduce((data, byte) => data + String.fromCharCode(byte), '')
   );
 
-  // Claude accepte les images directement
   const mediaType = mimeType.startsWith('image/') ? mimeType : 'image/png';
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
+      'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'gpt-4o',
       max_tokens: 8000,
       messages: [{
         role: 'user',
         content: [
           {
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: mediaType,
-              data: base64,
-            },
+            type: 'image_url',
+            image_url: {
+              url: `data:${mediaType};base64,${base64}`,
+              detail: 'high'
+            }
           },
           {
             type: 'text',
@@ -73,11 +70,11 @@ Retourne UNIQUEMENT le texte extrait, sans commentaire ni introduction.`
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`Claude Vision error: ${response.status} - ${error}`);
+    throw new Error(`OpenAI Vision error: ${response.status} - ${error}`);
   }
 
   const data = await response.json();
-  return data.content[0]?.text || '';
+  return data.choices[0]?.message?.content || '';
 }
 
 // Convertir PDF en images via pdf.js ou API externe
@@ -344,27 +341,22 @@ async function handleProcess(body: any, supabase: any) {
     if (dlError) throw dlError;
 
     let text: string;
-    const claudeApiKey = Deno.env.get('CLAUDE_API_KEY');
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     const isImage = doc.mime_type.startsWith('image/');
     const isPdf = doc.mime_type === 'application/pdf';
 
-    // Utiliser OCR Claude Vision pour images et PDFs
-    if (claudeApiKey && (isImage || isPdf)) {
-      console.log('Using Claude Vision OCR for:', doc.mime_type);
+    // Utiliser OCR OpenAI Vision (GPT-4o) pour images
+    if (openaiApiKey && isImage) {
+      console.log('Using OpenAI Vision OCR for:', doc.mime_type);
       const buffer = await fileData.arrayBuffer();
-
-      if (isImage) {
-        // Images: envoyer directement à Claude Vision
-        text = await extractTextWithClaudeVision(buffer, doc.mime_type, claudeApiKey);
-      } else {
-        // PDF: essayer extraction basique, fallback sur message d'erreur
-        text = extractTextFromPdf(buffer);
-        if (!text || text.length < 100) {
-          // Texte trop court = extraction échouée
-          // Note: Pour les PDFs, convertir en images d'abord serait idéal
-          console.log('PDF extraction failed, text too short');
-          text = `[Extraction PDF limitée - Convertir en images PNG pour OCR complet]\n\nContenu partiel:\n${text}`;
-        }
+      text = await extractTextWithOpenAIVision(buffer, doc.mime_type, openaiApiKey);
+    } else if (openaiApiKey && isPdf) {
+      // PDF: essayer extraction basique d'abord
+      const buffer = await fileData.arrayBuffer();
+      text = extractTextFromPdf(buffer);
+      if (!text || text.length < 100) {
+        console.log('PDF extraction limited, text too short');
+        text = `[Extraction PDF limitée - Convertir en images PNG pour OCR complet]\n\nContenu partiel:\n${text}`;
       }
     } else if (isPdf) {
       const buffer = await fileData.arrayBuffer();
