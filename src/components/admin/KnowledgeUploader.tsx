@@ -102,11 +102,16 @@ export const KnowledgeUploader = () => {
     setIsDragOver(false);
   }, []);
 
+  const isValidFile = (f: File) => {
+    const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'text/plain'];
+    const validExts = /\.(pdf|png|jpg|jpeg|webp|gif|txt|md)$/i;
+    return validTypes.includes(f.type) || validExts.test(f.name);
+  };
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    const droppedFiles = Array.from(e.dataTransfer.files).filter(
-      f => f.type === "application/pdf" || f.name.endsWith(".pdf")
+    const droppedFiles = Array.from(e.dataTransfer.files).filter(isValidFile
     );
     addFiles(droppedFiles);
   }, []);
@@ -123,9 +128,7 @@ export const KnowledgeUploader = () => {
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const selectedFiles = Array.from(e.target.files).filter(
-        f => f.type === "application/pdf" || f.name.endsWith(".pdf")
-      );
+      const selectedFiles = Array.from(e.target.files).filter(isValidFile);
       addFiles(selectedFiles);
     }
   };
@@ -476,13 +479,13 @@ export const KnowledgeUploader = () => {
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".pdf"
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.txt,.md"
               className="hidden"
               onChange={handleFileSelect}
             />
             <Upload className="h-10 w-10 mx-auto mb-4 text-muted-foreground" />
             <p className="text-lg font-medium">
-              Glissez vos fichiers PDF ici
+              Glissez vos fichiers ici (PDF, images, texte)
             </p>
             <p className="text-sm text-muted-foreground mt-1">
               ou cliquez pour slectionner
