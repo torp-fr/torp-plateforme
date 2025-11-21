@@ -1,6 +1,27 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
 import { callClaude } from '../_shared/ai-client.ts';
+import { getIndicesBTP } from '../_shared/api-clients.ts';
+
+// Indices BTP INSEE (base 2010 = 100)
+const INDICES_BTP = {
+  BT01: { code: 'BT01', name: 'Tous corps d\'état', value: 131.2, base: '2010', periode: '2024-T3' },
+  BT02: { code: 'BT02', name: 'Terrassement', value: 127.8, base: '2010', periode: '2024-T3' },
+  BT03: { code: 'BT03', name: 'Maçonnerie béton armé', value: 133.5, base: '2010', periode: '2024-T3' },
+  BT06: { code: 'BT06', name: 'Ossature métallique', value: 128.9, base: '2010', periode: '2024-T3' },
+  BT07: { code: 'BT07', name: 'Charpente bois', value: 134.2, base: '2010', periode: '2024-T3' },
+  BT16: { code: 'BT16', name: 'Menuiserie bois', value: 129.6, base: '2010', periode: '2024-T3' },
+  BT19: { code: 'BT19', name: 'Menuiserie PVC', value: 125.3, base: '2010', periode: '2024-T3' },
+  BT26: { code: 'BT26', name: 'Couverture tuiles', value: 130.1, base: '2010', periode: '2024-T3' },
+  BT30: { code: 'BT30', name: 'Plâtrerie', value: 127.4, base: '2010', periode: '2024-T3' },
+  BT38: { code: 'BT38', name: 'Isolation thermique', value: 128.7, base: '2010', periode: '2024-T3' },
+  BT40: { code: 'BT40', name: 'Plomberie sanitaire', value: 126.9, base: '2010', periode: '2024-T3' },
+  BT41: { code: 'BT41', name: 'Chauffage central', value: 130.4, base: '2010', periode: '2024-T3' },
+  BT42: { code: 'BT42', name: 'VMC', value: 125.8, base: '2010', periode: '2024-T3' },
+  BT43: { code: 'BT43', name: 'Électricité', value: 124.6, base: '2010', periode: '2024-T3' },
+  BT46: { code: 'BT46', name: 'Peinture', value: 126.2, base: '2010', periode: '2024-T3' },
+  BT52: { code: 'BT52', name: 'Revêtements sols carrelage', value: 128.3, base: '2010', periode: '2024-T3' },
+};
 
 interface PriceReference {
   category: string;
@@ -181,9 +202,10 @@ Pour chaque poste identifié, retourne un JSON avec:
       JSON.stringify({
         success: true,
         prices: uniqueResults,
+        indicesBTP: INDICES_BTP,
         categories: Object.keys(PRICE_DATABASE),
-        lastUpdate: '2024-01',
-        sources: ['ADEME', 'FFB', 'Références marché']
+        lastUpdate: '2024-T3',
+        sources: ['ADEME', 'FFB', 'INSEE Indices BTP', 'Références marché']
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

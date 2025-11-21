@@ -1,169 +1,403 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
-import { callClaude } from '../_shared/ai-client.ts';
+import {
+  searchEntreprise,
+  getRGECertifications,
+  getBODACCAnnonces,
+  getQualibatCertification,
+  getQualifelecCertification,
+  getOPQIBICertification,
+  getURSSAFAttestation,
+  getDGFIPAttestation,
+  getDGFIPChiffresAffaires,
+  getInfogreffeKbis,
+  type APIEntrepriseConfig,
+  type RechercheEntrepriseResult
+} from '../_shared/api-clients.ts';
 
-interface EnterpriseData {
-  siret?: string;
-  siren?: string;
-  name: string;
-  address?: string;
-  rgeLabels?: string[];
-  certifications?: string[];
-  reviews?: { source: string; rating: number; count: number }[];
-  creationDate?: string;
-  employees?: string;
-  capital?: string;
-  activity?: string;
+interface EnterpriseFullData {
+  // Identité
+  siren: string;
+  siret: string;
+  nom: string;
+  formeJuridique?: string;
+  dateCreation?: string;
+  etatAdministratif: string;
+
+  // Adresse
+  adresse?: string;
+  codePostal?: string;
+  ville?: string;
+  latitude?: string;
+  longitude?: string;
+
+  // Données économiques
+  categorieEntreprise?: string;
+  effectif?: string;
+  activitePrincipale?: string;
+  chiffreAffaires?: { annee: string; montant: number }[];
+
+  // Dirigeants
+  dirigeants?: {
+    nom: string;
+    prenom?: string;
+    qualite: string;
+    dateNaissance?: string;
+  }[];
+
+  // Certifications
+  certifications: {
+    rge: {
+      actif: boolean;
+      qualifications: {
+        nom: string;
+        organisme: string;
+        domaine: string;
+        dateDebut: string;
+        dateFin: string;
+      }[];
+    };
+    qualibat?: any;
+    qualifelec?: any;
+    opqibi?: any;
+  };
+
+  // Conformité
+  conformite: {
+    urssaf?: { valide: boolean; dateValidite?: string };
+    dgfip?: { valide: boolean; dateValidite?: string };
+  };
+
+  // Annonces légales
+  annoncesLegales?: {
+    type: string;
+    date: string;
+    tribunal?: string;
+  }[];
+
+  // Scores et alertes
+  score: {
+    global: number;
+    details: {
+      anciennete: number;
+      certifications: number;
+      conformite: number;
+      stabilite: number;
+    };
+  };
+  alertes: string[];
 }
 
-// API endpoints (public French data)
-const API_SIRENE = 'https://api.insee.fr/entreprises/sirene/V3.11';
-const API_RGE = 'https://data.ademe.fr/data-fair/api/v1/datasets/liste-des-entreprises-rge-2/lines';
+function calculateScore(data: Partial<EnterpriseFullData>): {
+  global: number;
+  details: { anciennete: number; certifications: number; conformite: number; stabilite: number };
+} {
+  const details = {
+    anciennete: 0,
+    certifications: 0,
+    conformite: 0,
+    stabilite: 0
+  };
+
+  // Ancienneté (max 25 pts)
+  if (data.dateCreation) {
+    const years = new Date().getFullYear() - new Date(data.dateCreation).getFullYear();
+    details.anciennete = Math.min(25, years * 2.5);
+  }
+
+  // Certifications (max 35 pts)
+  if (data.certifications?.rge?.actif) {
+    details.certifications += 20;
+    details.certifications += Math.min(15, (data.certifications.rge.qualifications?.length || 0) * 3);
+  }
+  if (data.certifications?.qualibat) details.certifications = Math.min(35, details.certifications + 10);
+  if (data.certifications?.qualifelec) details.certifications = Math.min(35, details.certifications + 10);
+
+  // Conformité (max 25 pts)
+  if (data.conformite?.urssaf?.valide) details.conformite += 12;
+  if (data.conformite?.dgfip?.valide) details.conformite += 13;
+
+  // Stabilité (max 15 pts)
+  if (data.etatAdministratif === 'A') details.stabilite += 10;
+  if (!data.annoncesLegales?.some(a => a.type.includes('liquidation') || a.type.includes('redressement'))) {
+    details.stabilite += 5;
+  }
+
+  return {
+    global: Math.round(details.anciennete + details.certifications + details.conformite + details.stabilite),
+    details
+  };
+}
+
+function generateAlertes(data: Partial<EnterpriseFullData>): string[] {
+  const alertes: string[] = [];
+
+  if (data.etatAdministratif !== 'A') {
+    alertes.push('CRITIQUE: Entreprise cessée ou en cours de cessation');
+  }
+
+  if (!data.certifications?.rge?.actif) {
+    alertes.push('ATTENTION: Pas de certification RGE active - Vérifier éligibilité aides');
+  }
+
+  if (!data.conformite?.urssaf?.valide) {
+    alertes.push('ATTENTION: Attestation URSSAF non vérifiée');
+  }
+
+  if (data.dateCreation) {
+    const years = new Date().getFullYear() - new Date(data.dateCreation).getFullYear();
+    if (years < 2) {
+      alertes.push('INFO: Entreprise récente (< 2 ans)');
+    }
+  }
+
+  // Check RGE expiration
+  data.certifications?.rge?.qualifications?.forEach(q => {
+    const expDate = new Date(q.dateFin);
+    const now = new Date();
+    const daysUntilExp = (expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+    if (daysUntilExp < 0) {
+      alertes.push(`ATTENTION: Certification RGE "${q.nom}" expirée`);
+    } else if (daysUntilExp < 90) {
+      alertes.push(`INFO: Certification RGE "${q.nom}" expire dans ${Math.round(daysUntilExp)} jours`);
+    }
+  });
+
+  return alertes;
+}
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
   try {
-    const { siret, name, postalCode } = await req.json();
+    const { siret, siren, nom, codePostal, includeAPIs = [] } = await req.json();
 
-    if (!siret && !name) {
+    if (!siret && !siren && !nom) {
       return new Response(
-        JSON.stringify({ error: 'siret ou name requis' }),
+        JSON.stringify({ error: 'siret, siren ou nom requis' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const result: EnterpriseData = { name: name || '' };
+    const result: Partial<EnterpriseFullData> = {
+      certifications: { rge: { actif: false, qualifications: [] } },
+      conformite: {},
+      alertes: []
+    };
+    const sources: string[] = [];
     const errors: string[] = [];
 
-    // 1. Fetch SIRENE data (INSEE)
-    if (siret) {
-      try {
-        const inseeToken = Deno.env.get('INSEE_API_TOKEN');
-        if (inseeToken) {
-          const sireneResponse = await fetch(
-            `${API_SIRENE}/siret/${siret}`,
-            { headers: { Authorization: `Bearer ${inseeToken}` } }
-          );
-          if (sireneResponse.ok) {
-            const sireneData = await sireneResponse.json();
-            const etablissement = sireneData.etablissement;
-            const unite = etablissement?.uniteLegale;
-
-            result.siret = siret;
-            result.siren = siret.substring(0, 9);
-            result.name = unite?.denominationUniteLegale || name;
-            result.creationDate = unite?.dateCreationUniteLegale;
-            result.employees = unite?.trancheEffectifsUniteLegale;
-            result.activity = etablissement?.activitePrincipaleEtablissement;
-
-            const adresse = etablissement?.adresseEtablissement;
-            if (adresse) {
-              result.address = [
-                adresse.numeroVoieEtablissement,
-                adresse.typeVoieEtablissement,
-                adresse.libelleVoieEtablissement,
-                adresse.codePostalEtablissement,
-                adresse.libelleCommuneEtablissement
-              ].filter(Boolean).join(' ');
-            }
-          }
-        } else {
-          errors.push('INSEE_API_TOKEN non configuré');
-        }
-      } catch (e) {
-        errors.push(`Erreur SIRENE: ${e}`);
-      }
-    }
-
-    // 2. Fetch RGE certifications (ADEME open data)
+    // 1. API Recherche Entreprises (gratuite, ouverte)
     try {
-      const searchParam = siret
-        ? `siret:${siret}`
-        : `nom_entreprise:${encodeURIComponent(name)}`;
-
-      const rgeParams = new URLSearchParams({
-        q: searchParam,
-        size: '10'
+      const searchResult = await searchEntreprise({
+        siret,
+        siren,
+        q: nom,
+        code_postal: codePostal
       });
 
-      if (postalCode) {
-        rgeParams.append('q', `code_postal:${postalCode}`);
-      }
+      if (searchResult.results.length > 0) {
+        const entreprise = searchResult.results[0];
+        result.siren = entreprise.siren;
+        result.siret = entreprise.siege?.siret || siret || '';
+        result.nom = entreprise.nom_complet;
+        result.formeJuridique = entreprise.nature_juridique;
+        result.dateCreation = entreprise.date_creation;
+        result.etatAdministratif = entreprise.etat_administratif;
+        result.adresse = entreprise.siege?.adresse;
+        result.codePostal = entreprise.siege?.code_postal;
+        result.ville = entreprise.siege?.libelle_commune;
+        result.latitude = entreprise.siege?.latitude;
+        result.longitude = entreprise.siege?.longitude;
+        result.categorieEntreprise = entreprise.categorie_entreprise;
+        result.effectif = entreprise.tranche_effectif_salarie;
+        result.activitePrincipale = entreprise.activite_principale;
 
-      const rgeResponse = await fetch(`${API_RGE}?${rgeParams}`);
-      if (rgeResponse.ok) {
-        const rgeData = await rgeResponse.json();
-        if (rgeData.results?.length > 0) {
-          const rgeLabels = new Set<string>();
-          const certifications = new Set<string>();
-
-          rgeData.results.forEach((r: any) => {
-            if (r.nom_qualification) rgeLabels.add(r.nom_qualification);
-            if (r.organisme) certifications.add(r.organisme);
-            if (!result.siret && r.siret) result.siret = r.siret;
-            if (!result.address && r.adresse) {
-              result.address = `${r.adresse}, ${r.code_postal} ${r.commune}`;
-            }
-          });
-
-          result.rgeLabels = Array.from(rgeLabels);
-          result.certifications = Array.from(certifications);
+        if (entreprise.dirigeants) {
+          result.dirigeants = entreprise.dirigeants.map((d: any) => ({
+            nom: d.nom || d.denomination,
+            prenom: d.prenoms,
+            qualite: d.qualite,
+            dateNaissance: d.date_de_naissance
+          }));
         }
+
+        if (entreprise.finances) {
+          result.chiffreAffaires = Object.entries(entreprise.finances).map(([annee, data]: [string, any]) => ({
+            annee,
+            montant: data.ca
+          }));
+        }
+
+        sources.push('API Recherche Entreprises (gouv.fr)');
       }
     } catch (e) {
-      errors.push(`Erreur RGE: ${e}`);
+      errors.push(`Recherche Entreprises: ${e}`);
     }
 
-    // 3. Enrich with AI if we have partial data
-    const claudeApiKey = Deno.env.get('CLAUDE_API_KEY');
-    if (claudeApiKey && (result.name || siret)) {
+    // 2. API RGE ADEME (gratuite, ouverte)
+    try {
+      const rgeData = await getRGECertifications({
+        siret: result.siret || siret,
+        nom: result.nom || nom,
+        code_postal: result.codePostal || codePostal
+      });
+
+      if (rgeData.length > 0) {
+        result.certifications!.rge = {
+          actif: true,
+          qualifications: rgeData.map(r => ({
+            nom: r.nom_qualification,
+            organisme: r.organisme,
+            domaine: r.domaine,
+            dateDebut: r.date_debut,
+            dateFin: r.date_fin
+          }))
+        };
+        sources.push('ADEME - Liste RGE');
+      }
+    } catch (e) {
+      errors.push(`RGE ADEME: ${e}`);
+    }
+
+    // 3. BODACC - Annonces légales (gratuit, ouvert)
+    if (result.siren || siren) {
       try {
-        const enrichPrompt = `Recherche des informations complémentaires sur cette entreprise du bâtiment:
-Nom: ${result.name || 'Non connu'}
-SIRET: ${result.siret || siret || 'Non connu'}
-Adresse: ${result.address || 'Non connue'}
-
-Données déjà collectées:
-- Labels RGE: ${result.rgeLabels?.join(', ') || 'Aucun trouvé'}
-- Certifications: ${result.certifications?.join(', ') || 'Aucune trouvée'}
-
-Enrichis avec des informations typiques pour ce type d'entreprise (avis clients estimés, réputation secteur).
-Retourne un JSON avec: additionalCertifications[], estimatedReviews, sectorReputation, warnings[].`;
-
-        const aiResponse = await callClaude(
-          enrichPrompt,
-          'Tu es un expert en vérification d\'entreprises du bâtiment. Retourne uniquement du JSON valide.',
-          claudeApiKey
-        );
-
-        if (aiResponse.success && aiResponse.data) {
-          if (aiResponse.data.additionalCertifications) {
-            result.certifications = [
-              ...(result.certifications || []),
-              ...aiResponse.data.additionalCertifications
-            ];
-          }
-          if (aiResponse.data.estimatedReviews) {
-            result.reviews = [{
-              source: 'AI Estimate',
-              rating: aiResponse.data.estimatedReviews.rating || 3.5,
-              count: aiResponse.data.estimatedReviews.count || 0
-            }];
-          }
+        const bodaccData = await getBODACCAnnonces(result.siren || siren);
+        if (bodaccData.length > 0) {
+          result.annoncesLegales = bodaccData.map(a => ({
+            type: a.typeavis || a.familleavis,
+            date: a.dateparution,
+            tribunal: a.tribunal
+          }));
+          sources.push('BODACC');
         }
       } catch (e) {
-        errors.push(`Erreur enrichissement IA: ${e}`);
+        errors.push(`BODACC: ${e}`);
       }
     }
+
+    // 4. APIs avec token (API Entreprise)
+    const apiEntrepriseToken = Deno.env.get('API_ENTREPRISE_TOKEN');
+    if (apiEntrepriseToken && result.siret) {
+      const config: APIEntrepriseConfig = {
+        token: apiEntrepriseToken,
+        context: 'Analyse devis TORP',
+        recipient: Deno.env.get('API_ENTREPRISE_RECIPIENT') || '00000000000000'
+      };
+
+      // Qualibat
+      if (includeAPIs.includes('qualibat') || includeAPIs.includes('all')) {
+        try {
+          const qualibat = await getQualibatCertification(result.siret, config);
+          if (qualibat) {
+            result.certifications!.qualibat = qualibat;
+            sources.push('Qualibat (API Entreprise)');
+          }
+        } catch (e) {
+          errors.push(`Qualibat: ${e}`);
+        }
+      }
+
+      // Qualifelec
+      if (includeAPIs.includes('qualifelec') || includeAPIs.includes('all')) {
+        try {
+          const qualifelec = await getQualifelecCertification(result.siret, config);
+          if (qualifelec) {
+            result.certifications!.qualifelec = qualifelec;
+            sources.push('Qualifelec (API Entreprise)');
+          }
+        } catch (e) {
+          errors.push(`Qualifelec: ${e}`);
+        }
+      }
+
+      // OPQIBI
+      if ((includeAPIs.includes('opqibi') || includeAPIs.includes('all')) && result.siren) {
+        try {
+          const opqibi = await getOPQIBICertification(result.siren, config);
+          if (opqibi) {
+            result.certifications!.opqibi = opqibi;
+            sources.push('OPQIBI (API Entreprise)');
+          }
+        } catch (e) {
+          errors.push(`OPQIBI: ${e}`);
+        }
+      }
+
+      // URSSAF
+      if ((includeAPIs.includes('urssaf') || includeAPIs.includes('all')) && result.siren) {
+        try {
+          const urssaf = await getURSSAFAttestation(result.siren, config);
+          if (urssaf) {
+            result.conformite!.urssaf = {
+              valide: urssaf.data?.entity_status === 'ok',
+              dateValidite: urssaf.data?.date_fin_validite
+            };
+            sources.push('URSSAF (API Entreprise)');
+          }
+        } catch (e) {
+          errors.push(`URSSAF: ${e}`);
+        }
+      }
+
+      // DGFIP
+      if ((includeAPIs.includes('dgfip') || includeAPIs.includes('all')) && result.siren) {
+        try {
+          const dgfip = await getDGFIPAttestation(result.siren, config);
+          if (dgfip) {
+            result.conformite!.dgfip = {
+              valide: dgfip.data?.entity_status === 'ok',
+              dateValidite: dgfip.data?.date_fin_validite
+            };
+            sources.push('DGFIP (API Entreprise)');
+          }
+        } catch (e) {
+          errors.push(`DGFIP: ${e}`);
+        }
+      }
+
+      // Chiffres d'affaires (si pas déjà récupérés)
+      if (includeAPIs.includes('ca') || includeAPIs.includes('all')) {
+        try {
+          const ca = await getDGFIPChiffresAffaires(result.siret, config);
+          if (ca?.data) {
+            result.chiffreAffaires = ca.data.map((d: any) => ({
+              annee: d.annee,
+              montant: d.chiffre_affaires
+            }));
+            sources.push('DGFIP CA (API Entreprise)');
+          }
+        } catch (e) {
+          errors.push(`DGFIP CA: ${e}`);
+        }
+      }
+
+      // Kbis
+      if ((includeAPIs.includes('kbis') || includeAPIs.includes('all')) && result.siren) {
+        try {
+          const kbis = await getInfogreffeKbis(result.siren, config);
+          if (kbis) {
+            sources.push('Infogreffe Kbis (API Entreprise)');
+          }
+        } catch (e) {
+          errors.push(`Kbis: ${e}`);
+        }
+      }
+    }
+
+    // Calculate score and alerts
+    result.score = calculateScore(result);
+    result.alertes = generateAlertes(result);
 
     return new Response(
       JSON.stringify({
         success: true,
         enterprise: result,
-        sources: ['INSEE SIRENE', 'ADEME RGE', 'AI Enrichment'],
-        warnings: errors.length > 0 ? errors : undefined
+        sources,
+        warnings: errors.length > 0 ? errors : undefined,
+        apiEntrepriseAvailable: !!apiEntrepriseToken
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
