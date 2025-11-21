@@ -18,7 +18,54 @@ function handleCors(req: Request) {
 }
 
 // ============================================
-// OCR avec OpenAI Vision (GPT-4o)
+// OCR avec OCR.space (supporte PDF directement)
+// ============================================
+async function extractTextWithOCRSpace(
+  fileData: ArrayBuffer,
+  mimeType: string,
+  apiKey: string
+): Promise<string> {
+  const base64 = btoa(
+    new Uint8Array(fileData).reduce((data, byte) => data + String.fromCharCode(byte), '')
+  );
+
+  const isImage = mimeType.startsWith('image/');
+  const filetype = isImage ? mimeType.split('/')[1].toUpperCase() : 'PDF';
+
+  const formData = new FormData();
+  formData.append('base64Image', `data:${mimeType};base64,${base64}`);
+  formData.append('language', 'fre'); // Franais
+  formData.append('isOverlayRequired', 'false');
+  formData.append('filetype', filetype);
+  formData.append('detectOrientation', 'true');
+  formData.append('scale', 'true');
+  formData.append('OCREngine', '2'); // Engine 2 = meilleur pour documents
+
+  const response = await fetch('https://api.ocr.space/parse/image', {
+    method: 'POST',
+    headers: {
+      'apikey': apiKey,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`OCR.space error: ${response.status}`);
+  }
+
+  const data = await response.json();
+
+  if (data.IsErroredOnProcessing) {
+    throw new Error(`OCR.space error: ${data.ErrorMessage?.[0] || 'Unknown error'}`);
+  }
+
+  // Combiner le texte de toutes les pages
+  const texts = data.ParsedResults?.map((r: any) => r.ParsedText) || [];
+  return texts.join('\n\n---\n\n');
+}
+
+// ============================================
+// OCR avec OpenAI Vision (GPT-4o) - fallback pour images complexes
 // ============================================
 async function extractTextWithOpenAIVision(
   fileData: ArrayBuffer,
@@ -368,46 +415,36 @@ async function handleProcess(body: any, supabase: any) {
     if (dlError) throw dlError;
 
     let text: string;
+    const ocrSpaceApiKey = Deno.env.get('OCRSPACE_API_KEY');
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     const isImage = doc.mime_type.startsWith('image/');
     const isPdf = doc.mime_type === 'application/pdf';
 
-    const pdfcoApiKey = Deno.env.get('PDFCO_API_KEY');
-
-    // Utiliser OCR OpenAI Vision (GPT-4o) pour images
-    if (openaiApiKey && isImage) {
-      console.log('Using OpenAI Vision OCR for:', doc.mime_type);
-      const buffer = await fileData.arrayBuffer();
-      text = await extractTextWithOpenAIVision(buffer, doc.mime_type, openaiApiKey);
-
-    } else if (openaiApiKey && isPdf && pdfcoApiKey) {
-      // PDF avec conversion via pdf.co + OCR OpenAI Vision
-      console.log('Converting PDF to images via pdf.co...');
+    // OCR.space pour PDFs et images (mthode principale)
+    if (ocrSpaceApiKey && (isPdf || isImage)) {
+      console.log('Using OCR.space for:', doc.mime_type);
       const buffer = await fileData.arrayBuffer();
 
       try {
-        const imageUrls = await convertPdfToImages(buffer, pdfcoApiKey);
-        console.log(`PDF converted to ${imageUrls.length} images`);
-
-        // OCR chaque page
-        const pageTexts: string[] = [];
-        for (let i = 0; i < imageUrls.length; i++) {
-          console.log(`Processing page ${i + 1}/${imageUrls.length}`);
-          const imgResponse = await fetch(imageUrls[i]);
-          const imgBuffer = await imgResponse.arrayBuffer();
-          const pageText = await extractTextWithOpenAIVision(imgBuffer, 'image/png', openaiApiKey);
-          pageTexts.push(`## Page ${i + 1}\n\n${pageText}`);
-        }
-        text = pageTexts.join('\n\n---\n\n');
-
-      } catch (pdfError) {
-        console.error('PDF conversion failed:', pdfError);
-        // Fallback: extraction basique
-        text = extractTextFromPdf(buffer);
-        if (!text || text.length < 100) {
-          text = `[Extraction PDF limitée]\n\n${text}`;
+        text = await extractTextWithOCRSpace(buffer, doc.mime_type, ocrSpaceApiKey);
+        console.log(`OCR.space extracted ${text.length} characters`);
+      } catch (ocrError) {
+        console.error('OCR.space failed:', ocrError);
+        // Fallback: OpenAI Vision pour images, extraction basique pour PDF
+        if (isImage && openaiApiKey) {
+          text = await extractTextWithOpenAIVision(buffer, doc.mime_type, openaiApiKey);
+        } else if (isPdf) {
+          text = extractTextFromPdf(buffer);
+        } else {
+          throw ocrError;
         }
       }
+
+    } else if (openaiApiKey && isImage) {
+      // Fallback OpenAI Vision pour images
+      console.log('Using OpenAI Vision OCR for:', doc.mime_type);
+      const buffer = await fileData.arrayBuffer();
+      text = await extractTextWithOpenAIVision(buffer, doc.mime_type, openaiApiKey);
 
     } else if (isPdf) {
       const buffer = await fileData.arrayBuffer();
