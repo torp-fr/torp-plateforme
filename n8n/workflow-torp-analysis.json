@@ -1,0 +1,173 @@
+{
+  "name": "TORP Devis Analysis Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "torp-trigger",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/functions/v1/webhook-n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $env.SUPABASE_ANON_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "action", "value": "list-pending" },
+            { "name": "webhookSecret", "value": "={{ $env.N8N_WEBHOOK_SECRET }}" },
+            { "name": "payload", "value": "={{ JSON.stringify({ limit: 5 }) }}" }
+          ]
+        }
+      },
+      "id": "get-pending-devis",
+      "name": "Get Pending Devis",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-devis",
+      "name": "Split Devis",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/functions/v1/extract-pdf",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $env.SUPABASE_ANON_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "storagePath", "value": "={{ $json.fichier_url }}" }
+          ]
+        }
+      },
+      "id": "extract-pdf",
+      "name": "Extract PDF Text",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/functions/v1/analyze-devis",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $env.SUPABASE_ANON_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "devisText", "value": "={{ $json.text }}" },
+            { "name": "devisId", "value": "={{ $node['Split Devis'].json.id }}" }
+          ]
+        }
+      },
+      "id": "analyze-torp",
+      "name": "TORP Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.analysis?.scores?.total }}",
+              "operation": "largerEqual",
+              "value2": 700
+            }
+          ]
+        }
+      },
+      "id": "check-score",
+      "name": "Score >= 700?",
+      "type": "n8n-nodes-base.if",
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/functions/v1/webhook-n8n",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "action", "value": "notify" },
+            { "name": "webhookSecret", "value": "={{ $env.N8N_WEBHOOK_SECRET }}" },
+            { "name": "payload", "value": "={{ JSON.stringify({ type: 'approved', devisId: $node['Split Devis'].json.id, score: $json.analysis.scores.total }) }}" }
+          ]
+        }
+      },
+      "id": "notify-approved",
+      "name": "Notify Approved",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1450, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/functions/v1/webhook-n8n",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "action", "value": "notify" },
+            { "name": "webhookSecret", "value": "={{ $env.N8N_WEBHOOK_SECRET }}" },
+            { "name": "payload", "value": "={{ JSON.stringify({ type: 'review_needed', devisId: $node['Split Devis'].json.id, score: $json.analysis.scores.total }) }}" }
+          ]
+        }
+      },
+      "id": "notify-review",
+      "name": "Notify Review Needed",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1450, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, processed: $node['Split Devis'].json.id } }}"
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1650, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": { "main": [[{ "node": "Get Pending Devis", "type": "main", "index": 0 }]] },
+    "Get Pending Devis": { "main": [[{ "node": "Split Devis", "type": "main", "index": 0 }]] },
+    "Split Devis": { "main": [[{ "node": "Extract PDF Text", "type": "main", "index": 0 }]] },
+    "Extract PDF Text": { "main": [[{ "node": "TORP Analysis", "type": "main", "index": 0 }]] },
+    "TORP Analysis": { "main": [[{ "node": "Score >= 700?", "type": "main", "index": 0 }]] },
+    "Score >= 700?": {
+      "main": [
+        [{ "node": "Notify Approved", "type": "main", "index": 0 }],
+        [{ "node": "Notify Review Needed", "type": "main", "index": 0 }]
+      ]
+    },
+    "Notify Approved": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] },
+    "Notify Review Needed": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
