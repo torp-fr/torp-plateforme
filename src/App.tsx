@@ -29,6 +29,7 @@ import NotFound from "./pages/NotFound";
 import DiscoveryFlow from "./pages/DiscoveryFlow";
 import TorpCompleteFlow from "./pages/TorpCompleteFlow";
 import AlgorithmicSegments from "./pages/AlgorithmicSegments";
+import KnowledgeBase from "./pages/KnowledgeBase";
 
 const queryClient = new QueryClient();
 
@@ -63,6 +64,7 @@ const App = () => (
             <Route path="/discovery" element={<DiscoveryFlow />} />
             <Route path="/torp-complete" element={<TorpCompleteFlow />} />
             <Route path="/segments" element={<AlgorithmicSegments />} />
+            <Route path="/knowledge-base" element={<KnowledgeBase />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
