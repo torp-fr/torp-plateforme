@@ -34,7 +34,7 @@ import {
   Trash2,
   RefreshCw
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 
 interface UploadedFile {
