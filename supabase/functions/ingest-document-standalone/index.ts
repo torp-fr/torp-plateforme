@@ -18,6 +18,100 @@ function handleCors(req: Request) {
 }
 
 // ============================================
+// OCR avec OpenAI Vision (GPT-4o)
+// ============================================
+async function extractTextWithOpenAIVision(
+  fileData: ArrayBuffer,
+  mimeType: string,
+  apiKey: string
+): Promise<string> {
+  const base64 = btoa(
+    new Uint8Array(fileData).reduce((data, byte) => data + String.fromCharCode(byte), '')
+  );
+
+  const mediaType = mimeType.startsWith('image/') ? mimeType : 'image/png';
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      max_tokens: 8000,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:${mediaType};base64,${base64}`,
+              detail: 'high'
+            }
+          },
+          {
+            type: 'text',
+            text: `Extrais TOUT le texte de ce document de manière structurée.
+
+Conserve:
+- Les titres et sous-titres (marque-les avec # ou ##)
+- Les listes et énumérations
+- Les tableaux (format markdown)
+- Les références normatives (DTU, NF, etc.)
+- Les valeurs techniques (épaisseurs, résistances thermiques, etc.)
+
+Retourne UNIQUEMENT le texte extrait, sans commentaire ni introduction.`
+          }
+        ]
+      }]
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`OpenAI Vision error: ${response.status} - ${error}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0]?.message?.content || '';
+}
+
+// Convertir PDF en images via pdf.co API
+async function convertPdfToImages(pdfBuffer: ArrayBuffer, apiKey: string): Promise<string[]> {
+  // Upload PDF to pdf.co
+  const base64Pdf = btoa(
+    new Uint8Array(pdfBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+  );
+
+  const response = await fetch('https://api.pdf.co/v1/pdf/convert/to/png', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      url: `data:application/pdf;base64,${base64Pdf}`,
+      pages: '0-9', // Max 10 premières pages
+      async: false
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`pdf.co error: ${response.status}`);
+  }
+
+  const data = await response.json();
+
+  if (data.error) {
+    throw new Error(`pdf.co error: ${data.message}`);
+  }
+
+  // Retourne les URLs des images générées
+  return data.urls || [];
+}
+
+// ============================================
 // EMBEDDINGS (OpenAI)
 // ============================================
 async function generateEmbedding(text: string, apiKey: string) {
@@ -187,6 +281,23 @@ async function handleFileUpload(req: Request, supabase: any) {
     return errorResponse('Fichier requis');
   }
 
+  // Valider le type de fichier (PDF, images, texte)
+  const allowedTypes = [
+    'application/pdf',
+    'text/plain',
+    'text/markdown',
+    'image/png',
+    'image/jpeg',
+    'image/jpg',
+    'image/webp',
+    'image/gif'
+  ];
+  const fileType = file.type || 'application/octet-stream';
+  if (!allowedTypes.some(t => fileType.includes(t.split('/')[1])) &&
+      !file.name.match(/\.(pdf|txt|md|png|jpg|jpeg|webp|gif)$/i)) {
+    return errorResponse('Type non supporté. Utilisez PDF, images (PNG/JPG) ou TXT.');
+  }
+
   const timestamp = Date.now();
   const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
   const storagePath = `knowledge/${timestamp}_${safeName}`;
@@ -257,7 +368,48 @@ async function handleProcess(body: any, supabase: any) {
     if (dlError) throw dlError;
 
     let text: string;
-    if (doc.mime_type === 'application/pdf') {
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+    const isImage = doc.mime_type.startsWith('image/');
+    const isPdf = doc.mime_type === 'application/pdf';
+
+    const pdfcoApiKey = Deno.env.get('PDFCO_API_KEY');
+
+    // Utiliser OCR OpenAI Vision (GPT-4o) pour images
+    if (openaiApiKey && isImage) {
+      console.log('Using OpenAI Vision OCR for:', doc.mime_type);
+      const buffer = await fileData.arrayBuffer();
+      text = await extractTextWithOpenAIVision(buffer, doc.mime_type, openaiApiKey);
+
+    } else if (openaiApiKey && isPdf && pdfcoApiKey) {
+      // PDF avec conversion via pdf.co + OCR OpenAI Vision
+      console.log('Converting PDF to images via pdf.co...');
+      const buffer = await fileData.arrayBuffer();
+
+      try {
+        const imageUrls = await convertPdfToImages(buffer, pdfcoApiKey);
+        console.log(`PDF converted to ${imageUrls.length} images`);
+
+        // OCR chaque page
+        const pageTexts: string[] = [];
+        for (let i = 0; i < imageUrls.length; i++) {
+          console.log(`Processing page ${i + 1}/${imageUrls.length}`);
+          const imgResponse = await fetch(imageUrls[i]);
+          const imgBuffer = await imgResponse.arrayBuffer();
+          const pageText = await extractTextWithOpenAIVision(imgBuffer, 'image/png', openaiApiKey);
+          pageTexts.push(`## Page ${i + 1}\n\n${pageText}`);
+        }
+        text = pageTexts.join('\n\n---\n\n');
+
+      } catch (pdfError) {
+        console.error('PDF conversion failed:', pdfError);
+        // Fallback: extraction basique
+        text = extractTextFromPdf(buffer);
+        if (!text || text.length < 100) {
+          text = `[Extraction PDF limitée]\n\n${text}`;
+        }
+      }
+
+    } else if (isPdf) {
       const buffer = await fileData.arrayBuffer();
       text = extractTextFromPdf(buffer);
     } else {
