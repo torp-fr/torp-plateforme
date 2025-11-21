@@ -126,51 +126,37 @@ Retourne UNIQUEMENT le texte extrait, sans commentaire ni introduction.`
 
 // Convertir PDF en images via pdf.co API
 async function convertPdfToImages(pdfBuffer: ArrayBuffer, apiKey: string): Promise<string[]> {
-  // Étape 1 : Upload du PDF sur pdf.co
-  const uploadResponse = await fetch('https://api.pdf.co/v1/file/upload', {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'Content-Type': 'application/octet-stream',
-    },
-    body: pdfBuffer,
-  });
+  // Convertir le PDF en base64
+  const base64Pdf = btoa(
+    new Uint8Array(pdfBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+  );
 
-  if (!uploadResponse.ok) {
-    throw new Error(`pdf.co upload error: ${uploadResponse.status}`);
-  }
-
-  const uploadData = await uploadResponse.json();
-
-  if (!uploadData.url) {
-    throw new Error(`pdf.co upload failed: ${uploadData.error || 'No URL returned'}`);
-  }
-
-  // Étape 2 : Conversion en images
-  const convertResponse = await fetch('https://api.pdf.co/v1/pdf/convert/to/png', {
+  // Conversion directe en images
+  const response = await fetch('https://api.pdf.co/v1/pdf/convert/to/png', {
     method: 'POST',
     headers: {
       'x-api-key': apiKey,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      url: uploadData.url,
+      file: base64Pdf,
       pages: '0-9', // Max 10 premières pages
       async: false
     }),
   });
 
-  if (!convertResponse.ok) {
-    throw new Error(`pdf.co convert error: ${convertResponse.status}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`pdf.co error: ${response.status} - ${errorText}`);
   }
 
-  const convertData = await convertResponse.json();
+  const data = await response.json();
 
-  if (convertData.error) {
-    throw new Error(`pdf.co error: ${convertData.message}`);
+  if (data.error) {
+    throw new Error(`pdf.co error: ${data.message}`);
   }
 
-  return convertData.urls || [];
+  return data.urls || [];
 }
 
 // ============================================
