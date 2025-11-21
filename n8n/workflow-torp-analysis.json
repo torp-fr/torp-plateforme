@@ -70,6 +70,81 @@
     },
     {
       "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/functions/v1/scrape-enterprise",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $env.SUPABASE_ANON_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "siret", "value": "={{ $json.siret || '' }}" },
+            { "name": "name", "value": "={{ $json.enterpriseName || '' }}" }
+          ]
+        }
+      },
+      "id": "scrape-enterprise",
+      "name": "Scrape Enterprise",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1050, 100]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/functions/v1/scrape-prices",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $env.SUPABASE_ANON_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "devisText", "value": "={{ $node['Extract PDF Text'].json.text }}" }
+          ]
+        }
+      },
+      "id": "scrape-prices",
+      "name": "Compare Prices",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/functions/v1/scrape-regulations",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $env.SUPABASE_ANON_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "devisText", "value": "={{ $node['Extract PDF Text'].json.text }}" }
+          ]
+        }
+      },
+      "id": "scrape-regulations",
+      "name": "Check Aids & Regulations",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1050, 500]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "merge-data",
+      "name": "Merge Scraper Data",
+      "type": "n8n-nodes-base.merge",
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
         "url": "={{ $env.SUPABASE_URL }}/functions/v1/analyze-devis",
         "sendHeaders": true,
         "headerParameters": {
@@ -80,15 +155,18 @@
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "devisText", "value": "={{ $json.text }}" },
-            { "name": "devisId", "value": "={{ $node['Split Devis'].json.id }}" }
+            { "name": "devisText", "value": "={{ $node['Extract PDF Text'].json.text }}" },
+            { "name": "devisId", "value": "={{ $node['Split Devis'].json.id }}" },
+            { "name": "enterpriseData", "value": "={{ JSON.stringify($node['Scrape Enterprise'].json) }}" },
+            { "name": "priceComparison", "value": "={{ JSON.stringify($node['Compare Prices'].json) }}" },
+            { "name": "aidsData", "value": "={{ JSON.stringify($node['Check Aids & Regulations'].json) }}" }
           ]
         }
       },
       "id": "analyze-torp",
       "name": "TORP Analysis",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [1050, 300]
+      "position": [1450, 300]
     },
     {
       "parameters": {
@@ -105,7 +183,7 @@
       "id": "check-score",
       "name": "Score >= 700?",
       "type": "n8n-nodes-base.if",
-      "position": [1250, 300]
+      "position": [1650, 300]
     },
     {
       "parameters": {
@@ -115,14 +193,14 @@
           "parameters": [
             { "name": "action", "value": "notify" },
             { "name": "webhookSecret", "value": "={{ $env.N8N_WEBHOOK_SECRET }}" },
-            { "name": "payload", "value": "={{ JSON.stringify({ type: 'approved', devisId: $node['Split Devis'].json.id, score: $json.analysis.scores.total }) }}" }
+            { "name": "payload", "value": "={{ JSON.stringify({ type: 'approved', devisId: $node['Split Devis'].json.id, score: $json.analysis.scores.total, aids: $node['Check Aids & Regulations'].json.analysis?.eligibleAids }) }}" }
           ]
         }
       },
       "id": "notify-approved",
       "name": "Notify Approved",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [1450, 200]
+      "position": [1850, 200]
     },
     {
       "parameters": {
@@ -132,31 +210,43 @@
           "parameters": [
             { "name": "action", "value": "notify" },
             { "name": "webhookSecret", "value": "={{ $env.N8N_WEBHOOK_SECRET }}" },
-            { "name": "payload", "value": "={{ JSON.stringify({ type: 'review_needed', devisId: $node['Split Devis'].json.id, score: $json.analysis.scores.total }) }}" }
+            { "name": "payload", "value": "={{ JSON.stringify({ type: 'review_needed', devisId: $node['Split Devis'].json.id, score: $json.analysis.scores.total, issues: $json.analysis?.warnings }) }}" }
           ]
         }
       },
       "id": "notify-review",
       "name": "Notify Review Needed",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [1450, 400]
+      "position": [1850, 400]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { success: true, processed: $node['Split Devis'].json.id } }}"
+        "responseBody": "={{ { success: true, processed: $node['Split Devis'].json.id, analysis: $node['TORP Analysis'].json } }}"
       },
       "id": "respond",
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
-      "position": [1650, 300]
+      "position": [2050, 300]
     }
   ],
   "connections": {
     "Webhook Trigger": { "main": [[{ "node": "Get Pending Devis", "type": "main", "index": 0 }]] },
     "Get Pending Devis": { "main": [[{ "node": "Split Devis", "type": "main", "index": 0 }]] },
     "Split Devis": { "main": [[{ "node": "Extract PDF Text", "type": "main", "index": 0 }]] },
-    "Extract PDF Text": { "main": [[{ "node": "TORP Analysis", "type": "main", "index": 0 }]] },
+    "Extract PDF Text": {
+      "main": [
+        [
+          { "node": "Scrape Enterprise", "type": "main", "index": 0 },
+          { "node": "Compare Prices", "type": "main", "index": 0 },
+          { "node": "Check Aids & Regulations", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Scrape Enterprise": { "main": [[{ "node": "Merge Scraper Data", "type": "main", "index": 0 }]] },
+    "Compare Prices": { "main": [[{ "node": "Merge Scraper Data", "type": "main", "index": 1 }]] },
+    "Check Aids & Regulations": { "main": [[{ "node": "Merge Scraper Data", "type": "main", "index": 2 }]] },
+    "Merge Scraper Data": { "main": [[{ "node": "TORP Analysis", "type": "main", "index": 0 }]] },
     "TORP Analysis": { "main": [[{ "node": "Score >= 700?", "type": "main", "index": 0 }]] },
     "Score >= 700?": {
       "main": [
