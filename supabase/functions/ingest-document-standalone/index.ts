@@ -430,9 +430,12 @@ async function handleProcess(body: any, supabase: any) {
         console.log(`OCR.space extracted ${text.length} characters`);
       } catch (ocrError) {
         console.error('OCR.space failed:', ocrError);
-        // Fallback: OpenAI Vision pour images, extraction basique pour PDF
-        if (isImage && openaiApiKey) {
-          text = await extractTextWithOpenAIVision(buffer, doc.mime_type, openaiApiKey);
+        // Fallback: OpenAI Vision (fonctionne mieux pour PDF multi-pages)
+        if (openaiApiKey) {
+          console.log('Fallback to OpenAI Vision for:', doc.mime_type);
+          // Pour les PDFs, on utilise OpenAI Vision sur la première page convertie en image
+          // Note: OpenAI Vision ne peut traiter qu'une image à la fois
+          text = await extractTextWithOpenAIVision(buffer, isImage ? doc.mime_type : 'image/png', openaiApiKey);
         } else if (isPdf) {
           text = extractTextFromPdf(buffer);
         } else {
