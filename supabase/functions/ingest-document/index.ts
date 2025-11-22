@@ -19,10 +19,26 @@ import {
  */
 
 // ============================================
+// HELPER: Safe base64 encoding for large buffers
+// ============================================
+function bufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 8192; // Process 8KB at a time to avoid stack overflow
+  let binary = '';
+
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return btoa(binary);
+}
+
+// ============================================
 // STRATÉGIE 1 : OpenAI Vision (Images + fallback PDF)
 // ============================================
 async function ocrWithOpenAIVision(buffer: ArrayBuffer, mimeType: string, apiKey: string): Promise<string> {
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+  const base64 = bufferToBase64(buffer);
   const mediaType = mimeType.startsWith('image/') ? mimeType : 'image/png';
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -69,7 +85,7 @@ Retourne UNIQUEMENT le texte extrait.`
 // STRATÉGIE 2 : OCR.space (rapide, limites : 1MB, 3 pages)
 // ============================================
 async function ocrWithOCRSpace(buffer: ArrayBuffer, mimeType: string, apiKey: string): Promise<string> {
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+  const base64 = bufferToBase64(buffer);
   const formData = new FormData();
 
   formData.append('base64Image', `data:${mimeType};base64,${base64}`);
@@ -100,7 +116,7 @@ async function ocrWithOCRSpace(buffer: ArrayBuffer, mimeType: string, apiKey: st
 // ============================================
 async function convertPdfWithPdfCo(buffer: ArrayBuffer, apiKey: string): Promise<string[]> {
   console.log('[pdf.co] Starting PDF upload...');
-  const base64Pdf = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+  const base64Pdf = bufferToBase64(buffer);
 
   // Upload
   const uploadResp = await fetch('https://api.pdf.co/v1/file/upload/base64', {
