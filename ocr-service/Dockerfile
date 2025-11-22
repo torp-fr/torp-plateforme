@@ -17,11 +17,11 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Download PaddleOCR models (cache them in the image)
-RUN python -c "from paddleocr import PaddleOCR; PaddleOCR(use_angle_cls=True, lang='fr')"
-
 # Copy application code
 COPY main.py .
+
+# Note: PaddleOCR models will be downloaded on first startup (~200MB, 2-3 min)
+# This avoids memory issues during build
 
 # Expose port
 EXPOSE 8080
