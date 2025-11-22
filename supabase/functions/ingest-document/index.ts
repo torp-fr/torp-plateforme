@@ -99,32 +99,20 @@ async function ocrWithOCRSpace(buffer: ArrayBuffer, mimeType: string, apiKey: st
 // STRATÉGIE 3 : pdf.co conversion + OpenAI Vision
 // ============================================
 async function convertPdfWithPdfCo(buffer: ArrayBuffer, apiKey: string): Promise<string[]> {
-  console.log('[pdf.co] Starting PDF upload...');
+  console.log('[pdf.co] Converting PDF to images via data URI...');
   const base64Pdf = btoa(String.fromCharCode(...new Uint8Array(buffer)));
 
-  // Upload
-  const uploadResp = await fetch('https://api.pdf.co/v1/file/upload/base64', {
-    method: 'POST',
-    headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ base64: base64Pdf, name: 'doc.pdf' }),
-  });
+  // Utiliser directement une data URI (pas besoin d'upload séparé)
+  const dataUri = `data:application/pdf;base64,${base64Pdf}`;
 
-  if (!uploadResp.ok) {
-    throw new Error(`pdf.co upload: ${uploadResp.status} - ${await uploadResp.text()}`);
-  }
-
-  const uploadData = await uploadResp.json();
-  if (uploadData.error || !uploadData.url) {
-    throw new Error(`pdf.co upload failed: ${uploadData.message || 'No URL'}`);
-  }
-
-  console.log('[pdf.co] PDF uploaded, converting to images...');
-
-  // Convert
   const convertResp = await fetch('https://api.pdf.co/v1/pdf/convert/to/png', {
     method: 'POST',
     headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: uploadData.url, pages: '0-9', async: false }),
+    body: JSON.stringify({
+      url: dataUri,
+      pages: '0-9',
+      async: false
+    }),
   });
 
   if (!convertResp.ok) {
