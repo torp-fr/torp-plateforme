@@ -377,6 +377,8 @@ serve(async (req) => {
 });
 
 async function handleUpload(req: Request, supabase: any) {
+  console.log('🚀 [INGEST v2024-11-22] PaddleOCR microservice enabled');
+
   const formData = await req.formData();
   const file = formData.get('file') as File;
   const metadata = JSON.parse(formData.get('metadata') as string || '{}');
