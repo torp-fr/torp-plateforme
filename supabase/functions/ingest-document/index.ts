@@ -96,34 +96,41 @@ async function ocrWithOCRSpace(buffer: ArrayBuffer, mimeType: string, apiKey: st
 }
 
 // ============================================
-// STRATÉGIE 3 : pdf.co conversion + OpenAI Vision
+// STRATÉGIE 3 : Google Document AI (OCR premium pour documents FR)
 // ============================================
-async function convertPdfWithPdfCo(buffer: ArrayBuffer, apiKey: string): Promise<string[]> {
-  console.log('[pdf.co] Converting PDF to images via data URI...');
-  const base64Pdf = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+async function ocrWithGoogleDocumentAI(buffer: ArrayBuffer, mimeType: string, apiKey: string): Promise<string> {
+  console.log('[Google Doc AI] Processing document...');
+  const base64Doc = btoa(String.fromCharCode(...new Uint8Array(buffer)));
 
-  // Utiliser directement une data URI (pas besoin d'upload séparé)
-  const dataUri = `data:application/pdf;base64,${base64Pdf}`;
+  // Utiliser l'endpoint Document AI v1
+  const projectId = 'your-project'; // À configurer via env
+  const location = 'eu'; // Europe pour RGPD
+  const processorId = 'ocr-processor'; // ID du processor
 
-  const convertResp = await fetch('https://api.pdf.co/v1/pdf/convert/to/png', {
+  const endpoint = `https://${location}-documentai.googleapis.com/v1/projects/${projectId}/locations/${location}/processors/${processorId}:process`;
+
+  const response = await fetch(endpoint, {
     method: 'POST',
-    headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({
-      url: dataUri,
-      pages: '0-9',
-      async: false
+      rawDocument: {
+        content: base64Doc,
+        mimeType: mimeType
+      }
     }),
   });
 
-  if (!convertResp.ok) {
-    throw new Error(`pdf.co convert: ${convertResp.status} - ${await convertResp.text()}`);
+  if (!response.ok) {
+    throw new Error(`Google Doc AI: ${response.status} - ${await response.text()}`);
   }
 
-  const convertData = await convertResp.json();
-  if (convertData.error) throw new Error(`pdf.co: ${convertData.message}`);
-
-  console.log(`[pdf.co] Converted to ${convertData.urls?.length || 0} images`);
-  return convertData.urls || [];
+  const data = await response.json();
+  const text = data.document?.text || '';
+  console.log(`[Google Doc AI] Extracted ${text.length} characters`);
+  return text;
 }
 
 // ============================================
@@ -176,42 +183,40 @@ async function extractTextSmart(
 
   // ========== PDFs ==========
   if (isPdf) {
-    // Stratégie 1 : OCR.space pour petits PDFs
-    if (ocrSpaceKey && sizeMB < 1) {
+    // Stratégie 1 : OCR.space pour petits PDFs (accepter résultat partiel)
+    if (ocrSpaceKey && sizeMB < 3) {
       try {
-        console.log('[OCR] Strategy: OCR.space (small PDF)');
+        console.log('[OCR] Strategy: OCR.space (PDF, max 3 pages)');
         const text = await ocrWithOCRSpace(buffer, mimeType, ocrSpaceKey);
-        warnings.push('OCR.space limite à 3 pages - utilisez images pour documents longs');
-        return { text, method: 'OCR.space', warnings };
+        if (text.length > 200) {
+          warnings.push('OCR.space utilisé - limité aux 3 premières pages du PDF');
+          return { text, method: 'OCR.space (3 premières pages)', warnings };
+        }
       } catch (error) {
-        console.error('[OCR] OCR.space failed:', error);
-        warnings.push(`OCR.space échoué: ${error}`);
+        const errorMsg = String(error);
+        // Si l'erreur est la limite de 3 pages, on peut quand même avoir du contenu
+        if (errorMsg.includes('maximum page limit')) {
+          console.log('[OCR] OCR.space reached 3-page limit, but may have extracted content');
+          warnings.push('PDF > 3 pages - seules 3 premières pages extraites par OCR.space');
+        } else {
+          console.error('[OCR] OCR.space failed:', error);
+          warnings.push(`OCR.space échoué: ${error}`);
+        }
       }
     }
 
-    // Stratégie 2 : pdf.co + OpenAI Vision
-    if (pdfCoKey && openaiKey && sizeMB < 5) {
+    // Stratégie 2 : Google Document AI (si configuré)
+    const googleApiKey = Deno.env.get('GOOGLE_CLOUD_API_KEY');
+    if (googleApiKey && sizeMB < 20) {
       try {
-        console.log('[OCR] Strategy: pdf.co + OpenAI Vision');
-        const imageUrls = await convertPdfWithPdfCo(buffer, pdfCoKey);
-
-        const pageTexts: string[] = [];
-        for (let i = 0; i < Math.min(imageUrls.length, 10); i++) {
-          console.log(`[OCR] Processing page ${i + 1}/${imageUrls.length}`);
-          const imgResp = await fetch(imageUrls[i]);
-          const imgBuffer = await imgResp.arrayBuffer();
-          const pageText = await ocrWithOpenAIVision(imgBuffer, 'image/png', openaiKey);
-          pageTexts.push(`## Page ${i + 1}\n\n${pageText}`);
+        console.log('[OCR] Strategy: Google Document AI');
+        const text = await ocrWithGoogleDocumentAI(buffer, mimeType, googleApiKey);
+        if (text.length > 100) {
+          return { text, method: 'Google Document AI', warnings };
         }
-
-        if (imageUrls.length > 10) {
-          warnings.push(`Document ${imageUrls.length} pages - seules 10 premières pages traitées`);
-        }
-
-        return { text: pageTexts.join('\n\n---\n\n'), method: 'pdf.co + OpenAI Vision', warnings };
       } catch (error) {
-        console.error('[OCR] pdf.co conversion failed:', error);
-        warnings.push(`Conversion PDF échouée: ${error}`);
+        console.error('[OCR] Google Document AI failed:', error);
+        warnings.push(`Google Doc AI échoué: ${error}`);
       }
     }
 
@@ -222,7 +227,7 @@ async function extractTextSmart(
     if (basicText.length < 100) {
       warnings.push('ATTENTION: Extraction limitée - convertissez en images PNG pour meilleure qualité');
       return {
-        text: `[Extraction PDF limitée - ${basicText.length} caractères extraits]\n\nConvertissez ce PDF en images PNG (1 image par page) puis uploadez les images pour un OCR complet.\n\n${basicText}`,
+        text: `[Extraction PDF limitée - ${basicText.length} caractères extraits]\n\nPour documents avec schémas/tableaux complexes:\n1. Convertissez chaque page en PNG (300 DPI)\n2. Uploadez les images séparément\n3. OCR haute qualité via OpenAI Vision\n\n${basicText}`,
         method: 'Extraction basique (fallback)',
         warnings
       };
