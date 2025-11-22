@@ -243,9 +243,11 @@ async function extractTextSmart(
   if (isPdf) {
     // Stratégie 1 : Microservice OCR (PaddleOCR) - PRIORITAIRE pour production
     const ocrServiceUrl = Deno.env.get('OCR_SERVICE_URL');
+    console.log(`🔍 [OCR DEBUG] OCR_SERVICE_URL: ${ocrServiceUrl ? 'CONFIGURED ✅' : 'NOT CONFIGURED ❌'}, sizeMB: ${sizeMB}`);
+
     if (ocrServiceUrl && sizeMB < 50) {
       try {
-        console.log('[OCR] Strategy: Microservice PaddleOCR (production quality)');
+        console.log('🚀 [OCR] Strategy: Microservice PaddleOCR (production quality)');
         const text = await ocrWithMicroservice(buffer, mimeType);
         if (text.length > 100) {
           return { text, method: 'PaddleOCR Microservice', warnings };
@@ -255,6 +257,8 @@ async function extractTextSmart(
         warnings.push(`Microservice OCR échoué: ${error}`);
         // Continue avec fallbacks
       }
+    } else {
+      console.log(`⚠️ [OCR DEBUG] Skipping microservice - URL exists: ${!!ocrServiceUrl}, Size OK (<50MB): ${sizeMB < 50}`);
     }
 
     // Stratégie 2 : OCR.space pour petits PDFs (fallback rapide)
@@ -508,6 +512,8 @@ serve(async (req) => {
 // HANDLERS
 // ============================================
 async function handleFileUpload(req: Request, supabase: any) {
+  console.log('🚀🚀🚀 [INGEST-STANDALONE v2024-11-22-FINAL] PaddleOCR microservice ACTIVE 🚀🚀🚀');
+
   const formData = await req.formData();
   const file = formData.get('file') as File;
   const metadata = JSON.parse(formData.get('metadata') as string || '{}');
