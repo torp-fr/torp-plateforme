@@ -106,7 +106,47 @@ async function ocrWithOCRSpace(buffer: ArrayBuffer, mimeType: string, apiKey: st
 }
 
 // ============================================
-// STRATÉGIE 3 : Google Cloud Vision API (OCR avec API Key)
+// STRATÉGIE 3 : Microservice OCR (PaddleOCR) - Production quality
+// ============================================
+async function ocrWithMicroservice(buffer: ArrayBuffer, mimeType: string): Promise<string> {
+  const ocrServiceUrl = Deno.env.get('OCR_SERVICE_URL');
+
+  if (!ocrServiceUrl) {
+    throw new Error('OCR_SERVICE_URL not configured');
+  }
+
+  console.log(`[OCR Microservice] Calling ${ocrServiceUrl}...`);
+  const base64Content = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+
+  const response = await fetch(`${ocrServiceUrl}/ocr`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      content: base64Content,
+      mime_type: mimeType,
+      max_pages: 100  // Augmenter la limite pour DTU longs
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OCR Microservice: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  console.log(`[OCR Microservice] Extracted ${data.text.length} chars from ${data.pages_processed} pages`);
+
+  if (data.warnings && data.warnings.length > 0) {
+    console.log(`[OCR Microservice] Warnings: ${data.warnings.join(', ')}`);
+  }
+
+  return data.text;
+}
+
+// ============================================
+// STRATÉGIE 4 : Google Cloud Vision API (OCR avec API Key)
 // ============================================
 async function ocrWithGoogleVision(buffer: ArrayBuffer, mimeType: string, apiKey: string): Promise<string> {
   console.log('[Google Vision] Processing document...');
@@ -201,7 +241,23 @@ async function extractTextSmart(
 
   // ========== PDFs ==========
   if (isPdf) {
-    // Stratégie 1 : OCR.space pour petits PDFs (accepter résultat partiel)
+    // Stratégie 1 : Microservice OCR (PaddleOCR) - PRIORITAIRE pour production
+    const ocrServiceUrl = Deno.env.get('OCR_SERVICE_URL');
+    if (ocrServiceUrl && sizeMB < 50) {
+      try {
+        console.log('[OCR] Strategy: Microservice PaddleOCR (production quality)');
+        const text = await ocrWithMicroservice(buffer, mimeType);
+        if (text.length > 100) {
+          return { text, method: 'PaddleOCR Microservice', warnings };
+        }
+      } catch (error) {
+        console.error('[OCR] Microservice failed:', error);
+        warnings.push(`Microservice OCR échoué: ${error}`);
+        // Continue avec fallbacks
+      }
+    }
+
+    // Stratégie 2 : OCR.space pour petits PDFs (fallback rapide)
     if (ocrSpaceKey && sizeMB < 3) {
       try {
         console.log('[OCR] Strategy: OCR.space (PDF, max 3 pages)');
@@ -212,7 +268,6 @@ async function extractTextSmart(
         }
       } catch (error) {
         const errorMsg = String(error);
-        // Si l'erreur est la limite de 3 pages, on peut quand même avoir du contenu
         if (errorMsg.includes('maximum page limit')) {
           console.log('[OCR] OCR.space reached 3-page limit, but may have extracted content');
           warnings.push('PDF > 3 pages - seules 3 premières pages extraites par OCR.space');
@@ -223,7 +278,7 @@ async function extractTextSmart(
       }
     }
 
-    // Stratégie 2 : Google Cloud Vision (si configuré)
+    // Stratégie 3 : Google Cloud Vision (si configuré)
     const googleApiKey = Deno.env.get('GOOGLE_CLOUD_API_KEY');
     if (googleApiKey && sizeMB < 10) {
       try {
@@ -238,7 +293,7 @@ async function extractTextSmart(
       }
     }
 
-    // Stratégie 3 : Extraction texte basique (fallback ultime)
+    // Stratégie 4 : Extraction texte basique (fallback ultime)
     console.log('[OCR] Strategy: Basic PDF text extraction (fallback)');
     const basicText = extractBasicPdfText(buffer);
 
