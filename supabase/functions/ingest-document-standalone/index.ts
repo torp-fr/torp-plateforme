@@ -1,25 +1,144 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, handleCors } from '../_shared/cors.ts';
-import { chunkText, cleanExtractedText, generateEmbeddingsBatch } from '../_shared/embeddings.ts';
 
 /**
- * Version simplifiée et robuste de l'ingestion OCR
+ * VERSION STANDALONE AVEC EXTRACTION PDF AMÉLIORÉE
  *
- * STRATÉGIES (sans dépendances externes qui échouent) :
- * 1. Images → OpenAI Vision GPT-4o (haute qualité, fiable)
- * 2. PDFs → Extraction texte basique (rapide, toujours disponible)
- *
- * ✅ Plus de dépendances à OCR.space, pdf.co, Google Vision, ou microservices
- * ✅ Code simple et robuste qui ne plante pas
+ * Utilise pdf-parse pour une extraction de texte fiable et lisible
  */
+
+// ============================================
+// CORS HELPERS (inlined)
+// ============================================
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+};
+
+function handleCors(req: Request): Response | null {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+  return null;
+}
+
+// ============================================
+// EMBEDDINGS HELPERS (inlined)
+// ============================================
+const OPENAI_EMBEDDING_URL = 'https://api.openai.com/v1/embeddings';
+const OPENAI_EMBEDDING_MODEL = 'text-embedding-3-small';
+
+interface EmbeddingResult {
+  embedding: number[];
+  tokens: number;
+}
+
+async function generateEmbeddingsBatch(texts: string[], apiKey: string): Promise<EmbeddingResult[]> {
+  const BATCH_SIZE = 100;
+  const results: EmbeddingResult[] = [];
+
+  for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+    const batch = texts.slice(i, i + BATCH_SIZE);
+
+    const response = await fetch(OPENAI_EMBEDDING_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        input: batch,
+        model: OPENAI_EMBEDDING_MODEL
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`OpenAI Embedding error: ${error}`);
+    }
+
+    const data = await response.json();
+    const batchResults = data.data.map((item: any) => ({
+      embedding: item.embedding,
+      tokens: Math.floor(data.usage.total_tokens / batch.length)
+    }));
+
+    results.push(...batchResults);
+
+    if (i + BATCH_SIZE < texts.length) {
+      await new Promise(r => setTimeout(r, 100));
+    }
+  }
+
+  return results;
+}
+
+interface TextChunk {
+  content: string;
+  index: number;
+  startChar: number;
+  endChar: number;
+}
+
+function chunkText(text: string, options: { maxLength?: number; overlap?: number } = {}): TextChunk[] {
+  const { maxLength = 1500, overlap = 200 } = options;
+  const chunks: TextChunk[] = [];
+  const paragraphs = text.split(/\n\n+/);
+
+  let currentChunk = '';
+  let currentStart = 0;
+  let chunkIndex = 0;
+  let charPos = 0;
+
+  for (const para of paragraphs) {
+    const paraWithBreak = para + '\n\n';
+
+    if (currentChunk.length + paraWithBreak.length > maxLength && currentChunk.length > 0) {
+      chunks.push({
+        content: currentChunk.trim(),
+        index: chunkIndex++,
+        startChar: currentStart,
+        endChar: charPos
+      });
+
+      const overlapText = currentChunk.slice(-overlap);
+      currentChunk = overlapText + paraWithBreak;
+      currentStart = charPos - overlap;
+    } else {
+      currentChunk += paraWithBreak;
+    }
+
+    charPos += paraWithBreak.length;
+  }
+
+  if (currentChunk.trim().length > 0) {
+    chunks.push({
+      content: currentChunk.trim(),
+      index: chunkIndex,
+      startChar: currentStart,
+      endChar: charPos
+    });
+  }
+
+  return chunks;
+}
+
+function cleanExtractedText(text: string): string {
+  return text
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^.{0,50}Page \d+.{0,50}$/gm, '')
+    .trim();
+}
 
 // ============================================
 // HELPER: Safe base64 encoding for large buffers
 // ============================================
 function bufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
-  const chunkSize = 8192; // Process 8KB at a time to avoid stack overflow
+  const chunkSize = 8192;
   let binary = '';
 
   for (let i = 0; i < bytes.length; i += chunkSize) {
@@ -79,35 +198,99 @@ Retourne UNIQUEMENT le texte extrait.`
 }
 
 // ============================================
-// Extraction PDF basique (fallback robuste)
+// Extraction PDF AMÉLIORÉE avec pdfjs
+// ============================================
+async function extractPdfTextWithPdfJs(buffer: ArrayBuffer): Promise<string> {
+  console.log('[OCR] Using pdf.js for text extraction');
+
+  try {
+    // Import dynamique de pdfjs-dist depuis ESM
+    const pdfjsLib = await import('https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs');
+
+    // Charger le PDF
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(buffer),
+      useSystemFonts: true,
+    });
+
+    const pdf = await loadingTask.promise;
+    const textParts: string[] = [];
+
+    // Extraire le texte de chaque page
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent();
+
+      // Combiner les items de texte
+      const pageText = textContent.items
+        .map((item: any) => item.str)
+        .join(' ');
+
+      if (pageText.trim()) {
+        textParts.push(`\n\n=== Page ${pageNum} ===\n\n${pageText}`);
+      }
+    }
+
+    const fullText = textParts.join('\n');
+    console.log(`[OCR] ✅ Extracted ${fullText.length} characters from ${pdf.numPages} pages`);
+
+    return fullText;
+  } catch (error) {
+    console.error('[OCR] pdf.js extraction failed:', error);
+    throw error;
+  }
+}
+
+// ============================================
+// Extraction PDF basique (fallback si pdfjs échoue)
 // ============================================
 function extractBasicPdfText(buffer: ArrayBuffer): string {
-  console.log('[OCR] Using basic PDF text extraction');
+  console.log('[OCR] Using basic fallback PDF text extraction');
   const bytes = new Uint8Array(buffer);
-  const text = new TextDecoder('latin1').decode(bytes);
+
+  // Essayer UTF-8 d'abord, puis Latin1
+  let text = '';
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    text = new TextDecoder('latin1').decode(bytes);
+  }
+
   const parts: string[] = [];
 
-  // Extraire les streams de texte PDF
-  const streamRegex = /stream\s*([\s\S]*?)\s*endstream/g;
+  // Méthode 1: Extraction des objets texte
+  const textObjRegex = /BT\s*(.*?)\s*ET/gs;
   let match;
-  while ((match = streamRegex.exec(text)) !== null) {
-    const content = match[1];
-    const textMatches = content.match(/\(([^)]*)\)\s*Tj/g);
+  while ((match = textObjRegex.exec(text)) !== null) {
+    const textBlock = match[1];
+    const textMatches = textBlock.match(/\(([^)]*)\)\s*Tj/g);
     if (textMatches) {
       textMatches.forEach(m => {
         const extracted = m.match(/\(([^)]*)\)/);
-        if (extracted) parts.push(extracted[1]);
+        if (extracted && extracted[1]) {
+          // Décoder les séquences d'échappement
+          const decoded = extracted[1]
+            .replace(/\\n/g, '\n')
+            .replace(/\\r/g, '\r')
+            .replace(/\\t/g, '\t')
+            .replace(/\\\(/g, '(')
+            .replace(/\\\)/g, ')')
+            .replace(/\\\\/g, '\\');
+          parts.push(decoded);
+        }
       });
     }
   }
 
-  // Fallback: extraction ASCII brute
-  if (parts.length === 0) {
-    const asciiMatches = text.match(/[\x20-\x7E]{10,}/g);
-    return asciiMatches?.filter(s => !s.includes('/') && !s.includes('<')).join(' ') || '';
+  if (parts.length > 0) {
+    return parts.join(' ');
   }
 
-  return parts.join(' ');
+  // Méthode 2: Extraction ASCII brute (dernier recours)
+  const asciiMatches = text.match(/[\x20-\x7E]{10,}/g);
+  return asciiMatches
+    ?.filter(s => !s.includes('/') && !s.includes('<') && !s.match(/^[0-9.]+$/))
+    .join(' ') || '';
 }
 
 // ============================================
@@ -125,7 +308,7 @@ async function extractTextSmart(
 
   console.log(`[OCR] Processing: ${fileName} (${mimeType}, ${sizeMB.toFixed(2)}MB)`);
 
-  // ========== IMAGES ==========
+  // Images
   if (mimeType.startsWith('image/')) {
     if (!openaiKey) {
       throw new Error('OPENAI_API_KEY non configurée - requis pour les images');
@@ -141,33 +324,49 @@ async function extractTextSmart(
     }
   }
 
-  // ========== PDFs ==========
+  // PDFs - Essayer pdfjs d'abord, puis fallback
   if (mimeType === 'application/pdf') {
-    // Stratégie simple : extraction texte basique
-    const basicText = extractBasicPdfText(buffer);
+    // Essayer pdfjs en priorité
+    try {
+      const text = await extractPdfTextWithPdfJs(buffer);
 
-    if (basicText.length < 100) {
-      warnings.push('Extraction PDF limitée - document scanné ou avec peu de texte');
-      console.log(`[OCR] ⚠️  PDF extraction limited (${basicText.length} chars)`);
-      return {
-        text: `[Document PDF avec extraction limitée - ${basicText.length} caractères]\n\n` +
-              `Pour un meilleur résultat :\n` +
-              `1. Convertissez ce PDF en images (1 image PNG par page)\n` +
-              `2. Uploadez les images pour utiliser OpenAI Vision\n\n` +
-              `Texte extrait :\n${basicText || '[Aucun texte détecté]'}`,
-        method: 'Extraction PDF basique',
-        warnings
-      };
-    }
+      if (text.length < 100) {
+        warnings.push('PDF scanné ou avec peu de texte - essayez de convertir en images');
+        return {
+          text: `[PDF avec peu de texte extrait - ${text.length} caractères]\n\n` +
+                `Suggestion: Convertissez en images PNG pour meilleur OCR\n\n${text}`,
+          method: 'pdf.js (texte limité)',
+          warnings
+        };
+      }
 
-    console.log(`[OCR] ✅ PDF processed successfully (${basicText.length} chars)`);
-    if (basicText.length < 500) {
-      warnings.push('Extraction basique - peut manquer certains éléments visuels');
+      return { text, method: 'pdf.js', warnings };
+    } catch (pdfError) {
+      console.warn('[OCR] pdf.js failed, trying fallback:', pdfError);
+      warnings.push(`pdf.js échoué: ${pdfError}, utilisation du fallback`);
+
+      // Fallback sur extraction basique
+      const basicText = extractBasicPdfText(buffer);
+
+      if (basicText.length < 100) {
+        warnings.push('Extraction limitée - document scanné ou encodage complexe');
+        return {
+          text: `[Extraction limitée - ${basicText.length} caractères]\n\n` +
+                `Le PDF semble scanné ou utilise un encodage complexe.\n` +
+                `Convertissez-le en images PNG pour un meilleur résultat.\n\n${basicText}`,
+          method: 'Extraction basique (fallback)',
+          warnings
+        };
+      }
+
+      if (basicText.length < 500) {
+        warnings.push('Extraction basique - qualité non garantie');
+      }
+      return { text: basicText, method: 'Extraction basique (fallback)', warnings };
     }
-    return { text: basicText, method: 'Extraction PDF basique', warnings };
   }
 
-  // ========== TEXTE BRUT ==========
+  // Texte brut
   console.log('[OCR] Processing as plain text');
   return {
     text: new TextDecoder().decode(new Uint8Array(buffer)),
@@ -231,7 +430,6 @@ async function handleFileUpload(req: Request, supabase: any) {
     return errorResponse('Fichier requis');
   }
 
-  // Valider le type de fichier
   const allowedTypes = [
     'application/pdf',
     'text/plain',
