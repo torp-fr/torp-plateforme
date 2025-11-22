@@ -112,17 +112,22 @@ async function ocrWithGoogleDocumentAI(buffer: ArrayBuffer, mimeType: string, ap
   console.log('[Google Doc AI] Processing document...');
   const base64Doc = btoa(String.fromCharCode(...new Uint8Array(buffer)));
 
-  // Utiliser l'endpoint Document AI v1
-  const projectId = 'your-project'; // À configurer via env
-  const location = 'eu'; // Europe pour RGPD
-  const processorId = 'ocr-processor'; // ID du processor
+  // Récupérer la config depuis les env vars
+  const projectId = Deno.env.get('GOOGLE_PROJECT_ID');
+  const location = Deno.env.get('GOOGLE_DOC_AI_LOCATION') || 'eu'; // Europe par défaut pour RGPD
+  const processorId = Deno.env.get('GOOGLE_PROCESSOR_ID');
+
+  if (!projectId || !processorId) {
+    throw new Error('Google Doc AI non configuré : GOOGLE_PROJECT_ID et GOOGLE_PROCESSOR_ID requis');
+  }
 
   const endpoint = `https://${location}-documentai.googleapis.com/v1/projects/${projectId}/locations/${location}/processors/${processorId}:process`;
 
-  const response = await fetch(endpoint, {
+  console.log(`[Google Doc AI] Endpoint: ${endpoint.replace(processorId, 'PROC_***')}`);
+
+  const response = await fetch(`${endpoint}?key=${apiKey}`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -134,7 +139,8 @@ async function ocrWithGoogleDocumentAI(buffer: ArrayBuffer, mimeType: string, ap
   });
 
   if (!response.ok) {
-    throw new Error(`Google Doc AI: ${response.status} - ${await response.text()}`);
+    const errorText = await response.text();
+    throw new Error(`Google Doc AI: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
