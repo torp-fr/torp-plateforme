@@ -546,75 +546,23 @@ async function handleProcess(body: any, supabase: any) {
 
     if (dlError) throw dlError;
 
-    let text: string;
-    const ocrSpaceApiKey = Deno.env.get('OCRSPACE_API_KEY');
-    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
-    const isImage = doc.mime_type.startsWith('image/');
-    const isPdf = doc.mime_type === 'application/pdf';
+    const buffer = await fileData.arrayBuffer();
+    const { text, method, warnings } = await extractTextSmart(
+      buffer,
+      doc.mime_type,
+      doc.file_size,
+      doc.filename
+    );
 
-    // OCR.space pour images uniquement (limite 3 pages PDF)
-    if (ocrSpaceApiKey && isImage) {
-      console.log('Using OCR.space for:', doc.mime_type);
-      const buffer = await fileData.arrayBuffer();
-
-      try {
-        text = await extractTextWithOCRSpace(buffer, doc.mime_type, ocrSpaceApiKey);
-        console.log(`OCR.space extracted ${text.length} characters`);
-      } catch (ocrError) {
-        console.error('OCR.space failed:', ocrError);
-        // Fallback: OpenAI Vision
-        if (openaiApiKey) {
-          text = await extractTextWithOpenAIVision(buffer, doc.mime_type, openaiApiKey);
-        } else {
-          throw ocrError;
-        }
-      }
-
-    } else if (isPdf && openaiApiKey) {
-      // PDFs : Convertir en images via pdf.co puis OCR OpenAI Vision
-      const pdfcoApiKey = Deno.env.get('PDFCO_API_KEY');
-      const buffer = await fileData.arrayBuffer();
-
-      if (pdfcoApiKey) {
-        console.log('Converting PDF to images via pdf.co...');
-        try {
-          const imageUrls = await convertPdfToImages(buffer, pdfcoApiKey);
-          console.log(`PDF converted to ${imageUrls.length} images`);
-
-          const pageTexts: string[] = [];
-          for (let i = 0; i < imageUrls.length; i++) {
-            console.log(`Processing page ${i + 1}/${imageUrls.length}`);
-            const imgResponse = await fetch(imageUrls[i]);
-            const imgBuffer = await imgResponse.arrayBuffer();
-            const pageText = await extractTextWithOpenAIVision(imgBuffer, 'image/png', openaiApiKey);
-            pageTexts.push(`## Page ${i + 1}\n\n${pageText}`);
-          }
-          text = pageTexts.join('\n\n---\n\n');
-        } catch (convError) {
-          console.error('PDF conversion failed:', convError);
-          text = extractTextFromPdf(buffer);
-        }
-      } else {
-        // Pas de pdf.co : extraction basique
-        text = extractTextFromPdf(buffer);
-      }
-
-    } else if (isPdf) {
-      const buffer = await fileData.arrayBuffer();
-      text = extractTextFromPdf(buffer);
-    } else {
-      text = await fileData.text();
-    }
-
-    text = cleanExtractedText(text);
-    const chunks = chunkText(text, { maxLength: 1500, overlap: 200 });
+    const cleanedText = cleanExtractedText(text);
+    const chunks = chunkText(cleanedText, { maxLength: 1500, overlap: 200 });
 
     const chunkData = chunks.map(chunk => ({
       document_id: documentId,
       content: chunk.content,
       content_length: chunk.content.length,
       chunk_index: chunk.index,
-      metadata: { startChar: chunk.startChar, endChar: chunk.endChar }
+      metadata: { startChar: chunk.startChar, endChar: chunk.endChar, warnings, method }
     }));
 
     const { error: insertError } = await supabase
@@ -630,7 +578,9 @@ async function handleProcess(body: any, supabase: any) {
     return successResponse({
       message: 'Document traite',
       documentId,
-      chunksCreated: chunks.length
+      chunksCreated: chunks.length,
+      method,
+      warnings
     });
 
   } catch (error) {
