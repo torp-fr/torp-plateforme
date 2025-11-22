@@ -17,65 +17,22 @@ function handleCors(req: Request) {
   return null;
 }
 
-// ============================================
-// OCR avec OCR.space (supporte PDF directement)
-// ============================================
-async function extractTextWithOCRSpace(
-  fileData: ArrayBuffer,
-  mimeType: string,
-  apiKey: string
-): Promise<string> {
-  const base64 = btoa(
-    new Uint8Array(fileData).reduce((data, byte) => data + String.fromCharCode(byte), '')
-  );
-
-  const isImage = mimeType.startsWith('image/');
-  const filetype = isImage ? mimeType.split('/')[1].toUpperCase() : 'PDF';
-
-  const formData = new FormData();
-  formData.append('base64Image', `data:${mimeType};base64,${base64}`);
-  formData.append('language', 'fre'); // Franais
-  formData.append('isOverlayRequired', 'false');
-  formData.append('filetype', filetype);
-  formData.append('detectOrientation', 'true');
-  formData.append('scale', 'true');
-  formData.append('OCREngine', '2'); // Engine 2 = meilleur pour documents
-
-  const response = await fetch('https://api.ocr.space/parse/image', {
-    method: 'POST',
-    headers: {
-      'apikey': apiKey,
-    },
-    body: formData,
-  });
-
-  if (!response.ok) {
-    throw new Error(`OCR.space error: ${response.status}`);
-  }
-
-  const data = await response.json();
-
-  if (data.IsErroredOnProcessing) {
-    throw new Error(`OCR.space error: ${data.ErrorMessage?.[0] || 'Unknown error'}`);
-  }
-
-  // Combiner le texte de toutes les pages
-  const texts = data.ParsedResults?.map((r: any) => r.ParsedText) || [];
-  return texts.join('\n\n---\n\n');
-}
+/**
+ * Architecture OCR robuste avec fallbacks multiples
+ *
+ * Stratégies d'extraction par ordre de priorité :
+ * 1. Images : OpenAI Vision (GPT-4o) - haute qualité
+ * 2. PDFs petits (<1MB, <5 pages) : OCR.space
+ * 3. PDFs moyens : Conversion pdf.co + OpenAI Vision
+ * 4. PDFs complexes : Extraction texte basique + warning
+ * 5. Fallback final : Erreur documentée avec suggestions
+ */
 
 // ============================================
-// OCR avec OpenAI Vision (GPT-4o) - fallback pour images complexes
+// STRATÉGIE 1 : OpenAI Vision (Images + fallback PDF)
 // ============================================
-async function extractTextWithOpenAIVision(
-  fileData: ArrayBuffer,
-  mimeType: string,
-  apiKey: string
-): Promise<string> {
-  const base64 = btoa(
-    new Uint8Array(fileData).reduce((data, byte) => data + String.fromCharCode(byte), '')
-  );
-
+async function ocrWithOpenAIVision(buffer: ArrayBuffer, mimeType: string, apiKey: string): Promise<string> {
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
   const mediaType = mimeType.startsWith('image/') ? mimeType : 'image/png';
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -86,29 +43,23 @@ async function extractTextWithOpenAIVision(
     },
     body: JSON.stringify({
       model: 'gpt-4o',
-      max_tokens: 8000,
+      max_tokens: 16000,
       messages: [{
         role: 'user',
         content: [
-          {
-            type: 'image_url',
-            image_url: {
-              url: `data:${mediaType};base64,${base64}`,
-              detail: 'high'
-            }
-          },
+          { type: 'image_url', image_url: { url: `data:${mediaType};base64,${base64}`, detail: 'high' } },
           {
             type: 'text',
-            text: `Extrais TOUT le texte de ce document de manière structurée.
+            text: `Extrais TOUT le texte de ce document technique du bâtiment de manière structurée.
 
-Conserve:
-- Les titres et sous-titres (marque-les avec # ou ##)
-- Les listes et énumérations
+IMPORTANT : Conserve absolument :
+- Les titres et numéros (DTU, NF, articles)
 - Les tableaux (format markdown)
-- Les références normatives (DTU, NF, etc.)
-- Les valeurs techniques (épaisseurs, résistances thermiques, etc.)
+- Les valeurs techniques (dimensions, résistances, etc.)
+- Les listes à puces et énumérations
+- Les références normatives
 
-Retourne UNIQUEMENT le texte extrait, sans commentaire ni introduction.`
+Retourne UNIQUEMENT le texte extrait.`
           }
         ]
       }]
@@ -117,69 +68,226 @@ Retourne UNIQUEMENT le texte extrait, sans commentaire ni introduction.`
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`OpenAI Vision error: ${response.status} - ${error}`);
+    throw new Error(`OpenAI Vision: ${response.status} - ${error}`);
   }
 
   const data = await response.json();
   return data.choices[0]?.message?.content || '';
 }
 
-// Convertir PDF en images via pdf.co API
-async function convertPdfToImages(pdfBuffer: ArrayBuffer, apiKey: string): Promise<string[]> {
-  // Étape 1 : Upload du PDF en base64
-  const base64Pdf = btoa(
-    new Uint8Array(pdfBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-  );
+// ============================================
+// STRATÉGIE 2 : OCR.space (rapide, limites : 1MB, 3 pages)
+// ============================================
+async function ocrWithOCRSpace(buffer: ArrayBuffer, mimeType: string, apiKey: string): Promise<string> {
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+  const formData = new FormData();
 
-  const uploadResponse = await fetch('https://api.pdf.co/v1/file/upload/base64', {
+  formData.append('base64Image', `data:${mimeType};base64,${base64}`);
+  formData.append('language', 'fre');
+  formData.append('isOverlayRequired', 'false');
+  formData.append('detectOrientation', 'true');
+  formData.append('scale', 'true');
+  formData.append('OCREngine', '2');
+
+  const response = await fetch('https://api.ocr.space/parse/image', {
     method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      base64: base64Pdf,
-      name: 'document.pdf'
-    }),
+    headers: { 'apikey': apiKey },
+    body: formData,
   });
 
-  if (!uploadResponse.ok) {
-    const errorText = await uploadResponse.text();
-    throw new Error(`pdf.co upload error: ${uploadResponse.status} - ${errorText}`);
+  if (!response.ok) throw new Error(`OCR.space HTTP ${response.status}`);
+
+  const data = await response.json();
+  if (data.IsErroredOnProcessing) {
+    throw new Error(`OCR.space: ${data.ErrorMessage?.[0] || 'Unknown error'}`);
   }
 
-  const uploadData = await uploadResponse.json();
+  return data.ParsedResults?.map((r: any) => r.ParsedText).join('\n\n---\n\n') || '';
+}
 
+// ============================================
+// STRATÉGIE 3 : pdf.co conversion + OpenAI Vision
+// ============================================
+async function convertPdfWithPdfCo(buffer: ArrayBuffer, apiKey: string): Promise<string[]> {
+  console.log('[pdf.co] Starting PDF upload...');
+  const base64Pdf = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+
+  // Upload
+  const uploadResp = await fetch('https://api.pdf.co/v1/file/upload/base64', {
+    method: 'POST',
+    headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base64: base64Pdf, name: 'doc.pdf' }),
+  });
+
+  if (!uploadResp.ok) {
+    throw new Error(`pdf.co upload: ${uploadResp.status} - ${await uploadResp.text()}`);
+  }
+
+  const uploadData = await uploadResp.json();
   if (uploadData.error || !uploadData.url) {
-    throw new Error(`pdf.co upload failed: ${uploadData.message || 'No URL returned'}`);
+    throw new Error(`pdf.co upload failed: ${uploadData.message || 'No URL'}`);
   }
 
-  // Étape 2 : Conversion en images
-  const convertResponse = await fetch('https://api.pdf.co/v1/pdf/convert/to/png', {
+  console.log('[pdf.co] PDF uploaded, converting to images...');
+
+  // Convert
+  const convertResp = await fetch('https://api.pdf.co/v1/pdf/convert/to/png', {
     method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      url: uploadData.url,
-      pages: '0-9', // Max 10 premières pages
-      async: false
-    }),
+    headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: uploadData.url, pages: '0-9', async: false }),
   });
 
-  if (!convertResponse.ok) {
-    const errorText = await convertResponse.text();
-    throw new Error(`pdf.co convert error: ${convertResponse.status} - ${errorText}`);
+  if (!convertResp.ok) {
+    throw new Error(`pdf.co convert: ${convertResp.status} - ${await convertResp.text()}`);
   }
 
-  const convertData = await convertResponse.json();
+  const convertData = await convertResp.json();
+  if (convertData.error) throw new Error(`pdf.co: ${convertData.message}`);
 
-  if (convertData.error) {
-    throw new Error(`pdf.co error: ${convertData.message}`);
-  }
-
+  console.log(`[pdf.co] Converted to ${convertData.urls?.length || 0} images`);
   return convertData.urls || [];
+}
+
+// ============================================
+// ORCHESTRATEUR OCR avec fallbacks intelligents
+// ============================================
+async function extractTextSmart(
+  buffer: ArrayBuffer,
+  mimeType: string,
+  fileSize: number,
+  fileName: string
+): Promise<{ text: string; method: string; warnings: string[] }> {
+  const warnings: string[] = [];
+  const openaiKey = Deno.env.get('OPENAI_API_KEY');
+  const ocrSpaceKey = Deno.env.get('OCRSPACE_API_KEY');
+  const pdfCoKey = Deno.env.get('PDFCO_API_KEY');
+
+  const isImage = mimeType.startsWith('image/');
+  const isPdf = mimeType === 'application/pdf';
+  const sizeMB = fileSize / 1024 / 1024;
+
+  console.log(`[OCR] File: ${fileName}, Type: ${mimeType}, Size: ${sizeMB.toFixed(2)}MB`);
+
+  // ========== IMAGES ==========
+  if (isImage) {
+    if (openaiKey) {
+      try {
+        console.log('[OCR] Strategy: OpenAI Vision (image)');
+        const text = await ocrWithOpenAIVision(buffer, mimeType, openaiKey);
+        return { text, method: 'OpenAI Vision', warnings };
+      } catch (error) {
+        console.error('[OCR] OpenAI Vision failed:', error);
+        warnings.push(`OpenAI Vision échoué: ${error}`);
+      }
+    }
+
+    if (ocrSpaceKey && sizeMB < 1) {
+      try {
+        console.log('[OCR] Strategy: OCR.space (image fallback)');
+        const text = await ocrWithOCRSpace(buffer, mimeType, ocrSpaceKey);
+        warnings.push('Utilisé OCR.space (fallback) - qualité moyenne');
+        return { text, method: 'OCR.space', warnings };
+      } catch (error) {
+        console.error('[OCR] OCR.space failed:', error);
+        warnings.push(`OCR.space échoué: ${error}`);
+      }
+    }
+
+    throw new Error('Aucun service OCR disponible pour les images');
+  }
+
+  // ========== PDFs ==========
+  if (isPdf) {
+    // Stratégie 1 : OCR.space pour petits PDFs
+    if (ocrSpaceKey && sizeMB < 1) {
+      try {
+        console.log('[OCR] Strategy: OCR.space (small PDF)');
+        const text = await ocrWithOCRSpace(buffer, mimeType, ocrSpaceKey);
+        warnings.push('OCR.space limite à 3 pages - utilisez images pour documents longs');
+        return { text, method: 'OCR.space', warnings };
+      } catch (error) {
+        console.error('[OCR] OCR.space failed:', error);
+        warnings.push(`OCR.space échoué: ${error}`);
+      }
+    }
+
+    // Stratégie 2 : pdf.co + OpenAI Vision
+    if (pdfCoKey && openaiKey && sizeMB < 5) {
+      try {
+        console.log('[OCR] Strategy: pdf.co + OpenAI Vision');
+        const imageUrls = await convertPdfWithPdfCo(buffer, pdfCoKey);
+
+        const pageTexts: string[] = [];
+        for (let i = 0; i < Math.min(imageUrls.length, 10); i++) {
+          console.log(`[OCR] Processing page ${i + 1}/${imageUrls.length}`);
+          const imgResp = await fetch(imageUrls[i]);
+          const imgBuffer = await imgResp.arrayBuffer();
+          const pageText = await ocrWithOpenAIVision(imgBuffer, 'image/png', openaiKey);
+          pageTexts.push(`## Page ${i + 1}\n\n${pageText}`);
+        }
+
+        if (imageUrls.length > 10) {
+          warnings.push(`Document ${imageUrls.length} pages - seules 10 premières pages traitées`);
+        }
+
+        return { text: pageTexts.join('\n\n---\n\n'), method: 'pdf.co + OpenAI Vision', warnings };
+      } catch (error) {
+        console.error('[OCR] pdf.co conversion failed:', error);
+        warnings.push(`Conversion PDF échouée: ${error}`);
+      }
+    }
+
+    // Stratégie 3 : Extraction texte basique (fallback ultime)
+    console.log('[OCR] Strategy: Basic PDF text extraction (fallback)');
+    const basicText = extractBasicPdfText(buffer);
+
+    if (basicText.length < 100) {
+      warnings.push('ATTENTION: Extraction limitée - convertissez en images PNG pour meilleure qualité');
+      return {
+        text: `[Extraction PDF limitée - ${basicText.length} caractères extraits]\n\nConvertissez ce PDF en images PNG (1 image par page) puis uploadez les images pour un OCR complet.\n\n${basicText}`,
+        method: 'Extraction basique (fallback)',
+        warnings
+      };
+    }
+
+    warnings.push('Extraction texte basique - peut manquer tableaux/images');
+    return { text: basicText, method: 'Extraction basique', warnings };
+  }
+
+  // Texte brut
+  return {
+    text: new TextDecoder().decode(new Uint8Array(buffer)),
+    method: 'Texte brut',
+    warnings: []
+  };
+}
+
+// Extraction PDF basique (fallback)
+function extractBasicPdfText(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const text = new TextDecoder('latin1').decode(bytes);
+  const parts: string[] = [];
+
+  // Extraire les streams de texte
+  const streamRegex = /stream\s*([\s\S]*?)\s*endstream/g;
+  let match;
+  while ((match = streamRegex.exec(text)) !== null) {
+    const content = match[1];
+    const textMatches = content.match(/\(([^)]*)\)\s*Tj/g);
+    if (textMatches) {
+      textMatches.forEach(m => {
+        const extracted = m.match(/\(([^)]*)\)/);
+        if (extracted) parts.push(extracted[1]);
+      });
+    }
+  }
+
+  if (parts.length === 0) {
+    const asciiMatches = text.match(/[\x20-\x7E]{10,}/g);
+    return asciiMatches?.filter(s => !s.includes('/') && !s.includes('<')).join(' ') || '';
+  }
+
+  return parts.join(' ');
 }
 
 // ============================================
