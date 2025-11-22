@@ -13,8 +13,8 @@ RUN apt-get update && apt-get install -y \
     libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Invalidate cache for requirements update (paddlepaddle 2.6.2)
-ARG CACHE_BUST=2024-11-22
+# Invalidate cache for requirements update (numpy < 2.0.0 for PaddleOCR compatibility)
+ARG CACHE_BUST=2024-11-22-numpy-fix
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
