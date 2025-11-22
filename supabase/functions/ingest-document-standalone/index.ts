@@ -1,21 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-// ============================================
-// CORS
-// ============================================
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-};
-
-function handleCors(req: Request) {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
-  return null;
-}
+import { corsHeaders, handleCors } from './_shared/cors.ts';
+import { chunkText, cleanExtractedText, generateEmbeddingsBatch } from './_shared/embeddings.ts';
 
 /**
  * Architecture OCR robuste avec fallbacks multiples
@@ -291,121 +277,6 @@ function extractBasicPdfText(buffer: ArrayBuffer): string {
 }
 
 // ============================================
-// EMBEDDINGS (OpenAI)
-// ============================================
-async function generateEmbedding(text: string, apiKey: string) {
-  const response = await fetch('https://api.openai.com/v1/embeddings', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      input: text.substring(0, 8000),
-      model: 'text-embedding-3-small',
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`OpenAI API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return {
-    embedding: data.data[0].embedding,
-    tokens: data.usage?.total_tokens || 0,
-  };
-}
-
-async function generateEmbeddingsBatch(texts: string[], apiKey: string) {
-  const results = [];
-  const batchSize = 20;
-
-  for (let i = 0; i < texts.length; i += batchSize) {
-    const batch = texts.slice(i, i + batchSize);
-    const response = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        input: batch.map(t => t.substring(0, 8000)),
-        model: 'text-embedding-3-small',
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const batchResults = data.data.map((item: any, idx: number) => ({
-      embedding: item.embedding,
-      tokens: Math.round((data.usage?.total_tokens || 0) / batch.length),
-    }));
-    results.push(...batchResults);
-  }
-
-  return results;
-}
-
-// ============================================
-// TEXT PROCESSING
-// ============================================
-function cleanExtractedText(text: string): string {
-  return text
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-    .replace(/\n{4,}/g, '\n\n\n')
-    .replace(/[ \t]{2,}/g, ' ')
-    .trim();
-}
-
-function chunkText(text: string, options: { maxLength?: number; overlap?: number } = {}) {
-  const { maxLength = 1500, overlap = 200 } = options;
-  const chunks = [];
-  const paragraphs = text.split(/\n\n+/);
-
-  let currentChunk = '';
-  let currentStart = 0;
-  let charPosition = 0;
-
-  for (const para of paragraphs) {
-    if (currentChunk.length + para.length + 2 > maxLength && currentChunk.length > 0) {
-      chunks.push({
-        content: currentChunk.trim(),
-        index: chunks.length,
-        startChar: currentStart,
-        endChar: charPosition,
-      });
-
-      const overlapText = currentChunk.slice(-overlap);
-      currentChunk = overlapText + '\n\n' + para;
-      currentStart = charPosition - overlap;
-    } else {
-      if (currentChunk.length === 0) {
-        currentStart = charPosition;
-      }
-      currentChunk += (currentChunk ? '\n\n' : '') + para;
-    }
-    charPosition += para.length + 2;
-  }
-
-  if (currentChunk.trim()) {
-    chunks.push({
-      content: currentChunk.trim(),
-      index: chunks.length,
-      startChar: currentStart,
-      endChar: charPosition,
-    });
-  }
-
-  return chunks;
-}
-
-// ============================================
 // MAIN HANDLER
 // ============================================
 serve(async (req) => {
@@ -546,75 +417,23 @@ async function handleProcess(body: any, supabase: any) {
 
     if (dlError) throw dlError;
 
-    let text: string;
-    const ocrSpaceApiKey = Deno.env.get('OCRSPACE_API_KEY');
-    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
-    const isImage = doc.mime_type.startsWith('image/');
-    const isPdf = doc.mime_type === 'application/pdf';
+    const buffer = await fileData.arrayBuffer();
+    const { text, method, warnings } = await extractTextSmart(
+      buffer,
+      doc.mime_type,
+      doc.file_size,
+      doc.filename
+    );
 
-    // OCR.space pour images uniquement (limite 3 pages PDF)
-    if (ocrSpaceApiKey && isImage) {
-      console.log('Using OCR.space for:', doc.mime_type);
-      const buffer = await fileData.arrayBuffer();
-
-      try {
-        text = await extractTextWithOCRSpace(buffer, doc.mime_type, ocrSpaceApiKey);
-        console.log(`OCR.space extracted ${text.length} characters`);
-      } catch (ocrError) {
-        console.error('OCR.space failed:', ocrError);
-        // Fallback: OpenAI Vision
-        if (openaiApiKey) {
-          text = await extractTextWithOpenAIVision(buffer, doc.mime_type, openaiApiKey);
-        } else {
-          throw ocrError;
-        }
-      }
-
-    } else if (isPdf && openaiApiKey) {
-      // PDFs : Convertir en images via pdf.co puis OCR OpenAI Vision
-      const pdfcoApiKey = Deno.env.get('PDFCO_API_KEY');
-      const buffer = await fileData.arrayBuffer();
-
-      if (pdfcoApiKey) {
-        console.log('Converting PDF to images via pdf.co...');
-        try {
-          const imageUrls = await convertPdfToImages(buffer, pdfcoApiKey);
-          console.log(`PDF converted to ${imageUrls.length} images`);
-
-          const pageTexts: string[] = [];
-          for (let i = 0; i < imageUrls.length; i++) {
-            console.log(`Processing page ${i + 1}/${imageUrls.length}`);
-            const imgResponse = await fetch(imageUrls[i]);
-            const imgBuffer = await imgResponse.arrayBuffer();
-            const pageText = await extractTextWithOpenAIVision(imgBuffer, 'image/png', openaiApiKey);
-            pageTexts.push(`## Page ${i + 1}\n\n${pageText}`);
-          }
-          text = pageTexts.join('\n\n---\n\n');
-        } catch (convError) {
-          console.error('PDF conversion failed:', convError);
-          text = extractTextFromPdf(buffer);
-        }
-      } else {
-        // Pas de pdf.co : extraction basique
-        text = extractTextFromPdf(buffer);
-      }
-
-    } else if (isPdf) {
-      const buffer = await fileData.arrayBuffer();
-      text = extractTextFromPdf(buffer);
-    } else {
-      text = await fileData.text();
-    }
-
-    text = cleanExtractedText(text);
-    const chunks = chunkText(text, { maxLength: 1500, overlap: 200 });
+    const cleanedText = cleanExtractedText(text);
+    const chunks = chunkText(cleanedText, { maxLength: 1500, overlap: 200 });
 
     const chunkData = chunks.map(chunk => ({
       document_id: documentId,
       content: chunk.content,
       content_length: chunk.content.length,
       chunk_index: chunk.index,
-      metadata: { startChar: chunk.startChar, endChar: chunk.endChar }
+      metadata: { startChar: chunk.startChar, endChar: chunk.endChar, warnings, method }
     }));
 
     const { error: insertError } = await supabase
@@ -630,7 +449,9 @@ async function handleProcess(body: any, supabase: any) {
     return successResponse({
       message: 'Document traite',
       documentId,
-      chunksCreated: chunks.length
+      chunksCreated: chunks.length,
+      method,
+      warnings
     });
 
   } catch (error) {
@@ -768,38 +589,6 @@ async function handleStats(supabase: any) {
   };
 
   return successResponse({ stats });
-}
-
-// ============================================
-// HELPERS
-// ============================================
-function extractTextFromPdf(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  const text = new TextDecoder('latin1').decode(bytes);
-  const textParts: string[] = [];
-  const streamRegex = /stream\s*([\s\S]*?)\s*endstream/g;
-  let match;
-
-  while ((match = streamRegex.exec(text)) !== null) {
-    const content = match[1];
-    const textMatches = content.match(/\(([^)]*)\)\s*Tj/g);
-    if (textMatches) {
-      textMatches.forEach(m => {
-        const extracted = m.match(/\(([^)]*)\)/);
-        if (extracted) textParts.push(extracted[1]);
-      });
-    }
-  }
-
-  if (textParts.length === 0) {
-    const asciiRegex = /[\x20-\x7E]{10,}/g;
-    const asciiMatches = text.match(asciiRegex);
-    if (asciiMatches) {
-      return asciiMatches.filter(s => !s.includes('/') && !s.includes('<')).join(' ');
-    }
-  }
-
-  return textParts.join(' ');
 }
 
 function successResponse(data: any) {
