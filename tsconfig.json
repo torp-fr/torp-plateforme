@@ -9,11 +9,14 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-    "noImplicitAny": false,
-    "noUnusedParameters": false,
-    "skipLibCheck": true,
-    "allowJs": true,
-    "noUnusedLocals": false,
-    "strictNullChecks": false
+    // Progressive TypeScript strictness - Phase 1
+    "noImplicitAny": true,           // ✅ Activated - Prevent implicit any types
+    "strictNullChecks": true,        // ✅ Activated - Prevent null/undefined errors
+    "noUnusedParameters": false,     // ⏳ TODO: Activate in Phase 2
+    "noUnusedLocals": false,         // ⏳ TODO: Activate in Phase 2
+    "strictFunctionTypes": true,     // ✅ Activated - Stricter function checks
+    "strictBindCallApply": true,     // ✅ Activated - Stricter bind/call/apply
+    "skipLibCheck": true,            // Keep for performance
+    "allowJs": true                  // Keep for compatibility
   }
 }

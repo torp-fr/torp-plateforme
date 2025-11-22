@@ -1,0 +1,18 @@
+# Vercel ignore file
+node_modules
+.env
+.env.local
+.env.development
+.env.test
+coverage
+*.log
+.DS_Store
+.vscode
+.idea
+src/**/*.test.ts
+src/**/*.test.tsx
+src/**/*.spec.ts
+src/**/*.spec.tsx
+docs/
+*.md
+!README.md

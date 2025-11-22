@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  ocr-service:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - LOG_LEVEL=INFO
+    restart: unless-stopped

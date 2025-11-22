@@ -1,22 +1,157 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
 import { CheckCircle, AlertTriangle, Lightbulb, TrendingUp, Download, Eye, ArrowLeft, MessageSquare } from 'lucide-react';
+import type { Project } from '@/context/AppContext';
 
 export default function Results() {
-  const { currentProject } = useApp();
+  const { currentProject, setCurrentProject } = useApp();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [displayScore, setDisplayScore] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (!currentProject || !currentProject.analysisResult) {
-      navigate('/analyze');
-      return;
-    }
+    const loadProjectData = async () => {
+      // Always load from database if we have a devisId in URL
+      // This ensures we get the complete, up-to-date analysis data
+      const devisId = searchParams.get('devisId');
+      if (!devisId) {
+        navigate('/analyze');
+        return;
+      }
+
+      // Load project data from Supabase using REST API to avoid blocking
+      setIsLoading(true);
+      try {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const supabaseAuthKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
+        const sessionData = localStorage.getItem(supabaseAuthKey);
+
+        let accessToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        if (sessionData) {
+          try {
+            const session = JSON.parse(sessionData);
+            accessToken = session.access_token;
+          } catch (e) {
+            console.error('Failed to parse session:', e);
+          }
+        }
+
+        const queryUrl = `${supabaseUrl}/rest/v1/devis?id=eq.${devisId}&select=*`;
+        const response = await fetch(queryUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+        });
+
+        if (!response.ok) {
+          console.error('Error loading devis:', response.status);
+          navigate('/analyze');
+          return;
+        }
+
+        const dataArray = await response.json();
+        const data = dataArray[0];
+
+        if (!data) {
+          console.error('No devis found');
+          navigate('/analyze');
+          return;
+        }
+
+        // Helper function to parse JSON if it's a string, or return as-is if already parsed
+        const parseIfString = (value: any) => {
+          if (typeof value === 'string') {
+            try {
+              return JSON.parse(value);
+            } catch (e) {
+              console.error('[Results] Failed to parse JSON:', e);
+              return {};
+            }
+          }
+          return value || {};
+        };
+
+        // Parse JSON fields (Supabase may return them as strings or objects)
+        const scoreEntrepriseData = parseIfString(data.score_entreprise);
+        const scorePrixData = parseIfString(data.score_prix);
+        const scoreCompletudeData = parseIfString(data.score_completude);
+        const scoreConformiteData = parseIfString(data.score_conformite);
+        const scoreDelaisData = parseIfString(data.score_delais);
+        const recommendationsData = parseIfString(data.recommendations);
+
+        console.log('[Results] Parsed score_entreprise:', scoreEntrepriseData);
+        console.log('[Results] Parsed recommendations:', recommendationsData);
+
+        // Extract scores from analysis objects and convert to percentages
+        // TORP scores: Entreprise /250, Prix /300, Complétude /200, Conformité /150, Délais /100
+        const scoreEntreprise = Math.round(((scoreEntrepriseData?.scoreTotal || 0) / 250) * 100);
+        const scorePrix = Math.round(((scorePrixData?.scoreTotal || 0) / 300) * 100);
+        const scoreCompletude = Math.round(((scoreCompletudeData?.scoreTotal || 0) / 200) * 100);
+        const scoreConformite = Math.round(((scoreConformiteData?.scoreTotal || 0) / 150) * 100);
+        const scoreDelais = Math.round(((scoreDelaisData?.scoreTotal || 0) / 100) * 100);
+
+        console.log('[Results] Calculated scores:', { scoreEntreprise, scorePrix, scoreCompletude, scoreConformite, scoreDelais });
+
+        // Extract different types of information from recommendations
+        const pointsForts = recommendationsData.pointsForts || [];
+        const pointsFaibles = recommendationsData.pointsFaibles || [];
+        const questionsAPoser = recommendationsData.questionsAPoser || [];
+        const pointsNegociation = recommendationsData.pointsNegociation || [];
+        const recommandationsActions = recommendationsData.recommandations || [];
+
+        console.log('[Results] Recommendations data:', { pointsForts, pointsFaibles, questionsAPoser });
+
+        // Convert Supabase data to Project format
+        const project: Project = {
+          id: data.id,
+          name: data.nom_projet,
+          type: data.type_travaux || 'Non spécifié',
+          status: data.status === 'analyzed' ? 'completed' : data.status as any,
+          score: data.score_total || 0,
+          grade: data.grade || 'C',
+          amount: `${data.montant_total || 0} €`,
+          createdAt: data.created_at,
+          analysisResult: {
+            strengths: pointsForts.length > 0 ? pointsForts : ['Analyse complétée avec succès'],
+            warnings: pointsFaibles.length > 0 ? pointsFaibles : [],
+            recommendations: {
+              questions: questionsAPoser,
+              negotiation: pointsNegociation.length > 0 ? pointsNegociation.join(', ') : null,
+              actions: recommandationsActions
+            },
+            priceComparison: data.comparaison_prix || null,
+            detailedScores: {
+              entreprise: scoreEntreprise,
+              prix: scorePrix,
+              completude: scoreCompletude,
+              conformite: scoreConformite,
+              delais: scoreDelais,
+            }
+          }
+        };
+
+        setCurrentProject(project);
+      } catch (error) {
+        console.error('Error loading project:', error);
+        navigate('/analyze');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadProjectData();
+  }, [currentProject, searchParams, navigate, setCurrentProject]);
+
+  useEffect(() => {
+    if (!currentProject) return;
 
     // Animation du score
     const timer = setTimeout(() => {
@@ -34,13 +169,33 @@ export default function Results() {
       return () => clearInterval(interval);
     }, 500);
     return () => clearTimeout(timer);
-  }, [currentProject, navigate]);
+  }, [currentProject]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto px-4 py-12 text-center">
+          <div className="animate-pulse">
+            <h2 className="text-2xl font-bold mb-4">Chargement des résultats...</h2>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentProject || !currentProject.analysisResult) {
     return null;
   }
 
   const { analysisResult, score = 0, grade = 'C' } = currentProject;
+  const detailedScores = analysisResult?.detailedScores || {
+    entreprise: 0,
+    prix: 0,
+    completude: 0,
+    conformite: 0,
+    delais: 0
+  };
   
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-success';
@@ -113,15 +268,23 @@ export default function Results() {
                   <div className="space-y-3">
                     <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
                       <span className="text-muted-foreground">Fiabilité entreprise</span>
-                      <Badge variant="secondary" className={getScoreColor(85)}>85%</Badge>
+                      <Badge variant="secondary" className={getScoreColor(detailedScores.entreprise)}>{detailedScores.entreprise}%</Badge>
                     </div>
                     <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
                       <span className="text-muted-foreground">Prix cohérent</span>
-                      <Badge variant="secondary" className={getScoreColor(78)}>78%</Badge>
+                      <Badge variant="secondary" className={getScoreColor(detailedScores.prix)}>{detailedScores.prix}%</Badge>
                     </div>
                     <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
-                      <span className="text-muted-foreground">Conformité technique</span>
-                      <Badge variant="secondary" className={getScoreColor(72)}>72%</Badge>
+                      <span className="text-muted-foreground">Complétude</span>
+                      <Badge variant="secondary" className={getScoreColor(detailedScores.completude)}>{detailedScores.completude}%</Badge>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
+                      <span className="text-muted-foreground">Conformité</span>
+                      <Badge variant="secondary" className={getScoreColor(detailedScores.conformite)}>{detailedScores.conformite}%</Badge>
+                    </div>
+                    <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
+                      <span className="text-muted-foreground">Délais</span>
+                      <Badge variant="secondary" className={getScoreColor(detailedScores.delais)}>{detailedScores.delais}%</Badge>
                     </div>
                   </div>
 
@@ -196,22 +359,54 @@ export default function Results() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {analysisResult.recommendations?.questions && (
+                  {/* Recommandations détaillées avec priorités */}
+                  {analysisResult.recommendations?.actions && Array.isArray(analysisResult.recommendations.actions) && analysisResult.recommendations.actions.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-foreground">Actions prioritaires</h4>
+                      {analysisResult.recommendations.actions.map((action: any, index: number) => (
+                        <div key={index} className={`p-4 rounded-lg border-l-4 ${
+                          action.priorite === 'haute' ? 'bg-destructive/5 border-destructive' :
+                          action.priorite === 'moyenne' ? 'bg-warning/5 border-warning' :
+                          'bg-muted/30 border-muted'
+                        }`}>
+                          <div className="flex items-start justify-between mb-2">
+                            <h5 className="font-semibold text-foreground">{action.titre}</h5>
+                            <Badge variant={action.priorite === 'haute' ? 'destructive' : action.priorite === 'moyenne' ? 'default' : 'secondary'}>
+                              {action.priorite}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-2">{action.description}</p>
+                          <p className="text-sm font-medium text-foreground">→ {action.actionSuggeree}</p>
+                          {action.impactBudget && (
+                            <p className="text-sm text-success mt-2">💰 Économie potentielle : {action.impactBudget}€</p>
+                          )}
+                          {action.delaiAction && (
+                            <p className="text-xs text-muted-foreground mt-1">⏱️ À faire sous {action.delaiAction} jours</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Questions à poser */}
+                  {analysisResult.recommendations?.questions && analysisResult.recommendations.questions.length > 0 && (
                     <div className="p-4 bg-background rounded-lg border">
-                      <h4 className="font-semibold text-foreground mb-3">Questions à poser à l'entreprise</h4>
+                      <h4 className="font-semibold text-foreground mb-3">❓ Questions à poser à l'entreprise</h4>
                       <ul className="space-y-2">
                         {analysisResult.recommendations.questions.map((question: string, index: number) => (
-                          <li key={index} className="text-sm text-muted-foreground">
-                            • {question}
+                          <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
+                            <span className="text-info mt-0.5">•</span>
+                            <span>{question}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
                   )}
-                  
+
+                  {/* Points de négociation */}
                   {analysisResult.recommendations?.negotiation && (
                     <div className="p-4 bg-background rounded-lg border">
-                      <h4 className="font-semibold text-foreground mb-2">Négociation suggérée</h4>
+                      <h4 className="font-semibold text-foreground mb-2">💬 Points de négociation</h4>
                       <p className="text-sm text-muted-foreground">
                         {analysisResult.recommendations.negotiation}
                       </p>

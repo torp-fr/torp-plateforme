@@ -8,9 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, FileText, Clock, Shield, CheckCircle, Home, Zap, Droplet, Paintbrush, Download } from 'lucide-react';
+import { Upload, FileText, Clock, Shield, CheckCircle, Home, Zap, Droplet, Paintbrush, Download, Loader2 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { BackButton } from '@/components/BackButton';
+import { devisService } from '@/services/api/supabase/devis.service';
 
 const projectTypes = [
   { id: 'plomberie', label: 'Plomberie', icon: Droplet },
@@ -36,8 +37,10 @@ export default function Analyze() {
     constraints: ''
   });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  
-  const { addProject, setCurrentProject } = useApp();
+  const [analysisProgress, setAnalysisProgress] = useState<string[]>([]);
+  const [currentDevisId, setCurrentDevisId] = useState<string | null>(null);
+
+  const { user, addProject, setCurrentProject } = useApp();
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -94,76 +97,180 @@ export default function Analyze() {
       return;
     }
 
-    setIsAnalyzing(true);
+    try {
+      setIsAnalyzing(true);
+      setAnalysisProgress(['Préparation de l\'analyse...']);
 
-    // Créer le projet
-    const newProject = {
-      id: Date.now().toString(),
-      name: projectData.name,
-      type: projectData.type,
-      status: 'analyzing' as const,
-      amount: projectData.budget || 'Non spécifié',
-      createdAt: new Date().toISOString().split('T')[0],
-      company: `Entreprise ${Math.floor(Math.random() * 1000)}`
-    };
+      // Check if user is authenticated
+      console.log('[Analyze] User check:', { hasUser: !!user, userId: user?.id, email: user?.email });
 
-    addProject(newProject);
-    setCurrentProject(newProject);
+      if (!user) {
+        console.error('[Analyze] No user found in context');
+        toast({
+          title: 'Non authentifié',
+          description: 'Veuillez vous connecter pour analyser un devis.',
+          variant: 'destructive'
+        });
+        navigate('/login');
+        return;
+      }
 
-    // Simulation d'analyse (3 secondes)
-    setTimeout(() => {
-      const score = Math.floor(Math.random() * 40) + 60; // Score entre 60-100
-      const grade = score >= 80 ? 'A' : score >= 70 ? 'B' : score >= 60 ? 'C' : 'D';
-      
-      const analysisResult = {
-        score,
-        grade,
-        strengths: [
-          'Entreprise certifiée RGE avec 15 ans d\'expérience',
-          'Prix dans la fourchette marché pour ce type de travaux',
-          'Garanties décennale et biennale mentionnées',
-          'Matériaux de qualité spécifiés dans le devis'
-        ],
-        warnings: [
-          'Délais de livraison non précisés dans le devis',
-          'Modalités de paiement à négocier (30% d\'acompte élevé)',
-          'Pas de plan détaillé des interventions'
-        ],
-        recommendations: {
-          questions: [
-            'Quel est le délai exact de réalisation des travaux ?',
-            'Puis-je obtenir des références de chantiers similaires ?',
-            'Les matériaux sont-ils garantis séparément ?',
-            'Un plan détaillé peut-il être fourni ?'
-          ],
-          negotiation: 'L\'acompte de 30% peut être ramené à 20%. Demandez un échelonnement des paiements selon l\'avancement des travaux.'
-        },
-        priceComparison: {
-          low: Math.floor(Math.random() * 3000) + 10000,
-          current: parseInt(projectData.budget?.split('-')[1]?.replace(/[^0-9]/g, '') || '15000'),
-          high: Math.floor(Math.random() * 5000) + 18000
+      console.log('[Analyze] Starting upload with user:', user.id);
+      console.log('[Analyze] File:', { name: uploadedFile.name, size: uploadedFile.size, type: uploadedFile.type });
+      console.log('[Analyze] Project data:', projectData);
+      console.log('[Analyze] devisService:', devisService);
+      console.log('[Analyze] About to call uploadDevis...');
+
+      // Upload devis and start analysis
+      setAnalysisProgress(prev => [...prev, 'Upload du devis en cours...']);
+      console.log('[Analyze] Calling uploadDevis NOW...');
+
+      // Add timeout to avoid infinite wait
+      const uploadPromise = devisService.uploadDevis(
+        user.id,
+        uploadedFile,
+        projectData.name,
+        {
+          typeTravaux: projectData.type,
+          budget: projectData.budget,
+          surface: projectData.surface ? parseFloat(projectData.surface) : undefined,
+          description: projectData.description,
+          delaiSouhaite: projectData.startDate,
+          urgence: projectData.urgency,
+          contraintes: projectData.constraints,
+        }
+      );
+
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Upload timeout after 30 seconds')), 30000);
+      });
+
+      const devis = await Promise.race([uploadPromise, timeoutPromise]);
+
+      setCurrentDevisId(devis.id);
+      setAnalysisProgress(prev => [...prev, 'Devis uploadé avec succès', 'Analyse TORP en cours...']);
+
+      // Poll for analysis completion
+      const checkAnalysisStatus = async () => {
+        try {
+          // Use direct REST API to avoid SDK blocking issues
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          const supabaseAuthKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
+          const sessionData = localStorage.getItem(supabaseAuthKey);
+
+          let accessToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
+          if (sessionData) {
+            try {
+              const session = JSON.parse(sessionData);
+              accessToken = session.access_token;
+            } catch (e) {
+              console.error('Failed to parse session:', e);
+            }
+          }
+
+          const queryUrl = `${supabaseUrl}/rest/v1/devis?id=eq.${devis.id}&select=*`;
+          const response = await fetch(queryUrl, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+            },
+          });
+
+          if (!response.ok) {
+            console.error('Error checking analysis status:', response.status);
+            return null;
+          }
+
+          const dataArray = await response.json();
+          return dataArray[0] || null;
+        } catch (error) {
+          console.error('Error checking analysis status:', error);
+          return null;
         }
       };
 
-      const updatedProject = {
-        ...newProject,
-        status: 'completed' as const,
-        score,
-        grade,
-        analysisResult
-      };
+      // Poll every 3 seconds
+      const pollInterval = setInterval(async () => {
+        const devisData = await checkAnalysisStatus();
 
-      addProject(updatedProject);
-      setCurrentProject(updatedProject);
+        if (!devisData) return;
+
+        console.log('[Analyze] Polling status:', devisData.status);
+
+        // Update progress based on status
+        if (devisData.status === 'analyzing') {
+          // Show random progress step
+          const steps = [
+            'Extraction des données du devis...',
+            'Analyse de l\'entreprise (250 pts)...',
+            'Vérification des prix du marché (300 pts)...',
+            'Analyse de la complétude technique (200 pts)...',
+            'Vérification de la conformité (150 pts)...',
+            'Analyse des délais (100 pts)...',
+            'Génération de la synthèse finale...'
+          ];
+          const randomStep = steps[Math.floor(Math.random() * steps.length)];
+          setAnalysisProgress(prev => {
+            if (!prev.includes(randomStep)) {
+              return [...prev, randomStep];
+            }
+            return prev;
+          });
+        } else if (devisData.status === 'analyzed') {
+          console.log('[Analyze] Analysis complete! Navigating to results...');
+          clearInterval(pollInterval);
+          setAnalysisProgress(prev => [...prev, 'Analyse terminée !']);
+
+          // Navigate directly to results page - let it load the data
+          setIsAnalyzing(false);
+
+          toast({
+            title: 'Analyse terminée !',
+            description: `Score TORP: ${devisData.score_total}/1000 (${devisData.grade})`,
+          });
+
+          navigate(`/results?devisId=${devis.id}`);
+        } else if (devisData.status === 'uploaded') {
+          // Still waiting for analysis to start
+          setAnalysisProgress(prev => {
+            const lastMsg = 'En attente de traitement...';
+            if (!prev.includes(lastMsg)) {
+              return [...prev, lastMsg];
+            }
+            return prev;
+          });
+        }
+      }, 3000);
+
+      // Timeout after 5 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        if (isAnalyzing) {
+          setIsAnalyzing(false);
+          toast({
+            title: 'Délai d\'analyse dépassé',
+            description: 'L\'analyse prend plus de temps que prévu. Consultez votre dashboard.',
+            variant: 'destructive'
+          });
+          navigate('/dashboard');
+        }
+      }, 300000);
+
+    } catch (error) {
+      console.error('[Analyze] ===== CATCH BLOCK REACHED =====');
+      console.error('[Analyze] Analysis error:', error);
+      console.error('[Analyze] Error type:', typeof error);
+      console.error('[Analyze] Error message:', error instanceof Error ? error.message : String(error));
+      console.error('[Analyze] Error stack:', error instanceof Error ? error.stack : 'No stack');
+
       setIsAnalyzing(false);
-
       toast({
-        title: 'Analyse terminée !',
-        description: `Votre devis a obtenu la note ${grade} (${score}/100)`,
+        title: 'Erreur d\'analyse',
+        description: error instanceof Error ? error.message : 'Une erreur est survenue lors de l\'analyse',
+        variant: 'destructive'
       });
-
-      navigate('/results');
-    }, 3000);
+    }
   };
 
   if (isAnalyzing) {
@@ -186,10 +293,14 @@ export default function Analyze() {
             </div>
 
             <div className="space-y-4">
-              {['Extraction des données du document', 'Vérification de l\'entreprise', 'Analyse des prix et prestations', 'Génération du rapport'].map((step, index) => (
-                <div key={index} className="flex items-center space-x-3 p-4 bg-card rounded-lg">
+              {analysisProgress.map((step, index) => (
+                <div key={index} className="flex items-center space-x-3 p-4 bg-card rounded-lg animate-fade-in">
                   <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-                    <CheckCircle className="w-4 h-4 text-white" />
+                    {index === analysisProgress.length - 1 && !step.includes('terminée') ? (
+                      <Loader2 className="w-4 h-4 text-white animate-spin" />
+                    ) : (
+                      <CheckCircle className="w-4 h-4 text-white" />
+                    )}
                   </div>
                   <span className="text-foreground font-medium">{step}</span>
                 </div>
@@ -309,10 +420,8 @@ export default function Analyze() {
 
                 {uploadedFile && (
                 <div className="mt-8 text-center">
-                  <Button onClick={() => navigate('/formula-picker', { 
-                    state: { uploadedFile, projectData } 
-                  })} size="lg">
-                    Choisir ma formule d'analyse
+                  <Button onClick={() => setStep(2)} size="lg">
+                    Continuer vers les détails du projet
                   </Button>
                 </div>
                 )}

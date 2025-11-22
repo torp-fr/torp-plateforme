@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { authService } from '@/services/api/supabase/auth.service';
 
 // User types - Nouveau modèle commercial TORP
 export type UserType = 'B2C' | 'B2B' | 'B2G' | 'B2B2C' | 'admin';
@@ -176,9 +177,37 @@ const mockProjects: Project[] = [
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [userType, setUserType] = useState<UserType>('B2C');
-  const [projects, setProjects] = useState<Project[]>(mockProjects);
+  const [projects, setProjects] = useState<Project[]>([]); // Start with empty array - will load from Supabase
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // Check for existing session on mount and listen for auth changes
+  useEffect(() => {
+    // Check initial session
+    authService.getCurrentUser().then(currentUser => {
+      if (currentUser) {
+        setUser(currentUser);
+        setUserType(currentUser.type);
+      }
+    });
+
+    // Listen for auth state changes
+    const { data: { subscription } } = authService.onAuthStateChange((sessionUser) => {
+      setUser(sessionUser);
+      if (sessionUser) {
+        setUserType(sessionUser.type);
+      } else {
+        // User logged out - reset state
+        setProjects([]);
+        setCurrentProject(null);
+      }
+    });
+
+    // Cleanup subscription on unmount
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, []);
 
   const addProject = (project: Project) => {
     setProjects(prev => [project, ...prev]);

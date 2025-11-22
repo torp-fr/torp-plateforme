@@ -1,0 +1,226 @@
+{
+  "name": "TORP Devis Analysis Pipeline - RAG Enhanced",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "torp-trigger",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "hours", "hoursInterval": 1 }] }
+      },
+      "id": "schedule-trigger",
+      "name": "Hourly Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [200, 500]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/functions/v1/webhook-n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $env.SUPABASE_ANON_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"action\": \"list-pending\",\n  \"webhookSecret\": \"{{ $env.N8N_WEBHOOK_SECRET }}\",\n  \"payload\": { \"limit\": 10 }\n}"
+      },
+      "id": "get-pending-devis",
+      "name": "Get Pending Devis",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [450, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [{ "value1": "={{ $json.devis?.length }}", "operation": "larger", "value2": 0 }]
+        }
+      },
+      "id": "has-pending",
+      "name": "Has Pending?",
+      "type": "n8n-nodes-base.if",
+      "position": [650, 400]
+    },
+    {
+      "parameters": { "batchSize": 1, "options": {} },
+      "id": "split-devis",
+      "name": "Process Each Devis",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/functions/v1/webhook-n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $env.SUPABASE_ANON_KEY }}" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"action\": \"update-status\",\n  \"webhookSecret\": \"{{ $env.N8N_WEBHOOK_SECRET }}\",\n  \"payload\": {\n    \"devisId\": \"{{ $json.id }}\",\n    \"status\": \"en_cours_analyse\"\n  }\n}"
+      },
+      "id": "mark-processing",
+      "name": "Mark Processing",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/functions/v1/extract-pdf",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $env.SUPABASE_ANON_KEY }}" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{ \"storagePath\": \"{{ $node['Process Each Devis'].json.fichier_url }}\" }"
+      },
+      "id": "extract-pdf",
+      "name": "Extract PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/functions/v1/analyze-devis",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $env.SUPABASE_ANON_KEY }}" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"devisText\": {{ JSON.stringify($json.text) }},\n  \"devisId\": \"{{ $node['Process Each Devis'].json.id }}\",\n  \"skipRAG\": false\n}",
+        "options": { "timeout": 120000 }
+      },
+      "id": "analyze-rag",
+      "name": "RAG Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1450, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{ $json.success }}", "value2": true }]
+        }
+      },
+      "id": "analysis-success",
+      "name": "Analysis OK?",
+      "type": "n8n-nodes-base.if",
+      "position": [1650, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [{ "value1": "={{ $json.analysis?.scores?.total }}", "operation": "largerEqual", "value2": 700 }]
+        }
+      },
+      "id": "score-check",
+      "name": "Score >= 700?",
+      "type": "n8n-nodes-base.if",
+      "position": [1850, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const analysis = $input.first().json.analysis;\nconst devis = $node['Process Each Devis'].first().json;\n\nreturn [{\n  json: {\n    type: 'approved',\n    devisId: devis.id,\n    score: analysis.scores.total,\n    entreprise: analysis.details?.entreprise?.certifications || [],\n    aides: analysis.aides?.eligibles || [],\n    montantAides: analysis.aides?.montantEstime || 0,\n    recommandations: analysis.recommandations?.slice(0, 3) || [],\n    sources: analysis.ragContext?.sources || [],\n    fiabilite: analysis.ragContext?.fiabilite || 0\n  }\n}];"
+      },
+      "id": "format-approved",
+      "name": "Format Approved",
+      "type": "n8n-nodes-base.code",
+      "position": [2050, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const analysis = $input.first().json.analysis;\nconst devis = $node['Process Each Devis'].first().json;\n\nconst alertes = [\n  ...(analysis.details?.entreprise?.alertes || []),\n  ...(analysis.details?.conformite?.alertes || [])\n];\n\nconst prixProblemes = analysis.details?.prix?.comparaisonMarche?.filter(\n  p => p.analyse?.includes('élevé') || p.analyse?.includes('bas')\n) || [];\n\nreturn [{\n  json: {\n    type: 'review_needed',\n    devisId: devis.id,\n    score: analysis.scores.total,\n    alertes: alertes,\n    prixProblemes: prixProblemes.map(p => `${p.poste}: ${p.analyse}`),\n    recommandations: analysis.recommandations || [],\n    sources: analysis.ragContext?.sources || []\n  }\n}];"
+      },
+      "id": "format-review",
+      "name": "Format Review",
+      "type": "n8n-nodes-base.code",
+      "position": [2050, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const error = $input.first().json.error || 'Unknown error';\nconst devis = $node['Process Each Devis'].first().json;\n\nreturn [{\n  json: {\n    type: 'error',\n    devisId: devis.id,\n    error: error\n  }\n}];"
+      },
+      "id": "format-error",
+      "name": "Format Error",
+      "type": "n8n-nodes-base.code",
+      "position": [1850, 550]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/functions/v1/webhook-n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $env.SUPABASE_ANON_KEY }}" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"action\": \"notify\",\n  \"webhookSecret\": \"{{ $env.N8N_WEBHOOK_SECRET }}\",\n  \"payload\": {{ JSON.stringify($json) }}\n}"
+      },
+      "id": "send-notification",
+      "name": "Send Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [2300, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, processed: $node['Process Each Devis'].json.id, result: $json } }}"
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [2500, 400]
+    },
+    {
+      "parameters": {},
+      "id": "no-pending",
+      "name": "No Pending",
+      "type": "n8n-nodes-base.noOp",
+      "position": [850, 550]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": { "main": [[{ "node": "Get Pending Devis", "type": "main", "index": 0 }]] },
+    "Hourly Check": { "main": [[{ "node": "Get Pending Devis", "type": "main", "index": 0 }]] },
+    "Get Pending Devis": { "main": [[{ "node": "Has Pending?", "type": "main", "index": 0 }]] },
+    "Has Pending?": {
+      "main": [
+        [{ "node": "Process Each Devis", "type": "main", "index": 0 }],
+        [{ "node": "No Pending", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process Each Devis": { "main": [[{ "node": "Mark Processing", "type": "main", "index": 0 }]] },
+    "Mark Processing": { "main": [[{ "node": "Extract PDF", "type": "main", "index": 0 }]] },
+    "Extract PDF": { "main": [[{ "node": "RAG Analysis", "type": "main", "index": 0 }]] },
+    "RAG Analysis": { "main": [[{ "node": "Analysis OK?", "type": "main", "index": 0 }]] },
+    "Analysis OK?": {
+      "main": [
+        [{ "node": "Score >= 700?", "type": "main", "index": 0 }],
+        [{ "node": "Format Error", "type": "main", "index": 0 }]
+      ]
+    },
+    "Score >= 700?": {
+      "main": [
+        [{ "node": "Format Approved", "type": "main", "index": 0 }],
+        [{ "node": "Format Review", "type": "main", "index": 0 }]
+      ]
+    },
+    "Format Approved": { "main": [[{ "node": "Send Notification", "type": "main", "index": 0 }]] },
+    "Format Review": { "main": [[{ "node": "Send Notification", "type": "main", "index": 0 }]] },
+    "Format Error": { "main": [[{ "node": "Send Notification", "type": "main", "index": 0 }]] },
+    "Send Notification": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

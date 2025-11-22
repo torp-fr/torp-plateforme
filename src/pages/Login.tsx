@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Building, Users, ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import torpLogo from '@/assets/torp-logo-red.png';
+import { authService } from '@/services/api';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -23,25 +24,31 @@ export default function Login() {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulation de connexion
-    setTimeout(() => {
-      const mockUser = {
-        id: '1',
+    try {
+      // Login using real Supabase auth service
+      const response = await authService.login({
         email,
-        name: userType === 'B2C' ? 'Jean Dupont' : 'Marie Martin',
-        type: userType,
-        company: (userType === 'B2B' || userType === 'B2B2C') ? 'BTP Excellence SARL' : undefined
-      };
+        password,
+      });
 
-      setUser(mockUser);
+      setUser(response.user);
+
       toast({
         title: 'Connexion réussie',
-        description: `Bienvenue ${mockUser.name}!`,
+        description: `Bienvenue ${response.user.name || response.user.email}!`,
       });
-      
-      setIsLoading(false);
+
       navigate('/dashboard');
-    }, 1500);
+    } catch (error) {
+      console.error('Login error:', error);
+      toast({
+        title: 'Erreur de connexion',
+        description: error instanceof Error ? error.message : 'Email ou mot de passe incorrect',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -226,9 +233,11 @@ export default function Login() {
             <div className="mt-6 pt-4 border-t text-center">
               <p className="text-sm text-muted-foreground">
                 Pas encore de compte ?{' '}
-                <Button variant="link" className="p-0 h-auto">
-                  Créer un compte
-                </Button>
+                <Link to="/register">
+                  <Button variant="link" className="p-0 h-auto">
+                    Créer un compte
+                  </Button>
+                </Link>
               </p>
             </div>
           </CardContent>
