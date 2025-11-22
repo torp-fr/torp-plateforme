@@ -233,6 +233,8 @@ async function extractTextSmart(
   if (isPdf) {
     // Stratégie 1 : Microservice OCR (PaddleOCR) - PRIORITAIRE pour production
     const ocrServiceUrl = Deno.env.get('OCR_SERVICE_URL');
+    console.log(`[OCR DEBUG] OCR_SERVICE_URL: ${ocrServiceUrl ? 'CONFIGURED' : 'NOT CONFIGURED'}, sizeMB: ${sizeMB}`);
+
     if (ocrServiceUrl && sizeMB < 50) {
       try {
         console.log('[OCR] Strategy: Microservice PaddleOCR (production quality)');
@@ -245,6 +247,8 @@ async function extractTextSmart(
         warnings.push(`Microservice OCR échoué: ${error}`);
         // Continue avec fallbacks
       }
+    } else {
+      console.log(`[OCR DEBUG] Skipping microservice - URL: ${!!ocrServiceUrl}, Size check: ${sizeMB < 50}`);
     }
 
     // Stratégie 2 : OCR.space pour petits PDFs (fallback rapide)
