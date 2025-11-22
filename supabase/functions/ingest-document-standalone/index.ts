@@ -118,31 +118,46 @@ async function ocrWithMicroservice(buffer: ArrayBuffer, mimeType: string): Promi
   console.log(`[OCR Microservice] Calling ${ocrServiceUrl}...`);
   const base64Content = btoa(String.fromCharCode(...new Uint8Array(buffer)));
 
-  const response = await fetch(`${ocrServiceUrl}/ocr`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      content: base64Content,
-      mime_type: mimeType,
-      max_pages: 100  // Augmenter la limite pour DTU longs
-    }),
-  });
+  // Timeout de 180 secondes pour cold start Render (~60s) + OCR processing (~60-120s)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 180000);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`OCR Microservice: ${response.status} - ${errorText}`);
+  try {
+    const response = await fetch(`${ocrServiceUrl}/ocr`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        content: base64Content,
+        mime_type: mimeType,
+        max_pages: 100  // Augmenter la limite pour DTU longs
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OCR Microservice: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log(`[OCR Microservice] Extracted ${data.text.length} chars from ${data.pages_processed} pages`);
+
+    if (data.warnings && data.warnings.length > 0) {
+      console.log(`[OCR Microservice] Warnings: ${data.warnings.join(', ')}`);
+    }
+
+    return data.text;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('OCR Microservice timeout (>180s) - Service Render probablement endormi');
+    }
+    throw error;
   }
-
-  const data = await response.json();
-  console.log(`[OCR Microservice] Extracted ${data.text.length} chars from ${data.pages_processed} pages`);
-
-  if (data.warnings && data.warnings.length > 0) {
-    console.log(`[OCR Microservice] Warnings: ${data.warnings.join(', ')}`);
-  }
-
-  return data.text;
 }
 
 // ============================================
