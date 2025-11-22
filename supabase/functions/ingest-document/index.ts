@@ -1,21 +1,17 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
-import {
-  generateEmbeddingsBatch,
-  chunkText,
-  cleanExtractedText,
-} from '../_shared/embeddings.ts';
+import { chunkText, cleanExtractedText, generateEmbeddingsBatch } from '../_shared/embeddings.ts';
 
 /**
- * Architecture OCR robuste avec fallbacks multiples
+ * Version simplifiée et robuste de l'ingestion OCR
  *
- * Stratégies d'extraction par ordre de priorité :
- * 1. Images : OpenAI Vision (GPT-4o) - haute qualité
- * 2. PDFs petits (<1MB, <5 pages) : OCR.space
- * 3. PDFs moyens : Conversion pdf.co + OpenAI Vision
- * 4. PDFs complexes : Extraction texte basique + warning
- * 5. Fallback final : Erreur documentée avec suggestions
+ * STRATÉGIES (sans dépendances externes qui échouent) :
+ * 1. Images → OpenAI Vision GPT-4o (haute qualité, fiable)
+ * 2. PDFs → Extraction texte basique (rapide, toujours disponible)
+ *
+ * ✅ Plus de dépendances à OCR.space, pdf.co, Google Vision, ou microservices
+ * ✅ Code simple et robuste qui ne plante pas
  */
 
 // ============================================
@@ -35,9 +31,10 @@ function bufferToBase64(buffer: ArrayBuffer): string {
 }
 
 // ============================================
-// STRATÉGIE 1 : OpenAI Vision (Images + fallback PDF)
+// OpenAI Vision pour images (GPT-4o)
 // ============================================
 async function ocrWithOpenAIVision(buffer: ArrayBuffer, mimeType: string, apiKey: string): Promise<string> {
+  console.log('[OCR] Using OpenAI Vision GPT-4o');
   const base64 = bufferToBase64(buffer);
   const mediaType = mimeType.startsWith('image/') ? mimeType : 'image/png';
 
@@ -74,7 +71,7 @@ Retourne UNIQUEMENT le texte extrait.`
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`OpenAI Vision: ${response.status} - ${error}`);
+    throw new Error(`OpenAI Vision API error ${response.status}: ${error}`);
   }
 
   const data = await response.json();
@@ -82,199 +79,15 @@ Retourne UNIQUEMENT le texte extrait.`
 }
 
 // ============================================
-// STRATÉGIE 2 : OCR.space (rapide, limites : 1MB, 3 pages)
+// Extraction PDF basique (fallback robuste)
 // ============================================
-async function ocrWithOCRSpace(buffer: ArrayBuffer, mimeType: string, apiKey: string): Promise<string> {
-  const base64 = bufferToBase64(buffer);
-  const formData = new FormData();
-
-  formData.append('base64Image', `data:${mimeType};base64,${base64}`);
-  formData.append('language', 'fre');
-  formData.append('isOverlayRequired', 'false');
-  formData.append('detectOrientation', 'true');
-  formData.append('scale', 'true');
-  formData.append('OCREngine', '2');
-
-  const response = await fetch('https://api.ocr.space/parse/image', {
-    method: 'POST',
-    headers: { 'apikey': apiKey },
-    body: formData,
-  });
-
-  if (!response.ok) throw new Error(`OCR.space HTTP ${response.status}`);
-
-  const data = await response.json();
-  if (data.IsErroredOnProcessing) {
-    throw new Error(`OCR.space: ${data.ErrorMessage?.[0] || 'Unknown error'}`);
-  }
-
-  return data.ParsedResults?.map((r: any) => r.ParsedText).join('\n\n---\n\n') || '';
-}
-
-// ============================================
-// STRATÉGIE 3 : pdf.co conversion + OpenAI Vision
-// ============================================
-async function convertPdfWithPdfCo(buffer: ArrayBuffer, apiKey: string): Promise<string[]> {
-  console.log('[pdf.co] Starting PDF upload...');
-  const base64Pdf = bufferToBase64(buffer);
-
-  // Upload
-  const uploadResp = await fetch('https://api.pdf.co/v1/file/upload/base64', {
-    method: 'POST',
-    headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ base64: base64Pdf, name: 'doc.pdf' }),
-  });
-
-  if (!uploadResp.ok) {
-    throw new Error(`pdf.co upload: ${uploadResp.status} - ${await uploadResp.text()}`);
-  }
-
-  const uploadData = await uploadResp.json();
-  if (uploadData.error || !uploadData.url) {
-    throw new Error(`pdf.co upload failed: ${uploadData.message || 'No URL'}`);
-  }
-
-  console.log('[pdf.co] PDF uploaded, converting to images...');
-
-  // Convert
-  const convertResp = await fetch('https://api.pdf.co/v1/pdf/convert/to/png', {
-    method: 'POST',
-    headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: uploadData.url, pages: '0-9', async: false }),
-  });
-
-  if (!convertResp.ok) {
-    throw new Error(`pdf.co convert: ${convertResp.status} - ${await convertResp.text()}`);
-  }
-
-  const convertData = await convertResp.json();
-  if (convertData.error) throw new Error(`pdf.co: ${convertData.message}`);
-
-  console.log(`[pdf.co] Converted to ${convertData.urls?.length || 0} images`);
-  return convertData.urls || [];
-}
-
-// ============================================
-// ORCHESTRATEUR OCR avec fallbacks intelligents
-// ============================================
-async function extractTextSmart(
-  buffer: ArrayBuffer,
-  mimeType: string,
-  fileSize: number,
-  fileName: string
-): Promise<{ text: string; method: string; warnings: string[] }> {
-  const warnings: string[] = [];
-  const openaiKey = Deno.env.get('OPENAI_API_KEY');
-  const ocrSpaceKey = Deno.env.get('OCRSPACE_API_KEY');
-  const pdfCoKey = Deno.env.get('PDFCO_API_KEY');
-
-  const isImage = mimeType.startsWith('image/');
-  const isPdf = mimeType === 'application/pdf';
-  const sizeMB = fileSize / 1024 / 1024;
-
-  console.log(`[OCR] File: ${fileName}, Type: ${mimeType}, Size: ${sizeMB.toFixed(2)}MB`);
-
-  // ========== IMAGES ==========
-  if (isImage) {
-    if (openaiKey) {
-      try {
-        console.log('[OCR] Strategy: OpenAI Vision (image)');
-        const text = await ocrWithOpenAIVision(buffer, mimeType, openaiKey);
-        return { text, method: 'OpenAI Vision', warnings };
-      } catch (error) {
-        console.error('[OCR] OpenAI Vision failed:', error);
-        warnings.push(`OpenAI Vision échoué: ${error}`);
-      }
-    }
-
-    if (ocrSpaceKey && sizeMB < 1) {
-      try {
-        console.log('[OCR] Strategy: OCR.space (image fallback)');
-        const text = await ocrWithOCRSpace(buffer, mimeType, ocrSpaceKey);
-        warnings.push('Utilisé OCR.space (fallback) - qualité moyenne');
-        return { text, method: 'OCR.space', warnings };
-      } catch (error) {
-        console.error('[OCR] OCR.space failed:', error);
-        warnings.push(`OCR.space échoué: ${error}`);
-      }
-    }
-
-    throw new Error('Aucun service OCR disponible pour les images');
-  }
-
-  // ========== PDFs ==========
-  if (isPdf) {
-    // Stratégie 1 : OCR.space pour petits PDFs
-    if (ocrSpaceKey && sizeMB < 1) {
-      try {
-        console.log('[OCR] Strategy: OCR.space (small PDF)');
-        const text = await ocrWithOCRSpace(buffer, mimeType, ocrSpaceKey);
-        warnings.push('OCR.space limite à 3 pages - utilisez images pour documents longs');
-        return { text, method: 'OCR.space', warnings };
-      } catch (error) {
-        console.error('[OCR] OCR.space failed:', error);
-        warnings.push(`OCR.space échoué: ${error}`);
-      }
-    }
-
-    // Stratégie 2 : pdf.co + OpenAI Vision
-    if (pdfCoKey && openaiKey && sizeMB < 5) {
-      try {
-        console.log('[OCR] Strategy: pdf.co + OpenAI Vision');
-        const imageUrls = await convertPdfWithPdfCo(buffer, pdfCoKey);
-
-        const pageTexts: string[] = [];
-        for (let i = 0; i < Math.min(imageUrls.length, 10); i++) {
-          console.log(`[OCR] Processing page ${i + 1}/${imageUrls.length}`);
-          const imgResp = await fetch(imageUrls[i]);
-          const imgBuffer = await imgResp.arrayBuffer();
-          const pageText = await ocrWithOpenAIVision(imgBuffer, 'image/png', openaiKey);
-          pageTexts.push(`## Page ${i + 1}\n\n${pageText}`);
-        }
-
-        if (imageUrls.length > 10) {
-          warnings.push(`Document ${imageUrls.length} pages - seules 10 premières pages traitées`);
-        }
-
-        return { text: pageTexts.join('\n\n---\n\n'), method: 'pdf.co + OpenAI Vision', warnings };
-      } catch (error) {
-        console.error('[OCR] pdf.co conversion failed:', error);
-        warnings.push(`Conversion PDF échouée: ${error}`);
-      }
-    }
-
-    // Stratégie 3 : Extraction texte basique (fallback ultime)
-    console.log('[OCR] Strategy: Basic PDF text extraction (fallback)');
-    const basicText = extractBasicPdfText(buffer);
-
-    if (basicText.length < 100) {
-      warnings.push('ATTENTION: Extraction limitée - convertissez en images PNG pour meilleure qualité');
-      return {
-        text: `[Extraction PDF limitée - ${basicText.length} caractères extraits]\n\nConvertissez ce PDF en images PNG (1 image par page) puis uploadez les images pour un OCR complet.\n\n${basicText}`,
-        method: 'Extraction basique (fallback)',
-        warnings
-      };
-    }
-
-    warnings.push('Extraction texte basique - peut manquer tableaux/images');
-    return { text: basicText, method: 'Extraction basique', warnings };
-  }
-
-  // Texte brut
-  return {
-    text: new TextDecoder().decode(new Uint8Array(buffer)),
-    method: 'Texte brut',
-    warnings: []
-  };
-}
-
-// Extraction PDF basique (fallback)
 function extractBasicPdfText(buffer: ArrayBuffer): string {
+  console.log('[OCR] Using basic PDF text extraction');
   const bytes = new Uint8Array(buffer);
   const text = new TextDecoder('latin1').decode(bytes);
   const parts: string[] = [];
 
-  // Extraire les streams de texte
+  // Extraire les streams de texte PDF
   const streamRegex = /stream\s*([\s\S]*?)\s*endstream/g;
   let match;
   while ((match = streamRegex.exec(text)) !== null) {
@@ -288,6 +101,7 @@ function extractBasicPdfText(buffer: ArrayBuffer): string {
     }
   }
 
+  // Fallback: extraction ASCII brute
   if (parts.length === 0) {
     const asciiMatches = text.match(/[\x20-\x7E]{10,}/g);
     return asciiMatches?.filter(s => !s.includes('/') && !s.includes('<')).join(' ') || '';
@@ -297,11 +111,77 @@ function extractBasicPdfText(buffer: ArrayBuffer): string {
 }
 
 // ============================================
-// HANDLERS
+// ORCHESTRATEUR SIMPLIFIÉ
+// ============================================
+async function extractTextSmart(
+  buffer: ArrayBuffer,
+  mimeType: string,
+  fileSize: number,
+  fileName: string
+): Promise<{ text: string; method: string; warnings: string[] }> {
+  const warnings: string[] = [];
+  const openaiKey = Deno.env.get('OPENAI_API_KEY');
+  const sizeMB = fileSize / 1024 / 1024;
+
+  console.log(`[OCR] Processing: ${fileName} (${mimeType}, ${sizeMB.toFixed(2)}MB)`);
+
+  // ========== IMAGES ==========
+  if (mimeType.startsWith('image/')) {
+    if (!openaiKey) {
+      throw new Error('OPENAI_API_KEY non configurée - requis pour les images');
+    }
+
+    try {
+      const text = await ocrWithOpenAIVision(buffer, mimeType, openaiKey);
+      console.log(`[OCR] ✅ Image processed successfully (${text.length} chars)`);
+      return { text, method: 'OpenAI Vision GPT-4o', warnings };
+    } catch (error) {
+      console.error('[OCR] ❌ OpenAI Vision failed:', error);
+      throw new Error(`Échec OCR image: ${error}`);
+    }
+  }
+
+  // ========== PDFs ==========
+  if (mimeType === 'application/pdf') {
+    // Stratégie simple : extraction texte basique
+    const basicText = extractBasicPdfText(buffer);
+
+    if (basicText.length < 100) {
+      warnings.push('Extraction PDF limitée - document scanné ou avec peu de texte');
+      console.log(`[OCR] ⚠️  PDF extraction limited (${basicText.length} chars)`);
+      return {
+        text: `[Document PDF avec extraction limitée - ${basicText.length} caractères]\n\n` +
+              `Pour un meilleur résultat :\n` +
+              `1. Convertissez ce PDF en images (1 image PNG par page)\n` +
+              `2. Uploadez les images pour utiliser OpenAI Vision\n\n` +
+              `Texte extrait :\n${basicText || '[Aucun texte détecté]'}`,
+        method: 'Extraction PDF basique',
+        warnings
+      };
+    }
+
+    console.log(`[OCR] ✅ PDF processed successfully (${basicText.length} chars)`);
+    if (basicText.length < 500) {
+      warnings.push('Extraction basique - peut manquer certains éléments visuels');
+    }
+    return { text: basicText, method: 'Extraction PDF basique', warnings };
+  }
+
+  // ========== TEXTE BRUT ==========
+  console.log('[OCR] Processing as plain text');
+  return {
+    text: new TextDecoder().decode(new Uint8Array(buffer)),
+    method: 'Texte brut',
+    warnings: []
+  };
+}
+
+// ============================================
+// MAIN HANDLER
 // ============================================
 serve(async (req) => {
-  const corsResp = handleCors(req);
-  if (corsResp) return corsResp;
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -311,33 +191,62 @@ serve(async (req) => {
     const contentType = req.headers.get('content-type') || '';
 
     if (contentType.includes('multipart/form-data')) {
-      return handleUpload(req, supabase);
+      return handleFileUpload(req, supabase);
     }
 
     const body = await req.json();
     const { action } = body;
 
     switch (action) {
-      case 'process': return handleProcess(body, supabase);
-      case 'index': return handleIndex(body, supabase);
-      case 'status': return handleStatus(body, supabase);
-      case 'list': return handleList(body, supabase);
-      case 'delete': return handleDelete(body, supabase);
-      case 'stats': return handleStats(supabase);
-      default: return errorResponse(`Action inconnue: ${action}`);
+      case 'process':
+        return handleProcess(body, supabase);
+      case 'index':
+        return handleIndex(body, supabase);
+      case 'status':
+        return handleStatus(body, supabase);
+      case 'list':
+        return handleList(body, supabase);
+      case 'delete':
+        return handleDelete(body, supabase);
+      case 'stats':
+        return handleStats(supabase);
+      default:
+        return errorResponse(`Action inconnue: ${action}`);
     }
   } catch (error) {
-    console.error('[ERROR]', error);
+    console.error('❌ Ingestion error:', error);
     return errorResponse(String(error), 500);
   }
 });
 
-async function handleUpload(req: Request, supabase: any) {
+// ============================================
+// HANDLERS
+// ============================================
+async function handleFileUpload(req: Request, supabase: any) {
   const formData = await req.formData();
   const file = formData.get('file') as File;
   const metadata = JSON.parse(formData.get('metadata') as string || '{}');
 
-  if (!file) return errorResponse('Fichier requis');
+  if (!file) {
+    return errorResponse('Fichier requis');
+  }
+
+  // Valider le type de fichier
+  const allowedTypes = [
+    'application/pdf',
+    'text/plain',
+    'text/markdown',
+    'image/png',
+    'image/jpeg',
+    'image/jpg',
+    'image/webp',
+    'image/gif'
+  ];
+  const fileType = file.type || 'application/octet-stream';
+  if (!allowedTypes.some(t => fileType.includes(t.split('/')[1])) &&
+      !file.name.match(/\.(pdf|txt|md|png|jpg|jpeg|webp|gif)$/i)) {
+    return errorResponse('Type non supporté. Utilisez PDF, images (PNG/JPG) ou TXT.');
+  }
 
   const timestamp = Date.now();
   const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
@@ -350,7 +259,9 @@ async function handleUpload(req: Request, supabase: any) {
   if (uploadError) {
     if (uploadError.message?.includes('not found')) {
       await supabase.storage.createBucket('documents', { public: false });
-      const { error: retryError } = await supabase.storage.from('documents').upload(storagePath, file);
+      const { error: retryError } = await supabase.storage
+        .from('documents')
+        .upload(storagePath, file);
       if (retryError) throw retryError;
     } else {
       throw uploadError;
@@ -376,7 +287,11 @@ async function handleUpload(req: Request, supabase: any) {
 
   if (dbError) throw dbError;
 
-  return successResponse({ message: 'Document uploadé', documentId: doc.id, document: doc });
+  return successResponse({
+    message: 'Document uploadé',
+    documentId: doc.id,
+    document: doc
+  });
 }
 
 async function handleProcess(body: any, supabase: any) {
@@ -391,7 +306,9 @@ async function handleProcess(body: any, supabase: any) {
 
   if (fetchError || !doc) return errorResponse('Document non trouvé');
 
-  await supabase.from('knowledge_documents').update({ status: 'processing' }).eq('id', documentId);
+  await supabase.from('knowledge_documents')
+    .update({ status: 'processing' })
+    .eq('id', documentId);
 
   try {
     const { data: fileData, error: dlError } = await supabase.storage
@@ -419,10 +336,17 @@ async function handleProcess(body: any, supabase: any) {
       metadata: { startChar: chunk.startChar, endChar: chunk.endChar, warnings, method }
     }));
 
-    const { error: insertError } = await supabase.from('knowledge_chunks').insert(chunkData);
+    const { error: insertError } = await supabase
+      .from('knowledge_chunks')
+      .insert(chunkData);
+
     if (insertError) throw insertError;
 
-    await supabase.from('knowledge_documents').update({ chunks_count: chunks.length }).eq('id', documentId);
+    await supabase.from('knowledge_documents')
+      .update({ chunks_count: chunks.length, status: 'processed' })
+      .eq('id', documentId);
+
+    console.log(`✅ Document ${documentId} processed: ${chunks.length} chunks, method: ${method}`);
 
     return successResponse({
       message: 'Document traité',
@@ -433,10 +357,10 @@ async function handleProcess(body: any, supabase: any) {
     });
 
   } catch (error) {
-    await supabase.from('knowledge_documents').update({
-      status: 'error',
-      processing_error: String(error)
-    }).eq('id', documentId);
+    console.error(`❌ Processing failed for document ${documentId}:`, error);
+    await supabase.from('knowledge_documents')
+      .update({ status: 'error', processing_error: String(error) })
+      .eq('id', documentId);
     throw error;
   }
 }
@@ -471,12 +395,17 @@ async function handleIndex(body: any, supabase: any) {
     if (!error) indexed++;
   }
 
-  await supabase.from('knowledge_documents').update({
-    status: 'indexed',
-    indexed_at: new Date().toISOString()
-  }).eq('id', documentId);
+  await supabase.from('knowledge_documents')
+    .update({ status: 'indexed', indexed_at: new Date().toISOString() })
+    .eq('id', documentId);
 
-  return successResponse({ message: 'Document indexé', documentId, chunksIndexed: indexed });
+  console.log(`✅ Document ${documentId} indexed: ${indexed} chunks`);
+
+  return successResponse({
+    message: 'Document indexé',
+    documentId,
+    chunksIndexed: indexed
+  });
 }
 
 async function handleStatus(body: any, supabase: any) {
@@ -530,9 +459,12 @@ async function handleDelete(body: any, supabase: any) {
     await supabase.storage.from('documents').remove([doc.file_path]);
   }
 
-  const { error } = await supabase.from('knowledge_documents').delete().eq('id', documentId);
-  if (error) throw error;
+  const { error } = await supabase
+    .from('knowledge_documents')
+    .delete()
+    .eq('id', documentId);
 
+  if (error) throw error;
   return successResponse({ message: 'Supprimé', documentId });
 }
 
