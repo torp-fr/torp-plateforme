@@ -26,21 +26,20 @@ ENV/
 env/
 .venv
 
-# IDE
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
-.DS_Store
-Thumbs.db
+# Environment variables
+.env
+.env.local
 
 # Logs
 *.log
 
-# Test
-.pytest_cache/
-.coverage
-htmlcov/
+# OS
+.DS_Store
+Thumbs.db

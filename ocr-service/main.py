@@ -1,65 +1,76 @@
 """
-Microservice OCR avec PaddleOCR
-Supporte PDFs et images avec OCR haute qualité pour documents français
+Microservice OCR basé sur PaddleOCR
+Déployable sur Railway, Render, Fly.io, etc.
 """
-
-import base64
-import io
 import os
-from typing import List, Optional
-from fastapi import FastAPI, HTTPException, File, UploadFile
+import io
+import base64
+import logging
+from typing import Optional, List
+from datetime import datetime
+
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from PIL import Image
 from paddleocr import PaddleOCR
 from pdf2image import convert_from_bytes
-from PIL import Image
-import logging
 
 # Configuration du logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=os.getenv('LOG_LEVEL', 'INFO'),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="OCR Service", version="1.0.0")
+# Initialisation de FastAPI
+app = FastAPI(
+    title="OCR Service (PaddleOCR)",
+    description="Service d'OCR pour PDFs et images avec PaddleOCR",
+    version="1.0.0"
+)
 
 # CORS pour permettre les appels depuis Supabase Edge Functions
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # En production, restreindre aux domaines Supabase
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialiser PaddleOCR (cache le modèle)
-# use_angle_cls=True pour détecter l'orientation
-# lang='fr' pour optimiser pour le français
+# Initialisation de PaddleOCR (au démarrage pour éviter de le refaire à chaque requête)
+logger.info("Initialisation de PaddleOCR...")
 ocr_engine = PaddleOCR(use_angle_cls=True, lang='fr', show_log=False)
+logger.info("PaddleOCR initialisé avec succès")
 
-logger.info("PaddleOCR initialized with French language model")
 
+# === MODELS ===
 
 class OCRRequest(BaseModel):
-    """Request model pour OCR avec base64"""
-    content: str  # Base64 encoded file
-    mime_type: str
-    max_pages: Optional[int] = 50  # Limite de pages pour PDFs
+    """Requête OCR"""
+    content: str  # Base64 encoded file content
+    mime_type: str  # application/pdf, image/png, image/jpeg, etc.
+    max_pages: Optional[int] = 50  # Limite de pages pour les PDFs
 
 
 class OCRResponse(BaseModel):
-    """Response model"""
+    """Réponse OCR"""
     text: str
     pages_processed: int
-    method: str
     warnings: List[str] = []
+    processing_time_seconds: float
 
+
+# === HELPERS ===
 
 def ocr_image(image: Image.Image) -> str:
     """
     Applique PaddleOCR sur une image PIL
-
+    
     Args:
-        image: Image PIL
-
+        image: Image PIL à traiter
+        
     Returns:
         Texte extrait
     """
@@ -67,212 +78,190 @@ def ocr_image(image: Image.Image) -> str:
     img_byte_arr = io.BytesIO()
     image.save(img_byte_arr, format='PNG')
     img_byte_arr = img_byte_arr.getvalue()
-
+    
     # Appliquer OCR
     result = ocr_engine.ocr(img_byte_arr, cls=True)
-
-    # Extraire le texte (PaddleOCR retourne [[[bbox], (text, confidence)], ...])
+    
     if not result or not result[0]:
         return ""
-
-    lines = []
-    for line in result[0]:
-        if len(line) >= 2:
-            text = line[1][0]  # (text, confidence)[0]
-            lines.append(text)
-
+    
+    # Extraire le texte de chaque ligne détectée
+    lines = [line[1][0] for line in result[0]]
+    
     return '\n'.join(lines)
-
-
-def process_pdf(pdf_bytes: bytes, max_pages: int = 50) -> tuple[str, int, List[str]]:
-    """
-    Traite un PDF : conversion en images + OCR
-
-    Args:
-        pdf_bytes: Contenu du PDF
-        max_pages: Nombre max de pages à traiter
-
-    Returns:
-        (texte_extrait, nombre_pages, warnings)
-    """
-    warnings = []
-
-    try:
-        # Convertir PDF en images (300 DPI pour bonne qualité)
-        logger.info("Converting PDF to images...")
-        images = convert_from_bytes(pdf_bytes, dpi=300, fmt='png')
-
-        total_pages = len(images)
-        pages_to_process = min(total_pages, max_pages)
-
-        if total_pages > max_pages:
-            warnings.append(f"PDF contient {total_pages} pages, seules {max_pages} premières pages traitées")
-
-        logger.info(f"Processing {pages_to_process} pages...")
-
-        # OCR sur chaque page
-        page_texts = []
-        for i, image in enumerate(images[:pages_to_process]):
-            logger.info(f"OCR page {i+1}/{pages_to_process}")
-            try:
-                text = ocr_image(image)
-                if text.strip():
-                    page_texts.append(f"## Page {i+1}\n\n{text}")
-                else:
-                    warnings.append(f"Page {i+1} : aucun texte détecté")
-            except Exception as e:
-                logger.error(f"Error OCR page {i+1}: {e}")
-                warnings.append(f"Page {i+1} : erreur OCR - {str(e)}")
-
-        full_text = '\n\n---\n\n'.join(page_texts)
-        return full_text, pages_to_process, warnings
-
-    except Exception as e:
-        logger.error(f"PDF processing error: {e}")
-        raise HTTPException(status_code=500, detail=f"Erreur traitement PDF: {str(e)}")
 
 
 def process_image(image_bytes: bytes) -> tuple[str, List[str]]:
     """
     Traite une image : OCR direct
-
+    
     Args:
-        image_bytes: Contenu de l'image
-
+        image_bytes: Bytes de l'image
+        
     Returns:
-        (texte_extrait, warnings)
+        (texte extrait, liste des warnings)
     """
     warnings = []
-
+    
     try:
         image = Image.open(io.BytesIO(image_bytes))
-        logger.info(f"Processing image: {image.size} pixels")
-
+        
+        # Convertir en RGB si nécessaire
+        if image.mode not in ('RGB', 'L'):
+            image = image.convert('RGB')
+        
         text = ocr_image(image)
-
-        if not text.strip():
-            warnings.append("Aucun texte détecté dans l'image")
-
+        
+        if len(text) < 10:
+            warnings.append("Très peu de texte détecté dans l'image")
+        
         return text, warnings
-
+        
     except Exception as e:
-        logger.error(f"Image processing error: {e}")
+        logger.error(f"Erreur traitement image: {e}")
         raise HTTPException(status_code=500, detail=f"Erreur traitement image: {str(e)}")
+
+
+def process_pdf(pdf_bytes: bytes, max_pages: int = 50) -> tuple[str, int, List[str]]:
+    """
+    Traite un PDF : conversion en images + OCR
+    
+    Args:
+        pdf_bytes: Bytes du PDF
+        max_pages: Nombre maximum de pages à traiter
+        
+    Returns:
+        (texte extrait, nombre de pages traitées, liste des warnings)
+    """
+    warnings = []
+    
+    try:
+        # Conversion PDF → Images (300 DPI pour bonne qualité)
+        logger.info(f"Conversion du PDF en images (max {max_pages} pages)...")
+        images = convert_from_bytes(pdf_bytes, dpi=300, fmt='png')
+        
+        total_pages = len(images)
+        pages_to_process = min(total_pages, max_pages)
+        
+        if total_pages > max_pages:
+            warnings.append(f"PDF contient {total_pages} pages, seules les {max_pages} premières seront traitées")
+        
+        logger.info(f"PDF converti : {pages_to_process} pages à traiter")
+        
+        # OCR sur chaque page
+        page_texts = []
+        for i, image in enumerate(images[:pages_to_process], 1):
+            logger.info(f"OCR page {i}/{pages_to_process}...")
+            text = ocr_image(image)
+            
+            if text:
+                page_texts.append(f"## Page {i}\n\n{text}")
+            else:
+                warnings.append(f"Page {i}: Aucun texte détecté")
+        
+        full_text = '\n\n'.join(page_texts)
+        
+        if len(full_text) < 50:
+            warnings.append("Très peu de texte extrait du PDF (possible PDF vide ou illisible)")
+        
+        return full_text, pages_to_process, warnings
+        
+    except Exception as e:
+        logger.error(f"Erreur traitement PDF: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur traitement PDF: {str(e)}")
+
+
+# === ENDPOINTS ===
+
+@app.get("/")
+async def root():
+    """Endpoint racine"""
+    return {
+        "service": "OCR Service (PaddleOCR)",
+        "version": "1.0.0",
+        "status": "running",
+        "endpoints": {
+            "health": "/health",
+            "ocr": "/ocr (POST)"
+        }
+    }
+
+
+@app.get("/health")
+async def health():
+    """Health check pour Railway/Render"""
+    return {
+        "status": "healthy",
+        "service": "OCR Service (PaddleOCR)",
+        "version": "1.0.0",
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 
 @app.post("/ocr", response_model=OCRResponse)
 async def ocr_endpoint(request: OCRRequest):
     """
     Endpoint principal pour OCR
-
-    Accepte base64 encodé (PDF ou image)
-    Retourne le texte extrait
+    
+    Accepte un fichier encodé en base64 (PDF ou image) et retourne le texte extrait
     """
+    start_time = datetime.utcnow()
+    
     try:
-        # Décoder base64
+        # Décoder le contenu base64
         file_bytes = base64.b64decode(request.content)
-        logger.info(f"Received file: {len(file_bytes)} bytes, type: {request.mime_type}")
-
+        file_size_mb = len(file_bytes) / (1024 * 1024)
+        
+        logger.info(f"Traitement fichier: {request.mime_type}, {file_size_mb:.2f} MB")
+        
+        # Vérifier la taille
+        if file_size_mb > 50:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Fichier trop volumineux: {file_size_mb:.2f} MB (max 50 MB)"
+            )
+        
         # Traiter selon le type
         if request.mime_type == 'application/pdf':
-            text, pages, warnings = process_pdf(file_bytes, request.max_pages)
-            return OCRResponse(
-                text=text,
-                pages_processed=pages,
-                method="PaddleOCR (PDF)",
-                warnings=warnings
-            )
-
+            text, pages_processed, warnings = process_pdf(file_bytes, request.max_pages)
+            
         elif request.mime_type.startswith('image/'):
             text, warnings = process_image(file_bytes)
-            return OCRResponse(
-                text=text,
-                pages_processed=1,
-                method="PaddleOCR (Image)",
-                warnings=warnings
-            )
-
+            pages_processed = 1
+            
         else:
-            raise HTTPException(status_code=400, detail=f"Type MIME non supporté: {request.mime_type}")
-
+            raise HTTPException(
+                status_code=400,
+                detail=f"Type de fichier non supporté: {request.mime_type}"
+            )
+        
+        # Calculer le temps de traitement
+        processing_time = (datetime.utcnow() - start_time).total_seconds()
+        
+        logger.info(
+            f"OCR terminé: {len(text)} caractères extraits, "
+            f"{pages_processed} pages, {processing_time:.2f}s"
+        )
+        
+        return OCRResponse(
+            text=text,
+            pages_processed=pages_processed,
+            warnings=warnings,
+            processing_time_seconds=processing_time
+        )
+        
     except base64.binascii.Error:
         raise HTTPException(status_code=400, detail="Contenu base64 invalide")
+    
+    except HTTPException:
+        raise
+    
     except Exception as e:
-        logger.error(f"OCR error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/ocr/upload", response_model=OCRResponse)
-async def ocr_upload(file: UploadFile):
-    """
-    Endpoint alternatif : upload direct de fichier
-    """
-    try:
-        file_bytes = await file.read()
-        mime_type = file.content_type or 'application/octet-stream'
-
-        logger.info(f"Upload: {file.filename}, {len(file_bytes)} bytes, type: {mime_type}")
-
-        if mime_type == 'application/pdf':
-            text, pages, warnings = process_pdf(file_bytes, max_pages=50)
-            return OCRResponse(
-                text=text,
-                pages_processed=pages,
-                method="PaddleOCR (PDF)",
-                warnings=warnings
-            )
-
-        elif mime_type.startswith('image/'):
-            text, warnings = process_image(file_bytes)
-            return OCRResponse(
-                text=text,
-                pages_processed=1,
-                method="PaddleOCR (Image)",
-                warnings=warnings
-            )
-
-        else:
-            raise HTTPException(status_code=400, detail=f"Type non supporté: {mime_type}")
-
-    except Exception as e:
-        logger.error(f"Upload error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/health")
-async def health():
-    """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "service": "ocr-service",
-        "version": "1.0.0",
-        "ocr_engine": "PaddleOCR",
-        "language": "fr"
-    }
-
-
-@app.get("/")
-async def root():
-    """Root endpoint avec documentation"""
-    return {
-        "service": "OCR Microservice",
-        "version": "1.0.0",
-        "endpoints": {
-            "/ocr": "POST - OCR avec base64 JSON",
-            "/ocr/upload": "POST - OCR avec multipart/form-data",
-            "/health": "GET - Health check",
-            "/docs": "GET - Documentation Swagger"
-        },
-        "features": [
-            "PaddleOCR (meilleure qualité open-source)",
-            "Support PDF multi-pages",
-            "Support images (PNG, JPG, etc.)",
-            "Optimisé pour documents français",
-            "Détection automatique d'orientation"
-        ]
-    }
+        logger.error(f"Erreur inattendue: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erreur serveur: {str(e)}")
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    port = int(os.getenv('PORT', 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)

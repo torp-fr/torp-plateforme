@@ -8,11 +8,10 @@ __pycache__
 *.egg-info
 dist
 build
-.pytest_cache
-.coverage
-htmlcov
+.env
+.venv
+venv/
+README.md
 .git
 .gitignore
-README.md
 docker-compose.yml
-.dockerignore

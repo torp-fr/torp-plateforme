@@ -1,203 +1,192 @@
-# OCR Microservice
+# OCR Microservice (PaddleOCR)
 
-Microservice OCR autonome avec **PaddleOCR** pour extraction de texte haute qualité des documents français (DTU, normes, etc.).
+Service d'OCR production-ready basé sur PaddleOCR pour extraction de texte depuis PDFs et images.
 
-## 🎯 Features
+## Fonctionnalités
 
-- ✅ **PaddleOCR** - Meilleure qualité OCR open-source
-- ✅ **Support PDF multi-pages** - Conversion automatique en images
-- ✅ **Support images** - PNG, JPG, WEBP, etc.
-- ✅ **Optimisé français** - Modèle FR pré-chargé
-- ✅ **Détection orientation** - Rotation automatique
-- ✅ **API REST** - FastAPI avec documentation Swagger
-- ✅ **Docker ready** - Déploiement facile
+- **OCR haute qualité** avec PaddleOCR (modèle français)
+- **Support PDF** : conversion automatique en images 300 DPI
+- **Support images** : PNG, JPEG, WEBP, etc.
+- **Traitement batch** : jusqu'à 100 pages par PDF
+- **API REST** simple avec FastAPI
+- **Déployable** sur Railway, Render, Fly.io, Google Cloud Run, etc.
 
-## 🚀 Déploiement local (test)
+## Architecture
 
-### Option 1 : Docker (recommandé)
+```
+Client (Supabase Edge Function)
+    ↓ POST /ocr (base64)
+OCR Service (FastAPI)
+    ↓
+PaddleOCR Engine (Python)
+    ↓
+Text extraction
+```
+
+## Déploiement
+
+### Option 1 : Railway.app (Recommandé)
+
+**Prix** : $5/mois
+
+1. Créez un compte sur [railway.app](https://railway.app)
+2. Connectez votre repo GitHub
+3. Créez un nouveau projet : **Deploy from GitHub**
+4. Sélectionnez le repo `quote-insight-tally`
+5. Dans **Settings** → **Source** :
+   - Root Directory : `ocr-service`
+6. Railway détecte le Dockerfile automatiquement
+7. Cliquez sur **Deploy**
+8. Attendez 5-10 minutes (téléchargement des modèles PaddleOCR)
+9. Dans **Settings** → **Networking** :
+   - Cliquez sur **Generate Domain**
+   - Copiez l'URL générée
+
+### Option 2 : Render.com
+
+**Prix** : GRATUIT (750h/mois)
+
+1. Créez un compte sur [render.com](https://render.com)
+2. New → **Web Service**
+3. Connectez votre repo GitHub
+4. Configuration :
+   - Name : `ocr-service`
+   - Root Directory : `ocr-service`
+   - Environment : **Docker**
+   - Plan : **Free**
+5. Déployez
+6. **Note** : Le service s'endort après 15 min d'inactivité (cold start ~30s)
+
+### Option 3 : Fly.io
+
+**Prix** : GRATUIT (3 VMs incluses)
+
+```bash
+# Installation
+curl -L https://fly.io/install.sh | sh
+
+# Connexion
+fly auth login
+
+# Depuis le dossier ocr-service/
+cd ocr-service
+fly launch --name ocr-service --region cdg
+
+# Déploiement
+fly deploy
+```
+
+### Option 4 : Google Cloud Run
+
+**Prix** : Pay-as-you-go (très économique)
 
 ```bash
 # Build l'image
-docker build -t ocr-service .
+gcloud builds submit --tag gcr.io/VOTRE_PROJECT/ocr-service
 
-# Run le container
-docker run -p 8080:8080 ocr-service
-
-# Test
-curl http://localhost:8080/health
+# Déploiement
+gcloud run deploy ocr-service \
+  --image gcr.io/VOTRE_PROJECT/ocr-service \
+  --platform managed \
+  --region europe-west1 \
+  --allow-unauthenticated \
+  --memory 2Gi \
+  --timeout 300
 ```
 
-### Option 2 : Python direct
+## Configuration Supabase
+
+Une fois déployé, configurez l'URL dans Supabase :
+
+1. Supabase Dashboard → **Settings** → **Edge Functions**
+2. Ajoutez un secret :
+   - **Nom** : `OCR_SERVICE_URL`
+   - **Valeur** : `https://votre-service.railway.app` (sans slash final)
+3. Redéployez vos Edge Functions
+
+## Test local
 
 ```bash
-# Installer poppler (pour pdf2image)
-# Ubuntu/Debian:
-sudo apt-get install poppler-utils
-
-# macOS:
-brew install poppler
-
-# Installer dépendances Python
+# Installation des dépendances
 pip install -r requirements.txt
 
-# Run
+# Lancement
 python main.py
+
+# Ou avec Docker
+docker-compose up --build
 ```
 
-## 📡 API Endpoints
+Le service sera disponible sur `http://localhost:8080`
 
-### POST /ocr
+## API
 
-OCR avec base64 JSON
+### Health Check
 
 ```bash
-curl -X POST http://localhost:8080/ocr \
+curl https://votre-service.railway.app/health
+```
+
+**Réponse** :
+```json
+{
+  "status": "healthy",
+  "service": "OCR Service (PaddleOCR)",
+  "version": "1.0.0"
+}
+```
+
+### OCR Endpoint
+
+```bash
+curl -X POST https://votre-service.railway.app/ocr \
   -H "Content-Type: application/json" \
   -d '{
-    "content": "base64_encoded_pdf_here",
+    "content": "BASE64_ENCODED_FILE",
     "mime_type": "application/pdf",
     "max_pages": 50
   }'
 ```
 
-**Response:**
+**Paramètres** :
+- `content` : Fichier encodé en base64
+- `mime_type` : `application/pdf`, `image/png`, `image/jpeg`, etc.
+- `max_pages` : Limite de pages pour PDFs (défaut: 50)
+
+**Réponse** :
 ```json
 {
-  "text": "Texte extrait du document...",
-  "pages_processed": 15,
-  "method": "PaddleOCR (PDF)",
-  "warnings": []
+  "text": "Texte extrait...",
+  "pages_processed": 5,
+  "warnings": [],
+  "processing_time_seconds": 12.5
 }
 ```
 
-### POST /ocr/upload
+## Performance
 
-OCR avec upload de fichier
+- **Images** : ~1-2 secondes par image
+- **PDFs** : ~2-3 secondes par page (300 DPI)
+- **Mémoire** : ~1.5 GB (modèles PaddleOCR en RAM)
+- **Premier déploiement** : ~5-10 minutes (téléchargement modèles)
 
-```bash
-curl -X POST http://localhost:8080/ocr/upload \
-  -F "file=@document.pdf"
-```
+## Limites
 
-### GET /health
+- Taille maximale : **50 MB** par fichier
+- Pages par PDF : **100 pages max** (configurable)
+- Langues supportées : Français (modifiable dans `main.py`)
 
-Health check
+## Monitoring
 
-```bash
-curl http://localhost:8080/health
-```
+Les logs incluent :
+- Taille des fichiers reçus
+- Temps de traitement
+- Nombre de pages traitées
+- Warnings (peu de texte détecté, etc.)
 
-### GET /docs
+## Support
 
-Documentation interactive Swagger UI
-
-→ http://localhost:8080/docs
-
-## ☁️ Déploiement production
-
-### Option A : Railway.app (simple, $5/mois)
-
-1. Connectez votre repo GitHub
-2. Sélectionnez le dossier `ocr-service`
-3. Railway détecte automatiquement le Dockerfile
-4. Déployez ! URL fournie automatiquement
-
-### Option B : Google Cloud Run (pay-as-you-go)
-
-```bash
-# Build et push
-gcloud builds submit --tag gcr.io/YOUR_PROJECT/ocr-service
-
-# Deploy
-gcloud run deploy ocr-service \
-  --image gcr.io/YOUR_PROJECT/ocr-service \
-  --platform managed \
-  --region europe-west1 \
-  --memory 2Gi \
-  --cpu 2 \
-  --max-instances 10 \
-  --allow-unauthenticated
-```
-
-### Option C : VPS (OVH, Scaleway, etc.)
-
-```bash
-# SSH sur votre VPS
-ssh user@your-vps-ip
-
-# Installer Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-
-# Clone repo
-git clone https://github.com/your-repo/quote-insight-tally.git
-cd quote-insight-tally/ocr-service
-
-# Build et run
-docker build -t ocr-service .
-docker run -d -p 8080:8080 --restart unless-stopped ocr-service
-
-# Configurer reverse proxy (nginx) pour HTTPS
-```
-
-## 🔗 Intégration avec Supabase Edge Functions
-
-Une fois déployé, configurez l'URL dans Supabase secrets :
-
-```bash
-# Supabase Dashboard > Edge Functions > Secrets
-OCR_SERVICE_URL=https://your-ocr-service.railway.app
-```
-
-Les Edge Functions appelleront automatiquement ce service pour les PDFs.
-
-## 📊 Performance
-
-- **Latence** : ~2-5s par page PDF (300 DPI)
-- **Mémoire** : ~1-2 GB RAM
-- **CPU** : Supporte multi-threading
-- **GPU** : Optionnel (peut accélérer 3-5x)
-
-## 🐛 Debugging
-
-Logs en temps réel :
-
-```bash
-# Docker
-docker logs -f <container_id>
-
-# Python direct
-# Les logs s'affichent dans le terminal
-```
-
-## 💰 Coûts estimés
-
-- **Railway.app** : $5-10/mois (toujours actif)
-- **Google Cloud Run** : ~$0.05 par 1000 requêtes (pay-as-you-go)
-- **VPS OVH** : €3-7/mois (VPS Starter)
-
-## 🔒 Sécurité
-
-Pour production, ajoutez :
-
-1. **API Key** authentication
-2. **Rate limiting**
-3. **HTTPS** obligatoire
-4. **CORS** restreint à votre domaine
-
-Exemple avec API key :
-
-```python
-# main.py
-from fastapi import Header, HTTPException
-
-API_KEY = os.getenv("OCR_API_KEY", "your-secret-key")
-
-async def verify_api_key(x_api_key: str = Header(...)):
-    if x_api_key != API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid API Key")
-
-@app.post("/ocr", dependencies=[Depends(verify_api_key)])
-async def ocr_endpoint(request: OCRRequest):
-    # ...
-```
+Pour des questions ou problèmes :
+1. Vérifiez les logs du service
+2. Testez le `/health` endpoint
+3. Vérifiez que `OCR_SERVICE_URL` est bien configuré dans Supabase

@@ -1,5 +1,7 @@
 FROM python:3.11-slim
 
+WORKDIR /app
+
 # Install system dependencies for pdf2image and PaddleOCR
 RUN apt-get update && apt-get install -y \
     poppler-utils \
@@ -11,18 +13,14 @@ RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-
-# Copy requirements
+# Copy requirements and install Python dependencies
 COPY requirements.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Download PaddleOCR models (cache them in the image)
 RUN python -c "from paddleocr import PaddleOCR; PaddleOCR(use_angle_cls=True, lang='fr')"
 
-# Copy application
+# Copy application code
 COPY main.py .
 
 # Expose port
