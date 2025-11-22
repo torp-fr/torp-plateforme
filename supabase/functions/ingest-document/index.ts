@@ -96,24 +96,13 @@ async function ocrWithOCRSpace(buffer: ArrayBuffer, mimeType: string, apiKey: st
 }
 
 // ============================================
-// STRATÉGIE 3 : Google Document AI (OCR premium pour documents FR)
+// STRATÉGIE 3 : Google Cloud Vision API (OCR avec API Key)
 // ============================================
-async function ocrWithGoogleDocumentAI(buffer: ArrayBuffer, mimeType: string, apiKey: string): Promise<string> {
-  console.log('[Google Doc AI] Processing document...');
-  const base64Doc = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+async function ocrWithGoogleVision(buffer: ArrayBuffer, mimeType: string, apiKey: string): Promise<string> {
+  console.log('[Google Vision] Processing document...');
+  const base64Content = btoa(String.fromCharCode(...new Uint8Array(buffer)));
 
-  // Récupérer la config depuis les env vars
-  const projectId = Deno.env.get('GOOGLE_PROJECT_ID');
-  const location = Deno.env.get('GOOGLE_DOC_AI_LOCATION') || 'eu'; // Europe par défaut pour RGPD
-  const processorId = Deno.env.get('GOOGLE_PROCESSOR_ID');
-
-  if (!projectId || !processorId) {
-    throw new Error('Google Doc AI non configuré : GOOGLE_PROJECT_ID et GOOGLE_PROCESSOR_ID requis');
-  }
-
-  const endpoint = `https://${location}-documentai.googleapis.com/v1/projects/${projectId}/locations/${location}/processors/${processorId}:process`;
-
-  console.log(`[Google Doc AI] Endpoint: ${endpoint.replace(processorId, 'PROC_***')}`);
+  const endpoint = 'https://vision.googleapis.com/v1/images:annotate';
 
   const response = await fetch(`${endpoint}?key=${apiKey}`, {
     method: 'POST',
@@ -121,21 +110,34 @@ async function ocrWithGoogleDocumentAI(buffer: ArrayBuffer, mimeType: string, ap
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      rawDocument: {
-        content: base64Doc,
-        mimeType: mimeType
-      }
+      requests: [{
+        image: {
+          content: base64Content
+        },
+        features: [{
+          type: 'DOCUMENT_TEXT_DETECTION',
+          maxResults: 1
+        }],
+        imageContext: {
+          languageHints: ['fr', 'en']
+        }
+      }]
     }),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Google Doc AI: ${response.status} - ${errorText}`);
+    throw new Error(`Google Vision: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
-  const text = data.document?.text || '';
-  console.log(`[Google Doc AI] Extracted ${text.length} characters`);
+
+  if (data.responses?.[0]?.error) {
+    throw new Error(`Google Vision: ${data.responses[0].error.message}`);
+  }
+
+  const text = data.responses?.[0]?.fullTextAnnotation?.text || '';
+  console.log(`[Google Vision] Extracted ${text.length} characters`);
   return text;
 }
 
@@ -211,18 +213,18 @@ async function extractTextSmart(
       }
     }
 
-    // Stratégie 2 : Google Document AI (si configuré)
+    // Stratégie 2 : Google Cloud Vision (si configuré)
     const googleApiKey = Deno.env.get('GOOGLE_CLOUD_API_KEY');
-    if (googleApiKey && sizeMB < 20) {
+    if (googleApiKey && sizeMB < 10) {
       try {
-        console.log('[OCR] Strategy: Google Document AI');
-        const text = await ocrWithGoogleDocumentAI(buffer, mimeType, googleApiKey);
+        console.log('[OCR] Strategy: Google Cloud Vision');
+        const text = await ocrWithGoogleVision(buffer, mimeType, googleApiKey);
         if (text.length > 100) {
-          return { text, method: 'Google Document AI', warnings };
+          return { text, method: 'Google Cloud Vision', warnings };
         }
       } catch (error) {
-        console.error('[OCR] Google Document AI failed:', error);
-        warnings.push(`Google Doc AI échoué: ${error}`);
+        console.error('[OCR] Google Cloud Vision failed:', error);
+        warnings.push(`Google Vision échoué: ${error}`);
       }
     }
 
