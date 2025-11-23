@@ -89,15 +89,13 @@ async function extractPdfTextWithPdfJs(buffer: ArrayBuffer): Promise<string> {
     // Import dynamique de pdfjs-dist depuis ESM
     const pdfjsLib = await import('https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs');
 
-    // CRITIQUE: Désactiver le worker pour Deno/Edge Functions (pas de filesystem)
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-
-    // Charger le PDF sans worker
+    // Charger le PDF sans worker - CRITICAL: disableWorker is the proper way
     const loadingTask = pdfjsLib.getDocument({
       data: new Uint8Array(buffer),
       useSystemFonts: true,
       isEvalSupported: false,
       useWorkerFetch: false,
+      disableWorker: true, // This is the key fix for Deno/Edge Functions
     });
 
     const pdf = await loadingTask.promise;
