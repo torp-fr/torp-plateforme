@@ -247,59 +247,131 @@ async function extractPdfTextWithPdfJs(buffer: ArrayBuffer): Promise<string> {
 }
 
 // ============================================
-// Extraction PDF basique (fallback si pdfjs échoue)
+// Conversion PDF → Images pour OCR Vision
 // ============================================
-function extractBasicPdfText(buffer: ArrayBuffer): string {
-  console.log('[OCR] Using basic fallback PDF text extraction');
-  const bytes = new Uint8Array(buffer);
+async function convertPdfPagesToImages(buffer: ArrayBuffer, maxPages: number = 20): Promise<string[]> {
+  console.log('[OCR] Converting PDF pages to images for Vision OCR');
 
-  // Essayer UTF-8 d'abord, puis Latin1
-  let text = '';
   try {
-    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-  } catch {
-    text = new TextDecoder('latin1').decode(bytes);
-  }
+    const pdfjsLib = await import('https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
 
-  const parts: string[] = [];
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(buffer),
+      useSystemFonts: true,
+      isEvalSupported: false,
+      useWorkerFetch: false,
+    });
 
-  // Méthode 1: Extraction des objets texte
-  const textObjRegex = /BT\s*(.*?)\s*ET/gs;
-  let match;
-  while ((match = textObjRegex.exec(text)) !== null) {
-    const textBlock = match[1];
-    const textMatches = textBlock.match(/\(([^)]*)\)\s*Tj/g);
-    if (textMatches) {
-      textMatches.forEach(m => {
-        const extracted = m.match(/\(([^)]*)\)/);
-        if (extracted && extracted[1]) {
-          // Décoder les séquences d'échappement
-          const decoded = extracted[1]
-            .replace(/\\n/g, '\n')
-            .replace(/\\r/g, '\r')
-            .replace(/\\t/g, '\t')
-            .replace(/\\\(/g, '(')
-            .replace(/\\\)/g, ')')
-            .replace(/\\\\/g, '\\');
-          parts.push(decoded);
-        }
-      });
+    const pdf = await loadingTask.promise;
+    const numPages = Math.min(pdf.numPages, maxPages);
+    const base64Images: string[] = [];
+
+    console.log(`[OCR] Rendering ${numPages} pages (max ${maxPages})`);
+
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 2.0 }); // Scale 2x pour meilleure qualité
+
+      // Créer un canvas pour render la page
+      const canvas = new OffscreenCanvas(viewport.width, viewport.height);
+      const context = canvas.getContext('2d');
+
+      await page.render({
+        canvasContext: context,
+        viewport: viewport,
+      }).promise;
+
+      // Convertir canvas en base64
+      const blob = await canvas.convertToBlob({ type: 'image/png' });
+      const arrayBuffer = await blob.arrayBuffer();
+      const base64 = bufferToBase64(arrayBuffer);
+
+      base64Images.push(base64);
+      console.log(`[OCR] ✅ Page ${pageNum} converted to image`);
     }
-  }
 
-  if (parts.length > 0) {
-    return parts.join(' ');
+    return base64Images;
+  } catch (error) {
+    console.error('[OCR] PDF to images conversion failed:', error);
+    throw error;
   }
-
-  // Méthode 2: Extraction ASCII brute (dernier recours)
-  const asciiMatches = text.match(/[\x20-\x7E]{10,}/g);
-  return asciiMatches
-    ?.filter(s => !s.includes('/') && !s.includes('<') && !s.match(/^[0-9.]+$/))
-    .join(' ') || '';
 }
 
 // ============================================
-// ORCHESTRATEUR SIMPLIFIÉ
+// OCR multi-pages avec OpenAI Vision
+// ============================================
+async function ocrPdfWithVision(buffer: ArrayBuffer, apiKey: string): Promise<string> {
+  const MAX_PAGES = 20; // Limite pour éviter coûts excessifs
+
+  console.log('[OCR] Using OpenAI Vision for PDF OCR (fallback mode)');
+
+  const base64Images = await convertPdfPagesToImages(buffer, MAX_PAGES);
+  const pageTexts: string[] = [];
+
+  for (let i = 0; i < base64Images.length; i++) {
+    console.log(`[OCR] Processing page ${i + 1}/${base64Images.length} with Vision...`);
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        max_tokens: 4000,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:image/png;base64,${base64Images[i]}`,
+                detail: 'high'
+              }
+            },
+            {
+              type: 'text',
+              text: `Extrais TOUT le texte de cette page de document technique du bâtiment.
+
+IMPORTANT : Conserve absolument :
+- Les titres et numéros (DTU, NF, articles)
+- Les tableaux (format markdown)
+- Les valeurs techniques (dimensions, résistances, etc.)
+- Les listes à puces et énumérations
+- Les références normatives
+
+Retourne UNIQUEMENT le texte extrait, sans commentaires.`
+            }
+          ]
+        }]
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`OpenAI Vision API error ${response.status}: ${error}`);
+    }
+
+    const data = await response.json();
+    const pageText = data.choices[0]?.message?.content || '';
+    pageTexts.push(`\n\n=== Page ${i + 1} ===\n\n${pageText}`);
+
+    // Rate limiting pour éviter throttling OpenAI
+    if (i < base64Images.length - 1) {
+      await new Promise(r => setTimeout(r, 500));
+    }
+  }
+
+  const fullText = pageTexts.join('\n');
+  console.log(`[OCR] ✅ Vision OCR completed: ${fullText.length} characters from ${base64Images.length} pages`);
+
+  return fullText;
+}
+
+// ============================================
+// ORCHESTRATEUR HYBRIDE INTELLIGENT
 // ============================================
 async function extractTextSmart(
   buffer: ArrayBuffer,
@@ -329,45 +401,49 @@ async function extractTextSmart(
     }
   }
 
-  // PDFs - Essayer pdfjs d'abord, puis fallback
+  // PDFs - Stratégie hybride intelligente
   if (mimeType === 'application/pdf') {
-    // Essayer pdfjs en priorité
+    // ÉTAPE 1: Essayer pdf.js (rapide et gratuit)
     try {
       const text = await extractPdfTextWithPdfJs(buffer);
 
-      if (text.length < 100) {
-        warnings.push('PDF scanné ou avec peu de texte - essayez de convertir en images');
-        return {
-          text: `[PDF avec peu de texte extrait - ${text.length} caractères]\n\n` +
-                `Suggestion: Convertissez en images PNG pour meilleur OCR\n\n${text}`,
-          method: 'pdf.js (texte limité)',
-          warnings
-        };
+      // Si extraction réussie avec texte suffisant, on garde
+      if (text.length >= 100) {
+        console.log('[OCR] ✅ pdf.js extraction successful');
+        return { text, method: 'pdf.js', warnings };
       }
 
-      return { text, method: 'pdf.js', warnings };
+      // Texte trop court = probablement PDF scanné
+      console.log(`[OCR] ⚠️ pdf.js extracted only ${text.length} chars, switching to Vision OCR`);
+      warnings.push('pdf.js a extrait peu de texte, passage à Vision OCR');
     } catch (pdfError) {
-      console.warn('[OCR] pdf.js failed, trying fallback:', pdfError);
-      warnings.push(`pdf.js échoué: ${pdfError}, utilisation du fallback`);
+      console.warn('[OCR] ❌ pdf.js failed, switching to Vision OCR:', pdfError);
+      warnings.push('pdf.js échoué, passage à Vision OCR');
+    }
 
-      // Fallback sur extraction basique
-      const basicText = extractBasicPdfText(buffer);
+    // ÉTAPE 2: Fallback intelligent vers OpenAI Vision
+    if (!openaiKey) {
+      warnings.push('OPENAI_API_KEY manquante - impossible d\'utiliser Vision OCR');
+      return {
+        text: '[Erreur] pdf.js a échoué et OPENAI_API_KEY non configurée.\n\n' +
+              'Configurez OPENAI_API_KEY pour activer le fallback Vision OCR de haute qualité.',
+        method: 'Erreur - pas de fallback',
+        warnings
+      };
+    }
 
-      if (basicText.length < 100) {
-        warnings.push('Extraction limitée - document scanné ou encodage complexe');
-        return {
-          text: `[Extraction limitée - ${basicText.length} caractères]\n\n` +
-                `Le PDF semble scanné ou utilise un encodage complexe.\n` +
-                `Convertissez-le en images PNG pour un meilleur résultat.\n\n${basicText}`,
-          method: 'Extraction basique (fallback)',
-          warnings
-        };
+    try {
+      const visionText = await ocrPdfWithVision(buffer, openaiKey);
+      warnings.push('Vision OCR utilisé avec succès');
+
+      if (sizeMB > 5) {
+        warnings.push('Document volumineux - coût Vision OCR élevé');
       }
 
-      if (basicText.length < 500) {
-        warnings.push('Extraction basique - qualité non garantie');
-      }
-      return { text: basicText, method: 'Extraction basique (fallback)', warnings };
+      return { text: visionText, method: 'OpenAI Vision OCR (fallback)', warnings };
+    } catch (visionError) {
+      console.error('[OCR] ❌ Vision OCR failed:', visionError);
+      throw new Error(`Échec complet de l'extraction PDF: ${visionError}`);
     }
   }
 
