@@ -4,7 +4,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 /**
  * VERSION STANDALONE AVEC EXTRACTION PDF AMÉLIORÉE
  *
- * Utilise pdf-parse pour une extraction de texte fiable et lisible
+ * Stratégie hybride : pdf.js puis fallback Vision OCR (Anthropic prioritaire, puis OpenAI)
  */
 
 // ============================================
@@ -150,7 +150,63 @@ function bufferToBase64(buffer: ArrayBuffer): string {
 }
 
 // ============================================
-// OpenAI Vision pour images (GPT-4o)
+// Anthropic Claude Vision (MOINS CHER - PRIORITAIRE)
+// ============================================
+async function ocrWithClaudeVision(buffer: ArrayBuffer, mimeType: string, apiKey: string): Promise<string> {
+  console.log('[OCR] Using Anthropic Claude 3.5 Sonnet Vision');
+  const base64 = bufferToBase64(buffer);
+  const mediaType = mimeType.startsWith('image/') ? mimeType : 'image/png';
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 4000,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: mediaType,
+              data: base64
+            }
+          },
+          {
+            type: 'text',
+            text: `Extrais TOUT le texte de ce document technique du bâtiment de manière structurée.
+
+IMPORTANT : Conserve absolument :
+- Les titres et numéros (DTU, NF, articles)
+- Les tableaux (format markdown)
+- Les valeurs techniques (dimensions, résistances, etc.)
+- Les listes à puces et énumérations
+- Les références normatives
+
+Retourne UNIQUEMENT le texte extrait, sans commentaires.`
+          }
+        ]
+      }]
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Claude API error ${response.status}: ${error}`);
+  }
+
+  const data = await response.json();
+  return data.content[0]?.text || '';
+}
+
+// ============================================
+// OpenAI Vision pour images (GPT-4o) - FALLBACK
 // ============================================
 async function ocrWithOpenAIVision(buffer: ArrayBuffer, mimeType: string, apiKey: string): Promise<string> {
   console.log('[OCR] Using OpenAI Vision GPT-4o');
@@ -204,13 +260,9 @@ async function extractPdfTextWithPdfJs(buffer: ArrayBuffer): Promise<string> {
   console.log('[OCR] Using pdf.js for text extraction');
 
   try {
-    // Import dynamique de pdfjs-dist depuis ESM
     const pdfjsLib = await import('https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs');
-
-    // CRITIQUE: Désactiver le worker pour Deno/Edge Functions (pas de filesystem)
     pdfjsLib.GlobalWorkerOptions.workerSrc = '';
 
-    // Charger le PDF sans worker
     const loadingTask = pdfjsLib.getDocument({
       data: new Uint8Array(buffer),
       useSystemFonts: true,
@@ -221,12 +273,10 @@ async function extractPdfTextWithPdfJs(buffer: ArrayBuffer): Promise<string> {
     const pdf = await loadingTask.promise;
     const textParts: string[] = [];
 
-    // Extraire le texte de chaque page
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
       const textContent = await page.getTextContent();
 
-      // Combiner les items de texte
       const pageText = textContent.items
         .map((item: any) => item.str)
         .join(' ');
@@ -271,9 +321,8 @@ async function convertPdfPagesToImages(buffer: ArrayBuffer, maxPages: number = 2
 
     for (let pageNum = 1; pageNum <= numPages; pageNum++) {
       const page = await pdf.getPage(pageNum);
-      const viewport = page.getViewport({ scale: 2.0 }); // Scale 2x pour meilleure qualité
+      const viewport = page.getViewport({ scale: 2.0 });
 
-      // Créer un canvas pour render la page
       const canvas = new OffscreenCanvas(viewport.width, viewport.height);
       const context = canvas.getContext('2d');
 
@@ -282,7 +331,6 @@ async function convertPdfPagesToImages(buffer: ArrayBuffer, maxPages: number = 2
         viewport: viewport,
       }).promise;
 
-      // Convertir canvas en base64
       const blob = await canvas.convertToBlob({ type: 'image/png' });
       const arrayBuffer = await blob.arrayBuffer();
       const base64 = bufferToBase64(arrayBuffer);
@@ -299,41 +347,56 @@ async function convertPdfPagesToImages(buffer: ArrayBuffer, maxPages: number = 2
 }
 
 // ============================================
-// OCR multi-pages avec OpenAI Vision
+// OCR multi-pages avec Vision (Anthropic prioritaire)
 // ============================================
-async function ocrPdfWithVision(buffer: ArrayBuffer, apiKey: string): Promise<string> {
-  const MAX_PAGES = 20; // Limite pour éviter coûts excessifs
+async function ocrPdfWithVision(buffer: ArrayBuffer, anthropicKey?: string, openaiKey?: string): Promise<{ text: string; provider: string }> {
+  const MAX_PAGES = 20;
 
-  console.log('[OCR] Using OpenAI Vision for PDF OCR (fallback mode)');
+  console.log('[OCR] Using Vision for PDF OCR (fallback mode)');
 
   const base64Images = await convertPdfPagesToImages(buffer, MAX_PAGES);
   const pageTexts: string[] = [];
 
-  for (let i = 0; i < base64Images.length; i++) {
-    console.log(`[OCR] Processing page ${i + 1}/${base64Images.length} with Vision...`);
+  const useAnthropic = !!anthropicKey;
+  const useOpenAI = !!openaiKey;
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        max_tokens: 4000,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'image_url',
-              image_url: {
-                url: `data:image/png;base64,${base64Images[i]}`,
-                detail: 'high'
-              }
-            },
-            {
-              type: 'text',
-              text: `Extrais TOUT le texte de cette page de document technique du bâtiment.
+  if (!useAnthropic && !useOpenAI) {
+    throw new Error('Aucune clé API Vision (ANTHROPIC_API_KEY ou OPENAI_API_KEY requis)');
+  }
+
+  const provider = useAnthropic ? 'Anthropic Claude 3.5 Sonnet' : 'OpenAI GPT-4o';
+  console.log(`[OCR] Using ${provider} (~$${(base64Images.length * (useAnthropic ? 0.003 : 0.0077)).toFixed(3)} estimated cost)`);
+
+  for (let i = 0; i < base64Images.length; i++) {
+    console.log(`[OCR] Processing page ${i + 1}/${base64Images.length} with ${provider}...`);
+
+    let pageText = '';
+
+    if (useAnthropic) {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': anthropicKey!,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 4000,
+          messages: [{
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: 'image/png',
+                  data: base64Images[i]
+                }
+              },
+              {
+                type: 'text',
+                text: `Extrais TOUT le texte de cette page de document technique du bâtiment.
 
 IMPORTANT : Conserve absolument :
 - Les titres et numéros (DTU, NF, articles)
@@ -343,22 +406,69 @@ IMPORTANT : Conserve absolument :
 - Les références normatives
 
 Retourne UNIQUEMENT le texte extrait, sans commentaires.`
-            }
-          ]
-        }]
-      }),
-    });
+              }
+            ]
+          }]
+        }),
+      });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`OpenAI Vision API error ${response.status}: ${error}`);
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Claude API error ${response.status}: ${error}`);
+      }
+
+      const data = await response.json();
+      pageText = data.content[0]?.text || '';
+
+    } else {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiKey!}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          max_tokens: 4000,
+          messages: [{
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:image/png;base64,${base64Images[i]}`,
+                  detail: 'high'
+                }
+              },
+              {
+                type: 'text',
+                text: `Extrais TOUT le texte de cette page de document technique du bâtiment.
+
+IMPORTANT : Conserve absolument :
+- Les titres et numéros (DTU, NF, articles)
+- Les tableaux (format markdown)
+- Les valeurs techniques (dimensions, résistances, etc.)
+- Les listes à puces et énumérations
+- Les références normatives
+
+Retourne UNIQUEMENT le texte extrait, sans commentaires.`
+              }
+            ]
+          }]
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`OpenAI Vision API error ${response.status}: ${error}`);
+      }
+
+      const data = await response.json();
+      pageText = data.choices[0]?.message?.content || '';
     }
 
-    const data = await response.json();
-    const pageText = data.choices[0]?.message?.content || '';
     pageTexts.push(`\n\n=== Page ${i + 1} ===\n\n${pageText}`);
 
-    // Rate limiting pour éviter throttling OpenAI
     if (i < base64Images.length - 1) {
       await new Promise(r => setTimeout(r, 500));
     }
@@ -367,7 +477,7 @@ Retourne UNIQUEMENT le texte extrait, sans commentaires.`
   const fullText = pageTexts.join('\n');
   console.log(`[OCR] ✅ Vision OCR completed: ${fullText.length} characters from ${base64Images.length} pages`);
 
-  return fullText;
+  return { text: fullText, provider };
 }
 
 // ============================================
@@ -380,25 +490,37 @@ async function extractTextSmart(
   fileName: string
 ): Promise<{ text: string; method: string; warnings: string[] }> {
   const warnings: string[] = [];
+  const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
   const openaiKey = Deno.env.get('OPENAI_API_KEY');
   const sizeMB = fileSize / 1024 / 1024;
 
   console.log(`[OCR] Processing: ${fileName} (${mimeType}, ${sizeMB.toFixed(2)}MB)`);
 
-  // Images
+  // Images directes - Anthropic prioritaire (moins cher)
   if (mimeType.startsWith('image/')) {
-    if (!openaiKey) {
-      throw new Error('OPENAI_API_KEY non configurée - requis pour les images');
+    if (anthropicKey) {
+      try {
+        const text = await ocrWithClaudeVision(buffer, mimeType, anthropicKey);
+        console.log(`[OCR] ✅ Image processed with Claude (${text.length} chars)`);
+        return { text, method: 'Anthropic Claude 3.5 Sonnet Vision', warnings };
+      } catch (error) {
+        console.error('[OCR] ❌ Claude Vision failed:', error);
+        warnings.push('Claude Vision échoué, essai OpenAI...');
+      }
     }
 
-    try {
-      const text = await ocrWithOpenAIVision(buffer, mimeType, openaiKey);
-      console.log(`[OCR] ✅ Image processed successfully (${text.length} chars)`);
-      return { text, method: 'OpenAI Vision GPT-4o', warnings };
-    } catch (error) {
-      console.error('[OCR] ❌ OpenAI Vision failed:', error);
-      throw new Error(`Échec OCR image: ${error}`);
+    if (openaiKey) {
+      try {
+        const text = await ocrWithOpenAIVision(buffer, mimeType, openaiKey);
+        console.log(`[OCR] ✅ Image processed with OpenAI (${text.length} chars)`);
+        return { text, method: 'OpenAI Vision GPT-4o', warnings };
+      } catch (error) {
+        console.error('[OCR] ❌ OpenAI Vision failed:', error);
+        throw new Error(`Échec OCR image: ${error}`);
+      }
     }
+
+    throw new Error('Aucune clé API Vision (ANTHROPIC_API_KEY ou OPENAI_API_KEY requis)');
   }
 
   // PDFs - Stratégie hybride intelligente
@@ -407,13 +529,11 @@ async function extractTextSmart(
     try {
       const text = await extractPdfTextWithPdfJs(buffer);
 
-      // Si extraction réussie avec texte suffisant, on garde
       if (text.length >= 100) {
         console.log('[OCR] ✅ pdf.js extraction successful');
         return { text, method: 'pdf.js', warnings };
       }
 
-      // Texte trop court = probablement PDF scanné
       console.log(`[OCR] ⚠️ pdf.js extracted only ${text.length} chars, switching to Vision OCR`);
       warnings.push('pdf.js a extrait peu de texte, passage à Vision OCR');
     } catch (pdfError) {
@@ -421,26 +541,26 @@ async function extractTextSmart(
       warnings.push('pdf.js échoué, passage à Vision OCR');
     }
 
-    // ÉTAPE 2: Fallback intelligent vers OpenAI Vision
-    if (!openaiKey) {
-      warnings.push('OPENAI_API_KEY manquante - impossible d\'utiliser Vision OCR');
+    // ÉTAPE 2: Fallback vers Vision OCR
+    if (!anthropicKey && !openaiKey) {
+      warnings.push('Aucune clé API Vision - impossible d\'utiliser Vision OCR');
       return {
-        text: '[Erreur] pdf.js a échoué et OPENAI_API_KEY non configurée.\n\n' +
-              'Configurez OPENAI_API_KEY pour activer le fallback Vision OCR de haute qualité.',
+        text: '[Erreur] pdf.js a échoué et aucune clé Vision API configurée.\n\n' +
+              'Configurez ANTHROPIC_API_KEY ou OPENAI_API_KEY.',
         method: 'Erreur - pas de fallback',
         warnings
       };
     }
 
     try {
-      const visionText = await ocrPdfWithVision(buffer, openaiKey);
-      warnings.push('Vision OCR utilisé avec succès');
+      const { text: visionText, provider } = await ocrPdfWithVision(buffer, anthropicKey, openaiKey);
+      warnings.push(`${provider} utilisé avec succès`);
 
       if (sizeMB > 5) {
         warnings.push('Document volumineux - coût Vision OCR élevé');
       }
 
-      return { text: visionText, method: 'OpenAI Vision OCR (fallback)', warnings };
+      return { text: visionText, method: `${provider} OCR (fallback)`, warnings };
     } catch (visionError) {
       console.error('[OCR] ❌ Vision OCR failed:', visionError);
       throw new Error(`Échec complet de l'extraction PDF: ${visionError}`);
