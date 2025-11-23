@@ -261,13 +261,14 @@ async function extractPdfTextWithPdfJs(buffer: ArrayBuffer): Promise<string> {
 
   try {
     const pdfjsLib = await import('https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs');
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
 
+    // CRITICAL: Disable worker for Deno/Edge Functions compatibility
     const loadingTask = pdfjsLib.getDocument({
       data: new Uint8Array(buffer),
       useSystemFonts: true,
       isEvalSupported: false,
       useWorkerFetch: false,
+      disableWorker: true, // This is the key fix
     });
 
     const pdf = await loadingTask.promise;
@@ -304,13 +305,14 @@ async function convertPdfPagesToImages(buffer: ArrayBuffer, maxPages: number = 2
 
   try {
     const pdfjsLib = await import('https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs');
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
 
+    // CRITICAL: Disable worker for Deno/Edge Functions compatibility
     const loadingTask = pdfjsLib.getDocument({
       data: new Uint8Array(buffer),
       useSystemFonts: true,
       isEvalSupported: false,
       useWorkerFetch: false,
+      disableWorker: true, // This is the key fix
     });
 
     const pdf = await loadingTask.promise;
