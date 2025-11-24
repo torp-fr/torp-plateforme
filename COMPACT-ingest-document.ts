@@ -38,8 +38,10 @@ async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
   return textParts.join('\n');
 }
 
-async function ocrVision(buffer: ArrayBuffer, anthropicKey?: string, openaiKey?: string): Promise<string> {
+async function ocrVisionImage(buffer: ArrayBuffer, mimeType: string, anthropicKey?: string, openaiKey?: string): Promise<string> {
   const base64 = bufferToBase64(buffer);
+
+  // Anthropic API
   if (anthropicKey) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -50,14 +52,23 @@ async function ocrVision(buffer: ArrayBuffer, anthropicKey?: string, openaiKey?:
         messages: [{
           role: 'user',
           content: [
-            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: base64 } },
+            { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64 } },
             { type: 'text', text: 'Extrais TOUT le texte de ce document. Conserve les titres, tableaux, valeurs techniques, listes et références.' }
           ]
         }]
       })
     });
-    if (res.ok) return (await res.json()).content[0]?.text || '';
+    if (res.ok) {
+      const data = await res.json();
+      console.log('[OCR] ✅ Anthropic Vision OCR successful');
+      return data.content[0]?.text || '';
+    } else {
+      const error = await res.text();
+      console.log(`[OCR] ❌ Anthropic failed (${res.status}): ${error.substring(0, 200)}`);
+    }
   }
+
+  // OpenAI API
   if (openaiKey) {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -68,15 +79,23 @@ async function ocrVision(buffer: ArrayBuffer, anthropicKey?: string, openaiKey?:
         messages: [{
           role: 'user',
           content: [
-            { type: 'image_url', image_url: { url: `data:image/png;base64,${base64}` } },
+            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } },
             { type: 'text', text: 'Extrais TOUT le texte de ce document. Conserve les titres, tableaux, valeurs techniques.' }
           ]
         }]
       })
     });
-    if (res.ok) return (await res.json()).choices[0]?.message?.content || '';
+    if (res.ok) {
+      const data = await res.json();
+      console.log('[OCR] ✅ OpenAI Vision OCR successful');
+      return data.choices[0]?.message?.content || '';
+    } else {
+      const error = await res.text();
+      console.log(`[OCR] ❌ OpenAI failed (${res.status}): ${error.substring(0, 200)}`);
+    }
   }
-  throw new Error('Aucune clé API Vision');
+
+  throw new Error('Toutes les APIs Vision ont échoué');
 }
 
 async function generateEmbeddings(texts: string[], apiKey: string): Promise<any[]> {
@@ -172,21 +191,20 @@ serve(async (req) => {
       let method = '';
 
       if (doc.mime_type === 'application/pdf') {
-        try {
-          text = await extractPdfText(buffer);
-          method = 'pdf.js';
-          console.log(`[OCR] ✅ pdf.js: ${text.length} chars`);
-        } catch (e) {
-          console.log('[OCR] pdf.js failed, using Vision');
-          const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
-          const openaiKey = Deno.env.get('OPENAI_API_KEY');
-          console.log(`[DEBUG] ANTHROPIC_API_KEY exists: ${!!anthropicKey}, length: ${anthropicKey?.length || 0}`);
-          console.log(`[DEBUG] OPENAI_API_KEY exists: ${!!openaiKey}, length: ${openaiKey?.length || 0}`);
-          text = await ocrVision(buffer, anthropicKey, openaiKey);
-          method = 'Vision OCR';
+        text = await extractPdfText(buffer);
+        method = 'pdf.js';
+        console.log(`[OCR] ✅ pdf.js extracted ${text.length} chars`);
+
+        // Si pdf.js retourne très peu de texte, c'est probablement un scan
+        if (text.length < 50) {
+          console.log('[OCR] ⚠️ PDF appears to be scanned (no extractable text)');
+          text = '⚠️ Ce PDF semble être un scan sans texte extractible. Pour traiter les PDFs scannés, veuillez d\'abord les convertir en images.';
         }
       } else if (doc.mime_type.startsWith('image/')) {
-        text = await ocrVision(buffer, Deno.env.get('ANTHROPIC_API_KEY'), Deno.env.get('OPENAI_API_KEY'));
+        const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
+        const openaiKey = Deno.env.get('OPENAI_API_KEY');
+        console.log(`[DEBUG] ANTHROPIC_API_KEY exists: ${!!anthropicKey}, OPENAI_API_KEY exists: ${!!openaiKey}`);
+        text = await ocrVisionImage(buffer, doc.mime_type, anthropicKey, openaiKey);
         method = 'Vision OCR';
       } else {
         text = new TextDecoder().decode(new Uint8Array(buffer));
