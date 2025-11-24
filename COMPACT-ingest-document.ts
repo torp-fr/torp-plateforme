@@ -115,6 +115,12 @@ serve(async (req) => {
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
   try {
+    // Health check for GET requests
+    if (req.method === 'GET') {
+      return new Response(JSON.stringify({ success: true, message: 'ingest-document function is running', timestamp: new Date().toISOString() }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     const contentType = req.headers.get('content-type') || '';
 
     if (contentType.includes('multipart/form-data')) {
@@ -144,8 +150,14 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const body = await req.json();
+    // Parse JSON body for POST requests
+    const body = await req.json().catch(() => ({}));
     const { action, documentId } = body;
+
+    if (!action) {
+      return new Response(JSON.stringify({ success: false, error: 'Action requise (process, index, list, delete)' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     if (action === 'process') {
       const { data: doc } = await supabase.from('knowledge_documents').select('*').eq('id', documentId).single();
