@@ -147,7 +147,17 @@ async function ocrVisionImage(buffer: ArrayBuffer, mimeType: string, anthropicKe
   throw new Error('Toutes les APIs Vision ont échoué');
 }
 
+// Estimate tokens from character count (conservative: 1 token ≈ 3.5 chars)
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 3.5);
+}
+
 async function generateEmbeddings(texts: string[], apiKey: string): Promise<any[]> {
+  // Log token estimation for this batch
+  const totalChars = texts.reduce((sum, t) => sum + t.length, 0);
+  const estimatedTokens = estimateTokens(totalChars.toString());
+  console.log(`[Embeddings] Batch: ${texts.length} chunks, ${totalChars} chars, ~${estimatedTokens} tokens estimated`);
+
   const res = await fetch('https://api.openai.com/v1/embeddings', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
@@ -170,7 +180,7 @@ async function generateEmbeddings(texts: string[], apiKey: string): Promise<any[
 
 function chunkText(text: string): any[] {
   const chunks: any[] = [];
-  const MAX_CHUNK_SIZE = 2000; // ~500 tokens max (conservative estimate: 1 token ≈ 4 chars)
+  const MAX_CHUNK_SIZE = 1500; // ~430 tokens max (conservative: 1 token ≈ 3.5 chars)
   const paragraphs = text.split(/\n\n+/);
   let current = '', idx = 0, start = 0, pos = 0;
 
@@ -183,7 +193,7 @@ function chunkText(text: string): any[] {
         chunks.push({ content: current.trim(), index: idx++, startChar: start, endChar: pos });
       }
 
-      // Split the large paragraph into smaller pieces
+      // Split the large paragraph into smaller pieces with succession
       for (let i = 0; i < para.length; i += MAX_CHUNK_SIZE) {
         const piece = para.slice(i, Math.min(i + MAX_CHUNK_SIZE, para.length));
         if (piece.trim().length > 0) {
@@ -194,17 +204,17 @@ function chunkText(text: string): any[] {
       current = '';
       start = pos + para.length;
     } else if (current.length + para.length > MAX_CHUNK_SIZE && current.length > 0) {
-      // Normal chunking with overlap
+      // Normal chunking with small overlap for context continuity
       chunks.push({ content: current.trim(), index: idx++, startChar: start, endChar: pos });
-      current = current.slice(-200) + para;
-      start = pos - 200;
+      current = current.slice(-150) + para; // Reduced overlap for better distribution
+      start = pos - 150;
     } else {
       current += para;
     }
     pos += para.length;
   }
 
-  // Handle remaining text
+  // Handle remaining text with succession
   if (current.trim()) {
     if (current.length > MAX_CHUNK_SIZE) {
       for (let i = 0; i < current.length; i += MAX_CHUNK_SIZE) {
@@ -218,7 +228,11 @@ function chunkText(text: string): any[] {
     }
   }
 
-  console.log(`[Chunking] Created ${chunks.length} chunks from ${text.length} characters`);
+  // Calculate and log statistics
+  const avgChunkSize = chunks.reduce((sum, c) => sum + c.content.length, 0) / chunks.length;
+  const maxChunkSize = Math.max(...chunks.map(c => c.content.length));
+  console.log(`[Chunking] Created ${chunks.length} chunks from ${text.length} characters (avg: ${Math.round(avgChunkSize)}, max: ${maxChunkSize})`);
+
   return chunks;
 }
 
@@ -334,13 +348,34 @@ serve(async (req) => {
       if (!chunks?.length) return new Response(JSON.stringify({ success: true, message: 'Déjà indexé' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-      // Process embeddings in batches to avoid token limits
-      const batchSize = 50;
+      // Process embeddings with dynamic batch sizing based on token estimation
+      // Target: max 250k tokens per batch (safety margin under 300k limit)
+      const MAX_BATCH_TOKENS = 250000;
+      const MAX_BATCH_SIZE = 20; // Max chunks per batch for safety
       let totalProcessed = 0;
+      let batchNum = 0;
 
-      for (let i = 0; i < chunks.length; i += batchSize) {
-        const batch = chunks.slice(i, Math.min(i + batchSize, chunks.length));
-        console.log(`[Embeddings] Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(chunks.length / batchSize)} (${batch.length} chunks)`);
+      let i = 0;
+      while (i < chunks.length) {
+        const batch: any[] = [];
+        let batchTokens = 0;
+
+        // Build dynamic batch based on token count
+        while (i < chunks.length && batch.length < MAX_BATCH_SIZE) {
+          const chunkTokens = estimateTokens(chunks[i].content);
+
+          // Check if adding this chunk would exceed limits
+          if (batchTokens + chunkTokens > MAX_BATCH_TOKENS && batch.length > 0) {
+            break; // Start new batch
+          }
+
+          batch.push(chunks[i]);
+          batchTokens += chunkTokens;
+          i++;
+        }
+
+        batchNum++;
+        console.log(`[Embeddings] Processing batch ${batchNum}/${Math.ceil(chunks.length / MAX_BATCH_SIZE)} (${batch.length} chunks, ~${batchTokens} tokens)`);
 
         const embeddings = await generateEmbeddings(batch.map((c: any) => c.content), openaiKey);
 
