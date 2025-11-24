@@ -148,7 +148,7 @@ export default function Results() {
     };
 
     loadProjectData();
-  }, [currentProject, searchParams, navigate, setCurrentProject]);
+  }, [searchParams, navigate, setCurrentProject]);
 
   useEffect(() => {
     if (!currentProject) return;
