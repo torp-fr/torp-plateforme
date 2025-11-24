@@ -153,7 +153,18 @@ async function generateEmbeddings(texts: string[], apiKey: string): Promise<any[
     headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ input: texts, model: 'text-embedding-3-small' })
   });
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`OpenAI Embeddings API failed (${res.status}): ${error.substring(0, 200)}`);
+  }
+
   const data = await res.json();
+
+  if (!data.data || !Array.isArray(data.data)) {
+    throw new Error('Invalid response from OpenAI Embeddings API');
+  }
+
   return data.data.map((item: any) => ({ embedding: item.embedding, tokens: 0 }));
 }
 
