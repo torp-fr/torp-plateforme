@@ -21,8 +21,8 @@ function bufferToBase64(buffer: ArrayBuffer): string {
 async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
   const pdfjsLib = await import('https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs');
 
-  // Configure GlobalWorkerOptions before using getDocument
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs';
+  // Set workerSrc to false to prevent worker loading (we use disableWorker: true)
+  pdfjsLib.GlobalWorkerOptions.workerSrc = false;
 
   const pdf = await pdfjsLib.getDocument({
     data: new Uint8Array(buffer),
