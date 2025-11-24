@@ -18,30 +18,6 @@ function bufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
-  const pdfjsLib = await import('https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs');
-
-  // Set workerSrc to false to prevent worker loading (we use disableWorker: true)
-  pdfjsLib.GlobalWorkerOptions.workerSrc = false;
-
-  const pdf = await pdfjsLib.getDocument({
-    data: new Uint8Array(buffer),
-    useSystemFonts: true,
-    isEvalSupported: false,
-    useWorkerFetch: false,
-    disableWorker: true,
-  }).promise;
-
-  const textParts: string[] = [];
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const pageText = content.items.map((item: any) => item.str).join(' ');
-    if (pageText.trim()) textParts.push(`\n\n=== Page ${i} ===\n\n${pageText}`);
-  }
-  return textParts.join('\n');
-}
-
 async function ocrVisionImage(buffer: ArrayBuffer, mimeType: string, anthropicKey?: string, openaiKey?: string): Promise<string> {
   const base64 = bufferToBase64(buffer);
 
@@ -194,17 +170,7 @@ serve(async (req) => {
       let text = '';
       let method = '';
 
-      if (doc.mime_type === 'application/pdf') {
-        text = await extractPdfText(buffer);
-        method = 'pdf.js';
-        console.log(`[OCR] ✅ pdf.js extracted ${text.length} chars`);
-
-        // Si pdf.js retourne très peu de texte, c'est probablement un scan
-        if (text.length < 50) {
-          console.log('[OCR] ⚠️ PDF appears to be scanned (no extractable text)');
-          text = '⚠️ Ce PDF semble être un scan sans texte extractible. Pour traiter les PDFs scannés, veuillez d\'abord les convertir en images.';
-        }
-      } else if (doc.mime_type.startsWith('image/')) {
+      if (doc.mime_type === 'application/pdf' || doc.mime_type.startsWith('image/')) {
         const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
         const openaiKey = Deno.env.get('OPENAI_API_KEY');
         console.log(`[DEBUG] ANTHROPIC_API_KEY exists: ${!!anthropicKey}, OPENAI_API_KEY exists: ${!!openaiKey}`);
