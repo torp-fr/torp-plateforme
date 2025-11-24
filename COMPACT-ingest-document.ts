@@ -170,16 +170,15 @@ async function generateEmbeddings(texts: string[], apiKey: string): Promise<any[
 
 function chunkText(text: string): any[] {
   const chunks: any[] = [];
-  const MAX_CHUNK_SIZE = 6000; // ~1500 tokens max (4 chars ≈ 1 token)
+  const MAX_CHUNK_SIZE = 2000; // ~500 tokens max (conservative estimate: 1 token ≈ 4 chars)
   const paragraphs = text.split(/\n\n+/);
   let current = '', idx = 0, start = 0, pos = 0;
 
   for (const p of paragraphs) {
     const para = p + '\n\n';
 
-    // If paragraph itself is too large, split it by sentences or force-split
+    // If paragraph itself is too large, force-split it
     if (para.length > MAX_CHUNK_SIZE) {
-      // Force split very long paragraphs
       if (current.trim()) {
         chunks.push({ content: current.trim(), index: idx++, startChar: start, endChar: pos });
       }
@@ -187,7 +186,9 @@ function chunkText(text: string): any[] {
       // Split the large paragraph into smaller pieces
       for (let i = 0; i < para.length; i += MAX_CHUNK_SIZE) {
         const piece = para.slice(i, Math.min(i + MAX_CHUNK_SIZE, para.length));
-        chunks.push({ content: piece.trim(), index: idx++, startChar: pos + i, endChar: pos + i + piece.length });
+        if (piece.trim().length > 0) {
+          chunks.push({ content: piece.trim(), index: idx++, startChar: pos + i, endChar: pos + i + piece.length });
+        }
       }
 
       current = '';
@@ -205,17 +206,19 @@ function chunkText(text: string): any[] {
 
   // Handle remaining text
   if (current.trim()) {
-    // If remaining text is still too large, force split it
     if (current.length > MAX_CHUNK_SIZE) {
       for (let i = 0; i < current.length; i += MAX_CHUNK_SIZE) {
         const piece = current.slice(i, Math.min(i + MAX_CHUNK_SIZE, current.length));
-        chunks.push({ content: piece.trim(), index: idx++, startChar: start + i, endChar: start + i + piece.length });
+        if (piece.trim().length > 0) {
+          chunks.push({ content: piece.trim(), index: idx++, startChar: start + i, endChar: start + i + piece.length });
+        }
       }
     } else {
       chunks.push({ content: current.trim(), index: idx, startChar: start, endChar: pos });
     }
   }
 
+  console.log(`[Chunking] Created ${chunks.length} chunks from ${text.length} characters`);
   return chunks;
 }
 
