@@ -32,10 +32,10 @@ export const Hero = () => {
                   Parcours TORP Complet
                 </Button>
               </Link>
-              <Link to="/discovery">
+              <Link to="/analyze">
                 <Button variant="outline" size="lg" className="border-white text-white hover:bg-white/10">
                   <Upload className="mr-2 h-5 w-5" />
-                  Découverte rapide
+                  Analyser un devis
                 </Button>
               </Link>
               <Link to="/analyze">

@@ -61,7 +61,8 @@ const App = () => (
             <Route path="/improved-b2b-dashboard" element={<ImprovedB2BDashboard />} />
             <Route path="/marketplace" element={<Marketplace />} />
             <Route path="/b2c-dashboard" element={<B2CDashboard />} />
-            <Route path="/discovery" element={<DiscoveryFlow />} />
+            {/* Route désactivée - wizard obsolète */}
+            {/* <Route path="/discovery" element={<DiscoveryFlow />} /> */}
             <Route path="/torp-complete" element={<TorpCompleteFlow />} />
             <Route path="/segments" element={<AlgorithmicSegments />} />
             <Route path="/knowledge-base" element={<KnowledgeBase />} />

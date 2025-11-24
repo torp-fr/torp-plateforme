@@ -25,12 +25,8 @@ export const Header = () => {
   const { toast } = useToast();
 
   const handleAnalyzeClick = () => {
-    if (user) {
-      navigate('/analyze');
-    } else {
-      // Pour les non-connectés, on propose le parcours découverte
-      navigate('/discovery');
-    }
+    // Redirection directe vers l'analyse, sans wizard intermédiaire
+    navigate('/analyze');
   };
 
   const handleLogout = async () => {

@@ -92,7 +92,8 @@ const App = () => (
                 <Route path="/demo" element={<Demo />} />
 
                 {/* Discovery flows */}
-                <Route path="/discovery" element={<DiscoveryFlow />} />
+                {/* Route désactivée - wizard obsolète */}
+                {/* <Route path="/discovery" element={<DiscoveryFlow />} /> */}
                 <Route path="/torp-complete" element={<TorpCompleteFlow />} />
 
                 {/* Protected routes - Analysis */}
