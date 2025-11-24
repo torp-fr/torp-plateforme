@@ -237,6 +237,26 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    if (action === 'stats') {
+      const { count: totalDocs } = await supabase.from('knowledge_documents').select('*', { count: 'exact', head: true });
+      const { count: totalChunks } = await supabase.from('knowledge_chunks').select('*', { count: 'exact', head: true });
+      const { data: byType } = await supabase.from('knowledge_documents').select('doc_type').eq('status', 'indexed');
+
+      const stats = {
+        total_documents: totalDocs || 0,
+        total_chunks: totalChunks || 0,
+        by_type: byType ? Object.entries(
+          byType.reduce((acc: any, d: any) => {
+            acc[d.doc_type] = (acc[d.doc_type] || 0) + 1;
+            return acc;
+          }, {})
+        ).map(([doc_type, count]) => ({ doc_type, count })) : []
+      };
+
+      return new Response(JSON.stringify({ success: true, stats }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     throw new Error(`Action inconnue: ${action}`);
 
   } catch (error) {
