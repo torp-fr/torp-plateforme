@@ -170,12 +170,30 @@ async function generateEmbeddings(texts: string[], apiKey: string): Promise<any[
 
 function chunkText(text: string): any[] {
   const chunks: any[] = [];
+  const MAX_CHUNK_SIZE = 6000; // ~1500 tokens max (4 chars ≈ 1 token)
   const paragraphs = text.split(/\n\n+/);
   let current = '', idx = 0, start = 0, pos = 0;
 
   for (const p of paragraphs) {
     const para = p + '\n\n';
-    if (current.length + para.length > 1500 && current.length > 0) {
+
+    // If paragraph itself is too large, split it by sentences or force-split
+    if (para.length > MAX_CHUNK_SIZE) {
+      // Force split very long paragraphs
+      if (current.trim()) {
+        chunks.push({ content: current.trim(), index: idx++, startChar: start, endChar: pos });
+      }
+
+      // Split the large paragraph into smaller pieces
+      for (let i = 0; i < para.length; i += MAX_CHUNK_SIZE) {
+        const piece = para.slice(i, Math.min(i + MAX_CHUNK_SIZE, para.length));
+        chunks.push({ content: piece.trim(), index: idx++, startChar: pos + i, endChar: pos + i + piece.length });
+      }
+
+      current = '';
+      start = pos + para.length;
+    } else if (current.length + para.length > MAX_CHUNK_SIZE && current.length > 0) {
+      // Normal chunking with overlap
       chunks.push({ content: current.trim(), index: idx++, startChar: start, endChar: pos });
       current = current.slice(-200) + para;
       start = pos - 200;
@@ -184,7 +202,20 @@ function chunkText(text: string): any[] {
     }
     pos += para.length;
   }
-  if (current.trim()) chunks.push({ content: current.trim(), index: idx, startChar: start, endChar: pos });
+
+  // Handle remaining text
+  if (current.trim()) {
+    // If remaining text is still too large, force split it
+    if (current.length > MAX_CHUNK_SIZE) {
+      for (let i = 0; i < current.length; i += MAX_CHUNK_SIZE) {
+        const piece = current.slice(i, Math.min(i + MAX_CHUNK_SIZE, current.length));
+        chunks.push({ content: piece.trim(), index: idx++, startChar: start + i, endChar: start + i + piece.length });
+      }
+    } else {
+      chunks.push({ content: current.trim(), index: idx, startChar: start, endChar: pos });
+    }
+  }
+
   return chunks;
 }
 
