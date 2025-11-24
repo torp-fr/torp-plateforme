@@ -14,10 +14,12 @@ dist-ssr
 
 # Environment variables
 .env
+.env.*
 .env.local
 .env.development
 .env.production
 .env.test
+.env.supabase
 # Keep .env.example and .env.*.example files
 
 # Test coverage
