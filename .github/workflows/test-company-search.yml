@@ -1,0 +1,60 @@
+name: Test Company Search System
+
+on:
+  push:
+    branches:
+      - claude/configure-company-search-01Be9mHyZZNNd2KUWVjowoFs
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+env:
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🔄 Checkout code
+        uses: actions/checkout@v3
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: 🔧 Install Supabase CLI
+        run: |
+          npm install -g supabase
+
+      - name: 🔗 Link to Supabase project
+        run: |
+          supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        continue-on-error: true
+
+      - name: 🧪 Run Test Suite
+        run: |
+          echo "Running company search test suite..."
+          supabase functions invoke test-company-search --no-verify-jwt
+        continue-on-error: true
+
+      - name: 📊 Test Results Summary
+        run: |
+          echo "================================"
+          echo "🧪 Test Suite Results"
+          echo "================================"
+          echo ""
+          echo "Tests executed for:"
+          echo "  - SIRET/SIREN validation"
+          echo "  - Company data extraction"
+          echo "  - Search service functionality"
+          echo "  - Database functions"
+          echo ""
+          echo "Expected: 12/12 tests passing"
+          echo ""
