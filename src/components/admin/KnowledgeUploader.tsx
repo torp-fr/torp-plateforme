@@ -147,7 +147,6 @@ export const KnowledgeUploader = () => {
     try {
       const formData = new FormData();
       formData.append("file", uploadedFile.file);
-      formData.append("action", "upload");
       formData.append("metadata", JSON.stringify({
         title: uploadedFile.file.name.replace(".pdf", ""),
         doc_type: docType,
