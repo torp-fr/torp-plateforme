@@ -15,11 +15,8 @@ export const Hero = () => {
   const navigate = useNavigate();
 
   const handleCTA = () => {
-    if (user) {
-      navigate('/analyze');
-    } else {
-      navigate('/discovery');
-    }
+    // Redirection directe vers l'analyse, sans wizard intermédiaire
+    navigate('/analyze');
   };
 
   return (
