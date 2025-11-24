@@ -2,6 +2,7 @@
  * Refresh Company Cache Function
  * Automatically refreshes company data that needs updating
  * Can be triggered by cron job or manually
+ * Version: 1.0.0
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
