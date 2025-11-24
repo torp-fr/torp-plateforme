@@ -300,13 +300,25 @@ serve(async (req) => {
       if (!chunks?.length) return new Response(JSON.stringify({ success: true, message: 'Déjà indexé' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-      const embeddings = await generateEmbeddings(chunks.map((c: any) => c.content), openaiKey);
-      for (let i = 0; i < chunks.length; i++) {
-        await supabase.from('knowledge_chunks').update({ embedding: embeddings[i].embedding }).eq('id', chunks[i].id);
+      // Process embeddings in batches to avoid token limits
+      const batchSize = 50;
+      let totalProcessed = 0;
+
+      for (let i = 0; i < chunks.length; i += batchSize) {
+        const batch = chunks.slice(i, Math.min(i + batchSize, chunks.length));
+        console.log(`[Embeddings] Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(chunks.length / batchSize)} (${batch.length} chunks)`);
+
+        const embeddings = await generateEmbeddings(batch.map((c: any) => c.content), openaiKey);
+
+        for (let j = 0; j < batch.length; j++) {
+          await supabase.from('knowledge_chunks').update({ embedding: embeddings[j].embedding }).eq('id', batch[j].id);
+        }
+
+        totalProcessed += batch.length;
       }
 
       await supabase.from('knowledge_documents').update({ status: 'indexed', indexed_at: new Date().toISOString() }).eq('id', documentId);
-      return new Response(JSON.stringify({ success: true, chunksIndexed: chunks.length }),
+      return new Response(JSON.stringify({ success: true, chunksIndexed: totalProcessed }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
