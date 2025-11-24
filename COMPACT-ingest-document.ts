@@ -18,6 +18,75 @@ function bufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+function extractBasicPdfText(buffer: ArrayBuffer): string {
+  try {
+    const decoder = new TextDecoder('latin1');
+    const text = decoder.decode(buffer);
+
+    const textParts: string[] = [];
+
+    // Extract text from PDF text objects (between BT and ET markers)
+    const textObjectRegex = /BT\s+(.*?)\s+ET/gs;
+    const matches = text.matchAll(textObjectRegex);
+
+    for (const match of matches) {
+      const textBlock = match[1];
+
+      // Extract strings from parentheses () which contain the actual text
+      const stringRegex = /\(([^)]*)\)/g;
+      const strings = textBlock.matchAll(stringRegex);
+
+      for (const str of strings) {
+        let extracted = str[1];
+
+        // Decode PDF string escapes
+        extracted = extracted
+          .replace(/\\n/g, '\n')
+          .replace(/\\r/g, '\r')
+          .replace(/\\t/g, '\t')
+          .replace(/\\\(/g, '(')
+          .replace(/\\\)/g, ')')
+          .replace(/\\\\/g, '\\');
+
+        if (extracted.trim().length > 0) {
+          textParts.push(extracted);
+        }
+      }
+    }
+
+    // Also try to extract text from Tj/TJ operators
+    const tjRegex = /\(((?:[^\\)]|\\.)*?)\)\s*Tj/g;
+    const tjMatches = text.matchAll(tjRegex);
+
+    for (const match of tjMatches) {
+      let extracted = match[1];
+      extracted = extracted
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/\\t/g, '\t')
+        .replace(/\\\(/g, '(')
+        .replace(/\\\)/g, ')')
+        .replace(/\\\\/g, '\\');
+
+      if (extracted.trim().length > 0 && !textParts.includes(extracted)) {
+        textParts.push(extracted);
+      }
+    }
+
+    const result = textParts.join(' ').trim();
+
+    // If we extracted very little text, it might be a scanned PDF
+    if (result.length < 50) {
+      return '';
+    }
+
+    return result;
+  } catch (error) {
+    console.log(`[PDF] Basic extraction failed: ${error.message}`);
+    return '';
+  }
+}
+
 async function ocrVisionImage(buffer: ArrayBuffer, mimeType: string, anthropicKey?: string, openaiKey?: string): Promise<string> {
   const base64 = bufferToBase64(buffer);
 
@@ -170,13 +239,28 @@ serve(async (req) => {
       let text = '';
       let method = '';
 
-      if (doc.mime_type === 'application/pdf' || doc.mime_type.startsWith('image/')) {
+      if (doc.mime_type === 'application/pdf') {
+        // Try basic PDF text extraction first
+        text = extractBasicPdfText(buffer);
+
+        if (text.length > 0) {
+          method = 'PDF text extraction';
+          console.log(`[PDF] ✅ Extracted ${text.length} characters`);
+        } else {
+          // PDF appears to be scanned or encrypted
+          console.log('[PDF] ⚠️ No extractable text - likely scanned or encrypted');
+          text = '⚠️ Ce PDF ne contient pas de texte extractible. Il s\'agit probablement d\'un scan ou d\'un PDF protégé. Pour traiter ce document, veuillez le convertir en images (PNG/JPG) et les uploader séparément.';
+          method = 'PDF scan detection';
+        }
+      } else if (doc.mime_type.startsWith('image/')) {
+        // Use Vision OCR for images only
         const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
         const openaiKey = Deno.env.get('OPENAI_API_KEY');
         console.log(`[DEBUG] ANTHROPIC_API_KEY exists: ${!!anthropicKey}, OPENAI_API_KEY exists: ${!!openaiKey}`);
         text = await ocrVisionImage(buffer, doc.mime_type, anthropicKey, openaiKey);
         method = 'Vision OCR';
       } else {
+        // Plain text files
         text = new TextDecoder().decode(new Uint8Array(buffer));
         method = 'text';
       }
