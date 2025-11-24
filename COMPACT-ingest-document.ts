@@ -178,7 +178,11 @@ serve(async (req) => {
           console.log(`[OCR] ✅ pdf.js: ${text.length} chars`);
         } catch (e) {
           console.log('[OCR] pdf.js failed, using Vision');
-          text = await ocrVision(buffer, Deno.env.get('ANTHROPIC_API_KEY'), Deno.env.get('OPENAI_API_KEY'));
+          const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
+          const openaiKey = Deno.env.get('OPENAI_API_KEY');
+          console.log(`[DEBUG] ANTHROPIC_API_KEY exists: ${!!anthropicKey}, length: ${anthropicKey?.length || 0}`);
+          console.log(`[DEBUG] OPENAI_API_KEY exists: ${!!openaiKey}, length: ${openaiKey?.length || 0}`);
+          text = await ocrVision(buffer, anthropicKey, openaiKey);
           method = 'Vision OCR';
         }
       } else if (doc.mime_type.startsWith('image/')) {
