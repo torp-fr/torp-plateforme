@@ -128,6 +128,8 @@ export class TorpAnalyzerService {
           reputation: entrepriseAnalysis.details.reputation.score,
           risques: entrepriseAnalysis.risques,
           benefices: entrepriseAnalysis.benefices,
+          // Add enriched company data if available
+          companyData: entrepriseAnalysis._companyData || null,
         },
 
         scorePrix: {
