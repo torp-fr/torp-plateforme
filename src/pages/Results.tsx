@@ -26,6 +26,7 @@ export default function Results() {
   const [currentWarningIndex, setCurrentWarningIndex] = useState<number | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadedDocuments, setUploadedDocuments] = useState<Set<number>>(new Set());
+  const [documentsDetails, setDocumentsDetails] = useState<any[]>([]);
 
   const toggleWarning = (index: number) => {
     const newExpanded = new Set(expandedWarnings);
@@ -48,12 +49,63 @@ export default function Results() {
 
     setUploadingFile(true);
     try {
-      // Upload to Supabase Storage
       const devisId = searchParams.get('devisId');
-      const fileName = `${devisId}_document_${currentWarningIndex}_${Date.now()}_${file.name}`;
+      if (!devisId) throw new Error('Devis ID not found');
 
-      // Simulate upload for now (implement actual upload later)
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Create unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${devisId}/warning_${currentWarningIndex}_${Date.now()}.${fileExt}`;
+
+      console.log('[Results] Uploading file to Storage:', fileName);
+
+      // Upload to Supabase Storage
+      const { supabase } = await import('@/lib/supabase');
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('devis-documents')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('[Results] Upload error:', uploadError);
+        throw uploadError;
+      }
+
+      console.log('[Results] File uploaded successfully:', uploadData);
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('devis-documents')
+        .getPublicUrl(fileName);
+
+      console.log('[Results] Public URL:', publicUrl);
+
+      // Save document reference to database
+      const warningText = analysisResult.warnings?.[currentWarningIndex] || '';
+      const documentType = warningText.toLowerCase().includes('assurance')
+        ? 'assurance'
+        : warningText.toLowerCase().includes('kbis')
+        ? 'kbis'
+        : 'autre';
+
+      const { error: dbError } = await supabase
+        .from('devis_documents')
+        .insert({
+          devis_id: devisId,
+          warning_index: currentWarningIndex,
+          document_type: documentType,
+          file_path: fileName,
+          file_url: publicUrl,
+          file_name: file.name,
+          file_size: file.size,
+          mime_type: file.type
+        });
+
+      if (dbError) {
+        console.error('[Results] Database insert error:', dbError);
+        // Continue anyway, file is uploaded
+      }
 
       // Mark document as uploaded
       const newUploaded = new Set(uploadedDocuments);
@@ -61,9 +113,13 @@ export default function Results() {
       setUploadedDocuments(newUploaded);
 
       setUploadModalOpen(false);
-      console.log('[Results] Document uploaded:', fileName);
+
+      // TODO: Trigger partial re-analysis to update score
+      console.log('[Results] Document uploaded successfully. Re-analysis can be triggered.');
+
     } catch (error) {
       console.error('[Results] Upload failed:', error);
+      alert('Erreur lors de l\'upload du document. Veuillez réessayer.');
     } finally {
       setUploadingFile(false);
     }
@@ -204,6 +260,28 @@ export default function Results() {
         };
 
         setCurrentProject(project);
+
+        // Load existing uploaded documents
+        const devisId = searchParams.get('devisId');
+        if (devisId) {
+          try {
+            const { supabase: supabaseClient } = await import('@/lib/supabase');
+            const { data: documents, error: docsError } = await supabaseClient
+              .from('devis_documents')
+              .select('*')
+              .eq('devis_id', devisId)
+              .order('uploaded_at', { ascending: false });
+
+            if (!docsError && documents) {
+              const uploadedSet = new Set(documents.map(doc => doc.warning_index));
+              setUploadedDocuments(uploadedSet);
+              setDocumentsDetails(documents);
+              console.log('[Results] Loaded existing documents:', uploadedSet);
+            }
+          } catch (err) {
+            console.error('[Results] Failed to load existing documents:', err);
+          }
+        }
       } catch (error) {
         console.error('Error loading project:', error);
         navigate('/analyze');
@@ -770,6 +848,63 @@ export default function Results() {
                       <p className="text-xs text-muted-foreground">
                         💡 <span className="font-semibold">Astuce :</span> Développez chaque point pour accéder aux recommandations détaillées et actions spécifiques.
                         Si un document manque, vous pouvez l'uploader directement pour améliorer le score de votre devis.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Documents fournis */}
+              {uploadedDocuments.size > 0 && (
+                <Card className="border-success/50 bg-gradient-to-br from-success/10 to-success/5">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-success">
+                      <CheckCircle className="w-5 h-5" />
+                      Documents fournis ({uploadedDocuments.size})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Vous avez fourni les documents suivants pour compléter votre dossier :
+                    </p>
+
+                    <div className="space-y-2">
+                      {Array.from(uploadedDocuments).map((warningIndex) => {
+                        const warningText = analysisResult.warnings?.[warningIndex] || `Point ${warningIndex + 1}`;
+                        const doc = documentsDetails.find(d => d.warning_index === warningIndex);
+
+                        return (
+                          <div key={warningIndex} className="flex items-start gap-3 p-3 bg-background rounded-lg border border-success/30">
+                            <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-foreground">{warningText}</p>
+                              {doc && (
+                                <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                                  <span>📄 {doc.file_name || 'Document'}</span>
+                                  {doc.file_size && (
+                                    <span>{(doc.file_size / 1024).toFixed(0)} KB</span>
+                                  )}
+                                  {doc.uploaded_at && (
+                                    <span>
+                                      Ajouté le {new Date(doc.uploaded_at).toLocaleDateString('fr-FR', {
+                                        day: '2-digit',
+                                        month: '2-digit',
+                                        year: 'numeric'
+                                      })}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-4 p-3 bg-success/10 rounded-lg border border-success/30">
+                      <p className="text-xs text-muted-foreground">
+                        ✓ <span className="font-semibold">Bravo !</span> Les documents fournis renforcent la qualité de votre dossier.
+                        Votre score pourrait être réévalué positivement lors de la prochaine analyse.
                       </p>
                     </div>
                   </CardContent>
