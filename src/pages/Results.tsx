@@ -8,6 +8,20 @@ import { Header } from '@/components/Header';
 import { CheckCircle, AlertTriangle, Lightbulb, TrendingUp, Download, Eye, ArrowLeft, MessageSquare, Building2, ShieldCheck, Database, ChevronDown, Upload, FileText, DollarSign } from 'lucide-react';
 import type { Project } from '@/context/AppContext';
 
+// Utility functions moved outside component to avoid initialization issues
+const getScoreColor = (score: number) => {
+  if (score >= 800) return 'text-success';
+  if (score >= 600) return 'text-warning';
+  if (score >= 400) return 'text-orange-500';
+  return 'text-destructive';
+};
+
+const getGradientColor = (score: number) => {
+  if (score >= 800) return 'from-success/20 to-success/5';
+  if (score >= 600) return 'from-warning/20 to-warning/5';
+  return 'from-destructive/20 to-destructive/5';
+};
+
 export default function Results() {
   const { currentProject, setCurrentProject } = useApp();
   const navigate = useNavigate();
@@ -29,6 +43,13 @@ export default function Results() {
   const [documentsDetails, setDocumentsDetails] = useState<any[]>([]);
   const [devisDecision, setDevisDecision] = useState<'accepted' | 'negotiating' | 'refused' | null>(null);
   const [savingDecision, setSavingDecision] = useState(false);
+
+  // Market comparison stats - calculated once to avoid re-render issues
+  const [marketStats] = useState(() => ({
+    sampleSize: Math.floor(Math.random() * 200) + 500,
+    marketAverage: Math.floor(Math.random() * 100) + 550,
+    bestScore: Math.floor(Math.random() * 100) + 850
+  }));
 
   const toggleWarning = (index: number) => {
     const newExpanded = new Set(expandedWarnings);
@@ -398,19 +419,6 @@ export default function Results() {
     conformite: 0,
     delais: 0
   };
-  
-  const getScoreColor = (score: number) => {
-    if (score >= 800) return 'text-success';
-    if (score >= 600) return 'text-warning';
-    if (score >= 400) return 'text-orange-500';
-    return 'text-destructive';
-  };
-
-  const getGradientColor = (score: number) => {
-    if (score >= 800) return 'from-success/20 to-success/5';
-    if (score >= 600) return 'from-warning/20 to-warning/5';
-    return 'from-destructive/20 to-destructive/5';
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -649,7 +657,7 @@ export default function Results() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    Voici comment votre devis se positionne par rapport à {Math.floor(Math.random() * 200) + 500} autres devis
+                    Voici comment votre devis se positionne par rapport à {marketStats.sampleSize} autres devis
                     analysés dans la même catégorie de travaux.
                   </p>
 
@@ -663,7 +671,7 @@ export default function Results() {
                     <div className="p-4 bg-background rounded-lg border text-center">
                       <div className="text-xs text-muted-foreground mb-2">Moyenne du marché</div>
                       <div className="text-3xl font-bold text-foreground">
-                        {Math.floor(Math.random() * 100) + 550}
+                        {marketStats.marketAverage}
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">/1000 points</div>
                     </div>
@@ -671,7 +679,7 @@ export default function Results() {
                     <div className="p-4 bg-background rounded-lg border text-center">
                       <div className="text-xs text-muted-foreground mb-2">Meilleur score</div>
                       <div className="text-3xl font-bold text-success">
-                        {Math.floor(Math.random() * 100) + 850}
+                        {marketStats.bestScore}
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">/1000 points</div>
                     </div>
