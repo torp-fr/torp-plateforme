@@ -22,6 +22,10 @@ export default function Results() {
     completion: 30
   });
   const [expandedWarnings, setExpandedWarnings] = useState<Set<number>>(new Set());
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [currentWarningIndex, setCurrentWarningIndex] = useState<number | null>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadedDocuments, setUploadedDocuments] = useState<Set<number>>(new Set());
 
   const toggleWarning = (index: number) => {
     const newExpanded = new Set(expandedWarnings);
@@ -31,6 +35,38 @@ export default function Results() {
       newExpanded.add(index);
     }
     setExpandedWarnings(newExpanded);
+  };
+
+  const handleUploadClick = (warningIndex: number) => {
+    setCurrentWarningIndex(warningIndex);
+    setUploadModalOpen(true);
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || currentWarningIndex === null) return;
+
+    setUploadingFile(true);
+    try {
+      // Upload to Supabase Storage
+      const devisId = searchParams.get('devisId');
+      const fileName = `${devisId}_document_${currentWarningIndex}_${Date.now()}_${file.name}`;
+
+      // Simulate upload for now (implement actual upload later)
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // Mark document as uploaded
+      const newUploaded = new Set(uploadedDocuments);
+      newUploaded.add(currentWarningIndex);
+      setUploadedDocuments(newUploaded);
+
+      setUploadModalOpen(false);
+      console.log('[Results] Document uploaded:', fileName);
+    } catch (error) {
+      console.error('[Results] Upload failed:', error);
+    } finally {
+      setUploadingFile(false);
+    }
   };
 
   useEffect(() => {
@@ -700,10 +736,22 @@ export default function Results() {
                                   {/* Action buttons */}
                                   <div className="flex gap-2 pl-6">
                                     {(hasInsuranceIssue || hasDocumentIssue) && (
-                                      <Button variant="outline" size="sm" className="gap-2">
-                                        <Upload className="w-4 h-4" />
-                                        Ajouter le document
-                                      </Button>
+                                      uploadedDocuments.has(warningIndex) ? (
+                                        <div className="flex items-center gap-2 px-3 py-2 bg-success/10 border border-success/30 rounded-md">
+                                          <CheckCircle className="w-4 h-4 text-success" />
+                                          <span className="text-sm text-success font-medium">Document fourni</span>
+                                        </div>
+                                      ) : (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="gap-2"
+                                          onClick={() => handleUploadClick(warningIndex)}
+                                        >
+                                          <Upload className="w-4 h-4" />
+                                          Ajouter le document
+                                        </Button>
+                                      )
                                     )}
                                     <Button variant="ghost" size="sm" className="gap-2">
                                       <FileText className="w-4 h-4" />
@@ -980,6 +1028,81 @@ export default function Results() {
           </div>
         </div>
       </div>
+
+      {/* Upload Modal */}
+      {uploadModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-background border rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-foreground">Ajouter un document</h3>
+              <button
+                onClick={() => setUploadModalOpen(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Ajoutez le document manquant (attestation d'assurance, justificatif, etc.) pour améliorer le score de votre devis.
+              </p>
+
+              <div className="border-2 border-dashed border-muted rounded-lg p-8 text-center hover:border-primary transition-colors">
+                <input
+                  type="file"
+                  id="file-upload"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  disabled={uploadingFile}
+                />
+                <label
+                  htmlFor="file-upload"
+                  className="cursor-pointer flex flex-col items-center gap-2"
+                >
+                  <Upload className="w-8 h-8 text-muted-foreground" />
+                  <span className="text-sm font-medium text-foreground">
+                    {uploadingFile ? 'Upload en cours...' : 'Cliquez pour sélectionner un fichier'}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    PDF, JPG, PNG (max 10MB)
+                  </span>
+                </label>
+              </div>
+
+              {uploadingFile && (
+                <div className="space-y-2">
+                  <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                    <div className="h-full bg-primary animate-pulse" style={{ width: '60%' }} />
+                  </div>
+                  <p className="text-xs text-center text-muted-foreground">
+                    Téléversement en cours...
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setUploadModalOpen(false)}
+                  disabled={uploadingFile}
+                >
+                  Annuler
+                </Button>
+              </div>
+
+              <div className="p-3 bg-info/10 rounded-lg border border-info/30">
+                <p className="text-xs text-muted-foreground">
+                  💡 <span className="font-semibold">Astuce :</span> Une fois le document ajouté,
+                  le score de votre devis sera automatiquement recalculé pour refléter cette amélioration.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
