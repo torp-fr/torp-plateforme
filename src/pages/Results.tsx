@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
-import { CheckCircle, AlertTriangle, Lightbulb, TrendingUp, Download, Eye, ArrowLeft, MessageSquare } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Lightbulb, TrendingUp, Download, Eye, ArrowLeft, MessageSquare, Building2, ShieldCheck, Database } from 'lucide-react';
 import type { Project } from '@/context/AppContext';
 
 export default function Results() {
@@ -14,6 +14,7 @@ export default function Results() {
   const [searchParams] = useSearchParams();
   const [displayScore, setDisplayScore] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [companyData, setCompanyData] = useState<any>(null);
 
   useEffect(() => {
     const loadProjectData = async () => {
@@ -89,6 +90,12 @@ export default function Results() {
 
         console.log('[Results] Parsed score_entreprise:', scoreEntrepriseData);
         console.log('[Results] Parsed recommendations:', recommendationsData);
+
+        // Extract company data if available
+        if (scoreEntrepriseData?.companyData) {
+          console.log('[Results] Company data found:', scoreEntrepriseData.companyData);
+          setCompanyData(scoreEntrepriseData.companyData);
+        }
 
         // Extract scores from analysis objects and convert to percentages
         // TORP scores: Entreprise /250, Prix /300, Complétude /200, Conformité /150, Délais /100
@@ -309,6 +316,159 @@ export default function Results() {
 
             {/* Détails de l'analyse */}
             <div className="lg:col-span-2 space-y-6">
+              {/* Company enrichment data */}
+              {companyData && (
+                <Card className="border-primary/50 bg-gradient-to-br from-primary/10 to-primary/5">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-primary">
+                      <Building2 className="w-5 h-5" />
+                      Informations entreprise vérifiées
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Company header */}
+                    <div className="flex items-start justify-between p-4 bg-background rounded-lg border">
+                      <div className="flex-1">
+                        <h3 className="text-xl font-bold text-foreground mb-2">{companyData.companyName}</h3>
+                        <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <span className="font-semibold">SIRET:</span> {companyData.siret}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="font-semibold">SIREN:</span> {companyData.siren}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <Badge
+                          variant="secondary"
+                          className="text-xs"
+                        >
+                          <Database className="w-3 h-3 mr-1" />
+                          {companyData.dataSource === 'pappers' ? 'Pappers API' : companyData.dataSource}
+                        </Badge>
+                        {companyData.cached && (
+                          <Badge variant="outline" className="text-xs">
+                            📦 Données en cache
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Quality and risk metrics */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 bg-background rounded-lg border">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm text-muted-foreground">Score de qualité</span>
+                          <ShieldCheck className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="flex items-end gap-2">
+                          <span className={`text-3xl font-bold ${
+                            companyData.qualityScore >= 80 ? 'text-success' :
+                            companyData.qualityScore >= 60 ? 'text-warning' :
+                            'text-destructive'
+                          }`}>
+                            {companyData.qualityScore}
+                          </span>
+                          <span className="text-muted-foreground mb-1">/100</span>
+                        </div>
+                        <div className="mt-2 w-full bg-muted rounded-full h-2">
+                          <div
+                            className={`h-2 rounded-full transition-all ${
+                              companyData.qualityScore >= 80 ? 'bg-success' :
+                              companyData.qualityScore >= 60 ? 'bg-warning' :
+                              'bg-destructive'
+                            }`}
+                            style={{ width: `${companyData.qualityScore}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-background rounded-lg border">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm text-muted-foreground">Niveau de risque</span>
+                          <AlertTriangle className={`w-4 h-4 ${
+                            companyData.riskLevel === 'low' ? 'text-success' :
+                            companyData.riskLevel === 'medium' ? 'text-warning' :
+                            companyData.riskLevel === 'high' ? 'text-destructive' :
+                            'text-destructive'
+                          }`} />
+                        </div>
+                        <Badge
+                          variant={
+                            companyData.riskLevel === 'low' ? 'default' :
+                            companyData.riskLevel === 'medium' ? 'secondary' :
+                            'destructive'
+                          }
+                          className="text-base px-3 py-1"
+                        >
+                          {companyData.riskLevel === 'low' ? '✓ Faible' :
+                           companyData.riskLevel === 'medium' ? '⚠ Moyen' :
+                           companyData.riskLevel === 'high' ? '⚠ Élevé' :
+                           '🚨 Critique'}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Financial data from Pappers API */}
+                    {companyData.data && (
+                      <div className="p-4 bg-background rounded-lg border">
+                        <h4 className="font-semibold text-foreground mb-3">📊 Données financières</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          {companyData.data.chiffre_affaires && (
+                            <div>
+                              <div className="text-xs text-muted-foreground mb-1">Chiffre d'affaires</div>
+                              <div className="text-sm font-semibold text-foreground">
+                                {(companyData.data.chiffre_affaires / 1000).toFixed(0)}k €
+                              </div>
+                            </div>
+                          )}
+                          {companyData.data.effectif && (
+                            <div>
+                              <div className="text-xs text-muted-foreground mb-1">Effectifs</div>
+                              <div className="text-sm font-semibold text-foreground">
+                                {companyData.data.effectif} personnes
+                              </div>
+                            </div>
+                          )}
+                          {companyData.data.date_creation && (
+                            <div>
+                              <div className="text-xs text-muted-foreground mb-1">Création</div>
+                              <div className="text-sm font-semibold text-foreground">
+                                {new Date(companyData.data.date_creation).getFullYear()}
+                              </div>
+                            </div>
+                          )}
+                          {companyData.data.statut_rcs && (
+                            <div>
+                              <div className="text-xs text-muted-foreground mb-1">Statut RCS</div>
+                              <div className="text-sm font-semibold text-foreground">
+                                {companyData.data.statut_rcs}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Alerts */}
+                    {companyData.alerts && companyData.alerts.length > 0 && (
+                      <div className="p-4 bg-destructive/10 rounded-lg border border-destructive/50">
+                        <h4 className="font-semibold text-destructive mb-2">⚠️ Alertes détectées</h4>
+                        <ul className="space-y-1">
+                          {companyData.alerts.map((alert: string, index: number) => (
+                            <li key={index} className="text-sm text-destructive flex items-start gap-2">
+                              <span className="mt-0.5">•</span>
+                              <span>{alert}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Points forts */}
               <Card className="border-success/50 bg-gradient-to-br from-success/10 to-success/5">
                 <CardHeader>
