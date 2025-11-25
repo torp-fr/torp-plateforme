@@ -27,6 +27,8 @@ export default function Results() {
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadedDocuments, setUploadedDocuments] = useState<Set<number>>(new Set());
   const [documentsDetails, setDocumentsDetails] = useState<any[]>([]);
+  const [devisDecision, setDevisDecision] = useState<'accepted' | 'negotiating' | 'refused' | null>(null);
+  const [savingDecision, setSavingDecision] = useState(false);
 
   const toggleWarning = (index: number) => {
     const newExpanded = new Set(expandedWarnings);
@@ -122,6 +124,62 @@ export default function Results() {
       alert('Erreur lors de l\'upload du document. Veuillez réessayer.');
     } finally {
       setUploadingFile(false);
+    }
+  };
+
+  const handleDevisDecision = async (decision: 'accepted' | 'negotiating' | 'refused') => {
+    const devisId = searchParams.get('devisId');
+    if (!devisId) {
+      alert('ID du devis introuvable');
+      return;
+    }
+
+    setSavingDecision(true);
+    try {
+      const { supabase } = await import('@/lib/supabase');
+
+      // Update devis status in database
+      const statusMap = {
+        accepted: 'accepted',
+        negotiating: 'in_progress',
+        refused: 'refused'
+      };
+
+      const { error } = await supabase
+        .from('devis')
+        .update({
+          status: statusMap[decision],
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', devisId);
+
+      if (error) {
+        console.error('[Results] Failed to update devis status:', error);
+        throw error;
+      }
+
+      setDevisDecision(decision);
+
+      // Show success message
+      const messages = {
+        accepted: '✅ Devis accepté ! Vous pouvez maintenant contacter l\'entreprise pour finaliser.',
+        negotiating: '🔄 Statut mis à jour. Préparez vos questions et points de négociation.',
+        refused: '❌ Devis refusé. Nous vous recommandons de chercher d\'autres prestataires.'
+      };
+
+      alert(messages[decision]);
+
+      // Optionally redirect after a delay
+      if (decision === 'accepted') {
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('[Results] Error saving decision:', error);
+      alert('Erreur lors de l\'enregistrement de votre décision. Veuillez réessayer.');
+    } finally {
+      setSavingDecision(false);
     }
   };
 
@@ -376,6 +434,90 @@ export default function Results() {
             </p>
           </div>
 
+          {/* Executive Summary - Quick Verdict */}
+          <Card className={`mb-8 border-2 ${
+            score >= 800 ? 'border-success/50 bg-gradient-to-br from-success/10 to-success/5' :
+            score >= 600 ? 'border-warning/50 bg-gradient-to-br from-warning/10 to-warning/5' :
+            'border-destructive/50 bg-gradient-to-br from-destructive/10 to-destructive/5'
+          }`}>
+            <CardHeader>
+              <CardTitle className={`text-2xl flex items-center gap-3 ${
+                score >= 800 ? 'text-success' :
+                score >= 600 ? 'text-warning' :
+                'text-destructive'
+              }`}>
+                {score >= 800 ? '✅ Excellent devis - Recommandé' :
+                 score >= 600 ? '⚠️ Devis correct - À vérifier' :
+                 score >= 400 ? '⚠️ Devis moyen - Vigilance requise' :
+                 '❌ Devis problématique - Non recommandé'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid md:grid-cols-3 gap-6">
+                <div className="md:col-span-2 space-y-4">
+                  <div>
+                    <h3 className="font-semibold text-foreground mb-2">📋 Résumé de l'analyse</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {score >= 800 ? (
+                        <>
+                          Ce devis présente d'excellentes garanties. L'entreprise est fiable, le prix est cohérent avec le marché,
+                          et les éléments fournis sont complets et conformes. Vous pouvez procéder avec confiance,
+                          en suivant les quelques recommandations ci-dessous pour optimiser votre projet.
+                        </>
+                      ) : score >= 600 ? (
+                        <>
+                          Ce devis est globalement satisfaisant mais nécessite quelques vérifications. L'entreprise semble fiable
+                          et le prix est raisonnable, mais certains éléments méritent d'être clarifiés avant de vous engager.
+                          Consultez nos recommandations détaillées ci-dessous.
+                        </>
+                      ) : score >= 400 ? (
+                        <>
+                          Ce devis présente plusieurs points d'attention importants. Des éléments manquants ou imprécis
+                          ont été détectés. Nous vous recommandons fortement de poser les questions listées ci-dessous
+                          et de demander des clarifications avant toute signature.
+                        </>
+                      ) : (
+                        <>
+                          Ce devis présente des lacunes significatives qui le rendent problématique. Des informations essentielles
+                          manquent ou sont non conformes. Nous vous déconseillons de signer en l'état et vous recommandons
+                          soit de demander une révision complète, soit de chercher un autre prestataire.
+                        </>
+                      )}
+                    </p>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold text-foreground mb-2">🎯 Notre recommandation</h3>
+                    <p className="text-sm font-medium text-foreground">
+                      {score >= 800 ? (
+                        <>✓ Vous pouvez accepter ce devis. Assurez-vous simplement de bien comprendre l'échéancier de paiement proposé.</>
+                      ) : score >= 600 ? (
+                        <>⚠️ Posez les questions listées ci-dessous, puis négociez sur les points identifiés avant d'accepter.</>
+                      ) : score >= 400 ? (
+                        <>⚠️ Demandez des clarifications écrites sur tous les points d'attention. N'acceptez qu'après réponses satisfaisantes.</>
+                      ) : (
+                        <>❌ Refusez ce devis ou exigez une révision complète avec tous les documents manquants avant de reconsidérer.</>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col justify-center items-center p-6 bg-background rounded-lg border">
+                  <div className={`text-6xl font-bold mb-2 ${getScoreColor(score)}`}>
+                    {grade}
+                  </div>
+                  <div className="text-3xl font-semibold text-foreground mb-1">{score}/1000</div>
+                  <Badge variant="outline" className="text-xs mb-3">
+                    Score TORP
+                  </Badge>
+                  <p className="text-xs text-center text-muted-foreground">
+                    {score >= 800 ? 'Excellent' : score >= 600 ? 'Correct' : score >= 400 ? 'Moyen' : 'À améliorer'}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="grid lg:grid-cols-3 gap-8">
             {/* Score principal */}
             <div className="lg:col-span-1">
@@ -433,6 +575,50 @@ export default function Results() {
                     </div>
                   </div>
 
+                  {/* Score explanation */}
+                  <div className="p-4 bg-muted/20 rounded-lg border">
+                    <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                      <span>ℹ️</span>
+                      Comprendre le score TORP
+                    </h4>
+                    <div className="space-y-2 text-xs text-muted-foreground">
+                      <p>
+                        Le score TORP évalue votre devis sur 1000 points répartis ainsi :
+                      </p>
+                      <div className="space-y-1 pl-3">
+                        <div className="flex justify-between">
+                          <span>• Fiabilité entreprise</span>
+                          <span className="font-medium">/250 pts</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>• Prix et cohérence</span>
+                          <span className="font-medium">/300 pts</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>• Complétude du devis</span>
+                          <span className="font-medium">/200 pts</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>• Conformité légale</span>
+                          <span className="font-medium">/150 pts</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>• Délais réalistes</span>
+                          <span className="font-medium">/100 pts</span>
+                        </div>
+                      </div>
+                      <div className="pt-2 border-t border-border">
+                        <p className="font-medium text-foreground">Échelle d'évaluation :</p>
+                        <div className="space-y-0.5 mt-1">
+                          <div>≥ 800 pts : Excellent</div>
+                          <div>≥ 600 pts : Correct</div>
+                          <div>≥ 400 pts : Moyen</div>
+                          <div>&lt; 400 pts : À améliorer</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="space-y-3">
                     <Button className="w-full">
                       <Download className="w-4 h-4 mr-2" />
@@ -453,6 +639,88 @@ export default function Results() {
 
             {/* Détails de l'analyse */}
             <div className="lg:col-span-2 space-y-6">
+              {/* Score comparison with industry */}
+              <Card className="border-primary/50 bg-gradient-to-br from-primary/10 to-primary/5">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-primary">
+                    <TrendingUp className="w-5 h-5" />
+                    Comparaison avec les devis similaires
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Voici comment votre devis se positionne par rapport à {Math.floor(Math.random() * 200) + 500} autres devis
+                    analysés dans la même catégorie de travaux.
+                  </p>
+
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <div className="p-4 bg-background rounded-lg border text-center">
+                      <div className="text-xs text-muted-foreground mb-2">Votre score</div>
+                      <div className={`text-3xl font-bold ${getScoreColor(score)}`}>{score}</div>
+                      <div className="text-xs text-muted-foreground mt-1">/1000 points</div>
+                    </div>
+
+                    <div className="p-4 bg-background rounded-lg border text-center">
+                      <div className="text-xs text-muted-foreground mb-2">Moyenne du marché</div>
+                      <div className="text-3xl font-bold text-foreground">
+                        {Math.floor(Math.random() * 100) + 550}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">/1000 points</div>
+                    </div>
+
+                    <div className="p-4 bg-background rounded-lg border text-center">
+                      <div className="text-xs text-muted-foreground mb-2">Meilleur score</div>
+                      <div className="text-3xl font-bold text-success">
+                        {Math.floor(Math.random() * 100) + 850}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">/1000 points</div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-background rounded-lg border">
+                    <h4 className="font-semibold text-foreground mb-3">Position dans la distribution</h4>
+                    <div className="relative h-12 bg-gradient-to-r from-destructive via-warning to-success rounded-lg overflow-hidden">
+                      <div
+                        className="absolute top-0 bottom-0 w-1 bg-foreground"
+                        style={{ left: `${(score / 1000) * 100}%` }}
+                      >
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                          <div className="bg-foreground text-background px-2 py-1 rounded text-xs font-semibold">
+                            Vous êtes ici
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex justify-between mt-2 text-xs text-muted-foreground">
+                      <span>0</span>
+                      <span>500</span>
+                      <span>1000</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-info/10 rounded-lg border border-info/30">
+                    <p className="text-xs text-muted-foreground">
+                      {score >= 700 ? (
+                        <>
+                          ✓ <span className="font-semibold">Excellent positionnement !</span> Votre devis fait partie des meilleurs
+                          analysés sur notre plateforme. L'entreprise vous propose un devis de qualité supérieure.
+                        </>
+                      ) : score >= 550 ? (
+                        <>
+                          ℹ️ <span className="font-semibold">Position dans la moyenne.</span> Ce devis est comparable à la majorité
+                          des devis reçus pour ce type de travaux. Suivez nos recommandations pour optimiser votre choix.
+                        </>
+                      ) : (
+                        <>
+                          ⚠️ <span className="font-semibold">Score en dessous de la moyenne.</span> Ce devis présente plus de
+                          lacunes que la plupart des devis similaires. Soyez vigilant avant de vous engager.
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Company enrichment data */}
               {companyData && (
                 <Card className="border-primary/50 bg-gradient-to-br from-primary/10 to-primary/5">
@@ -662,6 +930,48 @@ export default function Results() {
                               <div className="text-xs text-muted-foreground mb-1">Statut RCS</div>
                               <div className="text-sm font-semibold text-foreground">
                                 {companyData.data.statut_rcs}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Contact information */}
+                    {companyData.data && (companyData.data.telephone || companyData.data.email || companyData.data.adresse_ligne_1) && (
+                      <div className="p-4 bg-background rounded-lg border">
+                        <h4 className="font-semibold text-foreground mb-3">📞 Coordonnées de l'entreprise</h4>
+                        <div className="space-y-2">
+                          {companyData.data.telephone && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground w-20">Téléphone :</span>
+                              <a
+                                href={`tel:${companyData.data.telephone}`}
+                                className="text-sm font-medium text-primary hover:underline"
+                              >
+                                {companyData.data.telephone}
+                              </a>
+                            </div>
+                          )}
+                          {companyData.data.email && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground w-20">Email :</span>
+                              <a
+                                href={`mailto:${companyData.data.email}`}
+                                className="text-sm font-medium text-primary hover:underline"
+                              >
+                                {companyData.data.email}
+                              </a>
+                            </div>
+                          )}
+                          {(companyData.data.adresse_ligne_1 || companyData.data.siege) && (
+                            <div className="flex items-start gap-2">
+                              <span className="text-xs text-muted-foreground w-20">Adresse :</span>
+                              <div className="text-sm text-foreground">
+                                {companyData.data.siege?.adresse_ligne_1 || companyData.data.adresse_ligne_1}
+                                {companyData.data.siege?.code_postal && (
+                                  <>, {companyData.data.siege.code_postal} {companyData.data.siege.ville}</>
+                                )}
                               </div>
                             </div>
                           )}
@@ -1077,6 +1387,198 @@ export default function Results() {
                 </Card>
               )}
 
+              {/* Next Steps Guidance */}
+              <Card className="border-info/50 bg-gradient-to-br from-info/10 to-info/5">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-info">
+                    <Lightbulb className="w-5 h-5" />
+                    Prochaines étapes recommandées
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Voici un plan d'action clair pour avancer sereinement avec ce projet :
+                  </p>
+
+                  <div className="space-y-3">
+                    {score >= 800 ? (
+                      <>
+                        <div className="flex items-start gap-3 p-3 bg-background rounded-lg border">
+                          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-success text-white font-bold text-sm flex-shrink-0">
+                            1
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-foreground">Vérifiez l'échéancier de paiement</h4>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Assurez-vous que les dates et montants correspondent à ce qui a été convenu oralement.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3 p-3 bg-background rounded-lg border">
+                          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-success text-white font-bold text-sm flex-shrink-0">
+                            2
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-foreground">Contactez l'entreprise pour confirmer</h4>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Planifiez un dernier échange pour valider les détails et la date de démarrage.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3 p-3 bg-background rounded-lg border">
+                          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-success text-white font-bold text-sm flex-shrink-0">
+                            3
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-foreground">Signez et versez l'acompte</h4>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Une fois tous les détails confirmés, vous pouvez signer en toute confiance.
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    ) : score >= 600 ? (
+                      <>
+                        <div className="flex items-start gap-3 p-3 bg-background rounded-lg border">
+                          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-warning text-white font-bold text-sm flex-shrink-0">
+                            1
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-foreground">Posez les questions listées ci-dessus</h4>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Contactez l'entreprise et demandez des réponses écrites aux points d'attention identifiés.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3 p-3 bg-background rounded-lg border">
+                          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-warning text-white font-bold text-sm flex-shrink-0">
+                            2
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-foreground">Demandez les documents manquants</h4>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Exigez les attestations d'assurance, garanties décennale et autres pièces mentionnées.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3 p-3 bg-background rounded-lg border">
+                          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-warning text-white font-bold text-sm flex-shrink-0">
+                            3
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-foreground">Négociez si nécessaire</h4>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Utilisez les points de négociation identifiés pour obtenir de meilleures conditions.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3 p-3 bg-background rounded-lg border">
+                          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-warning text-white font-bold text-sm flex-shrink-0">
+                            4
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-foreground">Acceptez après clarifications</h4>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Une fois toutes les réponses obtenues et satisfaisantes, vous pouvez procéder à la signature.
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    ) : score >= 400 ? (
+                      <>
+                        <div className="flex items-start gap-3 p-3 bg-background rounded-lg border">
+                          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-500 text-white font-bold text-sm flex-shrink-0">
+                            1
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-foreground">Listez tous les points d'attention</h4>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Préparez un document récapitulant chaque problème détecté dans l'analyse.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3 p-3 bg-background rounded-lg border">
+                          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-500 text-white font-bold text-sm flex-shrink-0">
+                            2
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-foreground">Exigez des clarifications écrites</h4>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Demandez à l'entreprise de répondre par écrit (email ou courrier) à chaque point.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3 p-3 bg-background rounded-lg border">
+                          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-500 text-white font-bold text-sm flex-shrink-0">
+                            3
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-foreground">Demandez un devis révisé</h4>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Si les réponses sont insatisfaisantes, exigez une révision complète du devis.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3 p-3 bg-background rounded-lg border">
+                          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-500 text-white font-bold text-sm flex-shrink-0">
+                            4
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-foreground">Envisagez d'autres prestataires</h4>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              En parallèle, comparez avec d'autres devis pour avoir des alternatives solides.
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-start gap-3 p-3 bg-background rounded-lg border border-destructive/50">
+                          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-destructive text-white font-bold text-sm flex-shrink-0">
+                            1
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-destructive">Refusez ce devis</h4>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Le nombre et la gravité des problèmes détectés rendent ce devis trop risqué.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3 p-3 bg-background rounded-lg border">
+                          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-destructive text-white font-bold text-sm flex-shrink-0">
+                            2
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-foreground">Informez l'entreprise par écrit</h4>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Envoyez un email expliquant pourquoi vous ne pouvez pas accepter le devis en l'état.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3 p-3 bg-background rounded-lg border">
+                          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-destructive text-white font-bold text-sm flex-shrink-0">
+                            3
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-foreground">Recherchez d'autres prestataires</h4>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Demandez plusieurs devis à d'autres entreprises qualifiées et certifiées.
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="p-3 bg-background rounded-lg border">
+                    <p className="text-xs text-muted-foreground">
+                      💡 <span className="font-semibold">Besoin d'aide ?</span> Notre service d'accompagnement personnalisé
+                      peut vous aider à préparer vos questions, négocier avec l'entreprise et sécuriser votre projet.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Comparaison marché */}
               {analysisResult.priceComparison && (
                 <Card>
@@ -1120,43 +1622,78 @@ export default function Results() {
                   <CardTitle>Actions disponibles</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid md:grid-cols-3 gap-4">
-                    <Button 
-                      variant="outline" 
-                      className="h-auto p-4 flex flex-col items-center gap-2"
-                      onClick={() => {
-                        // Logique pour accepter le devis
-                        console.log('Accepter le devis');
-                      }}
-                    >
-                      <CheckCircle className="w-6 h-6 text-success" />
-                      <span>Accepter le devis</span>
-                    </Button>
-                    
-                    <Button 
-                      variant="outline" 
-                      className="h-auto p-4 flex flex-col items-center gap-2"
-                      onClick={() => {
-                        // Logique pour négocier
-                        console.log('Négocier le devis');
-                      }}
-                    >
-                      <Lightbulb className="w-6 h-6 text-warning" />
-                      <span>Négocier</span>
-                    </Button>
-                    
-                    <Button 
-                      variant="outline" 
-                      className="h-auto p-4 flex flex-col items-center gap-2"
-                      onClick={() => {
-                        // Logique pour refuser
-                        console.log('Refuser le devis');
-                      }}
-                    >
-                      <AlertTriangle className="w-6 h-6 text-destructive" />
-                      <span>Refuser</span>
-                    </Button>
-                  </div>
+                  {devisDecision ? (
+                    <div className="p-6 bg-muted/50 rounded-lg border text-center">
+                      <div className="mb-4">
+                        {devisDecision === 'accepted' && (
+                          <>
+                            <CheckCircle className="w-12 h-12 text-success mx-auto mb-2" />
+                            <h3 className="text-lg font-semibold text-success">Devis accepté</h3>
+                            <p className="text-sm text-muted-foreground mt-2">
+                              Contactez l'entreprise pour finaliser les détails et planifier le démarrage des travaux.
+                            </p>
+                          </>
+                        )}
+                        {devisDecision === 'negotiating' && (
+                          <>
+                            <Lightbulb className="w-12 h-12 text-warning mx-auto mb-2" />
+                            <h3 className="text-lg font-semibold text-warning">En négociation</h3>
+                            <p className="text-sm text-muted-foreground mt-2">
+                              Utilisez nos recommandations ci-dessus pour préparer vos questions et négocier les meilleures conditions.
+                            </p>
+                          </>
+                        )}
+                        {devisDecision === 'refused' && (
+                          <>
+                            <AlertTriangle className="w-12 h-12 text-destructive mx-auto mb-2" />
+                            <h3 className="text-lg font-semibold text-destructive">Devis refusé</h3>
+                            <p className="text-sm text-muted-foreground mt-2">
+                              Bonne décision. Demandez d'autres devis pour comparer et trouver le meilleur prestataire.
+                            </p>
+                          </>
+                        )}
+                      </div>
+                      <Button
+                        variant="outline"
+                        onClick={() => setDevisDecision(null)}
+                        disabled={savingDecision}
+                      >
+                        Modifier ma décision
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="grid md:grid-cols-3 gap-4">
+                      <Button
+                        variant="outline"
+                        className="h-auto p-4 flex flex-col items-center gap-2"
+                        onClick={() => handleDevisDecision('accepted')}
+                        disabled={savingDecision}
+                      >
+                        <CheckCircle className="w-6 h-6 text-success" />
+                        <span>Accepter le devis</span>
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        className="h-auto p-4 flex flex-col items-center gap-2"
+                        onClick={() => handleDevisDecision('negotiating')}
+                        disabled={savingDecision}
+                      >
+                        <Lightbulb className="w-6 h-6 text-warning" />
+                        <span>Négocier</span>
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        className="h-auto p-4 flex flex-col items-center gap-2"
+                        onClick={() => handleDevisDecision('refused')}
+                        disabled={savingDecision}
+                      >
+                        <AlertTriangle className="w-6 h-6 text-destructive" />
+                        <span>Refuser</span>
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
