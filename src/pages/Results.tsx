@@ -8,20 +8,6 @@ import { Header } from '@/components/Header';
 import { CheckCircle, AlertTriangle, Lightbulb, TrendingUp, Download, Eye, ArrowLeft, MessageSquare, Building2, ShieldCheck, Database, ChevronDown, Upload, FileText, DollarSign } from 'lucide-react';
 import type { Project } from '@/context/AppContext';
 
-// Utility functions moved outside component to avoid initialization issues
-const getScoreColor = (score: number) => {
-  if (score >= 800) return 'text-success';
-  if (score >= 600) return 'text-warning';
-  if (score >= 400) return 'text-orange-500';
-  return 'text-destructive';
-};
-
-const getGradientColor = (score: number) => {
-  if (score >= 800) return 'from-success/20 to-success/5';
-  if (score >= 600) return 'from-warning/20 to-warning/5';
-  return 'from-destructive/20 to-destructive/5';
-};
-
 export default function Results() {
   const { currentProject, setCurrentProject } = useApp();
   const navigate = useNavigate();
@@ -418,6 +404,20 @@ export default function Results() {
     completude: 0,
     conformite: 0,
     delais: 0
+  };
+
+  // Utility functions defined inside component after data validation
+  const getScoreColor = (scoreValue: number) => {
+    if (scoreValue >= 800) return 'text-success';
+    if (scoreValue >= 600) return 'text-warning';
+    if (scoreValue >= 400) return 'text-orange-500';
+    return 'text-destructive';
+  };
+
+  const getGradientColor = (scoreValue: number) => {
+    if (scoreValue >= 800) return 'from-success/20 to-success/5';
+    if (scoreValue >= 600) return 'from-warning/20 to-warning/5';
+    return 'from-destructive/20 to-destructive/5';
   };
 
   return (
