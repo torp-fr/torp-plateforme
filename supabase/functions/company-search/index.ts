@@ -4,11 +4,16 @@
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { corsHeaders } from '../_shared/cors.ts';
 import {
   CompanySearchService,
   type CompanySearchOptions,
 } from '../_shared/company-search.service.ts';
+
+// CORS headers - include x-application-name for Supabase client
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-application-name',
+};
 
 interface SearchRequest extends CompanySearchOptions {
   // Extends CompanySearchOptions with any additional request fields
