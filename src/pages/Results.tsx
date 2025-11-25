@@ -15,6 +15,12 @@ export default function Results() {
   const [displayScore, setDisplayScore] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [companyData, setCompanyData] = useState<any>(null);
+  const [projectAmount, setProjectAmount] = useState<number>(0);
+  const [paymentSchedule, setPaymentSchedule] = useState({
+    deposit: 30,
+    midpoint: 40,
+    completion: 30
+  });
 
   useEffect(() => {
     const loadProjectData = async () => {
@@ -95,6 +101,11 @@ export default function Results() {
         if (scoreEntrepriseData?.companyData) {
           console.log('[Results] Company data found:', scoreEntrepriseData.companyData);
           setCompanyData(scoreEntrepriseData.companyData);
+        }
+
+        // Store project amount for payment schedule
+        if (data.montant_total) {
+          setProjectAmount(data.montant_total);
         }
 
         // Extract scores from analysis objects and convert to percentages
@@ -206,14 +217,15 @@ export default function Results() {
   };
   
   const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-success';
-    if (score >= 60) return 'text-warning';
+    if (score >= 800) return 'text-success';
+    if (score >= 600) return 'text-warning';
+    if (score >= 400) return 'text-orange-500';
     return 'text-destructive';
   };
 
   const getGradientColor = (score: number) => {
-    if (score >= 80) return 'from-success/20 to-success/5';
-    if (score >= 60) return 'from-warning/20 to-warning/5';
+    if (score >= 800) return 'from-success/20 to-success/5';
+    if (score >= 600) return 'from-warning/20 to-warning/5';
     return 'from-destructive/20 to-destructive/5';
   };
 
@@ -259,15 +271,15 @@ export default function Results() {
                         strokeWidth="8" 
                         fill="none"
                         strokeDasharray="552" 
-                        strokeDashoffset={552 - (552 * displayScore) / 100}
+                        strokeDashoffset={552 - (552 * displayScore) / 1000}
                         className={`transition-all duration-1000 ease-out ${getScoreColor(score)}`}
                       />
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                       <div className={`text-6xl font-bold ${getScoreColor(score)} mb-2`}>{grade}</div>
-                      <div className="text-2xl font-semibold text-foreground">{Math.round(displayScore)}/100</div>
+                      <div className="text-2xl font-semibold text-foreground">{score}/1000</div>
                       <div className="text-sm text-muted-foreground">
-                        {score >= 80 ? 'Excellent' : score >= 60 ? 'Correct' : 'À améliorer'}
+                        {score >= 800 ? 'Excellent' : score >= 600 ? 'Correct' : score >= 400 ? 'Moyen' : 'À améliorer'}
                       </div>
                     </div>
                   </div>
@@ -327,52 +339,89 @@ export default function Results() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {/* Company header */}
-                    <div className="flex items-start justify-between p-4 bg-background rounded-lg border">
-                      <div className="flex-1">
-                        <h3 className="text-xl font-bold text-foreground mb-2">{companyData.companyName}</h3>
-                        <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <span className="font-semibold">SIRET:</span> {companyData.siret}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <span className="font-semibold">SIREN:</span> {companyData.siren}
-                          </span>
+                    <div className="p-4 bg-background rounded-lg border space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="text-xl font-bold text-foreground mb-2">{companyData.companyName}</h3>
+                          <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <span className="font-semibold">SIRET:</span> {companyData.siret}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="font-semibold">SIREN:</span> {companyData.siren}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <Badge
+                            variant="secondary"
+                            className="text-xs"
+                          >
+                            <Database className="w-3 h-3 mr-1" />
+                            {companyData.dataSource === 'pappers' ? 'Données officielles' : companyData.dataSource}
+                          </Badge>
+                          {companyData.cached && (
+                            <Badge variant="outline" className="text-xs">
+                              ✓ Vérifiées
+                            </Badge>
+                          )}
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <Badge
-                          variant="secondary"
-                          className="text-xs"
-                        >
-                          <Database className="w-3 h-3 mr-1" />
-                          {companyData.dataSource === 'pappers' ? 'Pappers API' : companyData.dataSource}
-                        </Badge>
-                        {companyData.cached && (
+
+                      {/* Activity description */}
+                      {companyData.data?.objet_social && (
+                        <div className="pt-3 border-t">
+                          <p className="text-sm text-muted-foreground mb-2">
+                            <span className="font-semibold text-foreground">Activité : </span>
+                            {companyData.data.objet_social.length > 200
+                              ? companyData.data.objet_social.substring(0, 200) + '...'
+                              : companyData.data.objet_social}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Tags/Hashtags */}
+                      <div className="flex flex-wrap gap-2">
+                        {companyData.data?.forme_juridique && (
                           <Badge variant="outline" className="text-xs">
-                            📦 Données en cache
+                            {companyData.data.forme_juridique}
+                          </Badge>
+                        )}
+                        {companyData.data?.code_naf && (
+                          <Badge variant="outline" className="text-xs">
+                            NAF: {companyData.data.code_naf}
+                          </Badge>
+                        )}
+                        {companyData.data?.domaine_activite && (
+                          <Badge variant="secondary" className="text-xs">
+                            #{companyData.data.domaine_activite.replace(/\s+/g, '')}
                           </Badge>
                         )}
                       </div>
                     </div>
 
                     {/* Quality and risk metrics */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-4">
+                      {/* Quality Score */}
                       <div className="p-4 bg-background rounded-lg border">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm text-muted-foreground">Score de qualité</span>
-                          <ShieldCheck className="w-4 h-4 text-primary" />
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <span className="text-sm font-semibold text-foreground">Compatibilité avec votre projet</span>
+                            <p className="text-xs text-muted-foreground mt-1">Adéquation entre l'entreprise et vos besoins</p>
+                          </div>
+                          <ShieldCheck className="w-5 h-5 text-primary" />
                         </div>
-                        <div className="flex items-end gap-2">
-                          <span className={`text-3xl font-bold ${
+                        <div className="flex items-end gap-2 mb-2">
+                          <span className={`text-4xl font-bold ${
                             companyData.qualityScore >= 80 ? 'text-success' :
                             companyData.qualityScore >= 60 ? 'text-warning' :
                             'text-destructive'
                           }`}>
                             {companyData.qualityScore}
                           </span>
-                          <span className="text-muted-foreground mb-1">/100</span>
+                          <span className="text-muted-foreground mb-2">/100</span>
                         </div>
-                        <div className="mt-2 w-full bg-muted rounded-full h-2">
+                        <div className="w-full bg-muted rounded-full h-2 mb-3">
                           <div
                             className={`h-2 rounded-full transition-all ${
                               companyData.qualityScore >= 80 ? 'bg-success' :
@@ -382,31 +431,75 @@ export default function Results() {
                             style={{ width: `${companyData.qualityScore}%` }}
                           />
                         </div>
+                        <p className="text-xs text-muted-foreground">
+                          {companyData.qualityScore >= 80
+                            ? '✓ Excellente correspondance - Cette entreprise est parfaitement adaptée à votre projet'
+                            : companyData.qualityScore >= 60
+                            ? '⚠ Bonne correspondance - L\'entreprise convient à votre projet'
+                            : '⚠ Correspondance moyenne - Vérifiez les détails avant de vous engager'}
+                        </p>
                       </div>
 
-                      <div className="p-4 bg-background rounded-lg border">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm text-muted-foreground">Niveau de risque</span>
-                          <AlertTriangle className={`w-4 h-4 ${
+                      {/* Risk Level with clear recommendation */}
+                      <div className={`p-4 rounded-lg border ${
+                        companyData.riskLevel === 'low'
+                          ? 'bg-success/5 border-success/30'
+                          : companyData.riskLevel === 'medium'
+                          ? 'bg-warning/5 border-warning/30'
+                          : 'bg-destructive/5 border-destructive/30'
+                      }`}>
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <span className="text-sm font-semibold text-foreground">Notre recommandation</span>
+                            <p className="text-xs text-muted-foreground mt-1">Basée sur l'analyse des risques</p>
+                          </div>
+                          <AlertTriangle className={`w-5 h-5 ${
                             companyData.riskLevel === 'low' ? 'text-success' :
                             companyData.riskLevel === 'medium' ? 'text-warning' :
-                            companyData.riskLevel === 'high' ? 'text-destructive' :
                             'text-destructive'
                           }`} />
                         </div>
-                        <Badge
-                          variant={
-                            companyData.riskLevel === 'low' ? 'default' :
-                            companyData.riskLevel === 'medium' ? 'secondary' :
-                            'destructive'
-                          }
-                          className="text-base px-3 py-1"
-                        >
-                          {companyData.riskLevel === 'low' ? '✓ Faible' :
-                           companyData.riskLevel === 'medium' ? '⚠ Moyen' :
-                           companyData.riskLevel === 'high' ? '⚠ Élevé' :
-                           '🚨 Critique'}
-                        </Badge>
+
+                        <div className="mb-3">
+                          <Badge
+                            variant={
+                              companyData.riskLevel === 'low' ? 'default' :
+                              companyData.riskLevel === 'medium' ? 'secondary' :
+                              'destructive'
+                            }
+                            className="text-base px-4 py-1.5"
+                          >
+                            {companyData.riskLevel === 'low' ? '✓ Risque faible' :
+                             companyData.riskLevel === 'medium' ? '⚠ Risque modéré' :
+                             companyData.riskLevel === 'high' ? '⚠ Risque élevé' :
+                             '🚨 Risque critique'}
+                          </Badge>
+                        </div>
+
+                        <div className={`p-3 rounded-lg ${
+                          companyData.riskLevel === 'low'
+                            ? 'bg-success/10'
+                            : companyData.riskLevel === 'medium'
+                            ? 'bg-warning/10'
+                            : 'bg-destructive/10'
+                        }`}>
+                          <p className="text-sm font-semibold mb-2">
+                            {companyData.riskLevel === 'low' && '✅ Oui, vous pouvez faire confiance à cette entreprise'}
+                            {companyData.riskLevel === 'medium' && '⚠️ Oui, avec quelques précautions'}
+                            {companyData.riskLevel === 'high' && '❌ Non, sauf si les points suivants sont clarifiés'}
+                            {companyData.riskLevel === 'critical' && '🚫 Refus recommandé'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {companyData.riskLevel === 'low' &&
+                              'L\'entreprise présente toutes les garanties nécessaires. Les données officielles confirment sa fiabilité et sa santé financière. Vous pouvez procéder en toute confiance.'}
+                            {companyData.riskLevel === 'medium' &&
+                              'L\'entreprise est globalement fiable mais présente quelques points à surveiller. Nous vous recommandons de vérifier les garanties et assurances avant de signer.'}
+                            {companyData.riskLevel === 'high' &&
+                              'L\'entreprise présente des signaux d\'alerte importants. Exigez des garanties supplémentaires et clarifiez les points d\'attention avant tout engagement.'}
+                            {companyData.riskLevel === 'critical' &&
+                              'L\'entreprise présente des risques majeurs (difficultés financières, procédures en cours). Nous vous déconseillons fortement de travailler avec cette entreprise.'}
+                          </p>
+                        </div>
                       </div>
                     </div>
 
@@ -490,23 +583,38 @@ export default function Results() {
               </Card>
 
               {/* Points d'attention */}
-              {analysisResult.warnings && (
+              {analysisResult.warnings && analysisResult.warnings.length > 0 && (
                 <Card className="border-warning/50 bg-gradient-to-br from-warning/10 to-warning/5">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-warning">
                       <AlertTriangle className="w-5 h-5" />
-                      Points à vérifier
+                      Ce qu'il faut vérifier avant de signer
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <ul className="space-y-3">
+                  <CardContent className="space-y-3">
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Voici les points importants à clarifier avec l'entreprise pour éviter les mauvaises surprises :
+                    </p>
+                    <div className="space-y-4">
                       {analysisResult.warnings.map((warning: string, index: number) => (
-                        <li key={index} className="flex items-start gap-3">
-                          <div className="w-2 h-2 bg-warning rounded-full mt-2 flex-shrink-0"></div>
-                          <span className="text-foreground">{warning}</span>
-                        </li>
+                        <div key={index} className="p-3 bg-background rounded-lg border border-warning/30">
+                          <div className="flex items-start gap-3">
+                            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-warning/20 text-warning font-bold text-sm flex-shrink-0 mt-0.5">
+                              !
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm text-foreground leading-relaxed">{warning}</p>
+                            </div>
+                          </div>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
+                    <div className="mt-4 p-3 bg-warning/10 rounded-lg border border-warning/30">
+                      <p className="text-xs text-muted-foreground">
+                        💡 <span className="font-semibold">Que faire ?</span> Demandez des précisions écrites à l'entreprise sur chacun de ces points avant de signer le devis.
+                        N'hésitez pas à demander des garanties supplémentaires si nécessaire.
+                      </p>
+                    </div>
                   </CardContent>
                 </Card>
               )}
@@ -575,6 +683,172 @@ export default function Results() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* Payment Schedule Proposal */}
+              {projectAmount > 0 && (
+                <Card className="border-info/50 bg-gradient-to-br from-info/10 to-info/5">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-info">
+                      <TrendingUp className="w-5 h-5" />
+                      Proposition de paiement échelonné
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Pour sécuriser votre projet, nous vous proposons un calendrier de paiement progressif lié à l'avancement des travaux. Vous pouvez ajuster les pourcentages selon vos préférences.
+                    </p>
+
+                    {/* Payment breakdown */}
+                    <div className="space-y-4">
+                      {/* Deposit */}
+                      <div className="p-4 bg-background rounded-lg border">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <h4 className="font-semibold text-foreground">1️⃣ Acompte à la signature</h4>
+                            <p className="text-xs text-muted-foreground">Engagement des deux parties</p>
+                          </div>
+                          <Badge variant="secondary" className="text-lg px-3 py-1">
+                            {paymentSchedule.deposit}%
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <input
+                            type="range"
+                            min="10"
+                            max="40"
+                            value={paymentSchedule.deposit}
+                            onChange={(e) => {
+                              const deposit = parseInt(e.target.value);
+                              const remaining = 100 - deposit;
+                              setPaymentSchedule({
+                                deposit,
+                                midpoint: Math.round(remaining * 0.6),
+                                completion: Math.round(remaining * 0.4)
+                              });
+                            }}
+                            className="flex-1 mr-4"
+                          />
+                          <span className="text-xl font-bold text-primary">
+                            {Math.round((projectAmount * paymentSchedule.deposit) / 100).toLocaleString()} €
+                          </span>
+                        </div>
+                        <div className="mt-2 w-full bg-muted rounded-full h-2">
+                          <div
+                            className="h-2 rounded-l-full bg-primary transition-all"
+                            style={{ width: `${paymentSchedule.deposit}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Midpoint */}
+                      <div className="p-4 bg-background rounded-lg border">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <h4 className="font-semibold text-foreground">2️⃣ Paiement intermédiaire</h4>
+                            <p className="text-xs text-muted-foreground">À 50% d'avancement des travaux</p>
+                          </div>
+                          <Badge variant="secondary" className="text-lg px-3 py-1">
+                            {paymentSchedule.midpoint}%
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <input
+                            type="range"
+                            min="20"
+                            max="60"
+                            value={paymentSchedule.midpoint}
+                            onChange={(e) => {
+                              const midpoint = parseInt(e.target.value);
+                              const remaining = 100 - paymentSchedule.deposit - midpoint;
+                              setPaymentSchedule({
+                                ...paymentSchedule,
+                                midpoint,
+                                completion: Math.max(10, remaining)
+                              });
+                            }}
+                            className="flex-1 mr-4"
+                          />
+                          <span className="text-xl font-bold text-primary">
+                            {Math.round((projectAmount * paymentSchedule.midpoint) / 100).toLocaleString()} €
+                          </span>
+                        </div>
+                        <div className="mt-2 w-full bg-muted rounded-full h-2">
+                          <div
+                            className="h-2 bg-warning transition-all"
+                            style={{
+                              width: `${paymentSchedule.midpoint}%`,
+                              marginLeft: `${paymentSchedule.deposit}%`
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Final payment */}
+                      <div className="p-4 bg-background rounded-lg border">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <h4 className="font-semibold text-foreground">3️⃣ Solde à la réception</h4>
+                            <p className="text-xs text-muted-foreground">Après vérification des travaux terminés</p>
+                          </div>
+                          <Badge variant="secondary" className="text-lg px-3 py-1">
+                            {paymentSchedule.completion}%
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 mr-4 text-sm text-muted-foreground">
+                            Calculé automatiquement (solde restant)
+                          </div>
+                          <span className="text-xl font-bold text-success">
+                            {Math.round((projectAmount * paymentSchedule.completion) / 100).toLocaleString()} €
+                          </span>
+                        </div>
+                        <div className="mt-2 w-full bg-muted rounded-full h-2">
+                          <div
+                            className="h-2 rounded-r-full bg-success transition-all"
+                            style={{
+                              width: `${paymentSchedule.completion}%`,
+                              marginLeft: `${paymentSchedule.deposit + paymentSchedule.midpoint}%`
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Visual progress bar */}
+                    <div className="p-4 bg-background rounded-lg border">
+                      <h4 className="font-semibold text-foreground mb-3">Répartition visuelle</h4>
+                      <div className="w-full h-8 bg-muted rounded-full overflow-hidden flex">
+                        <div
+                          className="bg-primary flex items-center justify-center text-white text-xs font-semibold"
+                          style={{ width: `${paymentSchedule.deposit}%` }}
+                        >
+                          {paymentSchedule.deposit}%
+                        </div>
+                        <div
+                          className="bg-warning flex items-center justify-center text-white text-xs font-semibold"
+                          style={{ width: `${paymentSchedule.midpoint}%` }}
+                        >
+                          {paymentSchedule.midpoint}%
+                        </div>
+                        <div
+                          className="bg-success flex items-center justify-center text-white text-xs font-semibold"
+                          style={{ width: `${paymentSchedule.completion}%` }}
+                        >
+                          {paymentSchedule.completion}%
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Tips */}
+                    <div className="p-3 bg-info/10 rounded-lg border border-info/30">
+                      <p className="text-xs text-muted-foreground">
+                        💡 <span className="font-semibold">Conseil :</span> Ne versez jamais plus de 30-40% avant le démarrage des travaux.
+                        Gardez toujours un solde significatif (au moins 20-30%) pour la réception finale, c'est votre garantie que les travaux seront terminés correctement.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Comparaison marché */}
               {analysisResult.priceComparison && (
