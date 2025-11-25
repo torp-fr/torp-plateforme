@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
-import { CheckCircle, AlertTriangle, Lightbulb, TrendingUp, Download, Eye, ArrowLeft, MessageSquare, Building2, ShieldCheck, Database } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Lightbulb, TrendingUp, Download, Eye, ArrowLeft, MessageSquare, Building2, ShieldCheck, Database, ChevronDown, Upload, FileText, DollarSign } from 'lucide-react';
 import type { Project } from '@/context/AppContext';
 
 export default function Results() {
@@ -21,6 +21,17 @@ export default function Results() {
     midpoint: 40,
     completion: 30
   });
+  const [expandedWarnings, setExpandedWarnings] = useState<Set<number>>(new Set());
+
+  const toggleWarning = (index: number) => {
+    const newExpanded = new Set(expandedWarnings);
+    if (newExpanded.has(index)) {
+      newExpanded.delete(index);
+    } else {
+      newExpanded.add(index);
+    }
+    setExpandedWarnings(newExpanded);
+  };
 
   useEffect(() => {
     const loadProjectData = async () => {
@@ -582,107 +593,140 @@ export default function Results() {
                 </CardContent>
               </Card>
 
-              {/* Points d'attention */}
+              {/* Points de vigilance enrichis avec accordions */}
               {analysisResult.warnings && analysisResult.warnings.length > 0 && (
                 <Card className="border-warning/50 bg-gradient-to-br from-warning/10 to-warning/5">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-warning">
                       <AlertTriangle className="w-5 h-5" />
-                      Ce qu'il faut vérifier avant de signer
+                      Points de vigilance et actions recommandées
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <p className="text-sm text-muted-foreground mb-4">
-                      Voici les points importants à clarifier avec l'entreprise pour éviter les mauvaises surprises :
+                      Cliquez sur chaque point pour voir les recommandations détaillées, questions à poser et éléments de négociation.
                     </p>
-                    <div className="space-y-4">
-                      {analysisResult.warnings.map((warning: string, index: number) => (
-                        <div key={index} className="p-3 bg-background rounded-lg border border-warning/30">
-                          <div className="flex items-start gap-3">
-                            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-warning/20 text-warning font-bold text-sm flex-shrink-0 mt-0.5">
-                              !
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-sm text-foreground leading-relaxed">{warning}</p>
-                            </div>
+
+                    <div className="space-y-3">
+                      {analysisResult.warnings.map((warning: string, warningIndex: number) => {
+                        const isExpanded = expandedWarnings.has(warningIndex);
+                        const relatedAction = analysisResult.recommendations?.actions?.[warningIndex];
+                        const hasInsuranceIssue = warning.toLowerCase().includes('assurance');
+                        const hasDocumentIssue = warning.toLowerCase().includes('document') || warning.toLowerCase().includes('justificatif');
+
+                        return (
+                          <div key={warningIndex} className="bg-background rounded-lg border border-warning/30 overflow-hidden">
+                            {/* Header - Always visible */}
+                            <button
+                              onClick={() => toggleWarning(warningIndex)}
+                              className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
+                            >
+                              <div className="flex items-start gap-3 flex-1 text-left">
+                                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-warning/20 text-warning font-bold text-sm flex-shrink-0 mt-0.5">
+                                  !
+                                </div>
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-foreground leading-relaxed">{warning}</p>
+                                  {relatedAction && (
+                                    <Badge variant={relatedAction.priorite === 'haute' ? 'destructive' : 'secondary'} className="mt-2">
+                                      {relatedAction.priorite === 'haute' ? '🔴 Priorité haute' : '🟡 Priorité moyenne'}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                              <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {/* Expanded content */}
+                            {isExpanded && (
+                              <div className="border-t border-warning/20 bg-muted/20">
+                                <div className="p-4 space-y-4">
+                                  {/* Recommendation */}
+                                  {relatedAction && (
+                                    <div className="space-y-2">
+                                      <h4 className="font-semibold text-foreground flex items-center gap-2">
+                                        <Lightbulb className="w-4 h-4" />
+                                        Notre recommandation
+                                      </h4>
+                                      <p className="text-sm text-muted-foreground pl-6">
+                                        {relatedAction.description}
+                                      </p>
+                                      <div className="pl-6">
+                                        <p className="text-sm font-medium text-foreground">
+                                          ✓ Action suggérée : {relatedAction.actionSuggeree}
+                                        </p>
+                                        {relatedAction.impactBudget && (
+                                          <p className="text-sm text-success mt-1">
+                                            💰 Économie potentielle : {relatedAction.impactBudget}€
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Questions to ask */}
+                                  {analysisResult.recommendations?.questions && analysisResult.recommendations.questions.length > warningIndex && (
+                                    <div className="space-y-2">
+                                      <h4 className="font-semibold text-foreground flex items-center gap-2">
+                                        <MessageSquare className="w-4 h-4" />
+                                        Questions à poser à l'entreprise
+                                      </h4>
+                                      <ul className="space-y-1 pl-6">
+                                        {analysisResult.recommendations.questions
+                                          .slice(warningIndex * 2, (warningIndex * 2) + 2)
+                                          .map((question: string, qIndex: number) => (
+                                            <li key={qIndex} className="text-sm text-muted-foreground flex items-start gap-2">
+                                              <span className="text-info mt-0.5">•</span>
+                                              <span>{question}</span>
+                                            </li>
+                                          ))}
+                                      </ul>
+                                    </div>
+                                  )}
+
+                                  {/* Negotiation points */}
+                                  {analysisResult.recommendations?.negotiation && warningIndex < 3 && (
+                                    <div className="space-y-2">
+                                      <h4 className="font-semibold text-foreground flex items-center gap-2">
+                                        <DollarSign className="w-4 h-4" />
+                                        Point de négociation
+                                      </h4>
+                                      <p className="text-sm text-muted-foreground pl-6">
+                                        {analysisResult.recommendations.negotiation.substring(0, 150)}...
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {/* Action buttons */}
+                                  <div className="flex gap-2 pl-6">
+                                    {(hasInsuranceIssue || hasDocumentIssue) && (
+                                      <Button variant="outline" size="sm" className="gap-2">
+                                        <Upload className="w-4 h-4" />
+                                        Ajouter le document
+                                      </Button>
+                                    )}
+                                    <Button variant="ghost" size="sm" className="gap-2">
+                                      <FileText className="w-4 h-4" />
+                                      Voir le détail
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
-                    <div className="mt-4 p-3 bg-warning/10 rounded-lg border border-warning/30">
+
+                    <div className="mt-4 p-3 bg-info/10 rounded-lg border border-info/30">
                       <p className="text-xs text-muted-foreground">
-                        💡 <span className="font-semibold">Que faire ?</span> Demandez des précisions écrites à l'entreprise sur chacun de ces points avant de signer le devis.
-                        N'hésitez pas à demander des garanties supplémentaires si nécessaire.
+                        💡 <span className="font-semibold">Astuce :</span> Développez chaque point pour accéder aux recommandations détaillées et actions spécifiques.
+                        Si un document manque, vous pouvez l'uploader directement pour améliorer le score de votre devis.
                       </p>
                     </div>
                   </CardContent>
                 </Card>
               )}
-
-              {/* Recommandations */}
-              <Card className="border-info/50 bg-gradient-to-br from-info/10 to-info/5">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-info">
-                    <Lightbulb className="w-5 h-5" />
-                    Recommandations TORP
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Recommandations détaillées avec priorités */}
-                  {analysisResult.recommendations?.actions && Array.isArray(analysisResult.recommendations.actions) && analysisResult.recommendations.actions.length > 0 && (
-                    <div className="space-y-3">
-                      <h4 className="font-semibold text-foreground">Actions prioritaires</h4>
-                      {analysisResult.recommendations.actions.map((action: any, index: number) => (
-                        <div key={index} className={`p-4 rounded-lg border-l-4 ${
-                          action.priorite === 'haute' ? 'bg-destructive/5 border-destructive' :
-                          action.priorite === 'moyenne' ? 'bg-warning/5 border-warning' :
-                          'bg-muted/30 border-muted'
-                        }`}>
-                          <div className="flex items-start justify-between mb-2">
-                            <h5 className="font-semibold text-foreground">{action.titre}</h5>
-                            <Badge variant={action.priorite === 'haute' ? 'destructive' : action.priorite === 'moyenne' ? 'default' : 'secondary'}>
-                              {action.priorite}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground mb-2">{action.description}</p>
-                          <p className="text-sm font-medium text-foreground">→ {action.actionSuggeree}</p>
-                          {action.impactBudget && (
-                            <p className="text-sm text-success mt-2">💰 Économie potentielle : {action.impactBudget}€</p>
-                          )}
-                          {action.delaiAction && (
-                            <p className="text-xs text-muted-foreground mt-1">⏱️ À faire sous {action.delaiAction} jours</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Questions à poser */}
-                  {analysisResult.recommendations?.questions && analysisResult.recommendations.questions.length > 0 && (
-                    <div className="p-4 bg-background rounded-lg border">
-                      <h4 className="font-semibold text-foreground mb-3">❓ Questions à poser à l'entreprise</h4>
-                      <ul className="space-y-2">
-                        {analysisResult.recommendations.questions.map((question: string, index: number) => (
-                          <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
-                            <span className="text-info mt-0.5">•</span>
-                            <span>{question}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Points de négociation */}
-                  {analysisResult.recommendations?.negotiation && (
-                    <div className="p-4 bg-background rounded-lg border">
-                      <h4 className="font-semibold text-foreground mb-2">💬 Points de négociation</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {analysisResult.recommendations.negotiation}
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
 
               {/* Payment Schedule Proposal */}
               {projectAmount > 0 && (
