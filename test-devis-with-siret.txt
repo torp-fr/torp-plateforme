@@ -1,0 +1,100 @@
+===================================
+        DEVIS DE TRAVAUX
+===================================
+
+ENTREPRISE
+----------
+Nom : SARL BATIMENT PRO
+SIRET : 94258978900018
+Adresse : 123 Rue de la Construction, 75001 Paris
+Tél : 01 23 45 67 89
+Email : contact@batimentpro.fr
+
+Assurances :
+- Décennale : OUI (Numéro : DEC-2024-12345)
+- RC Pro : OUI
+
+Certifications : RGE, Qualibat
+
+CLIENT
+------
+Nom : M. Dupont Jean
+Adresse : 456 Avenue des Champs, 75008 Paris
+
+DEVIS N° : DEV-2024-001
+Date : 15/11/2024
+Validité : 30 jours
+
+===================================
+        DESCRIPTIF DES TRAVAUX
+===================================
+
+Type de travaux : Rénovation complète appartement
+Surface : 85 m²
+Adresse chantier : 456 Avenue des Champs, 75008 Paris
+
+DÉTAIL DES POSTES
+-----------------
+
+1. DÉMOLITION & ÉVACUATION
+   - Démolition cloisons existantes          2 500,00 €
+   - Évacuation gravats                      1 200,00 €
+
+2. GROS ŒUVRE
+   - Création ouverture mur porteur          3 800,00 €
+   - Renforcement structure (IPN)            2 100,00 €
+
+3. ÉLECTRICITÉ
+   - Mise aux normes installation            4 500,00 €
+   - Points lumineux (15 unités)             1 800,00 €
+
+4. PLOMBERIE
+   - Remplacement tuyauterie                 3 200,00 €
+   - Installation salle de bain              5 600,00 €
+
+5. MENUISERIE
+   - Portes intérieures (5 unités)           2 800,00 €
+   - Fenêtres double vitrage (4 unités)      6 400,00 €
+
+6. REVÊTEMENTS
+   - Carrelage sols (60 m²)                  4 200,00 €
+   - Peinture murs et plafonds               3 900,00 €
+
+===================================
+              RÉCAPITULATIF
+===================================
+
+Total HT :                          42 000,00 €
+TVA 10% :                            4 200,00 €
+Total TTC :                         46 200,00 €
+
+MODALITÉS DE PAIEMENT
+---------------------
+- Acompte 30% à la commande : 13 860,00 €
+- 40% à mi-chantier : 18 480,00 €
+- Solde 30% à la réception : 13 860,00 €
+
+DÉLAIS
+------
+Durée prévisionnelle : 8 semaines
+Début des travaux : 02/12/2024
+Fin prévisionnelle : 27/01/2025
+
+GARANTIES
+---------
+- Garantie décennale
+- Garantie biennale
+- Garantie parfait achèvement (1 an)
+
+CONFORMITÉ
+----------
+Travaux conformes à la RT 2012
+Respect des normes NF C 15-100 (électricité)
+Respect des normes DTU
+
+===================================
+
+Fait à Paris, le 15/11/2024
+
+Signature entreprise :             Signature client :
+[Cachet entreprise]               (Précédé de "Bon pour accord")
