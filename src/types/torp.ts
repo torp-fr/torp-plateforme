@@ -187,6 +187,16 @@ export interface TorpAnalysisResult {
     reputation: number;
     risques: string[];
     benefices: string[];
+    companyData?: {
+      cached: boolean;
+      companyName: string;
+      siret: string;
+      siren: string;
+      qualityScore: number;
+      riskLevel: string;
+      dataSource: string;
+      data?: any; // Full Pappers API response
+    } | null;
   };
   
   // Analyse prix (300 points)
