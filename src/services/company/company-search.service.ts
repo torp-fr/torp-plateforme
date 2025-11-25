@@ -3,7 +3,7 @@
  * Calls Supabase Edge Function to search for company data
  */
 
-import { supabase } from '@/config/supabase';
+import { supabase } from '@/lib/supabase';
 
 export interface CompanySearchOptions {
   siret?: string;
