@@ -148,7 +148,8 @@ export default function Results() {
     };
 
     loadProjectData();
-  }, [currentProject, searchParams, navigate, setCurrentProject]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, navigate]);
 
   useEffect(() => {
     if (!currentProject) return;
