@@ -4,6 +4,7 @@
  */
 
 import { hybridAIService } from './hybrid-ai.service';
+import { companySearchService } from '@/services/company/company-search.service';
 import {
   TORP_SYSTEM_PROMPT,
   buildExtractionPrompt,
@@ -198,14 +199,78 @@ export class TorpAnalyzerService {
 
   /**
    * Analyze entreprise (250 points)
+   * Enhanced with real company data from Pappers API/cache
    */
   private async analyzeEntreprise(devisData: ExtractedDevisData): Promise<any> {
-    const prompt = buildEntrepriseAnalysisPrompt(JSON.stringify(devisData, null, 2));
+    let enrichedData = { ...devisData };
+    let companyDataContext = '';
+
+    // Try to enrich with real company data if SIRET is available
+    if (devisData.entreprise.siret) {
+      try {
+        console.log(`[TORP] Fetching company data for SIRET: ${devisData.entreprise.siret}`);
+
+        const companyResult = await companySearchService.searchBySiret(
+          devisData.entreprise.siret,
+          {
+            usePappers: true,
+            includeFinances: true,
+            includeRepresentants: true,
+            includeProcedures: true,
+          }
+        );
+
+        if (companyResult.success) {
+          console.log(`[TORP] Company data retrieved:`, {
+            name: companyResult.companyName,
+            cached: companyResult.cached,
+            qualityScore: companyResult.qualityScore,
+            riskLevel: companyResult.riskLevel,
+          });
+
+          // Build enrichment context for AI
+          companyDataContext = `
+
+DONNÉES RÉELLES DE L'ENTREPRISE (Source: ${companyResult.dataSource}, ${companyResult.cached ? 'cache' : 'fresh'}):
+{
+  "siret": "${companyResult.siret}",
+  "siren": "${companyResult.siren}",
+  "nom": "${companyResult.companyName}",
+  "qualityScore": ${companyResult.qualityScore},
+  "dataCompleteness": ${companyResult.dataCompleteness},
+  "riskLevel": "${companyResult.riskLevel}",
+  "alerts": ${JSON.stringify(companyResult.alerts)},
+  "detailedData": ${JSON.stringify(companyResult.data, null, 2)}
+}
+
+⚠️ IMPORTANT: Utilise ces données RÉELLES pour affiner ton analyse. Elles proviennent de sources officielles (Pappers API/INSEE).`;
+
+          // Store company data for later use in results
+          enrichedData.entreprise = {
+            ...enrichedData.entreprise,
+            _companySearchResult: companyResult,
+          };
+        }
+      } catch (error) {
+        console.warn('[TORP] Failed to fetch company data, continuing with basic analysis:', error);
+      }
+    } else {
+      console.log('[TORP] No SIRET found in devis, skipping company enrichment');
+    }
+
+    const prompt = buildEntrepriseAnalysisPrompt(
+      JSON.stringify(enrichedData, null, 2) + companyDataContext
+    );
 
     const { data } = await hybridAIService.generateJSON(prompt, {
       systemPrompt: TORP_SYSTEM_PROMPT,
       temperature: 0.4,
     });
+
+    // Attach company data to result for display
+    if (enrichedData.entreprise._companySearchResult) {
+      data._companyData = enrichedData.entreprise._companySearchResult;
+    }
 
     return data;
   }
