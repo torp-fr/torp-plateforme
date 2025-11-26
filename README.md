@@ -6,20 +6,33 @@
 
 ## 🎯 À propos
 
-TORP est une plateforme SaaS multi-tenant qui permet d'analyser automatiquement la qualité des devis de travaux grâce à l'intelligence artificielle. Elle s'adresse à plusieurs types d'utilisateurs (B2C, B2B, B2G, B2B2C) et offre un scoring détaillé sur 1000 points.
+TORP est une plateforme SaaS qui permet d'analyser automatiquement la qualité des devis de travaux grâce à l'intelligence artificielle. Elle s'adresse à deux types d'utilisateurs principaux (B2C et B2B) et offre un scoring détaillé TORP (Transparence, Offre, Robustesse, Prix).
+
+**🎉 Actuellement en phase de test gratuit** - Analyses illimitées pour tous les testeurs !
 
 **Démo en ligne** : [quote-insight-tally.vercel.app](https://quote-insight-tally.vercel.app)
 
 ## ✨ Fonctionnalités Principales
 
-- 🔍 **Analyse IA de devis** - Scoring sur 1000 points (A+ à F)
-- 👥 **Multi-tenant** - Support B2C, B2B, B2G, B2B2C, Admin
-- 📊 **Dashboards personnalisés** - Par profil utilisateur
-- 💰 **Comparaison de prix** - Vs marché local
-- 🏗️ **Suivi de chantier** - Timeline et paiements échelonnés
+### B2C - Particuliers
+- 🔍 **Analyse IA de devis reçus** - Score TORP détaillé (A+ à F)
+- 🔎 **Vérification entreprise** - SIREN, Kbis, assurances
+- 💡 **Aide à la décision** - Recommandations pour choisir le bon pro
+- 📊 **Dashboard personnel** - Suivi de vos demandes de devis
+
+### B2B - Professionnels BTP
+- 🎯 **Optimisation de devis avant envoi** - Améliorez votre taux de signature
+- 📈 **Recommandations IA** - Conseils pour augmenter votre score TORP
+- 🏆 **Certification TORP Pro** - Badge de confiance + QR Code
+- 📊 **Analyse de performance** - Suivez l'évolution de vos scores
+
+### Fonctionnalités communes
 - 📁 **Gestion documentaire** - CCTP, DOE, carnet numérique
-- 🗺️ **Analyse parcellaire** - PLU, COS, CES
-- 🛒 **Marketplace** - Services complémentaires
+- 🏗️ **Suivi de projet** - Timeline et paiements échelonnés
+- 💬 **Assistant IA** - Chatbot pour répondre à vos questions
+- 📊 **Analytics avancées** - Statistiques et tendances
+
+> 📖 **[Voir la documentation B2B complète](docs/B2B_ASSISTANT_SCOPE.md)** pour comprendre la différence entre B2C et B2B
 
 ## 🚀 Démarrage Rapide
 
@@ -56,9 +69,19 @@ npm run lint          # Vérifier le code
 
 ## 📚 Documentation
 
+### Documentation principale
 - **[Guide de démarrage](docs/GETTING_STARTED.md)** - Installation et configuration détaillée
 - **[Architecture technique](docs/ARCHITECTURE.md)** - Structure du projet et patterns
 - **[Changelog](CHANGELOG.md)** - Historique des modifications
+
+### Documentation métier
+- **[B2B Assistant Scope](docs/B2B_ASSISTANT_SCOPE.md)** - Vision et fonctionnalités B2B détaillées
+- **[Pragmatic Approach](PRAGMATIC_APPROACH.md)** - Stratégie de développement pragmatique
+- **[Free Mode Config](FREE_MODE_CONFIG.md)** - Configuration du mode gratuit
+
+### Guides d'implémentation
+- **[START_HERE Decision](START_HERE_DECISION.md)** - Choisir entre approche radicale et pragmatique
+- **[Automated Tasks](AUTOMATED_TASKS.md)** - Plan d'exécution automatisé (4 phases)
 
 ## 🏗️ Stack Technique
 
@@ -88,13 +111,12 @@ Le projet utilise actuellement un système d'authentification mocké pour le dé
 - Mot de passe : minimum 6 caractères (ex: `password`)
 
 Types d'utilisateurs :
-- **B2C** (Particuliers) - email normal
-- **B2B** (Entreprises) - email contenant "pro"
-- **B2G** (Collectivités)
-- **B2B2C** (Prescripteurs)
-- **Admin**
+- **B2C** (Particuliers) - email normal (ex: `jean@email.com`)
+- **B2B** (Professionnels BTP) - email contenant "pro" (ex: `contact@entreprise-pro.fr`)
+- **Admin** - pour la gestion de la plateforme
 
 > 💡 En production, remplacer par Supabase, Auth0 ou Firebase
+> 🎉 **Mode gratuit activé** - Tous les utilisateurs bénéficient de crédits illimités pendant la phase de test
 
 ## 📦 Structure du Projet
 
