@@ -510,9 +510,41 @@ export default function AdminAnalytics() {
               </CardHeader>
               <CardContent>
                 {allFeedbacks.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    Aucun feedback pour le moment
-                  </p>
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground mb-4">Aucun feedback pour le moment</p>
+                    {totalFeedbacks > 0 && (
+                      <div className="bg-yellow-50 dark:bg-yellow-950 p-4 rounded-lg text-left max-w-2xl mx-auto">
+                        <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-2">
+                          ⚠️ Les feedbacks existent mais ne peuvent pas être chargés
+                        </p>
+                        <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-3">
+                          Les statistiques montrent {totalFeedbacks} feedback(s), mais le tableau est vide.
+                          Cela signifie que les politiques RLS bloquent l'accès.
+                        </p>
+                        <div className="bg-white dark:bg-gray-900 p-3 rounded border border-yellow-200">
+                          <p className="text-xs font-medium mb-2">💡 Solution :</p>
+                          <p className="text-xs text-muted-foreground mb-2">
+                            Appliquez la migration SQL pour débloquer l'accès admin :
+                          </p>
+                          <code className="text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded block">
+                            supabase db push
+                          </code>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Ou copiez le contenu de <code>supabase/migrations/004_admin_access_policies.sql</code> dans le SQL Editor de Supabase.
+                          </p>
+                        </div>
+                        <Button
+                          onClick={handleRefresh}
+                          variant="outline"
+                          size="sm"
+                          className="mt-3"
+                        >
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Réessayer après migration
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <div className="space-y-4">
                     {/* Résumé rapide */}

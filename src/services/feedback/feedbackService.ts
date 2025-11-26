@@ -178,20 +178,36 @@ export const feedbackService = {
   /**
    * Récupérer tous les feedbacks détaillés (admin)
    * Utilise une fonction RPC pour contourner les RLS policies
+   * Avec fallback vers requête directe si RPC non disponible
    */
   async getAllFeedbacks(): Promise<Feedback[]> {
     try {
-      // Utiliser la fonction RPC qui a SECURITY DEFINER
-      const { data, error } = await supabase.rpc('get_all_feedbacks');
+      // Essayer d'abord la fonction RPC (nécessite migration 004)
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_all_feedbacks');
 
-      if (error) {
-        console.error('Error fetching all feedbacks:', error);
+      if (!rpcError && rpcData) {
+        console.log('✓ Feedbacks loaded via RPC:', rpcData.length);
+        return rpcData || [];
+      }
+
+      // Si RPC échoue (fonction n'existe pas), essayer requête directe
+      console.warn('⚠️ RPC get_all_feedbacks failed, trying direct query. Error:', rpcError?.message);
+      console.log('💡 Appliquez la migration 004_admin_access_policies.sql pour résoudre ce problème');
+
+      const { data: directData, error: directError } = await supabase
+        .from('user_feedback')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (directError) {
+        console.error('❌ Direct query also failed:', directError);
         return [];
       }
 
-      return data || [];
+      console.log('✓ Feedbacks loaded via direct query:', directData?.length || 0);
+      return directData || [];
     } catch (error) {
-      console.error('Error fetching all feedbacks:', error);
+      console.error('❌ Error fetching all feedbacks:', error);
       return [];
     }
   },
