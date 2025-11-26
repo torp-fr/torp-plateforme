@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdvancedAnalytics } from "@/components/AdvancedAnalytics";
-import { ActiveAssistant } from "@/components/ActiveAssistant";
 import { PaymentManager } from "@/components/PaymentManager";
 import {
   Building2,
@@ -560,9 +559,6 @@ export default function ImprovedB2BDashboard() {
           </TabsContent>
         </Tabs>
       </div>
-
-      {/* Assistant actif */}
-      <ActiveAssistant userType="B2B" context={activeTab} />
     </div>
   );
 }

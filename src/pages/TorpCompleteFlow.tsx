@@ -28,7 +28,6 @@ import DevisAnalyzer from '@/components/DevisAnalyzer';
 import PaymentSystem from '@/components/PaymentSystem';
 import { AdvancedAnalytics } from '@/components/AdvancedAnalytics';
 import { ProjectComparison } from '@/components/ProjectComparison';
-import { ActiveAssistant } from '@/components/ActiveAssistant';
 
 import { 
   type ScoringResult as ScoringData, 
@@ -522,15 +521,10 @@ const TorpCompleteFlow: React.FC = () => {
         {currentPhase === 'active_assistant' && userData && scoringResult && (
           <div className="space-y-8">
             <div className="text-center">
-              <Badge variant="outline" className="mb-4">Phase 8 : Assistant IA Actif</Badge>
+              <Badge variant="outline" className="mb-4">Phase 8 : Finalisation</Badge>
               <h2 className="text-2xl font-bold mb-2">Écosystème Complet TORP</h2>
-              <p className="text-muted-foreground">Intelligence artificielle 24/7 pour l'optimisation continue</p>
+              <p className="text-muted-foreground">Votre parcours TORP est maintenant complet</p>
             </div>
-            
-            <ActiveAssistant
-              userType={userData.profileType}
-              context="torp-complete-phase-8"
-            />
 
             <Card className="bg-gradient-to-r from-primary/10 to-success/10 border-primary/20">
               <CardContent className="p-8 text-center">

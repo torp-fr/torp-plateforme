@@ -5,7 +5,6 @@ import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
 import { BackButton } from '@/components/BackButton';
 import { AdvancedAnalytics } from '@/components/AdvancedAnalytics';
-import { ActiveAssistant } from '@/components/ActiveAssistant';
 import { FileText, TrendingUp, PiggyBank, Hammer, Eye, Plus, BarChart3, Users, Building, Clock, Activity, Target, Calendar, Download, Home } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -484,9 +483,6 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-
-          {/* Assistant IA actif */}
-          {userType !== 'admin' && <ActiveAssistant userType={userType as 'B2C' | 'B2B' | 'B2G' | 'B2B2C'} />}
         </div>
       </div>
     </div>

@@ -228,12 +228,13 @@ export default function AdminAnalytics() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold">{overview?.total_signups || 0}</div>
+                <div className="text-3xl font-bold">{allUsers.length}</div>
                 <Users className="h-8 w-8 text-muted-foreground" />
               </div>
               <div className="flex gap-2 mt-2">
-                <Badge variant="outline">Particulier: {overview?.b2c_signups || 0}</Badge>
-                <Badge variant="outline">Pro: {overview?.b2b_signups || 0}</Badge>
+                <Badge variant="outline">Particulier: {allUsers.filter(u => u.user_type === 'B2C').length}</Badge>
+                <Badge variant="outline">Pro: {allUsers.filter(u => u.user_type === 'B2B').length}</Badge>
+                <Badge variant="outline">Admin: {allUsers.filter(u => u.user_type === 'admin').length}</Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-2">Cliquer pour voir les détails</p>
             </CardContent>
