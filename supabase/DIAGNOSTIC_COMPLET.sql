@@ -52,32 +52,47 @@ SELECT is_admin() AS "Je suis admin ?";
 SELECT '=== TEST RPC get_all_feedbacks ===' AS diagnostic;
 SELECT
   COUNT(*) AS total_feedbacks_via_rpc,
-  COUNT(CASE WHEN type = 'bug' THEN 1 END) AS bugs,
-  COUNT(CASE WHEN type = 'feature' THEN 1 END) AS features,
-  COUNT(CASE WHEN type = 'satisfaction' THEN 1 END) AS satisfaction
+  COUNT(CASE WHEN feedback_type = 'bug' THEN 1 END) AS bugs,
+  COUNT(CASE WHEN feedback_type = 'feature_request' THEN 1 END) AS features,
+  COUNT(CASE WHEN feedback_type = 'improvement' THEN 1 END) AS improvements
 FROM get_all_feedbacks();
 
 -- 8. VÉRIFIER LES DERNIERS FEEDBACKS
 SELECT '=== DERNIERS FEEDBACKS ===' AS diagnostic;
-SELECT id, type, user_type, message, satisfaction, status, created_at
+SELECT id, feedback_type, user_type, message, satisfaction_score, status, created_at
 FROM get_all_feedbacks()
 ORDER BY created_at DESC
 LIMIT 5;
 
--- 9. VÉRIFIER LES ÉVÉNEMENTS ANALYTICS RÉCENTS
-SELECT '=== DERNIERS ÉVÉNEMENTS ANALYTICS ===' AS diagnostic;
-SELECT event_type, user_type, COUNT(*) as count, MAX(created_at) as last_event
+-- 9. VÉRIFIER LES UTILISATEURS INSCRITS
+SELECT '=== DERNIERS UTILISATEURS ===' AS diagnostic;
+SELECT id, email, name, user_type, created_at
 FROM get_all_users()
-WHERE event_type IN ('signup', 'login')
-GROUP BY event_type, user_type
-ORDER BY last_event DESC;
+ORDER BY created_at DESC
+LIMIT 5;
 
 -- 10. VÉRIFIER LES ANALYSES RÉCENTES
 SELECT '=== DERNIÈRES ANALYSES ===' AS diagnostic;
-SELECT id, user_email, torp_score, transparency_score, created_at
+SELECT id, user_email, user_type, torp_score_overall, torp_score_transparency, torp_score_offer, torp_score_robustness, torp_score_price, grade, created_at
 FROM get_all_analyses()
 ORDER BY created_at DESC
 LIMIT 5;
+
+-- 11. VÉRIFIER LES ÉVÉNEMENTS ANALYTICS (accès direct)
+SELECT '=== ÉVÉNEMENTS ANALYTICS ===' AS diagnostic;
+SELECT event_type, user_type, COUNT(*) as count, MAX(created_at) as dernier_evenement
+FROM public.analytics_events
+WHERE event_type IN ('signup', 'login')
+GROUP BY event_type, user_type
+ORDER BY dernier_evenement DESC;
+
+-- 12. TEST ACCÈS DIRECT AUX TABLES (vérifie que RLS fonctionne)
+SELECT '=== TEST ACCÈS DIRECT user_feedback ===' AS diagnostic;
+SELECT
+  COUNT(*) as total,
+  COUNT(CASE WHEN status = 'new' THEN 1 END) as nouveaux,
+  COUNT(CASE WHEN status = 'resolved' THEN 1 END) as resolus
+FROM public.user_feedback;
 
 -- ============================================
 -- FIN DU DIAGNOSTIC
