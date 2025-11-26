@@ -176,6 +176,28 @@ export const feedbackService = {
   },
 
   /**
+   * Récupérer tous les feedbacks détaillés (admin)
+   */
+  async getAllFeedbacks(): Promise<Feedback[]> {
+    try {
+      const { data, error } = await supabase
+        .from('user_feedback')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching all feedbacks:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching all feedbacks:', error);
+      return [];
+    }
+  },
+
+  /**
    * Mettre à jour un feedback (utilisateur)
    */
   async updateFeedback(

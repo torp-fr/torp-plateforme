@@ -213,6 +213,28 @@ export const analyticsService = {
   },
 
   /**
+   * Récupérer tous les utilisateurs inscrits (admin)
+   */
+  async getAllUsers(): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, email, name, user_type, company, phone, created_at, subscription_plan, subscription_status')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching all users:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching all users:', error);
+      return [];
+    }
+  },
+
+  /**
    * Helpers pour tracking rapide
    */
   trackSignup: (userType: UserType) =>

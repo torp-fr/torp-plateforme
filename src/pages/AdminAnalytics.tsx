@@ -18,12 +18,15 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { analyticsService, type AnalyticsOverview, type TorpScoreAverages } from '@/services/analytics/analyticsService';
-import { feedbackService, type FeedbackSummary } from '@/services/feedback/feedbackService';
+import { feedbackService, type FeedbackSummary, type Feedback } from '@/services/feedback/feedbackService';
 
 export default function AdminAnalytics() {
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [scoreAverages, setScoreAverages] = useState<TorpScoreAverages[]>([]);
   const [feedbackSummary, setFeedbackSummary] = useState<FeedbackSummary[]>([]);
+  const [allFeedbacks, setAllFeedbacks] = useState<Feedback[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState('inscriptions');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,16 +48,20 @@ export default function AdminAnalytics() {
         analyticsService.getOverview(),
         analyticsService.getScoreAverages(),
         feedbackService.getFeedbackSummary(),
+        feedbackService.getAllFeedbacks(),
+        analyticsService.getAllUsers(),
       ]);
 
-      const [overviewData, scoresData, feedbackData] = await Promise.race([
+      const [overviewData, scoresData, feedbackData, allFeedbacksData, usersData] = await Promise.race([
         dataPromise,
         timeoutPromise
-      ]) as [AnalyticsOverview | null, TorpScoreAverages[], FeedbackSummary[]];
+      ]) as [AnalyticsOverview | null, TorpScoreAverages[], FeedbackSummary[], Feedback[], any[]];
 
       setOverview(overviewData);
       setScoreAverages(scoresData);
       setFeedbackSummary(feedbackData);
+      setAllFeedbacks(allFeedbacksData);
+      setAllUsers(usersData);
     } catch (err) {
       console.error('Error loading analytics:', err);
       setError(err instanceof Error ? err.message : 'Erreur lors du chargement des données');
@@ -145,7 +152,10 @@ export default function AdminAnalytics() {
 
         {/* Stats globales */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <Card>
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-shadow"
+            onClick={() => setActiveTab('inscriptions')}
+          >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Total Inscriptions
@@ -157,13 +167,17 @@ export default function AdminAnalytics() {
                 <Users className="h-8 w-8 text-muted-foreground" />
               </div>
               <div className="flex gap-2 mt-2">
-                <Badge variant="outline">B2C: {overview?.b2c_signups || 0}</Badge>
-                <Badge variant="outline">B2B: {overview?.b2b_signups || 0}</Badge>
+                <Badge variant="outline">Particulier: {overview?.b2c_signups || 0}</Badge>
+                <Badge variant="outline">Pro: {overview?.b2b_signups || 0}</Badge>
               </div>
+              <p className="text-xs text-muted-foreground mt-2">Cliquer pour voir les détails</p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-shadow"
+            onClick={() => setActiveTab('analyses')}
+          >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Total Analyses
@@ -175,13 +189,17 @@ export default function AdminAnalytics() {
                 <FileText className="h-8 w-8 text-primary" />
               </div>
               <div className="flex gap-2 mt-2">
-                <Badge variant="outline">B2C: {overview?.b2c_analyses || 0}</Badge>
-                <Badge variant="outline">B2B: {overview?.b2b_analyses || 0}</Badge>
+                <Badge variant="outline">Particulier: {overview?.b2c_analyses || 0}</Badge>
+                <Badge variant="outline">Pro: {overview?.b2b_analyses || 0}</Badge>
               </div>
+              <p className="text-xs text-muted-foreground mt-2">Cliquer pour voir les détails</p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-shadow"
+            onClick={() => setActiveTab('feedbacks')}
+          >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Feedbacks
@@ -196,10 +214,14 @@ export default function AdminAnalytics() {
                 <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                 <span>{avgSatisfaction.toFixed(1)}/5 satisfaction</span>
               </div>
+              <p className="text-xs text-muted-foreground mt-2">Cliquer pour voir les détails</p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-shadow"
+            onClick={() => setActiveTab('scores')}
+          >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Score TORP Moyen
@@ -217,15 +239,100 @@ export default function AdminAnalytics() {
               <div className="text-xs text-muted-foreground mt-2">
                 Sur {scoreAverages.reduce((sum, s) => sum + s.total_analyses, 0)} analyses
               </div>
+              <p className="text-xs text-muted-foreground mt-2">Cliquer pour voir les détails</p>
             </CardContent>
           </Card>
         </div>
 
-        <Tabs defaultValue="scores" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList>
-            <TabsTrigger value="scores">Scores TORP</TabsTrigger>
+            <TabsTrigger value="inscriptions">Inscriptions</TabsTrigger>
+            <TabsTrigger value="analyses">Analyses</TabsTrigger>
             <TabsTrigger value="feedbacks">Feedbacks</TabsTrigger>
+            <TabsTrigger value="scores">Scores TORP</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="inscriptions" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Détails des Inscriptions</CardTitle>
+                <CardDescription>
+                  {allUsers.length} utilisateurs inscrits
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {allUsers.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    Aucune inscription pour le moment
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left p-2">Date</th>
+                          <th className="text-left p-2">Nom</th>
+                          <th className="text-left p-2">Email</th>
+                          <th className="text-left p-2">Type</th>
+                          <th className="text-left p-2">Entreprise</th>
+                          <th className="text-left p-2">Téléphone</th>
+                          <th className="text-left p-2">Abonnement</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allUsers.map((user) => (
+                          <tr key={user.id} className="border-b hover:bg-muted/50">
+                            <td className="p-2 whitespace-nowrap text-xs text-muted-foreground">
+                              {new Date(user.created_at).toLocaleDateString('fr-FR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </td>
+                            <td className="p-2 font-medium">{user.name || '-'}</td>
+                            <td className="p-2 text-muted-foreground">{user.email}</td>
+                            <td className="p-2">
+                              <Badge variant="secondary" className="text-xs">
+                                {user.user_type === 'B2C' ? 'Particulier' : user.user_type === 'B2B' ? 'Professionnel' : user.user_type}
+                              </Badge>
+                            </td>
+                            <td className="p-2 text-muted-foreground">{user.company || '-'}</td>
+                            <td className="p-2 text-muted-foreground">{user.phone || '-'}</td>
+                            <td className="p-2">
+                              <Badge
+                                variant={user.subscription_status === 'active' ? 'default' : 'outline'}
+                                className="text-xs"
+                              >
+                                {user.subscription_plan || 'free'}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="analyses" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Détails des Analyses</CardTitle>
+                <CardDescription>
+                  Liste des analyses de devis effectuées
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-center text-muted-foreground py-8">
+                  Fonctionnalité à venir - Affichage des analyses détaillées depuis devis_analysis_metrics
+                </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="scores" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -264,43 +371,107 @@ export default function AdminAnalytics() {
           <TabsContent value="feedbacks" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Résumé des Feedbacks</CardTitle>
+                <CardTitle>Feedbacks Détaillés</CardTitle>
                 <CardDescription>
                   {totalFeedbacks} feedbacks • Satisfaction moyenne: {avgSatisfaction.toFixed(1)}/5
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  {feedbackSummary.map((item, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-3 border rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Badge variant="outline">{item.feedback_type}</Badge>
-                        <Badge variant="secondary">{item.user_type}</Badge>
-                        <Badge
-                          variant={
-                            item.status === 'resolved' ? 'default' :
-                            item.status === 'in_progress' ? 'secondary' :
-                            'outline'
-                          }
-                        >
-                          {item.status}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium">{item.count} feedbacks</span>
-                        {item.avg_satisfaction > 0 && (
-                          <div className="flex items-center gap-1">
-                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                            <span className="text-sm">{item.avg_satisfaction.toFixed(1)}</span>
-                          </div>
-                        )}
-                      </div>
+                {allFeedbacks.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    Aucun feedback pour le moment
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Résumé rapide */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pb-4 border-b">
+                      {feedbackSummary.slice(0, 4).map((item, index) => (
+                        <div key={index} className="text-center p-2 bg-muted rounded">
+                          <div className="text-xs text-muted-foreground">{item.feedback_type}</div>
+                          <div className="text-lg font-bold">{item.count}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+
+                    {/* Tableau des feedbacks */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left p-2">Date</th>
+                            <th className="text-left p-2">Type</th>
+                            <th className="text-left p-2">User</th>
+                            <th className="text-left p-2">Message</th>
+                            <th className="text-left p-2">Satisfaction</th>
+                            <th className="text-left p-2">Statut</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {allFeedbacks.map((feedback) => (
+                            <tr key={feedback.id} className="border-b hover:bg-muted/50">
+                              <td className="p-2 whitespace-nowrap text-xs text-muted-foreground">
+                                {new Date(feedback.created_at).toLocaleDateString('fr-FR', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </td>
+                              <td className="p-2">
+                                <Badge variant="outline" className="text-xs">
+                                  {feedback.feedback_type}
+                                </Badge>
+                              </td>
+                              <td className="p-2">
+                                <div className="flex flex-col gap-1">
+                                  <Badge variant="secondary" className="text-xs w-fit">
+                                    {feedback.user_type}
+                                  </Badge>
+                                  <span className="text-xs text-muted-foreground">
+                                    {feedback.user_email}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="p-2 max-w-md">
+                                <div className="text-sm line-clamp-2" title={feedback.message}>
+                                  {feedback.message}
+                                </div>
+                                {feedback.page_url && (
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    📍 {new URL(feedback.page_url).pathname}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="p-2">
+                                {feedback.satisfaction_score ? (
+                                  <div className="flex items-center gap-1">
+                                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                                    <span className="font-medium">{feedback.satisfaction_score}/5</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">-</span>
+                                )}
+                              </td>
+                              <td className="p-2">
+                                <Badge
+                                  variant={
+                                    feedback.status === 'resolved' ? 'default' :
+                                    feedback.status === 'in_progress' ? 'secondary' :
+                                    'outline'
+                                  }
+                                  className="text-xs"
+                                >
+                                  {feedback.status}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
