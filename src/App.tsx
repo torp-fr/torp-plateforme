@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppProvider, useApp } from "@/context/AppContext";
 import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -79,11 +80,13 @@ const AppContent = () => {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AppProvider>
-      <TooltipProvider>
-        <AppContent />
-      </TooltipProvider>
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <TooltipProvider>
+          <AppContent />
+        </TooltipProvider>
+      </AppProvider>
+    </ErrorBoundary>
   </QueryClientProvider>
 );
 
