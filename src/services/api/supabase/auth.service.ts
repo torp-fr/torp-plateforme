@@ -195,25 +195,46 @@ export class SupabaseAuthService {
    * Get current user
    */
   async getCurrentUser(): Promise<User | null> {
-    // Get current session
-    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+    try {
+      // Get current session
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
 
-    if (authError || !authUser) {
+      if (authError) {
+        console.error('[getCurrentUser] Auth error:', authError);
+        return null;
+      }
+
+      if (!authUser) {
+        console.log('[getCurrentUser] No auth user found');
+        return null;
+      }
+
+      console.log('[getCurrentUser] Auth user found:', authUser.email);
+
+      // Fetch user profile
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authUser.id)
+        .single();
+
+      if (userError) {
+        console.error('[getCurrentUser] Error fetching user profile:', userError);
+        return null;
+      }
+
+      if (!userData) {
+        console.warn('[getCurrentUser] No user profile found for auth user');
+        return null;
+      }
+
+      const mappedUser = mapDbUserToAppUser(userData);
+      console.log('[getCurrentUser] User profile loaded:', mappedUser.email, 'Type:', mappedUser.type);
+      return mappedUser;
+    } catch (error) {
+      console.error('[getCurrentUser] Exception:', error);
       return null;
     }
-
-    // Fetch user profile
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', authUser.id)
-      .single();
-
-    if (userError || !userData) {
-      return null;
-    }
-
-    return mapDbUserToAppUser(userData);
   }
 
   /**
@@ -313,15 +334,36 @@ export class SupabaseAuthService {
    */
   onAuthStateChange(callback: (user: User | null) => void) {
     return supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        const { data } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
+      console.log('[Auth State Change] Event:', event, 'Session:', !!session);
 
-        callback(data ? mapDbUserToAppUser(data) : null);
+      if (session?.user) {
+        try {
+          const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          if (error) {
+            console.error('[Auth State Change] Error fetching user profile:', error);
+            callback(null);
+            return;
+          }
+
+          if (data) {
+            const mappedUser = mapDbUserToAppUser(data);
+            console.log('[Auth State Change] User profile loaded:', mappedUser.email);
+            callback(mappedUser);
+          } else {
+            console.warn('[Auth State Change] No user profile found for session');
+            callback(null);
+          }
+        } catch (error) {
+          console.error('[Auth State Change] Exception:', error);
+          callback(null);
+        }
       } else {
+        console.log('[Auth State Change] No session, calling callback with null');
         callback(null);
       }
     });
