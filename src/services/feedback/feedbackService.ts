@@ -177,13 +177,12 @@ export const feedbackService = {
 
   /**
    * Récupérer tous les feedbacks détaillés (admin)
+   * Utilise une fonction RPC pour contourner les RLS policies
    */
   async getAllFeedbacks(): Promise<Feedback[]> {
     try {
-      const { data, error } = await supabase
-        .from('user_feedback')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // Utiliser la fonction RPC qui a SECURITY DEFINER
+      const { data, error } = await supabase.rpc('get_all_feedbacks');
 
       if (error) {
         console.error('Error fetching all feedbacks:', error);

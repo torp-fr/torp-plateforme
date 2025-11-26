@@ -214,13 +214,12 @@ export const analyticsService = {
 
   /**
    * Récupérer tous les utilisateurs inscrits (admin)
+   * Utilise une fonction RPC pour contourner les RLS policies
    */
   async getAllUsers(): Promise<any[]> {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, email, name, user_type, company, phone, created_at, subscription_plan, subscription_status')
-        .order('created_at', { ascending: false });
+      // Utiliser la fonction RPC qui a SECURITY DEFINER
+      const { data, error } = await supabase.rpc('get_all_users');
 
       if (error) {
         console.error('Error fetching all users:', error);
@@ -230,6 +229,27 @@ export const analyticsService = {
       return data || [];
     } catch (error) {
       console.error('Error fetching all users:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Récupérer toutes les analyses de devis (admin)
+   * Utilise une fonction RPC pour contourner les RLS policies
+   */
+  async getAllAnalyses(): Promise<any[]> {
+    try {
+      // Utiliser la fonction RPC qui a SECURITY DEFINER
+      const { data, error } = await supabase.rpc('get_all_analyses');
+
+      if (error) {
+        console.error('Error fetching all analyses:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching all analyses:', error);
       return [];
     }
   },

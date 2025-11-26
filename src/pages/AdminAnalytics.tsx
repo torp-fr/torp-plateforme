@@ -16,6 +16,7 @@ import {
   MessageSquare,
   Star,
   AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { analyticsService, type AnalyticsOverview, type TorpScoreAverages } from '@/services/analytics/analyticsService';
 import { feedbackService, type FeedbackSummary, type Feedback } from '@/services/feedback/feedbackService';
@@ -26,16 +27,22 @@ export default function AdminAnalytics() {
   const [feedbackSummary, setFeedbackSummary] = useState<FeedbackSummary[]>([]);
   const [allFeedbacks, setAllFeedbacks] = useState<Feedback[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [allAnalyses, setAllAnalyses] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('inscriptions');
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
   }, []);
 
-  const loadData = async () => {
-    setIsLoading(true);
+  const loadData = async (isRefresh = false) => {
+    if (isRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
     setError(null);
 
     try {
@@ -50,24 +57,31 @@ export default function AdminAnalytics() {
         feedbackService.getFeedbackSummary(),
         feedbackService.getAllFeedbacks(),
         analyticsService.getAllUsers(),
+        analyticsService.getAllAnalyses(),
       ]);
 
-      const [overviewData, scoresData, feedbackData, allFeedbacksData, usersData] = await Promise.race([
+      const [overviewData, scoresData, feedbackData, allFeedbacksData, usersData, analysesData] = await Promise.race([
         dataPromise,
         timeoutPromise
-      ]) as [AnalyticsOverview | null, TorpScoreAverages[], FeedbackSummary[], Feedback[], any[]];
+      ]) as [AnalyticsOverview | null, TorpScoreAverages[], FeedbackSummary[], Feedback[], any[], any[]];
 
       setOverview(overviewData);
       setScoreAverages(scoresData);
       setFeedbackSummary(feedbackData);
       setAllFeedbacks(allFeedbacksData);
       setAllUsers(usersData);
+      setAllAnalyses(analysesData);
     } catch (err) {
       console.error('Error loading analytics:', err);
       setError(err instanceof Error ? err.message : 'Erreur lors du chargement des données');
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
+  };
+
+  const handleRefresh = () => {
+    loadData(true);
   };
 
   if (isLoading) {
@@ -145,9 +159,20 @@ export default function AdminAnalytics() {
       <Header />
 
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">📊 Dashboard Admin TORP</h1>
-          <p className="text-muted-foreground">Vue d'ensemble des métriques et feedbacks testeurs</p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">📊 Dashboard Admin TORP</h1>
+            <p className="text-muted-foreground">Vue d'ensemble des métriques et feedbacks testeurs</p>
+          </div>
+          <Button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            variant="outline"
+            size="sm"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Actualisation...' : 'Actualiser'}
+          </Button>
         </div>
 
         {/* Stats globales */}
@@ -323,13 +348,120 @@ export default function AdminAnalytics() {
               <CardHeader>
                 <CardTitle>Détails des Analyses</CardTitle>
                 <CardDescription>
-                  Liste des analyses de devis effectuées
+                  {allAnalyses.length} analyses de devis effectuées
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-center text-muted-foreground py-8">
-                  Fonctionnalité à venir - Affichage des analyses détaillées depuis devis_analysis_metrics
-                </p>
+                {allAnalyses.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    Aucune analyse pour le moment
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left p-2">Date</th>
+                          <th className="text-left p-2">User</th>
+                          <th className="text-left p-2">Type</th>
+                          <th className="text-left p-2">Score Global</th>
+                          <th className="text-left p-2">Grade</th>
+                          <th className="text-left p-2">Scores TORP</th>
+                          <th className="text-left p-2">Fichier</th>
+                          <th className="text-left p-2">Durée</th>
+                          <th className="text-left p-2">Statut</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allAnalyses.map((analysis) => (
+                          <tr key={analysis.id} className="border-b hover:bg-muted/50">
+                            <td className="p-2 whitespace-nowrap text-xs text-muted-foreground">
+                              {new Date(analysis.created_at).toLocaleDateString('fr-FR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </td>
+                            <td className="p-2">
+                              <div className="flex flex-col gap-1">
+                                <span className="text-xs text-muted-foreground">
+                                  {analysis.user_email || 'N/A'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="p-2">
+                              <Badge variant="secondary" className="text-xs">
+                                {analysis.user_type === 'B2C' ? 'Particulier' : analysis.user_type === 'B2B' ? 'Professionnel' : analysis.user_type}
+                              </Badge>
+                            </td>
+                            <td className="p-2">
+                              <div className="flex items-center gap-2">
+                                <div className="text-2xl font-bold text-primary">
+                                  {analysis.torp_score_overall?.toFixed(1) || 'N/A'}
+                                </div>
+                                <span className="text-xs text-muted-foreground">/10</span>
+                              </div>
+                            </td>
+                            <td className="p-2">
+                              <Badge
+                                variant={
+                                  analysis.grade?.startsWith('A') ? 'default' :
+                                  analysis.grade?.startsWith('B') ? 'secondary' :
+                                  'outline'
+                                }
+                                className="text-base font-bold"
+                              >
+                                {analysis.grade || 'N/A'}
+                              </Badge>
+                            </td>
+                            <td className="p-2">
+                              <div className="flex flex-col gap-1 text-xs">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-muted-foreground">T:</span>
+                                  <span className="font-medium">{analysis.torp_score_transparency?.toFixed(1) || 'N/A'}</span>
+                                  <span className="text-muted-foreground">O:</span>
+                                  <span className="font-medium">{analysis.torp_score_offer?.toFixed(1) || 'N/A'}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-muted-foreground">R:</span>
+                                  <span className="font-medium">{analysis.torp_score_robustness?.toFixed(1) || 'N/A'}</span>
+                                  <span className="text-muted-foreground">P:</span>
+                                  <span className="font-medium">{analysis.torp_score_price?.toFixed(1) || 'N/A'}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-2 text-xs">
+                              <div className="flex flex-col gap-1">
+                                <span className="text-muted-foreground">{analysis.file_type || 'N/A'}</span>
+                                <span className="text-muted-foreground">
+                                  {analysis.file_size_bytes ? `${(analysis.file_size_bytes / 1024).toFixed(1)} KB` : 'N/A'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="p-2 text-xs text-muted-foreground">
+                              {analysis.analysis_duration_ms ? `${(analysis.analysis_duration_ms / 1000).toFixed(1)}s` : 'N/A'}
+                            </td>
+                            <td className="p-2">
+                              <Badge
+                                variant={analysis.upload_success ? 'default' : 'destructive'}
+                                className="text-xs"
+                              >
+                                {analysis.upload_success ? '✓ Réussi' : '✗ Échec'}
+                              </Badge>
+                              {!analysis.upload_success && analysis.upload_error && (
+                                <div className="text-xs text-destructive mt-1" title={analysis.upload_error}>
+                                  {analysis.upload_error.substring(0, 30)}...
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
