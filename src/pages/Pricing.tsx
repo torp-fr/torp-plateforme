@@ -1,14 +1,12 @@
 import { useState } from 'react';
 import { Header } from '@/components/Header';
 import { BackButton } from '@/components/BackButton';
-import { Users, Building, Building2, Target } from 'lucide-react';
+import { Users, Building } from 'lucide-react';
 import B2CPricing from '@/components/pricing/B2CPricing';
 import B2BPricing from '@/components/pricing/B2BPricing';
-import B2B2CPricing from '@/components/pricing/B2B2CPricing';
-import B2GPricing from '@/components/pricing/B2GPricing';
 
 export default function Pricing() {
-  const [userType, setUserType] = useState<'B2C' | 'B2B' | 'B2G' | 'B2B2C'>('B2C');
+  const [userType, setUserType] = useState<'B2C' | 'B2B'>('B2C');
 
   const segments = [
     {
@@ -16,28 +14,14 @@ export default function Pricing() {
       label: 'B2C',
       icon: <Users className="w-4 h-4" />,
       title: 'Particuliers',
-      description: 'Expertise accessible + Paiements sécurisés'
+      description: 'Analyse de devis reçus pour aide à la décision'
     },
     {
       key: 'B2B' as const,
-      label: 'B2B', 
+      label: 'B2B',
       icon: <Building className="w-4 h-4" />,
-      title: 'Entreprises BTP',
-      description: 'Professionnalisez selon vos ambitions'
-    },
-    {
-      key: 'B2G' as const,
-      label: 'B2G',
-      icon: <Building2 className="w-4 h-4" />,
-      title: 'Collectivités',
-      description: 'Premier service public numérique BTP'
-    },
-    {
-      key: 'B2B2C' as const,
-      label: 'B2B2C',
-      icon: <Target className="w-4 h-4" />,
-      title: 'Prescripteurs',
-      description: 'Certifiez vos recommandations'
+      title: 'Professionnels BTP',
+      description: 'Assistant optimisation devis avant envoi'
     }
   ];
 
@@ -45,8 +29,6 @@ export default function Pricing() {
     switch (userType) {
       case 'B2C': return <B2CPricing />;
       case 'B2B': return <B2BPricing />;
-      case 'B2G': return <B2GPricing />;
-      case 'B2B2C': return <B2B2CPricing />;
       default: return <B2CPricing />;
     }
   };

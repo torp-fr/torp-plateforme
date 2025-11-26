@@ -8,14 +8,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdvancedAnalytics } from "@/components/AdvancedAnalytics";
 import { ActiveAssistant } from "@/components/ActiveAssistant";
 import { PaymentManager } from "@/components/PaymentManager";
-import { MarketplaceTab } from "@/components/marketplace/MarketplaceTab";
-import { MultiProjectManagement } from "@/components/MultiProjectManagement";
-import { TeamScheduler } from "@/components/TeamScheduler";
-import { 
-  Building2, 
-  Users, 
-  Target, 
-  Euro, 
+import {
+  Building2,
+  Users,
+  Target,
+  Euro,
   Settings,
   Plus,
   Download,
@@ -26,7 +23,6 @@ import {
   UserCheck,
   Truck,
   Receipt,
-  ShoppingCart,
   Award,
   QrCode,
   TrendingUp,
@@ -177,19 +173,10 @@ export default function ImprovedB2BDashboard() {
             <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
               <TabsList className="inline-flex h-auto min-w-full w-max p-2 bg-transparent gap-1">
                 <TabsTrigger value="overview" className="whitespace-nowrap">Vue d'ensemble</TabsTrigger>
-                <TabsTrigger value="projects" className="whitespace-nowrap relative">
-                  <span className="font-semibold">Gestion Projets</span>
-                  <Badge variant="destructive" className="ml-1 text-[10px] px-1.5 py-0.5">NEW</Badge>
-                </TabsTrigger>
-                <TabsTrigger value="planning" className="whitespace-nowrap relative">
-                  <span className="font-semibold">Planning Équipe</span>
-                  <Badge variant="destructive" className="ml-1 text-[10px] px-1.5 py-0.5">NEW</Badge>
-                </TabsTrigger>
                 <TabsTrigger value="tools" className="whitespace-nowrap">Outils Métier</TabsTrigger>
                 <TabsTrigger value="analytics" className="whitespace-nowrap">Analytics</TabsTrigger>
                 <TabsTrigger value="team" className="whitespace-nowrap">Équipe</TabsTrigger>
                 <TabsTrigger value="suppliers" className="whitespace-nowrap">Fournitures</TabsTrigger>
-                <TabsTrigger value="marketplace" className="whitespace-nowrap">Marketplace</TabsTrigger>
                 <TabsTrigger value="invoicing" className="whitespace-nowrap">Facturation</TabsTrigger>
                 <TabsTrigger value="payments" className="whitespace-nowrap">Paiements</TabsTrigger>
               </TabsList>
@@ -317,14 +304,6 @@ export default function ImprovedB2BDashboard() {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="projects" className="space-y-6">
-            <MultiProjectManagement />
-          </TabsContent>
-
-          <TabsContent value="planning" className="space-y-6">
-            <TeamScheduler />
           </TabsContent>
 
           <TabsContent value="tools" className="space-y-6">
@@ -573,20 +552,10 @@ export default function ImprovedB2BDashboard() {
           </TabsContent>
 
           <TabsContent value="payments" className="space-y-6">
-            <PaymentManager 
-              projectId="1" 
-              userType="B2B" 
+            <PaymentManager
+              projectId="1"
+              userType="B2B"
               projectAmount="150000"
-            />
-          </TabsContent>
-
-          <TabsContent value="marketplace" className="space-y-6">
-            <MarketplaceTab 
-              userType="B2B" 
-              projectContext={{
-                projectType: "commercial",
-                analysisResult: { score: companyStats.averageScore }
-              }}
             />
           </TabsContent>
         </Tabs>

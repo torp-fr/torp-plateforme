@@ -15,16 +15,12 @@ import Projects from "./pages/Projects";
 import Pricing from "./pages/Pricing";
 import Demo from "./pages/Demo";
 import ProjectTracking from "./pages/ProjectTracking";
-import FinancingPlatform from "./pages/FinancingPlatform";
 import FormulaPicker from "./pages/FormulaPicker";
 import AdminDashboard from "./pages/AdminDashboard";
-import CollectivitesDashboard from "./pages/CollectivitesDashboard";
 import ProjectDashboard from "./pages/ProjectDashboard";
 import PrescripteursDashboard from "./pages/PrescripteursDashboard";
 import ImprovedB2BDashboard from "@/pages/ImprovedB2BDashboard";
 import B2CDashboard from "./pages/B2CDashboard";
-import B2B2CDashboard from "./pages/B2B2CDashboard";
-import Marketplace from "./pages/Marketplace";
 import NotFound from "./pages/NotFound";
 import DiscoveryFlow from "./pages/DiscoveryFlow";
 import TorpCompleteFlow from "./pages/TorpCompleteFlow";
@@ -52,14 +48,10 @@ const App = () => (
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/demo" element={<Demo />} />
             <Route path="/project-tracking" element={<ProjectTracking />} />
-            <Route path="/financing" element={<FinancingPlatform />} />
             <Route path="/formula-picker" element={<FormulaPicker />} />
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
-            <Route path="/collectivites-dashboard" element={<CollectivitesDashboard />} />
             <Route path="/project-dashboard" element={<ProjectDashboard />} />
-            <Route path="/prescripteurs-dashboard" element={<B2B2CDashboard />} />
             <Route path="/improved-b2b-dashboard" element={<ImprovedB2BDashboard />} />
-            <Route path="/marketplace" element={<Marketplace />} />
             <Route path="/b2c-dashboard" element={<B2CDashboard />} />
             {/* Route désactivée - wizard obsolète */}
             {/* <Route path="/discovery" element={<DiscoveryFlow />} /> */}
