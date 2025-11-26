@@ -82,8 +82,19 @@ export class SupabaseAuthService {
       throw new Error('Failed to fetch user profile');
     }
 
+    const mappedUser = mapDbUserToAppUser(userData);
+
+    // Track login event
+    try {
+      await analyticsService.trackLogin(mappedUser.type === 'admin' ? 'B2C' : mappedUser.type);
+    } catch (trackError) {
+      console.warn('Failed to track login event:', trackError);
+    }
+
+    console.log('✓ Login réussi:', mappedUser.email, '- Type:', mappedUser.type);
+
     return {
-      user: mapDbUserToAppUser(userData),
+      user: mappedUser,
       token: authData.session?.access_token || '',
       refreshToken: authData.session?.refresh_token,
     };

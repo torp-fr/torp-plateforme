@@ -183,21 +183,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Check for existing session on mount and listen for auth changes
   useEffect(() => {
+    let isMounted = true;
+
     // Check initial session
-    authService.getCurrentUser().then(currentUser => {
-      if (currentUser) {
-        setUser(currentUser);
-        setUserType(currentUser.type);
+    const loadUser = async () => {
+      try {
+        const currentUser = await authService.getCurrentUser();
+        if (isMounted && currentUser) {
+          console.log('✓ Session restaurée:', currentUser.email);
+          setUser(currentUser);
+          setUserType(currentUser.type);
+        } else if (isMounted) {
+          console.log('ℹ️ Aucune session active');
+        }
+      } catch (error) {
+        console.error('Erreur lors de la restauration de session:', error);
       }
-    });
+    };
+
+    loadUser();
 
     // Listen for auth state changes
     const { data: { subscription } } = authService.onAuthStateChange((sessionUser) => {
-      setUser(sessionUser);
+      if (!isMounted) return;
+
       if (sessionUser) {
+        console.log('✓ Utilisateur connecté:', sessionUser.email);
+        setUser(sessionUser);
         setUserType(sessionUser.type);
       } else {
-        // User logged out - reset state
+        console.log('ℹ️ Utilisateur déconnecté');
+        setUser(null);
         setProjects([]);
         setCurrentProject(null);
       }
@@ -205,6 +221,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // Cleanup subscription on unmount
     return () => {
+      isMounted = false;
       subscription?.unsubscribe();
     };
   }, []);

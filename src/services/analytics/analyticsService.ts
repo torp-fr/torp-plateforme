@@ -214,22 +214,109 @@ export const analyticsService = {
 
   /**
    * Récupérer tous les utilisateurs inscrits (admin)
+   * Utilise une fonction RPC pour contourner les RLS policies
+   * Avec fallback vers requête directe si RPC non disponible
    */
   async getAllUsers(): Promise<any[]> {
     try {
-      const { data, error } = await supabase
+      // Essayer d'abord la fonction RPC (nécessite migration 004)
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_all_users');
+
+      if (!rpcError && rpcData) {
+        console.log('✓ Users loaded via RPC:', rpcData.length);
+        return rpcData || [];
+      }
+
+      // Si RPC échoue (fonction n'existe pas), essayer requête directe
+      console.warn('⚠️ RPC get_all_users failed, trying direct query. Error:', rpcError?.message);
+      console.log('💡 Appliquez la migration 004_admin_access_policies.sql pour résoudre ce problème');
+
+      const { data: directData, error: directError } = await supabase
         .from('users')
         .select('id, email, name, user_type, company, phone, created_at, subscription_plan, subscription_status')
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching all users:', error);
+      if (directError) {
+        console.error('❌ Direct query also failed:', directError);
         return [];
       }
 
-      return data || [];
+      console.log('✓ Users loaded via direct query:', directData?.length || 0);
+      return directData || [];
     } catch (error) {
-      console.error('Error fetching all users:', error);
+      console.error('❌ Error fetching all users:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Récupérer toutes les analyses de devis (admin)
+   * Utilise une fonction RPC pour contourner les RLS policies
+   * Avec fallback vers requête directe si RPC non disponible
+   */
+  async getAllAnalyses(): Promise<any[]> {
+    try {
+      // Essayer d'abord la fonction RPC (nécessite migration 004)
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_all_analyses');
+
+      if (!rpcError && rpcData) {
+        console.log('✓ Analyses loaded via RPC:', rpcData.length);
+        return rpcData || [];
+      }
+
+      // Si RPC échoue (fonction n'existe pas), essayer requête directe
+      console.warn('⚠️ RPC get_all_analyses failed, trying direct query. Error:', rpcError?.message);
+      console.log('💡 Appliquez la migration 004_admin_access_policies.sql pour résoudre ce problème');
+
+      const { data: directData, error: directError } = await supabase
+        .from('devis_analysis_metrics')
+        .select(`
+          id,
+          user_id,
+          user_type,
+          devis_id,
+          torp_score_overall,
+          torp_score_transparency,
+          torp_score_offer,
+          torp_score_robustness,
+          torp_score_price,
+          grade,
+          analysis_duration_ms,
+          file_size_bytes,
+          file_type,
+          upload_success,
+          upload_error,
+          created_at
+        `)
+        .order('created_at', { ascending: false });
+
+      if (directError) {
+        console.error('❌ Direct query also failed:', directError);
+        return [];
+      }
+
+      // Enrichir avec les emails utilisateurs
+      const dataWithEmails = await Promise.all(
+        (directData || []).map(async (analysis) => {
+          if (!analysis.user_id) return { ...analysis, user_email: null };
+
+          const { data: userData } = await supabase
+            .from('users')
+            .select('email')
+            .eq('id', analysis.user_id)
+            .single();
+
+          return {
+            ...analysis,
+            user_email: userData?.email || null
+          };
+        })
+      );
+
+      console.log('✓ Analyses loaded via direct query:', dataWithEmails.length);
+      return dataWithEmails;
+    } catch (error) {
+      console.error('❌ Error fetching all analyses:', error);
       return [];
     }
   },

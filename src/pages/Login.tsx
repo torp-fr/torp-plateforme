@@ -74,22 +74,14 @@ export default function Login() {
 
           <CardContent>
             <Tabs defaultValue={userType} onValueChange={(value) => setUserType(value as UserType)}>
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="B2C" className="flex items-center gap-2">
                   <Users className="w-4 h-4" />
-                  B2C
+                  Particulier
                 </TabsTrigger>
                 <TabsTrigger value="B2B" className="flex items-center gap-2">
                   <Building className="w-4 h-4" />
-                  B2B
-                </TabsTrigger>
-                <TabsTrigger value="B2G" className="flex items-center gap-2">
-                  <Building className="w-4 h-4" />
-                  B2G
-                </TabsTrigger>
-                <TabsTrigger value="B2B2C" className="flex items-center gap-2">
-                  <Building className="w-4 h-4" />
-                  B2B2C
+                  Professionnel
                 </TabsTrigger>
               </TabsList>
 
@@ -117,9 +109,9 @@ export default function Login() {
                       required
                     />
                   </div>
-                  <Button 
-                    type="submit" 
-                    className="w-full" 
+                  <Button
+                    type="submit"
+                    className="w-full"
                     disabled={isLoading}
                   >
                     {isLoading ? 'Connexion...' : 'Se connecter'}
@@ -151,80 +143,12 @@ export default function Login() {
                       required
                     />
                   </div>
-                  <Button 
-                    type="submit" 
-                    className="w-full" 
+                  <Button
+                    type="submit"
+                    className="w-full"
                     disabled={isLoading}
                   >
-                    {isLoading ? 'Connexion...' : 'Accéder à mon espace pro'}
-                  </Button>
-                </form>
-              </TabsContent>
-
-              <TabsContent value="B2G" className="space-y-4 mt-6">
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email-b2g">Email collectivité</Label>
-                    <Input
-                      id="email-b2g"
-                      type="email"
-                      placeholder="contact@mairie.fr"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password-b2g">Mot de passe</Label>
-                    <Input
-                      id="password-b2g"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <Button 
-                    type="submit" 
-                    className="w-full" 
-                    disabled={isLoading}
-                  >
-                    {isLoading ? 'Connexion...' : 'Accéder à l\'observatoire'}
-                  </Button>
-                </form>
-              </TabsContent>
-
-              <TabsContent value="B2B2C" className="space-y-4 mt-6">
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email-b2b2c">Email prescripteur</Label>
-                    <Input
-                      id="email-b2b2c"
-                      type="email"
-                      placeholder="contact@cabinet-archi.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password-b2b2c">Mot de passe</Label>
-                    <Input
-                      id="password-b2b2c"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <Button 
-                    type="submit" 
-                    className="w-full" 
-                    disabled={isLoading}
-                  >
-                    {isLoading ? 'Connexion...' : 'Dashboard Prescripteur'}
+                    {isLoading ? 'Connexion...' : 'Accéder à mon espace professionnel'}
                   </Button>
                 </form>
               </TabsContent>
