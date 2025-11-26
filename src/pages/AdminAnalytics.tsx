@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +23,7 @@ import { analyticsService, type AnalyticsOverview, type TorpScoreAverages } from
 import { feedbackService, type FeedbackSummary, type Feedback } from '@/services/feedback/feedbackService';
 
 export default function AdminAnalytics() {
+  const navigate = useNavigate();
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [scoreAverages, setScoreAverages] = useState<TorpScoreAverages[]>([]);
   const [feedbackSummary, setFeedbackSummary] = useState<FeedbackSummary[]>([]);
@@ -164,15 +166,24 @@ export default function AdminAnalytics() {
             <h1 className="text-3xl font-bold text-foreground mb-2">📊 Dashboard Admin TORP</h1>
             <p className="text-muted-foreground">Vue d'ensemble des métriques et feedbacks testeurs</p>
           </div>
-          <Button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            variant="outline"
-            size="sm"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? 'Actualisation...' : 'Actualiser'}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => navigate('/admin/diagnostic')}
+              variant="outline"
+              size="sm"
+            >
+              🔧 Diagnostic
+            </Button>
+            <Button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              variant="outline"
+              size="sm"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Actualisation...' : 'Actualiser'}
+            </Button>
+          </div>
         </div>
 
         {/* Stats globales */}

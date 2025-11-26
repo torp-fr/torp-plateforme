@@ -28,6 +28,7 @@ import TorpCompleteFlow from "./pages/TorpCompleteFlow";
 import AlgorithmicSegments from "./pages/AlgorithmicSegments";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import AdminAnalytics from "./pages/AdminAnalytics";
+import AdminDiagnostic from "./pages/AdminDiagnostic";
 
 const queryClient = new QueryClient();
 
@@ -55,6 +56,7 @@ const AppContent = () => {
           <Route path="/formula-picker" element={<FormulaPicker />} />
           <Route path="/admin-dashboard" element={<AdminDashboard />} />
           <Route path="/admin/analytics" element={<AdminAnalytics />} />
+          <Route path="/admin/diagnostic" element={<AdminDiagnostic />} />
           <Route path="/project-dashboard" element={<ProjectDashboard />} />
           <Route path="/improved-b2b-dashboard" element={<ImprovedB2BDashboard />} />
           <Route path="/b2c-dashboard" element={<B2CDashboard />} />
