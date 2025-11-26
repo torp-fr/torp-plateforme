@@ -25,11 +25,15 @@ export default function Login() {
     setIsLoading(true);
 
     try {
+      console.log('[Login] Tentative de connexion avec:', email);
+
       // Login using real Supabase auth service
       const response = await authService.login({
         email,
         password,
       });
+
+      console.log('[Login] Connexion réussie, utilisateur:', response.user.email, 'Type:', response.user.type);
 
       setUser(response.user);
 
@@ -38,9 +42,21 @@ export default function Login() {
         description: `Bienvenue ${response.user.name || response.user.email}!`,
       });
 
-      navigate('/dashboard');
+      // Attendre un petit délai pour que le contexte soit bien mis à jour
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      console.log('[Login] Redirection vers dashboard...');
+
+      // Vérifier si l'utilisateur est admin
+      if (response.user.type === 'admin') {
+        console.log('[Login] Admin détecté, redirection vers /admin/analytics');
+        navigate('/admin/analytics');
+      } else {
+        console.log('[Login] Utilisateur standard, redirection vers /dashboard');
+        navigate('/dashboard');
+      }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('[Login] Erreur de connexion:', error);
       toast({
         title: 'Erreur de connexion',
         description: error instanceof Error ? error.message : 'Email ou mot de passe incorrect',

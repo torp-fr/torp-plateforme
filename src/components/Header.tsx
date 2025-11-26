@@ -74,17 +74,17 @@ export const Header = () => {
                 <ChevronDown className="h-4 w-4" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuItem onClick={() => navigate('/b2c-dashboard')}>
+                <DropdownMenuItem onClick={() => navigate('/register')}>
                   <div>
-                    <div className="font-medium">👤 Particuliers (B2C)</div>
+                    <div className="font-medium">👤 Particuliers</div>
                     <div className="text-xs text-muted-foreground">
                       Analysez vos devis de travaux
                     </div>
                   </div>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/improved-b2b-dashboard')}>
+                <DropdownMenuItem onClick={() => navigate('/register')}>
                   <div>
-                    <div className="font-medium">🏢 Entreprises BTP (B2B)</div>
+                    <div className="font-medium">🏢 Professionnels BTP</div>
                     <div className="text-xs text-muted-foreground">
                       Valorisez votre expertise
                     </div>
@@ -194,18 +194,18 @@ export const Header = () => {
                 Solutions
               </div>
               <Link
-                to="/b2c-dashboard"
+                to="/register"
                 className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                👤 Particuliers (B2C)
+                👤 Particuliers
               </Link>
               <Link
-                to="/improved-b2b-dashboard"
+                to="/register"
                 className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                🏢 Entreprises BTP (B2B)
+                🏢 Professionnels BTP
               </Link>
             </div>
 

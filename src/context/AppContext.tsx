@@ -184,45 +184,64 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Check for existing session on mount and listen for auth changes
   useEffect(() => {
     let isMounted = true;
+    let subscription: any = null;
 
     // Check initial session
     const loadUser = async () => {
       try {
         const currentUser = await authService.getCurrentUser();
-        if (isMounted && currentUser) {
+        if (!isMounted) return;
+
+        if (currentUser) {
           console.log('✓ Session restaurée:', currentUser.email);
           setUser(currentUser);
           setUserType(currentUser.type);
-        } else if (isMounted) {
+        } else {
           console.log('ℹ️ Aucune session active');
         }
       } catch (error) {
-        console.error('Erreur lors de la restauration de session:', error);
+        console.error('⚠️ Erreur lors de la restauration de session:', error);
+        // Ne pas crasher, continuer sans session
       }
     };
 
-    loadUser();
+    // Setup auth state listener
+    const setupAuthListener = () => {
+      try {
+        const { data } = authService.onAuthStateChange((sessionUser) => {
+          if (!isMounted) return;
 
-    // Listen for auth state changes
-    const { data: { subscription } } = authService.onAuthStateChange((sessionUser) => {
-      if (!isMounted) return;
+          if (sessionUser) {
+            console.log('✓ Utilisateur connecté:', sessionUser.email);
+            setUser(sessionUser);
+            setUserType(sessionUser.type);
+          } else {
+            console.log('ℹ️ Utilisateur déconnecté');
+            setUser(null);
+            setProjects([]);
+            setCurrentProject(null);
+          }
+        });
 
-      if (sessionUser) {
-        console.log('✓ Utilisateur connecté:', sessionUser.email);
-        setUser(sessionUser);
-        setUserType(sessionUser.type);
-      } else {
-        console.log('ℹ️ Utilisateur déconnecté');
-        setUser(null);
-        setProjects([]);
-        setCurrentProject(null);
+        subscription = data?.subscription;
+      } catch (error) {
+        console.error('⚠️ Erreur setup auth listener:', error);
+        // Ne pas crasher, continuer sans listener
       }
-    });
+    };
+
+    // Execute initialization
+    loadUser();
+    setupAuthListener();
 
     // Cleanup subscription on unmount
     return () => {
       isMounted = false;
-      subscription?.unsubscribe();
+      try {
+        subscription?.unsubscribe();
+      } catch (error) {
+        console.error('⚠️ Erreur unsubscribe:', error);
+      }
     };
   }, []);
 

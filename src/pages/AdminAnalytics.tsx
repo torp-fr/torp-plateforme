@@ -48,24 +48,53 @@ export default function AdminAnalytics() {
     setError(null);
 
     try {
-      // Timeout après 10 secondes
+      console.log('[AdminAnalytics] Chargement des données...');
+
+      // Timeout augmenté à 30 secondes pour les connexions lentes
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout: La migration Supabase n\'a peut-être pas été appliquée')), 10000)
+        setTimeout(() => reject(new Error('Timeout: Le chargement prend trop de temps. Vérifiez votre connexion ou les migrations Supabase.')), 30000)
       );
 
       const dataPromise = Promise.all([
-        analyticsService.getOverview(),
-        analyticsService.getScoreAverages(),
-        feedbackService.getFeedbackSummary(),
-        feedbackService.getAllFeedbacks(),
-        analyticsService.getAllUsers(),
-        analyticsService.getAllAnalyses(),
+        analyticsService.getOverview().catch(err => {
+          console.error('[AdminAnalytics] Erreur getOverview:', err);
+          return null;
+        }),
+        analyticsService.getScoreAverages().catch(err => {
+          console.error('[AdminAnalytics] Erreur getScoreAverages:', err);
+          return [];
+        }),
+        feedbackService.getFeedbackSummary().catch(err => {
+          console.error('[AdminAnalytics] Erreur getFeedbackSummary:', err);
+          return [];
+        }),
+        feedbackService.getAllFeedbacks().catch(err => {
+          console.error('[AdminAnalytics] Erreur getAllFeedbacks:', err);
+          return [];
+        }),
+        analyticsService.getAllUsers().catch(err => {
+          console.error('[AdminAnalytics] Erreur getAllUsers:', err);
+          return [];
+        }),
+        analyticsService.getAllAnalyses().catch(err => {
+          console.error('[AdminAnalytics] Erreur getAllAnalyses:', err);
+          return [];
+        }),
       ]);
 
       const [overviewData, scoresData, feedbackData, allFeedbacksData, usersData, analysesData] = await Promise.race([
         dataPromise,
         timeoutPromise
       ]) as [AnalyticsOverview | null, TorpScoreAverages[], FeedbackSummary[], Feedback[], any[], any[]];
+
+      console.log('[AdminAnalytics] Données chargées:', {
+        overview: overviewData,
+        scores: scoresData.length,
+        feedback: feedbackData.length,
+        allFeedbacks: allFeedbacksData.length,
+        users: usersData.length,
+        analyses: analysesData.length,
+      });
 
       setOverview(overviewData);
       setScoreAverages(scoresData);
@@ -74,7 +103,7 @@ export default function AdminAnalytics() {
       setAllUsers(usersData);
       setAllAnalyses(analysesData);
     } catch (err) {
-      console.error('Error loading analytics:', err);
+      console.error('[AdminAnalytics] Erreur chargement:', err);
       setError(err instanceof Error ? err.message : 'Erreur lors du chargement des données');
     } finally {
       setIsLoading(false);
