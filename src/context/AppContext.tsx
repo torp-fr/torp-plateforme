@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { authService } from '@/services/api/supabase/auth.service';
 
-// User types - Nouveau modèle commercial TORP
-export type UserType = 'B2C' | 'B2B' | 'B2G' | 'B2B2C' | 'admin';
+// User types - Simplifié: Particulier (B2C) et Professionnel (B2B)
+export type UserType = 'B2C' | 'B2B' | 'admin';
 
 export interface User {
   id: string;

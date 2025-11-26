@@ -54,7 +54,7 @@ export default function Register() {
         password,
         name,
         type: userType,
-        company: (userType === 'B2B' || userType === 'B2B2C' || userType === 'B2G') ? company : undefined,
+        company: (userType === 'B2B') ? company : undefined,
         phone: phone || undefined,
       });
 
@@ -102,22 +102,14 @@ export default function Register() {
 
           <CardContent>
             <Tabs defaultValue={userType} onValueChange={(value) => setUserType(value as UserType)}>
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="B2C" className="flex items-center gap-2">
                   <Users className="w-4 h-4" />
-                  B2C
+                  Particulier
                 </TabsTrigger>
                 <TabsTrigger value="B2B" className="flex items-center gap-2">
                   <Building className="w-4 h-4" />
-                  B2B
-                </TabsTrigger>
-                <TabsTrigger value="B2G" className="flex items-center gap-2">
-                  <Building className="w-4 h-4" />
-                  B2G
-                </TabsTrigger>
-                <TabsTrigger value="B2B2C" className="flex items-center gap-2">
-                  <Building className="w-4 h-4" />
-                  B2B2C
+                  Professionnel
                 </TabsTrigger>
               </TabsList>
 
@@ -263,165 +255,7 @@ export default function Register() {
                     className="w-full"
                     disabled={isLoading}
                   >
-                    {isLoading ? 'Création du compte...' : 'Créer mon espace pro'}
-                  </Button>
-                </form>
-              </TabsContent>
-
-              <TabsContent value="B2G" className="space-y-4 mt-6">
-                <form onSubmit={handleRegister} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name-b2g">Nom complet</Label>
-                    <Input
-                      id="name-b2g"
-                      type="text"
-                      placeholder="Pierre Durand"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="company-b2g">Collectivité</Label>
-                    <Input
-                      id="company-b2g"
-                      type="text"
-                      placeholder="Mairie de Paris"
-                      value={company}
-                      onChange={(e) => setCompany(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email-b2g">Email collectivité</Label>
-                    <Input
-                      id="email-b2g"
-                      type="email"
-                      placeholder="contact@mairie.fr"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone-b2g">Téléphone (optionnel)</Label>
-                    <Input
-                      id="phone-b2g"
-                      type="tel"
-                      placeholder="06 12 34 56 78"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password-b2g">Mot de passe</Label>
-                    <Input
-                      id="password-b2g"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      minLength={8}
-                    />
-                    <p className="text-xs text-muted-foreground">Minimum 8 caractères</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password-b2g">Confirmer le mot de passe</Label>
-                    <Input
-                      id="confirm-password-b2g"
-                      type="password"
-                      placeholder="••••••••"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? 'Création du compte...' : 'Créer mon observatoire'}
-                  </Button>
-                </form>
-              </TabsContent>
-
-              <TabsContent value="B2B2C" className="space-y-4 mt-6">
-                <form onSubmit={handleRegister} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name-b2b2c">Nom complet</Label>
-                    <Input
-                      id="name-b2b2c"
-                      type="text"
-                      placeholder="Sophie Bernard"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="company-b2b2c">Cabinet/Structure</Label>
-                    <Input
-                      id="company-b2b2c"
-                      type="text"
-                      placeholder="Cabinet Architecture"
-                      value={company}
-                      onChange={(e) => setCompany(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email-b2b2c">Email prescripteur</Label>
-                    <Input
-                      id="email-b2b2c"
-                      type="email"
-                      placeholder="contact@cabinet-archi.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone-b2b2c">Téléphone (optionnel)</Label>
-                    <Input
-                      id="phone-b2b2c"
-                      type="tel"
-                      placeholder="06 12 34 56 78"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password-b2b2c">Mot de passe</Label>
-                    <Input
-                      id="password-b2b2c"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      minLength={8}
-                    />
-                    <p className="text-xs text-muted-foreground">Minimum 8 caractères</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password-b2b2c">Confirmer le mot de passe</Label>
-                    <Input
-                      id="confirm-password-b2b2c"
-                      type="password"
-                      placeholder="••••••••"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? 'Création du compte...' : 'Créer mon dashboard prescripteur'}
+                    {isLoading ? 'Création du compte...' : 'Créer mon compte professionnel'}
                   </Button>
                 </form>
               </TabsContent>
