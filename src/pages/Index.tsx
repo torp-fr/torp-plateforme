@@ -3,8 +3,8 @@
  * Complete UX/UI redesign with conversion-focused layout
  */
 
-import { Header } from "@/components/Header.optimized";
-import { Hero } from "@/components/Hero.optimized";
+import { Header } from "@/components/Header";
+import { Hero } from "@/components/Hero";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { Solutions } from "@/components/landing/Solutions";
 import { Testimonials } from "@/components/landing/Testimonials";
