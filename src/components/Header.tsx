@@ -76,7 +76,7 @@ export const Header = () => {
               <DropdownMenuContent align="start" className="w-56">
                 <DropdownMenuItem onClick={() => navigate('/b2c-dashboard')}>
                   <div>
-                    <div className="font-medium">👤 Particuliers</div>
+                    <div className="font-medium">👤 Particuliers (B2C)</div>
                     <div className="text-xs text-muted-foreground">
                       Analysez vos devis de travaux
                     </div>
@@ -84,25 +84,9 @@ export const Header = () => {
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/improved-b2b-dashboard')}>
                   <div>
-                    <div className="font-medium">🏢 Entreprises BTP</div>
+                    <div className="font-medium">🏢 Entreprises BTP (B2B)</div>
                     <div className="text-xs text-muted-foreground">
                       Valorisez votre expertise
-                    </div>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/collectivites-dashboard')}>
-                  <div>
-                    <div className="font-medium">🏛️ Collectivités</div>
-                    <div className="text-xs text-muted-foreground">
-                      Observatoire des marchés publics
-                    </div>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/prescripteurs-dashboard')}>
-                  <div>
-                    <div className="font-medium">🎯 Prescripteurs</div>
-                    <div className="text-xs text-muted-foreground">
-                      Accompagnez vos clients
                     </div>
                   </div>
                 </DropdownMenuItem>
@@ -114,13 +98,6 @@ export const Header = () => {
               className="text-sm font-medium text-foreground hover:text-primary transition-colors"
             >
               Tarifs
-            </Link>
-
-            <Link
-              to="/demo"
-              className="text-sm font-medium text-foreground hover:text-primary transition-colors"
-            >
-              Démo
             </Link>
 
             {user && (
@@ -221,28 +198,14 @@ export const Header = () => {
                 className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                👤 Particuliers
+                👤 Particuliers (B2C)
               </Link>
               <Link
                 to="/improved-b2b-dashboard"
                 className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                🏢 Entreprises BTP
-              </Link>
-              <Link
-                to="/collectivites-dashboard"
-                className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                🏛️ Collectivités
-              </Link>
-              <Link
-                to="/prescripteurs-dashboard"
-                className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                🎯 Prescripteurs
+                🏢 Entreprises BTP (B2B)
               </Link>
             </div>
 
@@ -252,14 +215,6 @@ export const Header = () => {
               onClick={() => setMobileMenuOpen(false)}
             >
               Tarifs
-            </Link>
-
-            <Link
-              to="/demo"
-              className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Démo
             </Link>
 
             {user && (

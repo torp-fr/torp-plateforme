@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { Header } from '@/components/Header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   BarChart3,
@@ -14,6 +15,7 @@ import {
   FileText,
   MessageSquare,
   Star,
+  AlertTriangle,
 } from 'lucide-react';
 import { analyticsService, type AnalyticsOverview, type TorpScoreAverages } from '@/services/analytics/analyticsService';
 import { feedbackService, type FeedbackSummary } from '@/services/feedback/feedbackService';
@@ -23,6 +25,7 @@ export default function AdminAnalytics() {
   const [scoreAverages, setScoreAverages] = useState<TorpScoreAverages[]>([]);
   const [feedbackSummary, setFeedbackSummary] = useState<FeedbackSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -30,17 +33,34 @@ export default function AdminAnalytics() {
 
   const loadData = async () => {
     setIsLoading(true);
+    setError(null);
 
-    const [overviewData, scoresData, feedbackData] = await Promise.all([
-      analyticsService.getOverview(),
-      analyticsService.getScoreAverages(),
-      feedbackService.getFeedbackSummary(),
-    ]);
+    try {
+      // Timeout après 10 secondes
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout: La migration Supabase n\'a peut-être pas été appliquée')), 10000)
+      );
 
-    setOverview(overviewData);
-    setScoreAverages(scoresData);
-    setFeedbackSummary(feedbackData);
-    setIsLoading(false);
+      const dataPromise = Promise.all([
+        analyticsService.getOverview(),
+        analyticsService.getScoreAverages(),
+        feedbackService.getFeedbackSummary(),
+      ]);
+
+      const [overviewData, scoresData, feedbackData] = await Promise.race([
+        dataPromise,
+        timeoutPromise
+      ]) as [AnalyticsOverview | null, TorpScoreAverages[], FeedbackSummary[]];
+
+      setOverview(overviewData);
+      setScoreAverages(scoresData);
+      setFeedbackSummary(feedbackData);
+    } catch (err) {
+      console.error('Error loading analytics:', err);
+      setError(err instanceof Error ? err.message : 'Erreur lors du chargement des données');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (isLoading) {
@@ -49,6 +69,59 @@ export default function AdminAnalytics() {
         <Header />
         <div className="container mx-auto px-4 py-8">
           <p className="text-center text-muted-foreground">Chargement des métriques...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto px-4 py-8">
+          <Card className="border-red-200 bg-red-50">
+            <CardHeader>
+              <CardTitle className="text-red-800 flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5" />
+                Erreur de chargement
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-red-700">{error}</p>
+              <div className="bg-white p-4 rounded-md border border-red-200">
+                <p className="font-medium text-sm mb-2">💡 Solution :</p>
+                <p className="text-sm text-muted-foreground mb-3">
+                  La migration Supabase doit être appliquée pour créer les tables nécessaires.
+                </p>
+                <p className="text-sm font-mono bg-gray-100 p-2 rounded">
+                  supabase db push
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Ou copiez le contenu de <code>supabase/migrations/002_analytics_feedback.sql</code> dans le SQL Editor de Supabase.
+                </p>
+              </div>
+              <Button onClick={loadData} variant="outline" size="sm">
+                Réessayer
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>📍 Où trouver les feedbacks manuellement</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                En attendant l'application de la migration, vous pouvez consulter les feedbacks directement dans Supabase :
+              </p>
+              <ol className="text-sm space-y-2 list-decimal list-inside">
+                <li>Ouvrez votre <strong>Dashboard Supabase</strong></li>
+                <li>Allez dans <strong>Table Editor</strong></li>
+                <li>Cherchez la table <code className="bg-gray-100 px-1 rounded">user_feedback</code></li>
+                <li>Vous y trouverez tous les feedbacks avec : type, message, satisfaction, date</li>
+              </ol>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
