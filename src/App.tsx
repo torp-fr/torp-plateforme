@@ -67,3 +67,21 @@ const App = () => (
 );
 
 export default App;
+import { FeedbackWidget } from '@/components/feedback/FeedbackWidget';
+
+// Dans votre fonction App():
+return (
+  <BrowserRouter>
+    {/* Vos routes existantes */}
+    <Routes>
+      {/* ... */}
+    </Routes>
+
+    {/* 👇 Ajoutez ceci à la fin */}
+    <FeedbackWidget userType={currentUserType} />
+  </BrowserRouter>
+);
+import AdminAnalytics from './pages/AdminAnalytics';
+
+// Dans vos routes:
+<Route path="/admin/analytics" element={<AdminAnalytics />} />
