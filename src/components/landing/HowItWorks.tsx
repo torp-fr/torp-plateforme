@@ -18,9 +18,9 @@ export const HowItWorks = () => {
     },
     {
       icon: Brain,
-      title: "2. L'IA analyse en profondeur",
+      title: "2. Analyse approfondie",
       description:
-        "Notre algorithme vérifie +150 critères : prix, conformité, fiabilité de l'entreprise, risques détectés.",
+        "Vérification des prix, de la conformité, de la fiabilité de l'entreprise et détection des points d'attention.",
       color: "text-purple-500",
       bgColor: "bg-purple-500/10",
     },

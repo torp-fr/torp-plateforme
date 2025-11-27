@@ -166,7 +166,7 @@ export const Header = () => {
                   size="sm"
                   className="bg-primary hover:bg-primary/90"
                 >
-                  Essayer gratuitement
+                  Analyser un devis
                 </Button>
               </>
             )}
@@ -287,7 +287,7 @@ export const Header = () => {
                     size="sm"
                     className="w-full bg-primary hover:bg-primary/90"
                   >
-                    Essayer gratuitement
+                    Analyser un devis
                   </Button>
                 </>
               )}
