@@ -42,7 +42,7 @@ export class ClaudeService {
     }
 
     const {
-      model = 'claude-3-5-sonnet-20240620',
+      model = 'claude-3-5-sonnet-20241022',
       temperature = 0.7,
       maxTokens = 4000,
       systemPrompt = 'You are a helpful assistant specialized in construction and renovation project analysis.',
@@ -86,7 +86,7 @@ export class ClaudeService {
     }
 
     const {
-      model = 'claude-3-5-sonnet-20240620',
+      model = 'claude-3-5-sonnet-20241022',
       temperature = 0.3, // Lower temperature for more consistent JSON
       systemPrompt = 'You are a JSON-generating assistant. Always respond with valid JSON only.',
     } = options || {};
