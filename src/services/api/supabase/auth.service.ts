@@ -147,7 +147,7 @@ export class SupabaseAuthService {
       p_phone: data.phone || null,
     });
 
-    if (userError || !userData || userData.length === 0) {
+    if (userError || !userData) {
       console.error('Failed to create user profile after registration:', userError);
       // Fallback: return a basic user object based on auth data
       const user = {
@@ -169,9 +169,8 @@ export class SupabaseAuthService {
       };
     }
 
-    // RPC returns an array, get the first element
-    const profileData = Array.isArray(userData) ? userData[0] : userData;
-    const mappedUser = mapDbUserToAppUser(profileData);
+    // RPC now returns JSONB object directly (not an array)
+    const mappedUser = mapDbUserToAppUser(userData as DbUser);
 
     // Track signup event
     await analyticsService.trackSignup(mappedUser.type === 'admin' ? 'B2C' : mappedUser.type);
