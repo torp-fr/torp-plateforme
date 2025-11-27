@@ -11,7 +11,7 @@ export const Footer = () => {
               <h3 className="text-xl font-bold">TORP</h3>
             </div>
             <p className="text-gray-300 text-sm">
-              La plateforme d'analyse de devis qui révolutionne le secteur des travaux par la transparence et l'intelligence artificielle.
+              La plateforme d'analyse de devis qui rassemble particuliers et professionnels autour d'une vision partagée de transparence et de confiance.
             </p>
           </div>
           
