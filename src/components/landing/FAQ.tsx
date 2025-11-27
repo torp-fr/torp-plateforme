@@ -93,7 +93,7 @@ export const FAQ = () => {
             Vous avez une autre question ?
           </p>
           <a
-            href="mailto:support@torp.app"
+            href="mailto:support@torp.fr"
             className="text-primary font-semibold hover:underline"
           >
             Contactez notre support →

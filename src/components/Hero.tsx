@@ -1,12 +1,11 @@
 /**
- * Hero Component - Refonte complète
- * Message positif rassemblant B2C et B2B autour de la confiance
+ * Hero Component - Version professionnelle
+ * Message centré sur le produit et sa valeur ajoutée concrète
  */
 
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Shield, Users, CheckCircle2, FileText } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { ArrowRight, CheckCircle2, FileSearch, Users, Award } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import heroImage from "@/assets/hero-image.jpg";
 
@@ -19,7 +18,7 @@ export const Hero = () => {
   };
 
   return (
-    <section className="relative bg-gradient-to-br from-primary/5 via-background to-primary/5 py-20 lg:py-32 overflow-hidden">
+    <section className="relative bg-gradient-to-br from-background via-primary/5 to-background py-16 lg:py-24 overflow-hidden">
       {/* Background decoration */}
       <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
       <div className="absolute top-20 right-10 w-72 h-72 bg-primary/10 rounded-full blur-3xl"></div>
@@ -29,44 +28,46 @@ export const Hero = () => {
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           {/* Left Column - Content */}
           <div className="space-y-8 animate-fade-in">
-            {/* Badge */}
-            <div className="inline-flex">
-              <Badge variant="secondary" className="gap-2 py-2 px-4">
-                <Shield className="h-4 w-4" />
-                Transparence et Confiance
-              </Badge>
-            </div>
-
             {/* Headline */}
             <div className="space-y-4">
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight tracking-tight">
-                Une vision partagée pour des{" "}
-                <span className="text-primary">devis justes</span>
+                Votre assistant technique pour{" "}
+                <span className="text-primary">comprendre et valider</span>{" "}
+                vos devis
               </h1>
               <p className="text-lg md:text-xl text-muted-foreground leading-relaxed max-w-xl">
-                TORP réunit particuliers et professionnels du BTP autour d'un objectif commun :
-                établir la confiance grâce à des devis clairs, transparents et équitables.
+                TORP analyse et vulgarise les aspects techniques de vos devis, valorise les
+                entreprises compétentes, et vous aide à prendre des décisions éclairées en toute confiance.
               </p>
             </div>
 
             {/* Value Props */}
-            <div className="grid sm:grid-cols-3 gap-4">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-success flex-shrink-0" />
-                <span className="text-sm font-medium">Transparent</span>
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="h-5 w-5 text-success flex-shrink-0 mt-1" />
+                <div>
+                  <span className="text-sm font-semibold text-foreground">Expertise accessible</span>
+                  <p className="text-sm text-muted-foreground">Vulgarisation technique pour comprendre chaque poste</p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-success flex-shrink-0" />
-                <span className="text-sm font-medium">Pour tous</span>
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="h-5 w-5 text-success flex-shrink-0 mt-1" />
+                <div>
+                  <span className="text-sm font-semibold text-foreground">Valorisation des pros compétents</span>
+                  <p className="text-sm text-muted-foreground">Identification des entreprises sérieuses et qualifiées</p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-success flex-shrink-0" />
-                <span className="text-sm font-medium">Simple</span>
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="h-5 w-5 text-success flex-shrink-0 mt-1" />
+                <div>
+                  <span className="text-sm font-semibold text-foreground">Transparence totale</span>
+                  <p className="text-sm text-muted-foreground">Analyse claire des prix, délais et conformité technique</p>
+                </div>
               </div>
             </div>
 
-            {/* CTAs */}
-            <div className="flex flex-col sm:flex-row gap-4">
+            {/* CTA */}
+            <div className="flex flex-col sm:flex-row gap-4 pt-2">
               <Button
                 onClick={handleCTA}
                 size="lg"
@@ -75,33 +76,6 @@ export const Hero = () => {
                 Analyser un devis
                 <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
               </Button>
-              <Link to="/demo">
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="h-14 px-8 text-lg"
-                >
-                  Voir la démo
-                </Button>
-              </Link>
-            </div>
-
-            {/* Vision statement */}
-            <div className="pt-4 border-t border-border/50">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <Users className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground mb-1">
-                    Notre mission
-                  </h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    Créer un écosystème où particuliers et professionnels travaillent ensemble
-                    en toute confiance, avec des devis transparents qui bénéficient à tous.
-                  </p>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -112,41 +86,41 @@ export const Hero = () => {
               <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 to-accent/20 rounded-2xl transform rotate-3"></div>
               <img
                 src={heroImage}
-                alt="TORP - Transparence dans les devis"
+                alt="TORP - Analyse de devis"
                 className="relative rounded-2xl shadow-2xl border border-border/50"
               />
 
-              {/* Floating card 1 - Trust */}
+              {/* Floating card 1 - Compréhension */}
               <div className="absolute -top-4 -right-4 bg-background rounded-xl p-4 shadow-xl border border-border/50 animate-float">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center">
-                    <Shield className="h-6 w-6 text-success" />
+                  <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center">
+                    <FileSearch className="h-6 w-6 text-blue-500" />
                   </div>
                   <div>
-                    <div className="text-sm font-semibold">Confiance</div>
-                    <div className="text-xs text-muted-foreground">Partagée</div>
+                    <div className="text-sm font-semibold">Compréhension</div>
+                    <div className="text-xs text-muted-foreground">Technique simplifiée</div>
                   </div>
                 </div>
               </div>
 
-              {/* Floating card 2 - Transparency */}
+              {/* Floating card 2 - Valorisation */}
               <div className="absolute -bottom-6 -left-6 bg-background rounded-xl p-4 shadow-xl border border-border/50 animate-float-delayed hidden sm:block">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                    <FileText className="h-6 w-6 text-primary" />
+                  <div className="w-12 h-12 rounded-full bg-orange-500/10 flex items-center justify-center">
+                    <Award className="h-6 w-6 text-orange-500" />
                   </div>
                   <div>
-                    <div className="text-sm font-semibold">Transparence</div>
-                    <div className="text-xs text-muted-foreground">Totale</div>
+                    <div className="text-sm font-semibold">Valorisation</div>
+                    <div className="text-xs text-muted-foreground">Pros compétents</div>
                   </div>
                 </div>
               </div>
 
-              {/* Floating card 3 - Community */}
+              {/* Floating card 3 - Confiance */}
               <div className="absolute top-1/2 -left-8 bg-background rounded-xl p-3 shadow-xl border border-border/50 animate-float hidden lg:block">
                 <div className="flex flex-col items-center gap-1">
-                  <Users className="h-8 w-8 text-primary" />
-                  <div className="text-xs font-semibold">Ensemble</div>
+                  <Users className="h-8 w-8 text-success" />
+                  <div className="text-xs font-semibold text-center">Confiance</div>
                 </div>
               </div>
             </div>
