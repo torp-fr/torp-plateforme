@@ -159,13 +159,16 @@ AND schemaname = 'public'
 ORDER BY policyname;
 
 -- =====================================================
--- FIN DU SCRIPT
+-- FIN DU SCRIPT - Affichage du résumé
 -- =====================================================
 
-RAISE NOTICE '';
-RAISE NOTICE '============================================';
-RAISE NOTICE 'CORRECTION TERMINÉE AVEC SUCCÈS!';
-RAISE NOTICE '============================================';
-RAISE NOTICE '';
-RAISE NOTICE 'Vous pouvez maintenant tester l''enregistrement d''un nouvel utilisateur.';
-RAISE NOTICE '';
+DO $$
+BEGIN
+  RAISE NOTICE '';
+  RAISE NOTICE '============================================';
+  RAISE NOTICE 'CORRECTION TERMINÉE AVEC SUCCÈS!';
+  RAISE NOTICE '============================================';
+  RAISE NOTICE '';
+  RAISE NOTICE 'Vous pouvez maintenant tester l''enregistrement d''un nouvel utilisateur.';
+  RAISE NOTICE '';
+END $$;
