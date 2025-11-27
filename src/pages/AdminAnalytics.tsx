@@ -10,6 +10,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
   BarChart3,
   Users,
@@ -18,6 +22,12 @@ import {
   Star,
   AlertTriangle,
   RefreshCw,
+  MoreVertical,
+  Edit,
+  Trash,
+  Eye,
+  Search,
+  Filter,
 } from 'lucide-react';
 import { analyticsService, type AnalyticsOverview, type TorpScoreAverages } from '@/services/analytics/analyticsService';
 import { feedbackService, type FeedbackSummary, type Feedback } from '@/services/feedback/feedbackService';
@@ -34,6 +44,18 @@ export default function AdminAnalytics() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Filtres
+  const [userSearch, setUserSearch] = useState('');
+  const [userTypeFilter, setUserTypeFilter] = useState<string>('all');
+  const [feedbackSearch, setFeedbackSearch] = useState('');
+  const [feedbackTypeFilter, setFeedbackTypeFilter] = useState<string>('all');
+  const [analysisSearch, setAnalysisSearch] = useState('');
+
+  // Données sélectionnées pour les modals
+  const [selectedUser, setSelectedUser] = useState<any | null>(null);
+  const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
+  const [selectedAnalysis, setSelectedAnalysis] = useState<any | null>(null);
 
   useEffect(() => {
     loadData();
@@ -114,6 +136,31 @@ export default function AdminAnalytics() {
   const handleRefresh = () => {
     loadData(true);
   };
+
+  // Fonctions de filtrage
+  const filteredUsers = allUsers.filter(user => {
+    const matchesSearch =
+      user.name?.toLowerCase().includes(userSearch.toLowerCase()) ||
+      user.email?.toLowerCase().includes(userSearch.toLowerCase()) ||
+      user.company?.toLowerCase().includes(userSearch.toLowerCase());
+    const matchesType = userTypeFilter === 'all' || user.user_type === userTypeFilter;
+    return matchesSearch && matchesType;
+  });
+
+  const filteredFeedbacks = allFeedbacks.filter(feedback => {
+    const matchesSearch =
+      feedback.message?.toLowerCase().includes(feedbackSearch.toLowerCase()) ||
+      feedback.user_email?.toLowerCase().includes(feedbackSearch.toLowerCase());
+    const matchesType = feedbackTypeFilter === 'all' || feedback.feedback_type === feedbackTypeFilter;
+    return matchesSearch && matchesType;
+  });
+
+  const filteredAnalyses = allAnalyses.filter(analysis => {
+    const matchesSearch =
+      analysis.user_email?.toLowerCase().includes(analysisSearch.toLowerCase()) ||
+      analysis.grade?.toLowerCase().includes(analysisSearch.toLowerCase());
+    return matchesSearch;
+  });
 
   if (isLoading) {
     return (
@@ -228,12 +275,13 @@ export default function AdminAnalytics() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold">{overview?.total_signups || 0}</div>
+                <div className="text-3xl font-bold">{allUsers.length}</div>
                 <Users className="h-8 w-8 text-muted-foreground" />
               </div>
               <div className="flex gap-2 mt-2">
-                <Badge variant="outline">Particulier: {overview?.b2c_signups || 0}</Badge>
-                <Badge variant="outline">Pro: {overview?.b2b_signups || 0}</Badge>
+                <Badge variant="outline">Particulier: {allUsers.filter(u => u.user_type === 'B2C').length}</Badge>
+                <Badge variant="outline">Pro: {allUsers.filter(u => u.user_type === 'B2B').length}</Badge>
+                <Badge variant="outline">Admin: {allUsers.filter(u => u.user_type === 'admin').length}</Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-2">Cliquer pour voir les détails</p>
             </CardContent>
@@ -320,15 +368,41 @@ export default function AdminAnalytics() {
           <TabsContent value="inscriptions" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Détails des Inscriptions</CardTitle>
-                <CardDescription>
-                  {allUsers.length} utilisateurs inscrits
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Détails des Inscriptions</CardTitle>
+                    <CardDescription>
+                      {filteredUsers.length} utilisateur{filteredUsers.length > 1 ? 's' : ''} ({allUsers.length} au total)
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Rechercher..."
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        className="pl-8 w-64"
+                      />
+                    </div>
+                    <Select value={userTypeFilter} onValueChange={setUserTypeFilter}>
+                      <SelectTrigger className="w-40">
+                        <SelectValue placeholder="Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous</SelectItem>
+                        <SelectItem value="B2C">Particulier</SelectItem>
+                        <SelectItem value="B2B">Professionnel</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                {allUsers.length === 0 ? (
+                {filteredUsers.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">
-                    Aucune inscription pour le moment
+                    {userSearch || userTypeFilter !== 'all' ? 'Aucun résultat' : 'Aucune inscription pour le moment'}
                   </p>
                 ) : (
                   <div className="overflow-x-auto">
@@ -342,10 +416,11 @@ export default function AdminAnalytics() {
                           <th className="text-left p-2">Entreprise</th>
                           <th className="text-left p-2">Téléphone</th>
                           <th className="text-left p-2">Abonnement</th>
+                          <th className="text-right p-2">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {allUsers.map((user) => (
+                        {filteredUsers.map((user) => (
                           <tr key={user.id} className="border-b hover:bg-muted/50">
                             <td className="p-2 whitespace-nowrap text-xs text-muted-foreground">
                               {new Date(user.created_at).toLocaleDateString('fr-FR', {
@@ -372,6 +447,83 @@ export default function AdminAnalytics() {
                               >
                                 {user.subscription_plan || 'free'}
                               </Badge>
+                            </td>
+                            <td className="p-2 text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <Dialog>
+                                    <DialogTrigger asChild>
+                                      <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setSelectedUser(user); }}>
+                                        <Eye className="mr-2 h-4 w-4" />
+                                        Voir détails
+                                      </DropdownMenuItem>
+                                    </DialogTrigger>
+                                    {selectedUser?.id === user.id && (
+                                      <DialogContent className="max-w-2xl">
+                                        <DialogHeader>
+                                          <DialogTitle>Détails de l'utilisateur</DialogTitle>
+                                          <DialogDescription>
+                                            Informations complètes de l'inscription
+                                          </DialogDescription>
+                                        </DialogHeader>
+                                        <div className="grid gap-4 py-4">
+                                          <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                              <p className="text-sm font-medium">Nom</p>
+                                              <p className="text-sm text-muted-foreground">{selectedUser.name || '-'}</p>
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-medium">Email</p>
+                                              <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-medium">Type</p>
+                                              <Badge>{selectedUser.user_type}</Badge>
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-medium">Téléphone</p>
+                                              <p className="text-sm text-muted-foreground">{selectedUser.phone || '-'}</p>
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-medium">Entreprise</p>
+                                              <p className="text-sm text-muted-foreground">{selectedUser.company || '-'}</p>
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-medium">Date d'inscription</p>
+                                              <p className="text-sm text-muted-foreground">
+                                                {new Date(selectedUser.created_at).toLocaleString('fr-FR')}
+                                              </p>
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-medium">Abonnement</p>
+                                              <Badge variant={selectedUser.subscription_status === 'active' ? 'default' : 'outline'}>
+                                                {selectedUser.subscription_plan || 'free'}
+                                              </Badge>
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-medium">ID</p>
+                                              <p className="text-xs text-muted-foreground font-mono">{selectedUser.id}</p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </DialogContent>
+                                    )}
+                                  </Dialog>
+                                  <DropdownMenuItem>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Éditer
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="text-destructive">
+                                    <Trash className="mr-2 h-4 w-4" />
+                                    Supprimer
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </td>
                           </tr>
                         ))}
@@ -543,137 +695,206 @@ export default function AdminAnalytics() {
           <TabsContent value="feedbacks" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Feedbacks Détaillés</CardTitle>
-                <CardDescription>
-                  {totalFeedbacks} feedbacks • Satisfaction moyenne: {avgSatisfaction.toFixed(1)}/5
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Feedbacks Détaillés</CardTitle>
+                    <CardDescription>
+                      {filteredFeedbacks.length} feedback{filteredFeedbacks.length > 1 ? 's' : ''} ({allFeedbacks.length} au total)
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Rechercher..."
+                        value={feedbackSearch}
+                        onChange={(e) => setFeedbackSearch(e.target.value)}
+                        className="pl-8 w-64"
+                      />
+                    </div>
+                    <Select value={feedbackTypeFilter} onValueChange={setFeedbackTypeFilter}>
+                      <SelectTrigger className="w-40">
+                        <SelectValue placeholder="Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous</SelectItem>
+                        <SelectItem value="bug">Bug</SelectItem>
+                        <SelectItem value="feature_request">Feature</SelectItem>
+                        <SelectItem value="improvement">Amélioration</SelectItem>
+                        <SelectItem value="praise">Compliment</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                {allFeedbacks.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground mb-4">Aucun feedback pour le moment</p>
-                    {totalFeedbacks > 0 && (
-                      <div className="bg-yellow-50 dark:bg-yellow-950 p-4 rounded-lg text-left max-w-2xl mx-auto">
-                        <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-2">
-                          ⚠️ Les feedbacks existent mais ne peuvent pas être chargés
-                        </p>
-                        <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-3">
-                          Les statistiques montrent {totalFeedbacks} feedback(s), mais le tableau est vide.
-                          Cela signifie que les politiques RLS bloquent l'accès.
-                        </p>
-                        <div className="bg-white dark:bg-gray-900 p-3 rounded border border-yellow-200">
-                          <p className="text-xs font-medium mb-2">💡 Solution :</p>
-                          <p className="text-xs text-muted-foreground mb-2">
-                            Appliquez la migration SQL pour débloquer l'accès admin :
-                          </p>
-                          <code className="text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded block">
-                            supabase db push
-                          </code>
-                          <p className="text-xs text-muted-foreground mt-2">
-                            Ou copiez le contenu de <code>supabase/migrations/004_admin_access_policies.sql</code> dans le SQL Editor de Supabase.
-                          </p>
-                        </div>
-                        <Button
-                          onClick={handleRefresh}
-                          variant="outline"
-                          size="sm"
-                          className="mt-3"
-                        >
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Réessayer après migration
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                {filteredFeedbacks.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    {feedbackSearch || feedbackTypeFilter !== 'all' ? 'Aucun résultat' : 'Aucun feedback pour le moment'}
+                  </p>
                 ) : (
-                  <div className="space-y-4">
-                    {/* Résumé rapide */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pb-4 border-b">
-                      {feedbackSummary.slice(0, 4).map((item, index) => (
-                        <div key={index} className="text-center p-2 bg-muted rounded">
-                          <div className="text-xs text-muted-foreground">{item.feedback_type}</div>
-                          <div className="text-lg font-bold">{item.count}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Tableau des feedbacks */}
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b">
-                            <th className="text-left p-2">Date</th>
-                            <th className="text-left p-2">Type</th>
-                            <th className="text-left p-2">User</th>
-                            <th className="text-left p-2">Message</th>
-                            <th className="text-left p-2">Satisfaction</th>
-                            <th className="text-left p-2">Statut</th>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left p-2">Date</th>
+                          <th className="text-left p-2">Type</th>
+                          <th className="text-left p-2">User</th>
+                          <th className="text-left p-2">Message</th>
+                          <th className="text-left p-2">Satisfaction</th>
+                          <th className="text-left p-2">Statut</th>
+                          <th className="text-right p-2">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredFeedbacks.map((feedback) => (
+                          <tr key={feedback.id} className="border-b hover:bg-muted/50">
+                            <td className="p-2 whitespace-nowrap text-xs text-muted-foreground">
+                              {new Date(feedback.created_at).toLocaleDateString('fr-FR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </td>
+                            <td className="p-2">
+                              <Badge variant="outline" className="text-xs">
+                                {feedback.feedback_type}
+                              </Badge>
+                            </td>
+                            <td className="p-2">
+                              <div className="flex flex-col gap-1">
+                                <Badge variant="secondary" className="text-xs w-fit">
+                                  {feedback.user_type}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  {feedback.user_email}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="p-2 max-w-sm">
+                              <div className="text-sm line-clamp-2">
+                                {feedback.message}
+                              </div>
+                            </td>
+                            <td className="p-2">
+                              {feedback.satisfaction_score ? (
+                                <div className="flex items-center gap-1">
+                                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                                  <span className="font-medium">{feedback.satisfaction_score}/5</span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </td>
+                            <td className="p-2">
+                              <Badge
+                                variant={
+                                  feedback.status === 'resolved' ? 'default' :
+                                  feedback.status === 'in_progress' ? 'secondary' :
+                                  'outline'
+                                }
+                                className="text-xs"
+                              >
+                                {feedback.status}
+                              </Badge>
+                            </td>
+                            <td className="p-2 text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <Dialog>
+                                    <DialogTrigger asChild>
+                                      <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setSelectedFeedback(feedback); }}>
+                                        <Eye className="mr-2 h-4 w-4" />
+                                        Voir détails
+                                      </DropdownMenuItem>
+                                    </DialogTrigger>
+                                    {selectedFeedback?.id === feedback.id && (
+                                      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                                        <DialogHeader>
+                                          <DialogTitle>Détails du Feedback</DialogTitle>
+                                          <DialogDescription>
+                                            Feedback complet avec toutes les informations
+                                          </DialogDescription>
+                                        </DialogHeader>
+                                        <div className="grid gap-4 py-4">
+                                          <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                              <p className="text-sm font-medium">Type</p>
+                                              <Badge>{selectedFeedback.feedback_type}</Badge>
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-medium">Statut</p>
+                                              <Badge variant={selectedFeedback.status === 'resolved' ? 'default' : 'outline'}>
+                                                {selectedFeedback.status}
+                                              </Badge>
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-medium">Utilisateur</p>
+                                              <p className="text-sm text-muted-foreground">{selectedFeedback.user_email}</p>
+                                              <Badge variant="secondary" className="text-xs mt-1">{selectedFeedback.user_type}</Badge>
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-medium">Date</p>
+                                              <p className="text-sm text-muted-foreground">
+                                                {new Date(selectedFeedback.created_at).toLocaleString('fr-FR')}
+                                              </p>
+                                            </div>
+                                            {selectedFeedback.satisfaction_score && (
+                                              <div>
+                                                <p className="text-sm font-medium">Satisfaction</p>
+                                                <div className="flex items-center gap-1">
+                                                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                                                  <span className="font-medium">{selectedFeedback.satisfaction_score}/5</span>
+                                                </div>
+                                              </div>
+                                            )}
+                                            {selectedFeedback.page_url && (
+                                              <div>
+                                                <p className="text-sm font-medium">Page</p>
+                                                <p className="text-xs text-muted-foreground break-all">{selectedFeedback.page_url}</p>
+                                              </div>
+                                            )}
+                                          </div>
+                                          <div>
+                                            <p className="text-sm font-medium mb-2">Message complet</p>
+                                            <div className="p-4 bg-muted rounded-lg">
+                                              <p className="text-sm whitespace-pre-wrap">{selectedFeedback.message}</p>
+                                            </div>
+                                          </div>
+                                          {selectedFeedback.admin_notes && (
+                                            <div>
+                                              <p className="text-sm font-medium mb-2">Notes admin</p>
+                                              <div className="p-4 bg-muted rounded-lg">
+                                                <p className="text-sm whitespace-pre-wrap">{selectedFeedback.admin_notes}</p>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </DialogContent>
+                                    )}
+                                  </Dialog>
+                                  <DropdownMenuItem>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Éditer
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="text-destructive">
+                                    <Trash className="mr-2 h-4 w-4" />
+                                    Supprimer
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {allFeedbacks.map((feedback) => (
-                            <tr key={feedback.id} className="border-b hover:bg-muted/50">
-                              <td className="p-2 whitespace-nowrap text-xs text-muted-foreground">
-                                {new Date(feedback.created_at).toLocaleDateString('fr-FR', {
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                  year: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
-                              </td>
-                              <td className="p-2">
-                                <Badge variant="outline" className="text-xs">
-                                  {feedback.feedback_type}
-                                </Badge>
-                              </td>
-                              <td className="p-2">
-                                <div className="flex flex-col gap-1">
-                                  <Badge variant="secondary" className="text-xs w-fit">
-                                    {feedback.user_type}
-                                  </Badge>
-                                  <span className="text-xs text-muted-foreground">
-                                    {feedback.user_email}
-                                  </span>
-                                </div>
-                              </td>
-                              <td className="p-2 max-w-md">
-                                <div className="text-sm line-clamp-2" title={feedback.message}>
-                                  {feedback.message}
-                                </div>
-                                {feedback.page_url && (
-                                  <div className="text-xs text-muted-foreground mt-1">
-                                    📍 {new URL(feedback.page_url).pathname}
-                                  </div>
-                                )}
-                              </td>
-                              <td className="p-2">
-                                {feedback.satisfaction_score ? (
-                                  <div className="flex items-center gap-1">
-                                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                                    <span className="font-medium">{feedback.satisfaction_score}/5</span>
-                                  </div>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">-</span>
-                                )}
-                              </td>
-                              <td className="p-2">
-                                <Badge
-                                  variant={
-                                    feedback.status === 'resolved' ? 'default' :
-                                    feedback.status === 'in_progress' ? 'secondary' :
-                                    'outline'
-                                  }
-                                  className="text-xs"
-                                >
-                                  {feedback.status}
-                                </Badge>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </CardContent>

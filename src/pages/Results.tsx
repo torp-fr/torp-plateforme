@@ -196,7 +196,10 @@ export default function Results() {
     conformite: 0,
     delais: 0
   };
-  
+
+  // Convert score from /1000 to percentage for color coding
+  const scorePercentage = (score / 1000) * 100;
+
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-success';
     if (score >= 60) return 'text-warning';
@@ -251,15 +254,15 @@ export default function Results() {
                         strokeWidth="8" 
                         fill="none"
                         strokeDasharray="552" 
-                        strokeDashoffset={552 - (552 * displayScore) / 100}
-                        className={`transition-all duration-1000 ease-out ${getScoreColor(score)}`}
+                        strokeDashoffset={552 - (552 * displayScore) / 1000}
+                        className={`transition-all duration-1000 ease-out ${getScoreColor(scorePercentage)}`}
                       />
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <div className={`text-6xl font-bold ${getScoreColor(score)} mb-2`}>{grade}</div>
-                      <div className="text-2xl font-semibold text-foreground">{Math.round(displayScore)}/100</div>
+                      <div className={`text-6xl font-bold ${getScoreColor(scorePercentage)} mb-2`}>{grade}</div>
+                      <div className="text-2xl font-semibold text-foreground">{Math.round(displayScore)}/1000</div>
                       <div className="text-sm text-muted-foreground">
-                        {score >= 80 ? 'Excellent' : score >= 60 ? 'Correct' : 'À améliorer'}
+                        {displayScore >= 800 ? 'Excellent' : displayScore >= 600 ? 'Correct' : 'À améliorer'}
                       </div>
                     </div>
                   </div>
