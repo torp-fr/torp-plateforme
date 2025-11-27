@@ -74,7 +74,7 @@ export class SupabaseAuthService {
     // Fetch user profile from users table
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('*')
+      .select('id, email, name, user_type, company, phone, avatar_url, subscription_plan, subscription_status')
       .eq('id', authData.user.id)
       .single();
 
@@ -137,12 +137,13 @@ export class SupabaseAuthService {
     }
 
     // Wait a moment for the trigger to create the profile
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Fetch the created profile (created automatically by database trigger)
+    // Use explicit column selection to avoid serialization issues
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('*')
+      .select('id, email, name, user_type, company, phone, avatar_url, subscription_plan, subscription_status')
       .eq('id', authData.user.id)
       .single();
 
@@ -214,7 +215,7 @@ export class SupabaseAuthService {
       // Fetch user profile
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('*')
+        .select('id, email, name, user_type, company, phone, avatar_url, subscription_plan, subscription_status')
         .eq('id', authUser.id)
         .single();
 
@@ -340,7 +341,7 @@ export class SupabaseAuthService {
         try {
           const { data, error } = await supabase
             .from('users')
-            .select('*')
+            .select('id, email, name, user_type, company, phone, avatar_url, subscription_plan, subscription_status')
             .eq('id', session.user.id)
             .single();
 
