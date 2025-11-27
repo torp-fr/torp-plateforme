@@ -136,21 +136,20 @@ export class SupabaseAuthService {
       throw new Error('Registration failed');
     }
 
-    // Wait a moment for the trigger to create the profile
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Create user profile using RPC function (bypasses RLS timing issues)
+    // This works even without an active session, which is the case when email confirmation is required
+    const { data: userData, error: userError } = await supabase.rpc('create_user_profile', {
+      p_user_id: authData.user.id,
+      p_email: data.email,
+      p_name: data.name,
+      p_user_type: data.type,
+      p_company: data.company || null,
+      p_phone: data.phone || null,
+    });
 
-    // Fetch the created profile (created automatically by database trigger)
-    // Use explicit column selection to avoid serialization issues
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('id, email, name, user_type, company, phone, avatar_url, subscription_plan, subscription_status')
-      .eq('id', authData.user.id)
-      .single();
-
-    if (userError) {
-      console.error('Failed to fetch user profile after registration:', userError);
-      // Profile might not exist yet if trigger failed, but user was created
-      // Return a basic user object based on auth data
+    if (userError || !userData || userData.length === 0) {
+      console.error('Failed to create user profile after registration:', userError);
+      // Fallback: return a basic user object based on auth data
       const user = {
         id: authData.user.id,
         email: data.email,
@@ -170,7 +169,9 @@ export class SupabaseAuthService {
       };
     }
 
-    const mappedUser = mapDbUserToAppUser(userData);
+    // RPC returns an array, get the first element
+    const profileData = Array.isArray(userData) ? userData[0] : userData;
+    const mappedUser = mapDbUserToAppUser(profileData);
 
     // Track signup event
     await analyticsService.trackSignup(mappedUser.type === 'admin' ? 'B2C' : mappedUser.type);
