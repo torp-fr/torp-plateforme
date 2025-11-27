@@ -10,6 +10,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
   BarChart3,
   Users,
@@ -18,6 +22,12 @@ import {
   Star,
   AlertTriangle,
   RefreshCw,
+  MoreVertical,
+  Edit,
+  Trash,
+  Eye,
+  Search,
+  Filter,
 } from 'lucide-react';
 import { analyticsService, type AnalyticsOverview, type TorpScoreAverages } from '@/services/analytics/analyticsService';
 import { feedbackService, type FeedbackSummary, type Feedback } from '@/services/feedback/feedbackService';
@@ -34,6 +44,18 @@ export default function AdminAnalytics() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Filtres
+  const [userSearch, setUserSearch] = useState('');
+  const [userTypeFilter, setUserTypeFilter] = useState<string>('all');
+  const [feedbackSearch, setFeedbackSearch] = useState('');
+  const [feedbackTypeFilter, setFeedbackTypeFilter] = useState<string>('all');
+  const [analysisSearch, setAnalysisSearch] = useState('');
+
+  // Données sélectionnées pour les modals
+  const [selectedUser, setSelectedUser] = useState<any | null>(null);
+  const [selectedFeedback, setSelectedFeedback] = useState<Feedback | null>(null);
+  const [selectedAnalysis, setSelectedAnalysis] = useState<any | null>(null);
 
   useEffect(() => {
     loadData();
@@ -114,6 +136,31 @@ export default function AdminAnalytics() {
   const handleRefresh = () => {
     loadData(true);
   };
+
+  // Fonctions de filtrage
+  const filteredUsers = allUsers.filter(user => {
+    const matchesSearch =
+      user.name?.toLowerCase().includes(userSearch.toLowerCase()) ||
+      user.email?.toLowerCase().includes(userSearch.toLowerCase()) ||
+      user.company?.toLowerCase().includes(userSearch.toLowerCase());
+    const matchesType = userTypeFilter === 'all' || user.user_type === userTypeFilter;
+    return matchesSearch && matchesType;
+  });
+
+  const filteredFeedbacks = allFeedbacks.filter(feedback => {
+    const matchesSearch =
+      feedback.message?.toLowerCase().includes(feedbackSearch.toLowerCase()) ||
+      feedback.user_email?.toLowerCase().includes(feedbackSearch.toLowerCase());
+    const matchesType = feedbackTypeFilter === 'all' || feedback.feedback_type === feedbackTypeFilter;
+    return matchesSearch && matchesType;
+  });
+
+  const filteredAnalyses = allAnalyses.filter(analysis => {
+    const matchesSearch =
+      analysis.user_email?.toLowerCase().includes(analysisSearch.toLowerCase()) ||
+      analysis.grade?.toLowerCase().includes(analysisSearch.toLowerCase());
+    return matchesSearch;
+  });
 
   if (isLoading) {
     return (
@@ -321,15 +368,41 @@ export default function AdminAnalytics() {
           <TabsContent value="inscriptions" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Détails des Inscriptions</CardTitle>
-                <CardDescription>
-                  {allUsers.length} utilisateurs inscrits
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Détails des Inscriptions</CardTitle>
+                    <CardDescription>
+                      {filteredUsers.length} utilisateur{filteredUsers.length > 1 ? 's' : ''} ({allUsers.length} au total)
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Rechercher..."
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        className="pl-8 w-64"
+                      />
+                    </div>
+                    <Select value={userTypeFilter} onValueChange={setUserTypeFilter}>
+                      <SelectTrigger className="w-40">
+                        <SelectValue placeholder="Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous</SelectItem>
+                        <SelectItem value="B2C">Particulier</SelectItem>
+                        <SelectItem value="B2B">Professionnel</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                {allUsers.length === 0 ? (
+                {filteredUsers.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">
-                    Aucune inscription pour le moment
+                    {userSearch || userTypeFilter !== 'all' ? 'Aucun résultat' : 'Aucune inscription pour le moment'}
                   </p>
                 ) : (
                   <div className="overflow-x-auto">
@@ -343,10 +416,11 @@ export default function AdminAnalytics() {
                           <th className="text-left p-2">Entreprise</th>
                           <th className="text-left p-2">Téléphone</th>
                           <th className="text-left p-2">Abonnement</th>
+                          <th className="text-right p-2">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {allUsers.map((user) => (
+                        {filteredUsers.map((user) => (
                           <tr key={user.id} className="border-b hover:bg-muted/50">
                             <td className="p-2 whitespace-nowrap text-xs text-muted-foreground">
                               {new Date(user.created_at).toLocaleDateString('fr-FR', {
@@ -373,6 +447,83 @@ export default function AdminAnalytics() {
                               >
                                 {user.subscription_plan || 'free'}
                               </Badge>
+                            </td>
+                            <td className="p-2 text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <Dialog>
+                                    <DialogTrigger asChild>
+                                      <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setSelectedUser(user); }}>
+                                        <Eye className="mr-2 h-4 w-4" />
+                                        Voir détails
+                                      </DropdownMenuItem>
+                                    </DialogTrigger>
+                                    {selectedUser?.id === user.id && (
+                                      <DialogContent className="max-w-2xl">
+                                        <DialogHeader>
+                                          <DialogTitle>Détails de l'utilisateur</DialogTitle>
+                                          <DialogDescription>
+                                            Informations complètes de l'inscription
+                                          </DialogDescription>
+                                        </DialogHeader>
+                                        <div className="grid gap-4 py-4">
+                                          <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                              <p className="text-sm font-medium">Nom</p>
+                                              <p className="text-sm text-muted-foreground">{selectedUser.name || '-'}</p>
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-medium">Email</p>
+                                              <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-medium">Type</p>
+                                              <Badge>{selectedUser.user_type}</Badge>
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-medium">Téléphone</p>
+                                              <p className="text-sm text-muted-foreground">{selectedUser.phone || '-'}</p>
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-medium">Entreprise</p>
+                                              <p className="text-sm text-muted-foreground">{selectedUser.company || '-'}</p>
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-medium">Date d'inscription</p>
+                                              <p className="text-sm text-muted-foreground">
+                                                {new Date(selectedUser.created_at).toLocaleString('fr-FR')}
+                                              </p>
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-medium">Abonnement</p>
+                                              <Badge variant={selectedUser.subscription_status === 'active' ? 'default' : 'outline'}>
+                                                {selectedUser.subscription_plan || 'free'}
+                                              </Badge>
+                                            </div>
+                                            <div>
+                                              <p className="text-sm font-medium">ID</p>
+                                              <p className="text-xs text-muted-foreground font-mono">{selectedUser.id}</p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </DialogContent>
+                                    )}
+                                  </Dialog>
+                                  <DropdownMenuItem>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Éditer
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="text-destructive">
+                                    <Trash className="mr-2 h-4 w-4" />
+                                    Supprimer
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </td>
                           </tr>
                         ))}
