@@ -15,18 +15,18 @@
 
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
+import { useApp } from '@/context/AppContext';
 
 export default function ProDashboard() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, userType } = useApp();
 
   useEffect(() => {
     // Vérifier que l'utilisateur est bien de type B2B
-    if (user && user.user_type !== 'B2B') {
+    if (user && userType !== 'B2B') {
       navigate('/dashboard');
     }
-  }, [user, navigate]);
+  }, [user, userType, navigate]);
 
   return (
     <div className="container mx-auto px-4 py-8">
