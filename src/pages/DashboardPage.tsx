@@ -333,9 +333,9 @@ export default function DashboardPage() {
                         <Link to={`/results?devisId=${project.id}`} className="block">
                           <div className="flex items-center justify-between p-4 pr-14 border border-border rounded-lg hover:shadow-soft hover:border-primary/50 transition-all cursor-pointer">
                             <div className="flex items-center space-x-4">
-                              <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold
-                                             ${project.score && project.score >= 80 ? 'bg-success' :
-                                               project.score && project.score >= 60 ? 'bg-warning' :
+                              <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg
+                                             ${project.score && project.score >= 800 ? 'bg-success' :
+                                               project.score && project.score >= 600 ? 'bg-warning' :
                                                project.score ? 'bg-destructive' : 'bg-muted'}`}>
                                 {project.grade || '?'}
                               </div>
