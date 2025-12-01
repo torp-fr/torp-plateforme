@@ -366,9 +366,11 @@ export default function DashboardPage() {
                           </Badge>
                           <span className="text-lg font-semibold text-foreground">{project.amount}</span>
                           {project.status === 'completed' && (
-                            <Button variant="outline" size="sm">
-                              <Eye className="w-4 h-4" />
-                            </Button>
+                            <Link to={`/results?devisId=${project.id}`}>
+                              <Button variant="outline" size="sm">
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            </Link>
                           )}
                         </div>
                       </div>

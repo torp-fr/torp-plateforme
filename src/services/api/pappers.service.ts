@@ -131,26 +131,39 @@ class PappersService {
    */
   async getEntrepriseBySiret(siret: string): Promise<EnrichedEntrepriseData | null> {
     if (!this.isConfigured()) {
-      console.warn('[Pappers] API key not configured');
+      console.warn('[Pappers] API key not configured - set VITE_PAPPERS_API_KEY in your .env');
       return null;
     }
 
     try {
       const cleanedSiret = siret.replace(/\s/g, '');
+      console.log('[Pappers] Fetching data for SIRET:', cleanedSiret);
 
       const response = await fetch(
         `${this.baseUrl}/entreprise?api_token=${this.apiKey}&siret=${cleanedSiret}`
       );
+
+      console.log('[Pappers] Response status:', response.status);
 
       if (!response.ok) {
         if (response.status === 404) {
           console.warn('[Pappers] Entreprise non trouvée:', siret);
           return null;
         }
+        const errorText = await response.text();
+        console.error('[Pappers] API error:', response.status, errorText);
         throw new Error(`Pappers API error: ${response.status}`);
       }
 
       const data: PappersEntreprise = await response.json();
+      console.log('[Pappers] Data received:', {
+        nom: data.nom_entreprise,
+        siret: data.siret,
+        forme: data.forme_juridique,
+        hasFinancials: !!(data.chiffre_affaires?.length),
+        hasRGE: !!(data.certifications_rge?.length)
+      });
+
       return this.transformPappersData(data);
     } catch (error) {
       console.error('[Pappers] Error fetching entreprise:', error);

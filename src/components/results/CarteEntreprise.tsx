@@ -44,14 +44,30 @@ export function CarteEntreprise({ entreprise, scoreEntreprise }: CarteEntreprise
   // Charger les données Pappers si SIRET disponible
   useEffect(() => {
     const loadPappersData = async () => {
-      if (!entreprise?.siret || !pappersService.isConfigured()) {
+      console.log('[CarteEntreprise] SIRET disponible:', entreprise?.siret);
+      console.log('[CarteEntreprise] Pappers configuré:', pappersService.isConfigured());
+
+      if (!entreprise?.siret) {
+        console.warn('[CarteEntreprise] Aucun SIRET disponible pour enrichissement Pappers');
+        return;
+      }
+
+      if (!pappersService.isConfigured()) {
+        console.warn('[CarteEntreprise] Service Pappers non configuré');
         return;
       }
 
       setLoadingPappers(true);
+      console.log('[CarteEntreprise] Chargement données Pappers pour:', entreprise.siret);
+
       try {
         const data = await pappersService.getEntrepriseBySiret(entreprise.siret);
-        setPappersData(data);
+        if (data) {
+          console.log('[CarteEntreprise] Données Pappers chargées:', data.nom);
+          setPappersData(data);
+        } else {
+          console.warn('[CarteEntreprise] Aucune donnée Pappers retournée');
+        }
       } catch (error) {
         console.error('[CarteEntreprise] Error loading Pappers data:', error);
       } finally {
