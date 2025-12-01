@@ -12,6 +12,9 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { getSireneData, formatSireneAddress } from '@/services/api/external/sirene.service';
+import { enrichAddress } from '@/services/api/external/ban.service';
+import { enrichWithPappers } from '@/services/api/external/pappers.service';
 
 export interface CompanyProfile {
   id: string;
@@ -169,10 +172,13 @@ export async function deleteCompanyProfile(id: string): Promise<void> {
 }
 
 /**
- * Vérifier un numéro SIRET via API Pappers (prioritaire) ou API SIRENE open data (fallback)
+ * Vérifier un numéro SIRET avec APIs open-source (priorité) + enrichissement Pappers
  *
- * Documentation Pappers: https://www.pappers.fr/api/documentation
- * Documentation SIRENE: https://api.insee.fr/catalogue/
+ * Architecture modulaire :
+ * 1. API SIRENE open data (gratuite, prioritaire)
+ * 2. Base Adresse Nationale (normalisation adresse)
+ * 3. Pappers (enrichissement optionnel : capital, dirigeants, CA)
+ * 4. Mock (développement)
  */
 export async function verifySiret(siret: string): Promise<VerifySiretResponse> {
   // Validation basique du format SIRET (14 chiffres)
@@ -184,98 +190,72 @@ export async function verifySiret(siret: string): Promise<VerifySiretResponse> {
     };
   }
 
-  const PAPPERS_API_KEY = import.meta.env.VITE_PAPPERS_API_KEY;
+  // ÉTAPE 1 : Récupérer les données SIRENE (API open data - PRIORITAIRE)
+  console.log('🔍 Étape 1/3 : Récupération SIRENE open data...');
+  const sireneData = await getSireneData(siretClean);
 
-  // 1. Essayer d'abord avec Pappers (si clé configurée)
-  if (PAPPERS_API_KEY) {
-    try {
-      const response = await fetch(
-        `https://api.pappers.fr/v2/entreprise?siret=${siretClean}&api_token=${PAPPERS_API_KEY}`
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-
-        return {
-          valid: !!data.siren,
-          data: {
-            siren: data.siren,
-            siret: data.siege?.siret || siretClean,
-            raison_sociale: data.nom_entreprise || 'Non renseigné',
-            forme_juridique: data.forme_juridique,
-            code_naf: data.code_naf,
-            adresse: data.siege?.adresse_ligne_1,
-            code_postal: data.siege?.code_postal,
-            ville: data.siege?.ville,
-            date_creation: data.date_creation,
-            effectif: data.siege?.effectif,
-          },
-        };
-      }
-
-      console.warn('⚠️ Pappers API error, fallback vers SIRENE open data');
-    } catch (error) {
-      console.error('❌ Erreur Pappers:', error);
-    }
-  }
-
-  // 2. Fallback vers API SIRENE open data (gratuite, sans authentification)
-  try {
-    const siren = siretClean.substring(0, 9);
-
-    const response = await fetch(
-      `https://api.insee.fr/entreprises/sirene/V3/siret/${siretClean}`,
-      {
-        headers: {
-          'Accept': 'application/json'
-        }
-      }
-    );
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        return { valid: false, error: 'SIRET non trouvé dans la base SIRENE' };
-      }
-      console.warn('⚠️ API SIRENE error, utilisation du mock');
-      return await verifySiretMock(siretClean);
-    }
-
-    const data = await response.json();
-    const etablissement = data.etablissement;
-    const uniteLegale = etablissement?.uniteLegale;
-
-    if (!etablissement) {
-      return { valid: false, error: 'Données entreprise non disponibles' };
-    }
-
-    // Construire l'adresse
-    const adresse = etablissement.adresseEtablissement;
-    const adresseComplete = adresse
-      ? `${adresse.numeroVoieEtablissement || ''} ${adresse.typeVoieEtablissement || ''} ${adresse.libelleVoieEtablissement || ''}`.trim()
-      : undefined;
-
-    return {
-      valid: true,
-      data: {
-        siren: uniteLegale?.siren || siren,
-        siret: etablissement.siret,
-        raison_sociale: uniteLegale?.denominationUniteLegale || etablissement.denominationUsuelleEtablissement || 'Non renseigné',
-        forme_juridique: uniteLegale?.categorieJuridiqueUniteLegale,
-        code_naf: etablissement.activitePrincipaleEtablissement,
-        adresse: adresseComplete,
-        code_postal: adresse?.codePostalEtablissement,
-        ville: adresse?.libelleCommuneEtablissement,
-        date_creation: uniteLegale?.dateCreationUniteLegale,
-        effectif: etablissement.trancheEffectifsEtablissement,
-      },
-    };
-  } catch (error) {
-    console.error('❌ Erreur API SIRENE:', error);
-
-    // Dernier fallback : mock
-    console.warn('⚠️ Fallback vers mock');
+  if (!sireneData) {
+    console.warn('⚠️ SIRENE non disponible, fallback vers mock');
     return await verifySiretMock(siretClean);
   }
+
+  console.log('✅ Données SIRENE récupérées:', sireneData.denomination);
+
+  // ÉTAPE 2 : Enrichir l'adresse avec BAN (optionnel)
+  console.log('🔍 Étape 2/3 : Enrichissement adresse BAN...');
+  let adresseComplete = formatSireneAddress(sireneData.adresse);
+  let codePostal = sireneData.adresse?.code_postal;
+  let ville = sireneData.adresse?.commune;
+
+  // Si adresse incomplète, essayer BAN pour normaliser
+  if (!codePostal || !ville) {
+    const banAddress = await enrichAddress(
+      adresseComplete,
+      ville,
+      codePostal
+    );
+
+    if (banAddress) {
+      console.log('✅ Adresse enrichie via BAN');
+      adresseComplete = banAddress.label;
+      codePostal = banAddress.postcode || codePostal;
+      ville = banAddress.city || ville;
+    }
+  }
+
+  // Préparer les données de base (SIRENE + BAN)
+  let finalData = {
+    siren: sireneData.siren,
+    siret: sireneData.siret,
+    raison_sociale: sireneData.denomination,
+    forme_juridique: sireneData.forme_juridique,
+    code_naf: sireneData.code_naf,
+    adresse: adresseComplete,
+    code_postal: codePostal,
+    ville: ville,
+    date_creation: sireneData.date_creation,
+    effectif: sireneData.tranche_effectif,
+  };
+
+  // ÉTAPE 3 : Enrichissement optionnel avec Pappers (données financières, dirigeants)
+  console.log('🔍 Étape 3/3 : Enrichissement Pappers (optionnel)...');
+  try {
+    const enrichedData = await enrichWithPappers(finalData);
+
+    if (enrichedData.capital_social || enrichedData.dirigeants) {
+      console.log('✅ Données enrichies via Pappers');
+      finalData = enrichedData;
+    } else {
+      console.log('ℹ️ Pappers non configuré ou données non disponibles');
+    }
+  } catch (error) {
+    console.log('ℹ️ Enrichissement Pappers échoué (non bloquant)');
+  }
+
+  return {
+    valid: true,
+    data: finalData,
+  };
 }
 
 /**
