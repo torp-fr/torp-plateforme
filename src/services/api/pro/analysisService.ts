@@ -384,100 +384,53 @@ export async function deleteAnalysis(analysisId: string): Promise<void> {
 }
 
 /**
- * Générer un ticket TORP (badge de certification)
+ * Générer un ticket TORP (badge de certification PDF)
+ * Utilise le nouveau système de génération complet
  */
 export async function generateTicket(analysisId: string): Promise<{
-  ticket_url: string;
   ticket_code: string;
-  qr_code_url: string;
+  short_code: string;
+  ticket_url: string;
+  pdf_url: string;
+  pdf_file_name: string;
 }> {
-  const { data: { user } } = await supabase.auth.getUser();
+  // Utiliser le service de génération complet de tickets
+  const { generateTicket: generateTicketService } = await import('@/lib/pro/ticket/ticket-service');
 
-  if (!user) {
-    throw new Error('User not authenticated');
-  }
-
-  const analysis = await getAnalysis(analysisId);
-
-  if (!analysis || analysis.status !== 'COMPLETED') {
-    throw new Error('L\'analyse doit être terminée avant de générer un ticket');
-  }
-
-  if (analysis.ticket_genere && analysis.ticket_code) {
-    throw new Error('Un ticket a déjà été généré pour cette analyse');
-  }
-
-  // 1. Générer un code unique via la fonction SQL
-  const { data: ticketCode, error: codeError } = await supabase
-    .rpc('generate_ticket_code');
-
-  if (codeError || !ticketCode) {
-    console.error('Erreur génération code ticket:', codeError);
-    throw new Error('Impossible de générer le code du ticket');
-  }
-
-  // 2. Générer le QR code
-  const publicUrl = `${window.location.origin}/t/${ticketCode}`;
-
-  let qrCodeDataUrl: string;
   try {
-    qrCodeDataUrl = await QRCode.toDataURL(publicUrl, {
-      width: 400,
-      margin: 2,
-      color: {
-        dark: '#000000',
-        light: '#FFFFFF'
-      },
-      errorCorrectionLevel: 'M'
-    });
-  } catch (err) {
-    console.error('Erreur génération QR code:', err);
-    throw new Error('Impossible de générer le QR code');
+    const result = await generateTicketService(analysisId);
+
+    return {
+      ticket_code: result.ticketCode,
+      short_code: result.shortCode,
+      ticket_url: result.ticketUrl,
+      pdf_url: result.pdfUrl,
+      pdf_file_name: result.pdfFileName,
+    };
+  } catch (error) {
+    console.error('[generateTicket] Error:', error);
+    throw error;
   }
+}
 
-  // 3. Convertir le QR code en blob pour l'upload
-  const qrBlob = await fetch(qrCodeDataUrl).then(r => r.blob());
-  const qrFileName = `${user.id}/${ticketCode}_qr.png`;
+/**
+ * Récupérer les informations d'un ticket existant
+ */
+export async function getTicketInfo(analysisId: string): Promise<{
+  ticket_code: string;
+  short_code: string;
+  ticket_url: string;
+  pdf_url: string;
+  pdf_file_name: string;
+} | null> {
+  const { getTicketInfo: getTicketInfoService } = await import('@/lib/pro/ticket/ticket-service');
 
-  // 4. Upload du QR code vers Supabase Storage
-  const { error: uploadError } = await supabase.storage
-    .from('tickets-torp')
-    .upload(qrFileName, qrBlob, {
-      contentType: 'image/png',
-      upsert: true
-    });
-
-  if (uploadError) {
-    console.error('Erreur upload QR code:', uploadError);
-    throw new Error('Impossible d\'enregistrer le QR code');
+  try {
+    return await getTicketInfoService(analysisId);
+  } catch (error) {
+    console.error('[getTicketInfo] Error:', error);
+    return null;
   }
-
-  // 5. Récupérer l'URL publique du QR code
-  const { data: { publicUrl: qrPublicUrl } } = supabase.storage
-    .from('tickets-torp')
-    .getPublicUrl(qrFileName);
-
-  // 6. Mettre à jour l'analyse avec les infos du ticket
-  const { error: updateError } = await supabase
-    .from('pro_devis_analyses')
-    .update({
-      ticket_genere: true,
-      ticket_code: ticketCode,
-      ticket_url: publicUrl,
-      ticket_generated_at: new Date().toISOString(),
-    })
-    .eq('id', analysisId);
-
-  if (updateError) {
-    console.error('Erreur mise à jour analyse:', updateError);
-    throw new Error('Impossible de sauvegarder le ticket');
-  }
-
-  return {
-    ticket_url: publicUrl,
-    ticket_code: ticketCode,
-    qr_code_url: qrPublicUrl,
-  };
 }
 
 /**

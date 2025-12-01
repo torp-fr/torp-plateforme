@@ -14,7 +14,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '@/context/AppContext';
-import { getAnalysis, generateTicket, reanalyzeDevis } from '@/services/api/pro/analysisService';
+import { getAnalysis, reanalyzeDevis } from '@/services/api/pro/analysisService';
 import { getCompanyProfile } from '@/services/api/pro/companyService';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +24,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
+import GenerateTicketButton from '@/components/pro/ticket/GenerateTicketButton';
 import {
   ArrowLeft,
   FileText,
@@ -55,7 +56,6 @@ export default function ProAnalysisDetail() {
   const [error, setError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<ProDevisAnalysis | null>(null);
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
-  const [generatingTicket, setGeneratingTicket] = useState(false);
   const [reanalyzing, setReanalyzing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -93,32 +93,6 @@ export default function ProAnalysisDetail() {
       setError(err.message || 'Erreur lors du chargement de l\'analyse');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleGenerateTicket = async () => {
-    if (!analysis) return;
-
-    try {
-      setGeneratingTicket(true);
-
-      const ticket = await generateTicket(analysis.id);
-
-      // Recharger l'analyse pour afficher le ticket
-      await loadAnalysis();
-
-      toast({
-        title: "✅ Ticket généré avec succès !",
-        description: `Code : ${ticket.ticket_code}`,
-      });
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
-        description: err.message || 'Impossible de générer le ticket',
-      });
-    } finally {
-      setGeneratingTicket(false);
     }
   };
 
@@ -678,47 +652,12 @@ export default function ProAnalysisDetail() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {analysis.status === 'COMPLETED' && !analysis.ticket_genere && (
-              <Button
-                className="w-full"
-                size="lg"
-                onClick={handleGenerateTicket}
-                disabled={generatingTicket}
-              >
-                {generatingTicket ? (
-                  <>
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Génération en cours...
-                  </>
-                ) : (
-                  <>
-                    <QrCode className="w-5 h-5 mr-2" />
-                    Générer un ticket TORP
-                  </>
-                )}
-              </Button>
-            )}
-
-            {analysis.status === 'COMPLETED' && analysis.ticket_genere && (
-              <Button
-                className="w-full"
-                size="lg"
-                variant="outline"
-                onClick={() => window.open(`/t/${analysis.ticket_code}`, '_blank')}
-              >
-                <CheckCircle2 className="w-5 h-5 mr-2 text-green-600" />
-                Voir le ticket TORP
-                <Badge variant="secondary" className="ml-2">{analysis.ticket_code}</Badge>
-              </Button>
-            )}
-
-            {analysis.status !== 'COMPLETED' && (
-              <Button className="w-full" size="lg" disabled>
-                <QrCode className="w-5 h-5 mr-2" />
-                Générer un ticket TORP
-                <Badge variant="secondary" className="ml-2">Analyse requise</Badge>
-              </Button>
-            )}
+            <GenerateTicketButton
+              analysis={analysis}
+              variant="full"
+              showDownload={true}
+              onSuccess={() => loadAnalysis()}
+            />
 
             {/* Hidden file input for re-analysis */}
             <input

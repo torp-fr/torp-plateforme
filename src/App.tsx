@@ -27,6 +27,7 @@ import ProAnalysisDetail from "@/pages/pro/ProAnalysisDetail";
 import ProDocuments from "@/pages/pro/ProDocuments";
 import ProAnalysesList from "@/pages/pro/ProAnalysesList";
 import ProSettings from "@/pages/pro/ProSettings";
+import TicketGeneration from "@/pages/pro/analyses/TicketGeneration";
 import TicketPublicView from "./pages/TicketPublicView";
 import B2CDashboard from "./pages/B2CDashboard";
 import NotFound from "./pages/NotFound";
@@ -69,6 +70,7 @@ const AppContent = () => {
           <Route path="/pro/onboarding" element={<ProOnboarding />} />
           <Route path="/pro/new-analysis" element={<NewProAnalysis />} />
           <Route path="/pro/analysis/:id" element={<ProAnalysisDetail />} />
+          <Route path="/pro/analyses/:id/ticket" element={<TicketGeneration />} />
           <Route path="/pro/analyses" element={<ProAnalysesList />} />
           <Route path="/pro/documents" element={<ProDocuments />} />
           <Route path="/pro/settings" element={<ProSettings />} />
