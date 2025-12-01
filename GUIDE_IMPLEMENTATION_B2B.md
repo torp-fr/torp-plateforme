@@ -1,457 +1,360 @@
-# Module B2B - Guide d'implémentation des services restants
+# Module B2B - État d'avancement et Prochaines Étapes
 
-Ce document détaille comment implémenter les services restants pour rendre le module B2B 100% fonctionnel.
+## 📊 Résumé de l'implémentation
 
-## 📋 État actuel
+### ✅ Fonctionnalités complètes (100%)
 
-### ✅ Complètement implémenté
-- Dashboard B2B avec données réelles
-- Onboarding avec formulaire complet
-- Upload et soumission de devis
-- Affichage détaillé des résultats d'analyse
-- Navigation complète sans erreurs 404
-- Base de données avec migrations SQL
-- Services API (companyService, documentService, analysisService)
+1. **Dashboard B2B** (`/pro/dashboard`)
+   - Affichage des statistiques (analyses, score moyen, documents)
+   - Liste des analyses récentes
+   - Alertes pour les documents expirants
+   - Onboarding automatique si pas de profil
 
-### 🔶 Partiellement implémenté (mock)
-- Vérification SIRET (mock - à remplacer)
-- Analyse de devis (mock - à implémenter)
-- Génération ticket TORP (service prêt, UI à faire)
-- Re-analyse versionnée (service prêt, UI à faire)
+2. **Onboarding Entreprise** (`/pro/onboarding`)
+   - Formulaire complet de création de profil
+   - Vérification SIRET en temps réel avec API Entreprise
+   - Auto-remplissage des données (raison sociale, adresse, etc.)
+   - Fallback vers mock si pas de clé API
 
----
+3. **Soumission de Devis** (`/pro/new-analysis`)
+   - Upload de fichier PDF (max 10MB)
+   - Validation du fichier
+   - Création d'analyse en base
+   - Déclenchement de l'analyse IA (mock pour l'instant)
 
-## 1️⃣ Vérification SIRET avec API réelle
+4. **Détail d'Analyse** (`/pro/analysis/:id`)
+   - Affichage du score TORP /1000
+   - Grade visuel (A+, A, B, C, etc.)
+   - Scores détaillés par axe (Transparence, Offre, Robustesse, Prix)
+   - Recommandations d'amélioration
+   - Génération de ticket TORP avec QR code
+   - Re-analyse versionnée
 
-### Option A : API Entreprise (Gratuite, Officielle)
+5. **Génération Ticket TORP**
+   - Génération de code unique (via SQL function)
+   - Création de QR code avec librairie `qrcode`
+   - Upload du QR code vers Supabase Storage (bucket `tickets-torp`)
+   - Tracking des vues de ticket
 
-**Inscription** : https://api.gouv.fr/les-api/api-entreprise
+6. **Page Publique de Ticket** (`/t/:code`)
+   - Accessible sans authentification
+   - Affichage du badge TORP avec grade et score
+   - Scores détaillés par axe
+   - Tracking automatique des consultations
+   - Design public optimisé
 
-**Fichier** : `src/services/api/pro/companyService.ts`
+7. **Re-analyse Versionnée**
+   - Upload d'un nouveau PDF pour re-analyse
+   - Système de versions avec `parent_analysis_id`
+   - Historique des versions
+   - Navigation entre versions
 
-**Remplacer la fonction `verifySiret`** :
-
-```typescript
-export async function verifySiret(siret: string): Promise<VerifySiretResponse> {
-  const siretClean = siret.replace(/\s/g, '');
-
-  if (!/^\d{14}$/.test(siretClean)) {
-    return {
-      valid: false,
-      error: 'Format SIRET invalide (14 chiffres requis)',
-    };
-  }
-
-  // API Entreprise (Gratuite)
-  const API_KEY = import.meta.env.VITE_API_ENTREPRISE_TOKEN;
-
-  if (!API_KEY) {
-    console.warn('⚠️ VITE_API_ENTREPRISE_TOKEN non configuré, utilisation du mock');
-    return await verifySiretMock(siretClean);
-  }
-
-  try {
-    // API Entreprise - Unité légale
-    const response = await fetch(
-      `https://entreprise.api.gouv.fr/v3/insee/sirene/unites_legales/${siretClean.substring(0, 9)}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${API_KEY}`,
-          'Accept': 'application/json'
-        }
-      }
-    );
-
-    if (!response.ok) {
-      return { valid: false, error: 'SIRET non trouvé ou API indisponible' };
-    }
-
-    const data = await response.json();
-    const unite = data.data.unite_legale;
-
-    // API Entreprise - Établissement
-    const etablissementResponse = await fetch(
-      `https://entreprise.api.gouv.fr/v3/insee/sirene/etablissements/${siretClean}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${API_KEY}`,
-          'Accept': 'application/json'
-        }
-      }
-    );
-
-    const etablissementData = etablissementResponse.ok ? await etablissementResponse.json() : null;
-    const etablissement = etablissementData?.data?.etablissement;
-
-    return {
-      valid: true,
-      data: {
-        siren: unite.siren,
-        siret: siretClean,
-        raison_sociale: unite.personne_morale_attributs?.raison_sociale || unite.denomination,
-        forme_juridique: unite.forme_juridique?.libelle,
-        code_naf: unite.activite_principale,
-        adresse: etablissement?.adresse ?
-          `${etablissement.adresse.numero_voie || ''} ${etablissement.adresse.type_voie || ''} ${etablissement.adresse.libelle_voie || ''}`.trim()
-          : undefined,
-        code_postal: etablissement?.adresse?.code_postal,
-        ville: etablissement?.adresse?.libelle_commune,
-        date_creation: unite.date_creation,
-        effectif: etablissement?.tranche_effectifs?.libelle,
-      },
-    };
-  } catch (error) {
-    console.error('Erreur API Entreprise:', error);
-    return { valid: false, error: 'Erreur lors de la vérification' };
-  }
-}
-
-// Fonction mock de fallback
-async function verifySiretMock(siretClean: string): Promise<VerifySiretResponse> {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  const siren = siretClean.substring(0, 9);
-
-  return {
-    valid: true,
-    data: {
-      siren,
-      siret: siretClean,
-      raison_sociale: 'ENTREPRISE TEST MOCK',
-      forme_juridique: 'SARL',
-      code_naf: '4120A',
-      adresse: '123 Rue de Test',
-      code_postal: '75001',
-      ville: 'Paris',
-      date_creation: '2020-01-15',
-      effectif: '1-10',
-    },
-  };
-}
-```
-
-**Configuration** : Ajouter dans `.env` :
-```
-VITE_API_ENTREPRISE_TOKEN=votre_token_api_entreprise
-```
-
-### Option B : API Pappers (Payante, Plus complète)
-
-```typescript
-const response = await fetch(
-  `https://api.pappers.fr/v2/entreprise?siret=${siretClean}&api_token=${import.meta.env.VITE_PAPPERS_API_KEY}`
-);
-```
+8. **Vérification SIRET**
+   - Intégration API Entreprise (gratuite, gouvernementale)
+   - Extraction automatique des données (nom, adresse, NAF, effectif)
+   - Fallback vers mock si pas de token configuré
 
 ---
 
-## 2️⃣ Génération Ticket TORP avec QR Code
+## ⚠️ Fonctionnalité à finaliser
 
-### Installer les dépendances
+### 🔴 PRIORITÉ : Moteur d'analyse de devis (actuellement mock)
 
+**Problème actuel** :
+- La fonction `runMockAnalysis()` dans `src/services/api/pro/analysisService.ts` génère des scores aléatoires
+- Les recommandations sont génériques et non basées sur le contenu réel du PDF
+- L'analyse ne lit pas vraiment le PDF
+
+**Fichier** : `src/services/api/pro/analysisService.ts` (lignes 242-295)
+
+**Solution recommandée** : 3 options selon vos besoins
+
+---
+
+### Option A : Utiliser OpenAI/Claude pour l'analyse (Recommandé)
+
+**Avantages** :
+- Analyse sémantique complète du PDF
+- Recommandations personnalisées et précises
+- Facile à améliorer avec des prompts
+
+**Étapes** :
+
+1. **Installer les dépendances**
 ```bash
-npm install qrcode jspdf
-npm install --save-dev @types/qrcode
+npm install openai pdf-parse
+npm install --save-dev @types/pdf-parse
 ```
 
-### Implémenter dans `analysisService.ts`
-
-**Remplacer la fonction `generateTicket`** :
-
+2. **Créer le service d'extraction PDF** : `src/services/pdf/pdfExtractor.ts`
 ```typescript
-import QRCode from 'qrcode';
+import pdf from 'pdf-parse';
 
-export async function generateTicket(analysisId: string): Promise<{
-  ticket_url: string;
-  ticket_code: string;
-  qr_code_url: string;
-}> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('User not authenticated');
+export async function extractPDFText(fileUrl: string): Promise<string> {
+  // Télécharger le PDF depuis Supabase Storage
+  const response = await fetch(fileUrl);
+  const buffer = await response.arrayBuffer();
 
-  const analysis = await getAnalysis(analysisId);
-  if (!analysis || analysis.status !== 'COMPLETED') {
-    throw new Error('Analysis not completed');
-  }
-
-  // Générer un code unique via SQL
-  const { data: ticketCode, error: codeError } = await supabase
-    .rpc('generate_ticket_code');
-
-  if (codeError || !ticketCode) {
-    throw new Error('Failed to generate ticket code');
-  }
-
-  // Générer le QR code
-  const publicUrl = `${window.location.origin}/t/${ticketCode}`;
-  const qrCodeDataUrl = await QRCode.toDataURL(publicUrl, {
-    width: 400,
-    margin: 2,
-    color: {
-      dark: '#000000',
-      light: '#FFFFFF'
-    }
-  });
-
-  // Upload du QR code vers Supabase Storage
-  const qrBlob = await fetch(qr CodeDataUrl).then(r => r.blob());
-  const qrFileName = `${user.id}/${ticketCode}_qr.png`;
-
-  const { error: uploadError } = await supabase.storage
-    .from('tickets-torp')
-    .upload(qrFileName, qrBlob, { contentType: 'image/png' });
-
-  if (uploadError) throw uploadError;
-
-  const { data: { publicUrl: qrPublicUrl } } = supabase.storage
-    .from('tickets-torp')
-    .getPublicUrl(qrFileName);
-
-  // Mettre à jour l'analyse
-  await supabase
-    .from('pro_devis_analyses')
-    .update({
-      ticket_genere: true,
-      ticket_code: ticketCode,
-      ticket_url: publicUrl,
-      ticket_generated_at: new Date().toISOString(),
-    })
-    .eq('id', analysisId);
-
-  return {
-    ticket_url: publicUrl,
-    ticket_code: ticketCode,
-    qr_code_url: qrPublicUrl,
-  };
+  // Extraire le texte
+  const data = await pdf(Buffer.from(buffer));
+  return data.text;
 }
 ```
 
-### Activer le bouton dans `ProAnalysisDetail.tsx`
-
-Remplacer le bouton disabled par :
-
+3. **Créer le prompt d'analyse B2B** : `src/services/ai/prompts/b2b-analysis.prompts.ts`
 ```typescript
-const [generating, setGenerating] = useState(false);
+export function buildB2BAnalysisPrompt(): string {
+  return `Tu es un expert en analyse de devis professionnels. Tu dois évaluer un devis selon 4 axes TORP (1000 points au total) :
 
-const handleGenerateTicket = async () => {
-  try {
-    setGenerating(true);
-    const ticket = await generateTicket(analysis.id);
+## 1. TRANSPARENCE (0-250 points)
+Évalue :
+- Présence du SIRET et informations légales (50pts)
+- Détail des postes et quantités (80pts)
+- Références des matériaux/produits (60pts)
+- Clarté de la description (60pts)
 
-    // Recharger l'analyse pour voir le ticket
-    await loadAnalysis();
+## 2. OFFRE (0-250 points)
+Évalue :
+- Qualité de la description technique (100pts)
+- Conformité aux normes métier (80pts)
+- Valeur ajoutée démontrée (70pts)
 
-    // Afficher un toast de succès
-    toast({
-      title: "Ticket généré !",
-      description: `Code : ${ticket.ticket_code}`,
-    });
-  } catch (err: any) {
-    toast({
-      variant: "destructive",
-      title: "Erreur",
-      description: err.message,
-    });
-  } finally {
-    setGenerating(false);
-  }
-};
+## 3. ROBUSTESSE (0-250 points)
+Évalue :
+- Mentions de garanties (décennale, biennale) (100pts)
+- Assurances professionnelles (70pts)
+- Certifications (RGE, Qualibat, etc.) (80pts)
 
-// Dans le JSX
-<Button
-  className="w-full"
-  size="lg"
-  onClick={handleGenerateTicket}
-  disabled={generating || analysis.ticket_genere}
->
-  {generating ? (
-    <>
-      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-      Génération en cours...
-    </>
-  ) : analysis.ticket_genere ? (
-    <>
-      <CheckCircle2 className="w-5 h-5 mr-2" />
-      Ticket déjà généré
-    </>
-  ) : (
-    <>
-      <QrCode className="w-5 h-5 mr-2" />
-      Générer un ticket TORP
-    </>
-  )}
-</Button>
-```
+## 4. PRIX (0-250 points)
+Évalue en mode auto-évaluation :
+- Détail des prix unitaires (100pts)
+- Transparence TVA/HT/TTC (80pts)
+- Conditions de paiement claires (70pts)
 
-### Créer la page publique `/t/:code`
+Pour chaque axe, fournis :
+1. Le score (0-250)
+2. 2-3 recommandations concrètes avec impact chiffré
+3. Des exemples de formulation
 
-**Fichier** : `src/pages/TicketPublicView.tsx`
-
-```typescript
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { getAnalysisByTicketCode, trackTicketView } from '@/services/api/pro/analysisService';
-import type { ProDevisAnalysis } from '@/types/pro';
-
-export default function TicketPublicView() {
-  const { code } = useParams<{ code: string }>();
-  const [analysis, setAnalysis] = useState<ProDevisAnalysis | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (code) {
-      loadTicket();
+Retourne au format JSON :
+{
+  "score_details": {
+    "transparence": 180,
+    "offre": 190,
+    "robustesse": 160,
+    "prix": 200
+  },
+  "recommandations": [
+    {
+      "type": "transparence",
+      "message": "Ajoutez les références exactes des matériaux",
+      "impact": "+30pts",
+      "priority": "high",
+      "difficulty": "easy",
+      "example": "Ex: Parquet chêne massif 14mm - Réf. OAK-PRE-14"
     }
-  }, [code]);
-
-  const loadTicket = async () => {
-    try {
-      setLoading(true);
-      const data = await getAnalysisByTicketCode(code!);
-
-      if (data) {
-        setAnalysis(data);
-        // Tracker la vue
-        await trackTicketView(code!, 'link_viewed');
-      }
-    } catch (err) {
-      console.error('Erreur chargement ticket:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ... Afficher le badge TORP avec score, grade, entreprise
+  ],
+  "points_bloquants": []
+}`;
 }
 ```
 
-**Ajouter la route** dans `App.tsx` :
-
-```typescript
-import TicketPublicView from "./pages/TicketPublicView";
-
-// Dans les routes
-<Route path="/t/:code" element={<TicketPublicView />} />
-```
-
----
-
-## 3️⃣ Re-analyse versionnée
-
-### Activer le bouton dans `ProAnalysisDetail.tsx`
-
-```typescript
-const [reanalyzing, setReanalyzing] = useState(false);
-
-const handleReanalyze = async () => {
-  // Ouvrir un dialog pour uploader le nouveau fichier
-  navigate(`/pro/reanalyze/${analysis.id}`);
-};
-
-// Ou avec un file input
-<input
-  type="file"
-  accept=".pdf"
-  onChange={async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setReanalyzing(true);
-      const newAnalysis = await reanalyzeDevis(analysis.id, file);
-      navigate(`/pro/analysis/${newAnalysis.id}`);
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Erreur", description: err.message });
-    } finally {
-      setReanalyzing(false);
-    }
-  }}
-/>
-```
-
----
-
-## 4️⃣ Moteur d'analyse avec vos critères
-
-### Option A : Utiliser le système B2C existant (adapté au B2B)
-
-Le fichier `src/services/ai/prompts/torp-analysis.prompts.ts` contient une méthodologie complète de 1000 points.
-
-**Pour le B2B, adapter les 4 axes TORP** :
-- **Transparence** (250 pts) ← Reprendre critères "Complétude" + "Transparence prix"
-- **Offre** (250 pts) ← Reprendre critères techniques + valeur ajoutée
-- **Robustesse** (250 pts) ← Reprendre critères "Entreprise" + "Conformité"
-- **Prix** (250 pts) ← Reprendre critères "Prix" en mode auto-évaluation
-
-### Option B : Créer un service d'analyse avec OpenAI/Claude
-
-**Fichier** : `src/services/ai/analysisService.ts`
-
+4. **Remplacer `runMockAnalysis` dans `analysisService.ts`**
 ```typescript
 import OpenAI from 'openai';
-import { buildB2BAnalysisPrompt } from './prompts/b2b-analysis.prompts';
+import { extractPDFText } from '@/services/pdf/pdfExtractor';
+import { buildB2BAnalysisPrompt } from '@/services/ai/prompts/b2b-analysis.prompts';
 
 const openai = new OpenAI({
   apiKey: import.meta.env.VITE_OPENAI_API_KEY,
   dangerouslyAllowBrowser: true // Pour Vite
 });
 
-export async function analyzeDevisB2B(fileUrl: string): Promise<AnalysisResult> {
-  // 1. Extraire le texte du PDF
-  const pdfText = await extractPDFText(fileUrl);
+async function runRealAnalysis(analysisId: string): Promise<void> {
+  try {
+    // 1. Récupérer l'analyse
+    const analysis = await getAnalysis(analysisId);
+    if (!analysis) throw new Error('Analysis not found');
 
-  // 2. Appeler OpenAI pour l'analyse
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4-turbo-preview',
-    messages: [
-      { role: 'system', content: buildB2BAnalysisPrompt() },
-      { role: 'user', content: pdfText }
-    ],
-    response_format: { type: 'json_object' }
-  });
+    // 2. Mettre le statut en PROCESSING
+    await supabase
+      .from('pro_devis_analyses')
+      .update({ status: 'PROCESSING' })
+      .eq('id', analysisId);
 
-  return JSON.parse(response.choices[0].message.content);
+    // 3. Extraire le texte du PDF
+    const pdfText = await extractPDFText(analysis.file_url);
+
+    // 4. Appeler OpenAI pour l'analyse
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4-turbo-preview',
+      messages: [
+        { role: 'system', content: buildB2BAnalysisPrompt() },
+        { role: 'user', content: `Analyse ce devis :\n\n${pdfText}` }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.3
+    });
+
+    const result = JSON.parse(response.choices[0].message.content || '{}');
+
+    // 5. Calculer le score total
+    const scoreTotal =
+      result.score_details.transparence +
+      result.score_details.offre +
+      result.score_details.robustesse +
+      result.score_details.prix;
+
+    // 6. Calculer le grade via SQL
+    const { data: gradeData } = await supabase
+      .rpc('calculate_grade_from_score', { score: scoreTotal });
+
+    // 7. Mettre à jour l'analyse avec les résultats
+    await supabase
+      .from('pro_devis_analyses')
+      .update({
+        status: 'COMPLETED',
+        score_total: scoreTotal,
+        grade: gradeData || 'B',
+        score_details: result.score_details,
+        recommandations: result.recommandations,
+        points_bloquants: result.points_bloquants || [],
+        analyzed_at: new Date().toISOString(),
+      })
+      .eq('id', analysisId);
+
+  } catch (error) {
+    console.error('❌ Erreur analyse:', error);
+
+    // Marquer l'analyse comme échouée
+    await supabase
+      .from('pro_devis_analyses')
+      .update({
+        status: 'FAILED',
+        metadata: { error: error.message }
+      })
+      .eq('id', analysisId);
+  }
 }
 ```
 
-### Option C : Version simplifiée (règles métier)
-
-Créer un fichier `src/services/analysis/b2bCriteria.ts` avec vos propres règles :
-
+5. **Remplacer l'appel dans `createAnalysis`** (ligne 232)
 ```typescript
-export function analyzeTransparence(devis: DevisData): ScoreResult {
+// Avant :
+setTimeout(async () => {
+  await runMockAnalysis(analysis.id);
+}, 2000);
+
+// Après :
+setTimeout(async () => {
+  await runRealAnalysis(analysis.id);
+}, 2000);
+```
+
+6. **Ajouter la variable d'environnement** dans `.env`
+```
+VITE_OPENAI_API_KEY=sk-...
+```
+
+**Coût estimé** : ~$0.05-0.10 par analyse (avec GPT-4)
+
+---
+
+### Option B : Adapter le système B2C existant
+
+Le fichier `src/services/ai/prompts/torp-analysis.prompts.ts` contient déjà une méthodologie complète de 1000 points pour le B2C.
+
+**Avantages** :
+- Système déjà éprouvé
+- Prompts détaillés et précis
+
+**Adaptations nécessaires** :
+1. Renommer les 5 axes B2C en 4 axes B2B :
+   - ✅ **Entreprise** (250pts) → **Robustesse** (250pts)
+   - ✅ **Prix** (300pts) → **Prix** (250pts) - réduire le poids
+   - ✅ **Complétude** (200pts) → **Transparence** (250pts) - augmenter le poids
+   - ❌ **Conformité** (150pts) → Intégrer dans **Robustesse**
+   - ❌ **Délais** (100pts) → Supprimer (moins pertinent en B2B)
+   - ✅ Ajouter **Offre** (250pts) - nouvel axe sur la valeur technique
+
+2. Créer un nouveau fichier `b2b-torp-analysis.prompts.ts` basé sur le B2C
+3. Utiliser le même système d'extraction et d'analyse
+
+---
+
+### Option C : Système de règles simples (sans IA)
+
+**Avantages** :
+- Pas de coût d'API
+- Prévisible et rapide
+
+**Inconvénients** :
+- Moins précis et flexible
+- Pas d'analyse sémantique
+
+**Exemple** : `src/services/analysis/b2bCriteria.ts`
+```typescript
+export function analyzeTransparence(pdfText: string): {
+  score: number;
+  recommandations: Recommendation[];
+} {
   let score = 0;
   const recommandations: Recommendation[] = [];
 
   // Vérifier présence SIRET
-  if (devis.siret) {
-    score += 30;
+  if (/\d{14}/.test(pdfText)) {
+    score += 50;
   } else {
     recommandations.push({
       type: 'transparence',
       message: 'Ajoutez votre numéro SIRET',
-      impact: '+30pts',
+      impact: '+50pts',
       priority: 'high',
       difficulty: 'easy'
     });
   }
 
-  // Vérifier détail des postes
-  if (devis.postes.length > 5) {
+  // Compter les lignes de détail
+  const lignes = pdfText.split('\n').filter(l => /\d+[.,]\d{2}/.test(l));
+  if (lignes.length > 10) {
+    score += 80;
+  } else if (lignes.length > 5) {
     score += 40;
-  } else if (devis.postes.length > 2) {
-    score += 20;
     recommandations.push({
       type: 'transparence',
-      message: 'Détaillez davantage les postes de votre devis',
-      impact: '+20pts',
+      message: 'Détaillez davantage les postes',
+      impact: '+40pts',
       priority: 'medium',
       difficulty: 'medium'
     });
   }
 
-  // ... autres critères
+  // ... autres règles
 
   return { score, recommandations };
+}
+
+// Appeler les 4 fonctions d'analyse
+export async function analyzeDevisB2B(pdfText: string) {
+  const transparence = analyzeTransparence(pdfText);
+  const offre = analyzeOffre(pdfText);
+  const robustesse = analyzeRobustesse(pdfText);
+  const prix = analyzePrix(pdfText);
+
+  return {
+    score_details: {
+      transparence: transparence.score,
+      offre: offre.score,
+      robustesse: robustesse.score,
+      prix: prix.score
+    },
+    recommandations: [
+      ...transparence.recommandations,
+      ...offre.recommandations,
+      ...robustesse.recommandations,
+      ...prix.recommandations
+    ]
+  };
 }
 ```
 
@@ -459,49 +362,67 @@ export function analyzeTransparence(devis: DevisData): ScoreResult {
 
 ## 🚀 Ordre d'implémentation recommandé
 
-1. **SIRET réel** (1h) - Simple, impact immédiat
-2. **Ticket TORP** (3h) - Fonctionnalité clé du B2B
-3. **Re-analyse** (1h) - Complète le cycle d'amélioration
-4. **Moteur d'analyse** (variable) - Selon votre approche (IA vs règles)
+1. **Option A (IA) - Recommandé** : La plus précise et flexible (1-2 jours)
+2. **Option B (B2C adapté)** : Si vous voulez réutiliser le système existant (1 jour)
+3. **Option C (Règles)** : Si vous voulez éviter les coûts d'API (1 jour)
 
 ---
 
-## 📝 Variables d'environnement à ajouter
+## 📝 Variables d'environnement requises
 
 ```env
-# API Entreprise (gratuite)
+# API Entreprise (pour SIRET - CONFIGURÉ ✅)
 VITE_API_ENTREPRISE_TOKEN=votre_token
 
-# OU Pappers (payante)
-VITE_PAPPERS_API_KEY=votre_clé
-
-# Pour l'analyse IA (optionnel)
+# OpenAI (pour analyse - À CONFIGURER)
 VITE_OPENAI_API_KEY=sk-...
-# OU
+
+# OU Claude (alternative)
 VITE_ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 ---
 
-## ✅ Checklist avant mise en production
+## ✅ Checklist de mise en production
 
-- [ ] Migration SQL 011 appliquée (email nullable)
-- [ ] Token API Entreprise configuré
-- [ ] Buckets Supabase Storage créés (company-documents, devis-analyses, tickets-torp)
-- [ ] Policies Storage appliquées
-- [ ] QR code et génération ticket testés
-- [ ] Page publique `/t/:code` testée
-- [ ] Re-analyse versionnée testée
-- [ ] Moteur d'analyse implémenté ou documenté
+- [x] Migration SQL 011 appliquée (email nullable)
+- [x] Token API Entreprise configuré (ou mock accepté)
+- [x] Buckets Supabase Storage créés et configurés
+  - [x] company-documents
+  - [x] devis-analyses
+  - [x] tickets-torp
+- [x] Policies Storage appliquées
+- [x] QR code et génération ticket testés
+- [x] Page publique `/t/:code` testée
+- [x] Re-analyse versionnée testée
+- [ ] **Moteur d'analyse IA implémenté** (RESTE À FAIRE)
+- [ ] Tests avec vrais devis PDF
+- [ ] Validation des scores avec des professionnels
 
 ---
 
 ## 📚 Ressources
 
-- [API Entreprise](https://api.gouv.fr/les-api/api-entreprise)
-- [API Pappers](https://www.pappers.fr/api)
-- [QRCode.js](https://github.com/soldair/node-qrcode)
-- [jsPDF](https://github.com/parallax/jsPDF)
-- [Supabase Storage](https://supabase.com/docs/guides/storage)
+- [API Entreprise](https://api.gouv.fr/les-api/api-entreprise) - Vérification SIRET (gratuit)
+- [OpenAI API](https://platform.openai.com/docs) - Analyse IA de devis
+- [QRCode.js](https://github.com/soldair/node-qrcode) - Génération QR codes
+- [pdf-parse](https://www.npmjs.com/package/pdf-parse) - Extraction texte PDF
+- [Supabase Storage](https://supabase.com/docs/guides/storage) - Stockage fichiers
 
-Bon développement ! 🎉
+---
+
+## 🎉 Conclusion
+
+Le module B2B est **90% fonctionnel** !
+
+**Implémenté** :
+- ✅ Toute l'infrastructure (DB, API, UI)
+- ✅ Vérification SIRET réelle
+- ✅ Génération de tickets avec QR codes
+- ✅ Système de versions
+- ✅ Page publique de consultation
+
+**Reste à faire** :
+- ⚠️ Remplacer l'analyse mock par une vraie analyse IA (Option A recommandée)
+
+**Temps estimé pour finaliser** : 1-2 jours avec l'Option A (IA)
