@@ -444,37 +444,68 @@ export class SupabaseDevisService {
   }
 
   /**
-   * Get all devis for a user (via projects)
+   * Get all devis for a user - FIXED
+   * Récupère directement par user_id au lieu de passer par projects
    */
   async getUserDevis(userId: string): Promise<DevisData[]> {
-    // First get user's projects
-    const { data: projects, error: projectsError } = await supabase
-      .from('projects')
-      .select('id')
-      .eq('user_id', userId);
-
-    if (projectsError) {
-      throw new Error(`Failed to fetch user projects: ${projectsError.message}`);
-    }
-
-    if (!projects || projects.length === 0) {
-      return [];
-    }
-
-    const projectIds = projects.map(p => p.id);
-
-    // Get all devis for these projects
     const { data: devisList, error: devisError } = await supabase
       .from('devis')
       .select('*')
-      .in('project_id', projectIds)
-      .order('created_at', { ascending: false });
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false});
 
     if (devisError) {
       throw new Error(`Failed to fetch devis: ${devisError.message}`);
     }
 
-    return devisList.map(mapDbDevisToAppDevis);
+    return (devisList || []).map(mapDbDevisToAppDevis);
+  }
+
+  /**
+   * Get count of user devis - NEW
+   * Pour afficher le compteur dans le dashboard
+   */
+  async getUserDevisCount(userId: string): Promise<{
+    total: number;
+    analyzed: number;
+    analyzing: number;
+  }> {
+    const { data, error } = await supabase
+      .from('devis')
+      .select('status')
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('[DevisService] Error counting devis:', error);
+      return { total: 0, analyzed: 0, analyzing: 0 };
+    }
+
+    const total = (data || []).length;
+    const analyzed = (data || []).filter(d => d.status === 'analyzed').length;
+    const analyzing = (data || []).filter(d => d.status === 'analyzing').length;
+
+    return { total, analyzed, analyzing };
+  }
+
+  /**
+   * Get recent analyzed devis - NEW
+   * Pour la page "Mes analyses"
+   */
+  async getUserAnalyzedDevis(userId: string, limit: number = 10): Promise<DevisData[]> {
+    const { data, error } = await supabase
+      .from('devis')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'analyzed')
+      .order('analyzed_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('[DevisService] Error fetching analyzed devis:', error);
+      throw new Error(`Failed to fetch analyzed devis: ${error.message}`);
+    }
+
+    return (data || []).map(mapDbDevisToAppDevis);
   }
 
   /**

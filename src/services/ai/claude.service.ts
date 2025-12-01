@@ -108,13 +108,39 @@ export class ClaudeService {
       const textBlock = message.content.find((block) => block.type === 'text');
       const content = textBlock && textBlock.type === 'text' ? textBlock.text : '{}';
 
-      // Remove markdown code blocks if present
-      const cleanedContent = content
-        .replace(/```json\n?/g, '')
+      // Enhanced JSON cleaning - remove ALL markdown formatting
+      let cleanedContent = content
+        // Remove markdown code blocks
+        .replace(/```json\n?/gi, '')
+        .replace(/```javascript\n?/gi, '')
         .replace(/```\n?/g, '')
+        // Remove any leading/trailing text before/after JSON
         .trim();
 
-      return JSON.parse(cleanedContent) as T;
+      // Try to extract JSON if surrounded by text
+      const jsonMatch = cleanedContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        cleanedContent = jsonMatch[0];
+      }
+
+      // Attempt to parse with error recovery
+      try {
+        return JSON.parse(cleanedContent) as T;
+      } catch (parseError) {
+        // Try to fix common JSON errors
+        console.warn('[Claude] Initial JSON parse failed, attempting cleanup...', parseError);
+
+        // Remove trailing commas (common issue)
+        cleanedContent = cleanedContent.replace(/,(\s*[}\]])/g, '$1');
+
+        // Try parsing again
+        try {
+          return JSON.parse(cleanedContent) as T;
+        } catch (secondError) {
+          console.error('[Claude] JSON parse failed after cleanup. Content:', cleanedContent);
+          throw new Error(`Failed to parse Claude JSON response: ${secondError instanceof Error ? secondError.message : 'Invalid JSON'}`);
+        }
+      }
     } catch (error) {
       console.error('Claude JSON Generation Error:', error);
       throw new Error(`Claude JSON generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
