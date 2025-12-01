@@ -114,60 +114,60 @@ export class TorpAnalyzerService {
       const result: TorpAnalysisResult = {
         id: `torp-${Date.now()}`,
         devisId: '', // Will be set by caller
-        scoreGlobal: synthesis.scoreGlobal,
-        grade: synthesis.grade as any,
+        scoreGlobal: synthesis.scoreGlobal || 0,
+        grade: (synthesis.grade || 'C') as any,
 
         scoreEntreprise: {
-          scoreTotal: entrepriseAnalysis.scoreTotal,
-          fiabilite: entrepriseAnalysis.details.fiabilite.score,
-          santeFinnaciere: entrepriseAnalysis.details.santeFinnaciere.score,
+          scoreTotal: entrepriseAnalysis.scoreTotal || 0,
+          fiabilite: entrepriseAnalysis.details?.fiabilite?.score || 0,
+          santeFinnaciere: entrepriseAnalysis.details?.santeFinnaciere?.score || 0,
           anciennete: 0, // Included in fiabilité
-          assurances: entrepriseAnalysis.details.assurances.score,
-          certifications: entrepriseAnalysis.details.certifications.score,
-          reputation: entrepriseAnalysis.details.reputation.score,
-          risques: entrepriseAnalysis.risques,
-          benefices: entrepriseAnalysis.benefices,
+          assurances: entrepriseAnalysis.details?.assurances?.score || 0,
+          certifications: entrepriseAnalysis.details?.certifications?.score || 0,
+          reputation: entrepriseAnalysis.details?.reputation?.score || 0,
+          risques: entrepriseAnalysis.risques || [],
+          benefices: entrepriseAnalysis.benefices || [],
         },
 
         scorePrix: {
-          scoreTotal: prixAnalysis.scoreTotal,
-          vsMarche: prixAnalysis.vsMarche.score,
-          transparence: prixAnalysis.transparence.score,
-          coherence: prixAnalysis.coherence.score,
+          scoreTotal: prixAnalysis.scoreTotal || 0,
+          vsMarche: prixAnalysis.vsMarche?.score || 0,
+          transparence: prixAnalysis.transparence?.score || 0,
+          coherence: prixAnalysis.coherence?.score || 0,
           margeEstimee: 0, // TODO: calculate
           ajustementQualite: 0, // TODO: calculate
-          economiesPotentielles: prixAnalysis.optimisations.economiesPotentielles,
+          economiesPotentielles: prixAnalysis.optimisations?.economiesPotentielles || 0,
         },
 
         scoreCompletude: {
-          scoreTotal: completudeAnalysis.scoreTotal,
-          elementsManquants: completudeAnalysis.elementsManquants,
+          scoreTotal: completudeAnalysis.scoreTotal || 0,
+          elementsManquants: completudeAnalysis.elementsManquants || [],
           incohérences: [], // TODO: extract from analysis
-          conformiteNormes: completudeAnalysis.conformiteNormes.score,
-          risquesTechniques: completudeAnalysis.risquesTechniques,
+          conformiteNormes: completudeAnalysis.conformiteNormes?.score || 0,
+          risquesTechniques: completudeAnalysis.risquesTechniques || [],
         },
 
         scoreConformite: {
-          scoreTotal: conformiteAnalysis.scoreTotal,
-          assurances: conformiteAnalysis.assurances.conforme,
-          plu: conformiteAnalysis.plu.conforme ?? false,
-          normes: conformiteAnalysis.normes.respectees.length > 0,
-          accessibilite: conformiteAnalysis.accessibilite.conforme ?? false,
-          defauts: conformiteAnalysis.defauts,
+          scoreTotal: conformiteAnalysis.scoreTotal || 0,
+          assurances: conformiteAnalysis.assurances?.conforme ?? false,
+          plu: conformiteAnalysis.plu?.conforme ?? false,
+          normes: conformiteAnalysis.normes?.respectees?.length > 0 ?? false,
+          accessibilite: conformiteAnalysis.accessibilite?.conforme ?? false,
+          defauts: conformiteAnalysis.defauts || [],
         },
 
         scoreDelais: {
-          scoreTotal: delaisAnalysis.scoreTotal,
-          realisme: delaisAnalysis.realisme.score,
+          scoreTotal: delaisAnalysis.scoreTotal || 0,
+          realisme: delaisAnalysis.realisme?.score || 0,
           vsMarche: 0, // Included in realisme
-          planningDetaille: delaisAnalysis.planning.detaille,
-          penalitesRetard: delaisAnalysis.penalites.mentionnees,
+          planningDetaille: delaisAnalysis.planning?.detaille ?? false,
+          penalitesRetard: delaisAnalysis.penalites?.mentionnees ?? false,
         },
 
         recommandations: synthesis, // Store entire synthesis object
-        surcoutsDetectes: extractedData.devis.montantTotal - (synthesis.budgetRealEstime || extractedData.devis.montantTotal),
-        budgetRealEstime: synthesis.budgetRealEstime || extractedData.devis.montantTotal,
-        margeNegociation: synthesis.margeNegociation,
+        surcoutsDetectes: extractedData.devis?.montantTotal ? extractedData.devis.montantTotal - (synthesis.budgetRealEstime || extractedData.devis.montantTotal) : 0,
+        budgetRealEstime: synthesis.budgetRealEstime || extractedData.devis?.montantTotal || 0,
+        margeNegociation: synthesis.margeNegociation || { min: 0, max: 0 },
 
         dateAnalyse: new Date(),
         dureeAnalyse,

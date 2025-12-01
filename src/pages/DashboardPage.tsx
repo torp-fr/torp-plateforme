@@ -5,11 +5,19 @@ import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
 import { BackButton } from '@/components/BackButton';
 import { AdvancedAnalytics } from '@/components/AdvancedAnalytics';
-import { FileText, TrendingUp, PiggyBank, Hammer, Eye, Plus, BarChart3, Users, Building, Clock, Activity, Target, Calendar, Download, Home } from 'lucide-react';
+import { FileText, TrendingUp, PiggyBank, Hammer, Eye, Plus, BarChart3, Users, Building, Clock, Activity, Target, Calendar, Download, Home, MoreVertical, Trash2, Filter } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { devisService } from '@/services/api';
+import { toast } from 'sonner';
 
 export default function DashboardPage() {
-  const { user, userType, projects } = useApp();
+  const { user, userType, projects, setProjects } = useApp();
 
   const completedProjects = projects.filter(p => p.status === 'completed');
 
@@ -34,7 +42,7 @@ export default function DashboardPage() {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'completed': return 'Terminé';
+      case 'completed': return 'Analysé';
       case 'analyzing': return 'En cours';
       case 'draft': return 'Brouillon';
       default: return 'Inconnu';
@@ -45,6 +53,22 @@ export default function DashboardPage() {
     if (score >= 80) return 'text-success';
     if (score >= 60) return 'text-warning';
     return 'text-destructive';
+  };
+
+  const handleDeleteDevis = async (projectId: string, projectName: string) => {
+    const confirmed = window.confirm(`Êtes-vous sûr de vouloir supprimer "${projectName}" ? Cette action est irréversible.`);
+
+    if (!confirmed) return;
+
+    try {
+      await devisService.deleteDevis(projectId);
+      // Update local state
+      setProjects(projects.filter(p => p.id !== projectId));
+      toast.success('Devis supprimé avec succès');
+    } catch (error) {
+      console.error('Error deleting devis:', error);
+      toast.error('Erreur lors de la suppression du devis');
+    }
   };
 
   return (
@@ -80,20 +104,28 @@ export default function DashboardPage() {
                 )}
               </div>
             </div>
-            {userType === 'B2B' && (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm">
-                  <Download className="h-4 w-4 mr-2" />
-                  Exporter
-                </Button>
-                <Link to="/improved-b2b-dashboard">
-                  <Button size="sm">
-                    <BarChart3 className="h-4 w-4 mr-2" />
-                    Dashboard Avancé
+            <div className="flex items-center gap-2">
+              {userType === 'B2B' && (
+                <>
+                  <Button variant="outline" size="sm">
+                    <Download className="h-4 w-4 mr-2" />
+                    Exporter
                   </Button>
-                </Link>
-              </div>
-            )}
+                  <Link to="/improved-b2b-dashboard">
+                    <Button variant="outline" size="sm">
+                      <BarChart3 className="h-4 w-4 mr-2" />
+                      Dashboard Avancé
+                    </Button>
+                  </Link>
+                </>
+              )}
+              <Link to="/analyze">
+                <Button size="sm" className="bg-primary hover:bg-primary/90">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Analyser un devis
+                </Button>
+              </Link>
+            </div>
           </div>
 
           {/* Statistiques principales */}
@@ -289,49 +321,63 @@ export default function DashboardPage() {
             <div className="lg:col-span-2">
               <Card>
                 <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <CardTitle className="flex items-center gap-2">
-                      <BarChart3 className="w-5 h-5" />
-                      {userType === 'B2C' ? 'Mes analyses' : 'Analyses clients'}
-                    </CardTitle>
-                    <Link to="/projects">
-                      <Button variant="outline" size="sm">
-                        Voir tout
-                      </Button>
-                    </Link>
-                  </div>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5" />
+                    {userType === 'B2C' ? 'Mes analyses' : 'Analyses clients'}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     {projects.slice(0, 5).map(project => (
-                      <div key={project.id} 
-                           className="flex items-center justify-between p-4 border border-border rounded-lg hover:shadow-soft transition-shadow">
-                        <div className="flex items-center space-x-4">
-                          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold
-                                         ${project.score && project.score >= 80 ? 'bg-success' : 
-                                           project.score && project.score >= 60 ? 'bg-warning' : 
-                                           project.score ? 'bg-destructive' : 'bg-muted'}`}>
-                            {project.grade || '?'}
+                      <div key={project.id} className="relative group">
+                        <Link to={`/results?devisId=${project.id}`} className="block">
+                          <div className="flex items-center justify-between p-4 pr-14 border border-border rounded-lg hover:shadow-soft hover:border-primary/50 transition-all cursor-pointer">
+                            <div className="flex items-center space-x-4">
+                              <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg
+                                             ${project.score && project.score >= 800 ? 'bg-success' :
+                                               project.score && project.score >= 600 ? 'bg-warning' :
+                                               project.score ? 'bg-destructive' : 'bg-muted'}`}>
+                                {project.grade || '?'}
+                              </div>
+                              <div>
+                                <h3 className="font-semibold text-foreground">{project.name}</h3>
+                                <p className="text-sm text-muted-foreground">
+                                  {project.company || 'Entreprise'} • {new Date(project.createdAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-4">
+                              <span className="text-lg font-semibold text-foreground">{project.amount}</span>
+                            </div>
                           </div>
-                          <div>
-                            <h3 className="font-semibold text-foreground">{project.name}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              {project.company} • {new Date(project.createdAt).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                          <Badge className={getStatusColor(project.status)}>
-                            {getStatusText(project.status)}
-                          </Badge>
-                          <span className="text-lg font-semibold text-foreground">{project.amount}</span>
-                          {project.status === 'completed' && (
-                            <Link to={`/results?devisId=${project.id}`}>
-                              <Button variant="outline" size="sm">
-                                <Eye className="w-4 h-4" />
+                        </Link>
+
+                        {/* Menu contextuel */}
+                        <div className="absolute top-4 right-4" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <MoreVertical className="h-4 w-4" />
                               </Button>
-                            </Link>
-                          )}
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => console.log('Voir détails', project.id)}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                Voir l'analyse
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => console.log('Filter', project.id)}>
+                                <Filter className="mr-2 h-4 w-4" />
+                                Filtrer similaires
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={() => handleDeleteDevis(project.id, project.name)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Supprimer
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
                     ))}

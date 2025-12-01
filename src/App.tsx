@@ -13,7 +13,6 @@ import Analyze from "./pages/Analyze";
 import Results from "./pages/Results";
 import ResultsInteractive from "./pages/ResultsInteractive";
 import DashboardPage from "./pages/DashboardPage";
-import Projects from "./pages/Projects";
 import Pricing from "./pages/Pricing";
 import Demo from "./pages/Demo";
 import ProjectTracking from "./pages/ProjectTracking";
@@ -50,7 +49,6 @@ const AppContent = () => {
           <Route path="/results" element={<Results />} />
           <Route path="/results-interactive" element={<ResultsInteractive />} />
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/projects" element={<Projects />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/demo" element={<Demo />} />
           <Route path="/project-tracking" element={<ProjectTracking />} />
