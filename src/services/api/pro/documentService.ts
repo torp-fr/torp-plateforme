@@ -60,55 +60,196 @@ export interface UploadDocumentData {
 }
 
 /**
- * TODO: Lister tous les documents de l'entreprise
+ * Lister tous les documents de l'entreprise
  */
 export async function listCompanyDocuments(companyId: string): Promise<CompanyDocument[]> {
-  // TODO: Implémenter l'appel Supabase
-  throw new Error('Not implemented');
+  const { data, error } = await supabase
+    .from('company_documents')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('uploaded_at', { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
 }
 
 /**
- * TODO: Récupérer un document spécifique
+ * Récupérer un document spécifique
  */
 export async function getCompanyDocument(documentId: string): Promise<CompanyDocument | null> {
-  // TODO: Implémenter l'appel Supabase
-  throw new Error('Not implemented');
+  const { data, error } = await supabase
+    .from('company_documents')
+    .select('*')
+    .eq('id', documentId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return null;
+    }
+    throw error;
+  }
+
+  return data;
 }
 
 /**
- * TODO: Upload d'un nouveau document
+ * Upload d'un nouveau document
  */
 export async function uploadCompanyDocument(data: UploadDocumentData): Promise<CompanyDocument> {
-  // TODO: 1. Upload du fichier vers Supabase Storage
-  // TODO: 2. Créer l'entrée dans la table company_documents
-  // TODO: 3. (Optionnel) Extraire les métadonnées du document (OCR)
-  throw new Error('Not implemented');
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  const { file, company_id, type, nom, ...metadata } = data;
+
+  // 1. Générer un nom de fichier unique
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+  // 2. Upload du fichier vers Supabase Storage
+  const { data: uploadData, error: uploadError } = await supabase.storage
+    .from('company-documents')
+    .upload(fileName, file, {
+      contentType: file.type,
+      upsert: false,
+    });
+
+  if (uploadError) {
+    throw uploadError;
+  }
+
+  // 3. Récupérer l'URL publique du fichier
+  const { data: { publicUrl } } = supabase.storage
+    .from('company-documents')
+    .getPublicUrl(fileName);
+
+  // 4. Créer l'entrée dans la base de données
+  const { data: document, error: dbError } = await supabase
+    .from('company_documents')
+    .insert({
+      company_id,
+      type,
+      nom,
+      file_url: publicUrl,
+      file_name: file.name,
+      file_size: file.size,
+      mime_type: file.type,
+      ...metadata,
+      statut: 'PENDING',
+    })
+    .select()
+    .single();
+
+  if (dbError) {
+    // Si l'insertion DB échoue, supprimer le fichier uploadé
+    await supabase.storage
+      .from('company-documents')
+      .remove([fileName]);
+
+    throw dbError;
+  }
+
+  return document;
 }
 
 /**
- * TODO: Mettre à jour les métadonnées d'un document
+ * Mettre à jour les métadonnées d'un document
  */
 export async function updateCompanyDocument(
   documentId: string,
   data: Partial<CompanyDocument>
 ): Promise<CompanyDocument> {
-  // TODO: Implémenter l'appel Supabase
-  throw new Error('Not implemented');
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  // Retirer les champs non modifiables
+  const { id: _, company_id, file_url, file_name, uploaded_at, ...updateData } = data as any;
+
+  const { data: document, error } = await supabase
+    .from('company_documents')
+    .update(updateData)
+    .eq('id', documentId)
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return document;
 }
 
 /**
- * TODO: Supprimer un document
+ * Supprimer un document
  */
 export async function deleteCompanyDocument(documentId: string): Promise<void> {
-  // TODO: 1. Supprimer le fichier de Supabase Storage
-  // TODO: 2. Supprimer l'entrée de la base de données
-  throw new Error('Not implemented');
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  // 1. Récupérer le document pour obtenir le file_url
+  const document = await getCompanyDocument(documentId);
+
+  if (!document) {
+    throw new Error('Document not found');
+  }
+
+  // 2. Extraire le nom du fichier depuis l'URL
+  const fileName = document.file_url.split('/').pop();
+
+  if (fileName) {
+    // 3. Supprimer le fichier du Storage
+    const { error: storageError } = await supabase.storage
+      .from('company-documents')
+      .remove([`${user.id}/${fileName}`]);
+
+    if (storageError) {
+      console.error('Error deleting file from storage:', storageError);
+    }
+  }
+
+  // 4. Supprimer l'entrée de la base de données
+  const { error: dbError } = await supabase
+    .from('company_documents')
+    .delete()
+    .eq('id', documentId);
+
+  if (dbError) {
+    throw dbError;
+  }
 }
 
 /**
- * TODO: Vérifier les documents expirant bientôt (< 30 jours)
+ * Vérifier les documents expirant bientôt (< 30 jours)
  */
 export async function checkExpiringDocuments(companyId: string): Promise<CompanyDocument[]> {
-  // TODO: Implémenter la requête pour récupérer les documents expirant dans moins de 30 jours
-  throw new Error('Not implemented');
+  // Date dans 30 jours
+  const thirtyDaysFromNow = new Date();
+  thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+
+  const { data, error } = await supabase
+    .from('company_documents')
+    .select('*')
+    .eq('company_id', companyId)
+    .not('date_expiration', 'is', null)
+    .lte('date_expiration', thirtyDaysFromNow.toISOString())
+    .gte('date_expiration', new Date().toISOString()) // Pas encore expiré
+    .order('date_expiration', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
 }

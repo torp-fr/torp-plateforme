@@ -54,47 +54,179 @@ export interface VerifySiretResponse {
 }
 
 /**
- * TODO: Récupérer le profil entreprise de l'utilisateur connecté
+ * Récupérer le profil entreprise de l'utilisateur connecté
  */
 export async function getCompanyProfile(): Promise<CompanyProfile | null> {
-  // TODO: Implémenter l'appel Supabase
-  throw new Error('Not implemented');
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  const { data, error } = await supabase
+    .from('pro_company_profiles')
+    .select('*')
+    .eq('user_id', user.id)
+    .single();
+
+  if (error) {
+    // Si l'erreur est "not found", retourner null (pas d'erreur)
+    if (error.code === 'PGRST116') {
+      return null;
+    }
+    throw error;
+  }
+
+  return data;
 }
 
 /**
- * TODO: Créer un nouveau profil entreprise
+ * Créer un nouveau profil entreprise
  */
 export async function createCompanyProfile(
   data: Omit<CompanyProfile, 'id' | 'created_at' | 'updated_at'>
 ): Promise<CompanyProfile> {
-  // TODO: Implémenter l'appel Supabase
-  throw new Error('Not implemented');
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  // Vérifier qu'un profil n'existe pas déjà
+  const existing = await getCompanyProfile();
+  if (existing) {
+    throw new Error('Company profile already exists');
+  }
+
+  const { data: profile, error } = await supabase
+    .from('pro_company_profiles')
+    .insert({
+      ...data,
+      user_id: user.id,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return profile;
 }
 
 /**
- * TODO: Mettre à jour le profil entreprise
+ * Mettre à jour le profil entreprise
  */
 export async function updateCompanyProfile(
   id: string,
   data: Partial<CompanyProfile>
 ): Promise<CompanyProfile> {
-  // TODO: Implémenter l'appel Supabase
-  throw new Error('Not implemented');
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  // Retirer les champs non modifiables
+  const { id: _, user_id, created_at, updated_at, ...updateData } = data as any;
+
+  const { data: profile, error } = await supabase
+    .from('pro_company_profiles')
+    .update(updateData)
+    .eq('id', id)
+    .eq('user_id', user.id) // Sécurité : ne mettre à jour que son propre profil
+    .select()
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return profile;
 }
 
 /**
- * TODO: Supprimer le profil entreprise
+ * Supprimer le profil entreprise
  */
 export async function deleteCompanyProfile(id: string): Promise<void> {
-  // TODO: Implémenter l'appel Supabase
-  throw new Error('Not implemented');
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  const { error } = await supabase
+    .from('pro_company_profiles')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id); // Sécurité : ne supprimer que son propre profil
+
+  if (error) {
+    throw error;
+  }
 }
 
 /**
- * TODO: Vérifier un numéro SIRET via API externe (Pappers, INSEE, etc.)
+ * Vérifier un numéro SIRET via API externe
+ *
+ * Version mock pour développement.
+ * En production, remplacer par un appel à l'API Pappers ou API Entreprise.
  */
 export async function verifySiret(siret: string): Promise<VerifySiretResponse> {
-  // TODO: Implémenter l'appel à l'API externe de vérification SIRET
-  // Utiliser l'API Pappers ou l'API Entreprise Data Gouv
-  throw new Error('Not implemented');
+  // Validation basique du format SIRET (14 chiffres)
+  const siretClean = siret.replace(/\s/g, '');
+  if (!/^\d{14}$/.test(siretClean)) {
+    return {
+      valid: false,
+      error: 'Format SIRET invalide (14 chiffres requis)',
+    };
+  }
+
+  // TODO: En production, utiliser une vraie API
+  // Exemple avec Pappers API:
+  /*
+  const response = await fetch(
+    `https://api.pappers.fr/v2/entreprise?siret=${siretClean}&api_token=${import.meta.env.VITE_PAPPERS_API_KEY}`
+  );
+
+  if (!response.ok) {
+    return { valid: false, error: 'Erreur lors de la vérification' };
+  }
+
+  const data = await response.json();
+
+  return {
+    valid: !!data.siren,
+    data: {
+      siren: data.siren,
+      siret: data.siege.siret,
+      raison_sociale: data.nom_entreprise,
+      forme_juridique: data.forme_juridique,
+      code_naf: data.code_naf,
+      adresse: data.siege.adresse_ligne_1,
+      date_creation: data.date_creation,
+    },
+  };
+  */
+
+  // Version MOCK pour développement
+  console.warn('⚠️ Utilisation de la version MOCK de verifySiret. Configurer l\'API Pappers pour la production.');
+
+  // Simuler un délai réseau
+  await new Promise(resolve => setTimeout(resolve, 500));
+
+  const siren = siretClean.substring(0, 9);
+
+  return {
+    valid: true,
+    data: {
+      siren,
+      siret: siretClean,
+      raison_sociale: 'ENTREPRISE TEST MOCK',
+      forme_juridique: 'SARL',
+      code_naf: '4120A',
+      adresse: '123 Rue de Test, 75001 Paris',
+      date_creation: '2020-01-15',
+    },
+  };
 }
