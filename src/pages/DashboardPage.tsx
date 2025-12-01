@@ -86,20 +86,28 @@ export default function DashboardPage() {
                 )}
               </div>
             </div>
-            {userType === 'B2B' && (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm">
-                  <Download className="h-4 w-4 mr-2" />
-                  Exporter
-                </Button>
-                <Link to="/improved-b2b-dashboard">
-                  <Button size="sm">
-                    <BarChart3 className="h-4 w-4 mr-2" />
-                    Dashboard Avancé
+            <div className="flex items-center gap-2">
+              {userType === 'B2B' && (
+                <>
+                  <Button variant="outline" size="sm">
+                    <Download className="h-4 w-4 mr-2" />
+                    Exporter
                   </Button>
-                </Link>
-              </div>
-            )}
+                  <Link to="/improved-b2b-dashboard">
+                    <Button variant="outline" size="sm">
+                      <BarChart3 className="h-4 w-4 mr-2" />
+                      Dashboard Avancé
+                    </Button>
+                  </Link>
+                </>
+              )}
+              <Link to="/analyze">
+                <Button size="sm" className="bg-primary hover:bg-primary/90">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Analyser un devis
+                </Button>
+              </Link>
+            </div>
           </div>
 
           {/* Statistiques principales */}
