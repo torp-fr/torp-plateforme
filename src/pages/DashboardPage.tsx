@@ -12,9 +12,6 @@ export default function DashboardPage() {
   const { user, userType, projects } = useApp();
 
   const completedProjects = projects.filter(p => p.status === 'completed');
-  const avgScore = completedProjects.length > 0
-    ? Math.round(completedProjects.reduce((sum, p) => sum + (p.score || 0), 0) / completedProjects.length)
-    : 0;
 
   // Calculate total savings from completed projects based on price comparisons
   const totalSavings = completedProjects.reduce((sum, p) => {
@@ -83,7 +80,7 @@ export default function DashboardPage() {
                 )}
               </div>
             </div>
-            {userType === 'B2B' ? (
+            {userType === 'B2B' && (
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm">
                   <Download className="h-4 w-4 mr-2" />
@@ -96,13 +93,6 @@ export default function DashboardPage() {
                   </Button>
                 </Link>
               </div>
-            ) : (
-              <Link to="/analyze">
-                <Button size="lg">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Analyser un devis
-                </Button>
-              </Link>
             )}
           </div>
 
@@ -176,38 +166,8 @@ export default function DashboardPage() {
             {/* Métriques simplifiées pour particuliers B2C */}
             {userType === 'B2C' && (
               <>
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Devis analysés</p>
-                        <p className="text-2xl font-bold text-foreground">{completedProjects.length}</p>
-                      </div>
-                      <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                        <FileText className="w-6 h-6 text-primary" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
                 {completedProjects.length > 0 && (
                   <>
-                    <Card>
-                      <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm text-muted-foreground">Score moyen</p>
-                            <p className={`text-2xl font-bold ${getScoreColor(avgScore)}`}>
-                              {avgScore}/100
-                            </p>
-                          </div>
-                          <div className="w-12 h-12 bg-success/10 rounded-full flex items-center justify-center">
-                            <TrendingUp className="w-6 h-6 text-success" />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
                     {totalSavings > 0 && (
                       <Card>
                         <CardContent className="p-6">
@@ -400,32 +360,6 @@ export default function DashboardPage() {
 
             {/* Panneau latéral */}
             <div className="space-y-6">
-              {/* Actions rapides */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Actions rapides</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Link to="/analyze" className="block">
-                    <Button className="w-full justify-start">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Nouvelle analyse
-                    </Button>
-                  </Link>
-                  <Link to="/projects" className="block">
-                    <Button variant="outline" className="w-full justify-start">
-                      <FileText className="w-4 h-4 mr-2" />
-                      Mes projets
-                    </Button>
-                  </Link>
-                  <Link to="/pricing" className="block">
-                    <Button variant="outline" className="w-full justify-start">
-                      <TrendingUp className="w-4 h-4 mr-2" />
-                      Voir les tarifs
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
             </div>
 
             {/* Analytics avancés pour B2B */}

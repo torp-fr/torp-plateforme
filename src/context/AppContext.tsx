@@ -261,7 +261,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         // Transform devis to Project format for compatibility
         const devisProjects: Project[] = analyzedDevis.map(devis => ({
           id: devis.id,
-          name: devis.file_name?.replace('.pdf', '') || `Devis ${devis.devis_number || 'sans numéro'}`,
+          name: (devis as any).projectName || devis.fileName?.replace('.pdf', '') || `Devis ${(devis as any).devisNumber || 'sans numéro'}`,
           type: 'Analyse devis',
           status: devis.status === 'analyzed' ? 'completed' : devis.status as any,
           score: devis.score_total || 0,

@@ -20,6 +20,7 @@ function mapDbDevisToAppDevis(dbDevis: DbDevis): DevisData {
   return {
     id: dbDevis.id,
     projectId: dbDevis.project_id,
+    projectName: dbDevis.nom_projet || undefined,
     companyId: dbDevis.company_id || undefined,
     devisNumber: dbDevis.devis_number || undefined,
     status: dbDevis.status,
