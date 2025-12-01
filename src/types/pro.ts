@@ -82,7 +82,7 @@ export interface CompanyProfile {
   code_postal?: string;
   ville?: string;
   telephone?: string;
-  email: string;
+  email?: string;
   site_web?: string;
 
   // Données vérifiées
@@ -116,7 +116,7 @@ export interface CreateCompanyProfileData {
   code_postal?: string;
   ville?: string;
   telephone?: string;
-  email: string;
+  email?: string;
   site_web?: string;
   date_creation?: string;
   capital_social?: number;

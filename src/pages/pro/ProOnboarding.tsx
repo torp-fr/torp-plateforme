@@ -43,7 +43,7 @@ export default function ProOnboarding() {
     email: '',
     site_web: '',
     description: '',
-    nombre_employes: '',
+    effectif: '',
     capital_social: '',
   });
 
@@ -70,10 +70,10 @@ export default function ProOnboarding() {
           code_postal: response.data.code_postal || '',
           ville: response.data.ville || '',
           telephone: '',
-          email: '',
+          email: user?.email || '', // Utiliser l'email du compte par défaut
           site_web: '',
           description: '',
-          nombre_employes: response.data.nombre_employes?.toString() || '',
+          effectif: response.data.effectif || '',
           capital_social: response.data.capital_social?.toString() || '',
         });
 
@@ -109,9 +109,10 @@ export default function ProOnboarding() {
         telephone: formData.telephone || undefined,
         email: formData.email || undefined,
         site_web: formData.site_web || undefined,
-        description: formData.description || undefined,
-        nombre_employes: formData.nombre_employes ? parseInt(formData.nombre_employes) : undefined,
+        effectif: formData.effectif || undefined,
         capital_social: formData.capital_social ? parseFloat(formData.capital_social) : undefined,
+        siret_verifie: true,
+        siret_verifie_le: new Date().toISOString(),
       });
 
       setStep('success');
@@ -356,15 +357,15 @@ export default function ProOnboarding() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="nombre_employes">Nombre d'employés</Label>
+                      <Label htmlFor="effectif">Effectif</Label>
                       <Input
-                        id="nombre_employes"
-                        type="number"
-                        value={formData.nombre_employes}
-                        onChange={(e) => setFormData({ ...formData, nombre_employes: e.target.value })}
-                        placeholder="10"
-                        min="0"
+                        id="effectif"
+                        type="text"
+                        value={formData.effectif}
+                        onChange={(e) => setFormData({ ...formData, effectif: e.target.value })}
+                        placeholder="1-10 ou 11-50"
                       />
+                      <p className="text-xs text-muted-foreground">Tranche d'effectif de l'entreprise</p>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="capital_social">Capital social (€)</Label>
