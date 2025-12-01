@@ -30,11 +30,19 @@
    - Génération de ticket TORP avec QR code
    - Re-analyse versionnée
 
-5. **Génération Ticket TORP**
-   - Génération de code unique (via SQL function)
+5. **Génération Ticket TORP** (Certification sécurisée)
+   - **Objectif** : Sécuriser le score et permettre au client de vérifier l'authenticité
+   - Génération de code unique (via SQL function) : `TORP-XXXXXXXX`
    - Création de QR code avec librairie `qrcode`
    - Upload du QR code vers Supabase Storage (bucket `tickets-torp`)
-   - Tracking des vues de ticket
+   - Tracking des vues de ticket (anti-fraude)
+
+   **Use case client** :
+   - L'entreprise B2B partage le ticket (QR code ou référence) avec son client
+   - Le client scanne le QR code ou saisit la référence sur la plateforme
+   - Accès à la page publique `/t/:code` montrant le score certifié
+   - Le client peut vérifier : grade, score détaillé, date de certification
+   - Impossible de falsifier le score (lié en base à l'analyse)
 
 6. **Page Publique de Ticket** (`/t/:code`)
    - Accessible sans authentification
@@ -50,9 +58,10 @@
    - Navigation entre versions
 
 8. **Vérification SIRET**
-   - Intégration API Entreprise (gratuite, gouvernementale)
+   - Priorité 1 : API Pappers (commerciale, complète)
+   - Priorité 2 : API SIRENE open data (gratuite, data.gouv.fr)
+   - Priorité 3 : Mock si aucune API configurée
    - Extraction automatique des données (nom, adresse, NAF, effectif)
-   - Fallback vers mock si pas de token configuré
 
 ---
 
@@ -371,8 +380,9 @@ export async function analyzeDevisB2B(pdfText: string) {
 ## 📝 Variables d'environnement requises
 
 ```env
-# API Entreprise (pour SIRET - CONFIGURÉ ✅)
-VITE_API_ENTREPRISE_TOKEN=votre_token
+# API Pappers (pour SIRET - RECOMMANDÉ)
+VITE_PAPPERS_API_KEY=votre_cle_pappers
+# Si non configuré, fallback automatique vers API SIRENE open data (gratuite)
 
 # OpenAI (pour analyse - À CONFIGURER)
 VITE_OPENAI_API_KEY=sk-...
@@ -381,32 +391,52 @@ VITE_OPENAI_API_KEY=sk-...
 VITE_ANTHROPIC_API_KEY=sk-ant-...
 ```
 
+**APIs utilisées pour la vérification SIRET :**
+1. **Pappers** (prioritaire) : https://www.pappers.fr/api
+   - Données complètes et à jour
+   - Nécessite clé API (payante)
+2. **SIRENE open data** (fallback) : https://api.insee.fr/catalogue/
+   - Gratuite, data.gouv.fr
+   - Données officielles INSEE
+   - Pas d'authentification requise
+3. **Mock** (développement) : données de test si aucune API
+
 ---
 
 ## ✅ Checklist de mise en production
 
 - [x] Migration SQL 011 appliquée (email nullable)
-- [x] Token API Entreprise configuré (ou mock accepté)
+- [x] API Pappers configurée (ou fallback SIRENE open data)
 - [x] Buckets Supabase Storage créés et configurés
   - [x] company-documents
   - [x] devis-analyses
-  - [x] tickets-torp
+  - [x] tickets-torp (pour QR codes)
 - [x] Policies Storage appliquées
 - [x] QR code et génération ticket testés
-- [x] Page publique `/t/:code` testée
+- [x] Page publique `/t/:code` testée (vérification client)
 - [x] Re-analyse versionnée testée
+- [x] Système de vérification SIRET fonctionnel (3 niveaux)
 - [ ] **Moteur d'analyse IA implémenté** (RESTE À FAIRE)
 - [ ] Tests avec vrais devis PDF
 - [ ] Validation des scores avec des professionnels
+- [ ] Test du workflow complet : analyse → ticket → partage client → vérification
 
 ---
 
 ## 📚 Ressources
 
-- [API Entreprise](https://api.gouv.fr/les-api/api-entreprise) - Vérification SIRET (gratuit)
+**Vérification SIRET :**
+- [API Pappers](https://www.pappers.fr/api) - Données entreprises complètes (payant)
+- [API SIRENE INSEE](https://api.insee.fr/catalogue/) - Données open data (gratuit)
+- [data.gouv.fr](https://data.gouv.fr) - Portail open data
+
+**Analyse de devis :**
 - [OpenAI API](https://platform.openai.com/docs) - Analyse IA de devis
-- [QRCode.js](https://github.com/soldair/node-qrcode) - Génération QR codes
+- [Claude API](https://console.anthropic.com/docs) - Alternative à OpenAI
 - [pdf-parse](https://www.npmjs.com/package/pdf-parse) - Extraction texte PDF
+
+**Tickets et QR codes :**
+- [QRCode.js](https://github.com/soldair/node-qrcode) - Génération QR codes
 - [Supabase Storage](https://supabase.com/docs/guides/storage) - Stockage fichiers
 
 ---
@@ -417,12 +447,81 @@ Le module B2B est **90% fonctionnel** !
 
 **Implémenté** :
 - ✅ Toute l'infrastructure (DB, API, UI)
-- ✅ Vérification SIRET réelle
-- ✅ Génération de tickets avec QR codes
-- ✅ Système de versions
-- ✅ Page publique de consultation
+- ✅ Vérification SIRET réelle (Pappers + SIRENE open data + mock)
+- ✅ Génération de tickets avec QR codes sécurisés
+- ✅ Système de versions pour amélioration continue
+- ✅ Page publique de vérification client (`/t/:code`)
+- ✅ Tracking des consultations (anti-fraude)
 
 **Reste à faire** :
 - ⚠️ Remplacer l'analyse mock par une vraie analyse IA (Option A recommandée)
+- 💡 Optionnel : Ajouter un formulaire de recherche de ticket par référence
 
 **Temps estimé pour finaliser** : 1-2 jours avec l'Option A (IA)
+
+---
+
+## 🔍 Amélioration suggérée : Formulaire de vérification par référence
+
+Pour permettre aux clients de vérifier un ticket **sans scanner le QR code**, vous pouvez ajouter un formulaire sur la page d'accueil :
+
+**Page** : `src/pages/TicketVerification.tsx`
+
+```typescript
+export default function TicketVerification() {
+  const [ticketCode, setTicketCode] = useState('');
+  const navigate = useNavigate();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (ticketCode.trim()) {
+      navigate(`/t/${ticketCode.trim().toUpperCase()}`);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Vérifier un ticket TORP</CardTitle>
+          <CardDescription>
+            Saisissez la référence du ticket pour consulter le score certifié
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Référence du ticket
+              </label>
+              <input
+                type="text"
+                placeholder="TORP-ABC12345"
+                value={ticketCode}
+                onChange={(e) => setTicketCode(e.target.value)}
+                className="w-full px-4 py-2 border rounded-lg"
+                pattern="TORP-[A-Z0-9]{8}"
+              />
+            </div>
+            <Button type="submit" className="w-full">
+              Vérifier le ticket
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+```
+
+**Route** : Ajouter dans `App.tsx`
+```typescript
+<Route path="/verifier-ticket" element={<TicketVerification />} />
+```
+
+**Use case** :
+- Le client reçoit la référence par email : `TORP-ABC12345`
+- Il va sur `/verifier-ticket`
+- Saisit la référence
+- Est redirigé vers `/t/TORP-ABC12345`
+- Voit le score certifié
