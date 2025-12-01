@@ -303,13 +303,13 @@ export class SupabaseDevisService {
           score_completude: analysis.scoreCompletude,
           score_conformite: analysis.scoreConformite,
           score_delais: analysis.scoreDelais,
-          recommendations: analysis.recommandations,
+          recommendations: {
+            ...analysis.recommandations,
+            budgetRealEstime: analysis.budgetRealEstime || 0,
+            margeNegociation: analysis.margeNegociation,
+          },
           detected_overcosts: analysis.surcoutsDetectes,
           potential_savings: analysis.scorePrix.economiesPotentielles || 0,
-          amount: analysis.budgetRealEstime || 0,
-          estimated_budget: analysis.budgetRealEstime || 0,
-          negotiation_margin_min: analysis.margeNegociation?.min || 0,
-          negotiation_margin_max: analysis.margeNegociation?.max || 0,
           updated_at: new Date().toISOString(),
         }),
       });
@@ -434,10 +434,10 @@ export class SupabaseDevisService {
       recommandations: (data.recommendations as any) || [],
 
       surcoutsDetectes: data.detected_overcosts || 0,
-      budgetRealEstime: data.amount || data.estimated_budget || 0,
-      margeNegociation: {
-        min: data.negotiation_margin_min || (data.amount * 0.95) || 0,
-        max: data.negotiation_margin_max || (data.amount * 1.05) || 0,
+      budgetRealEstime: (data.recommendations as any)?.budgetRealEstime || data.amount || 0,
+      margeNegociation: (data.recommendations as any)?.margeNegociation || {
+        min: data.amount ? data.amount * 0.95 : 0,
+        max: data.amount ? data.amount * 1.05 : 0,
       },
 
       dateAnalyse: data.analyzed_at ? new Date(data.analyzed_at) : new Date(),

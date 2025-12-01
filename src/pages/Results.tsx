@@ -147,13 +147,13 @@ export default function Results() {
               scoreCompletude: scoreCompletudeData,
               scoreConformite: scoreConformiteData,
               scoreDelais: scoreDelaisData,
-              montantTotal: data.amount || data.montant_total || 0,
-              margeNegociation: {
-                min: data.negotiation_margin_min || 0,
-                max: data.negotiation_margin_max || 0,
+              montantTotal: data.recommendations?.budgetRealEstime || data.amount || data.montant_total || 0,
+              margeNegociation: data.recommendations?.margeNegociation || {
+                min: data.amount ? data.amount * 0.95 : 0,
+                max: data.amount ? data.amount * 1.05 : 0,
               },
               surcoutsDetectes: data.detected_overcosts || data.surcouts_detectes || 0,
-              budgetRealEstime: data.amount || data.estimated_budget || data.budget_reel_estime || 0,
+              budgetRealEstime: data.recommendations?.budgetRealEstime || data.amount || data.budget_reel_estime || 0,
             }
           }
         };
