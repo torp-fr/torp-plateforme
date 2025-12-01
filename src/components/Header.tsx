@@ -24,11 +24,6 @@ export const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { toast } = useToast();
 
-  const handleAnalyzeClick = () => {
-    // Redirection directe vers l'analyse, sans wizard intermédiaire
-    navigate('/analyze');
-  };
-
   const handleLogout = async () => {
     try {
       await authService.logout();
@@ -114,14 +109,6 @@ export const Header = () => {
           <div className="hidden lg:flex items-center gap-3">
             {user ? (
               <>
-                <Button
-                  onClick={handleAnalyzeClick}
-                  variant="default"
-                  size="sm"
-                  className="bg-primary hover:bg-primary/90"
-                >
-                  Analyser un devis
-                </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm">
@@ -160,14 +147,6 @@ export const Header = () => {
                     Inscription
                   </Button>
                 </Link>
-                <Button
-                  onClick={handleAnalyzeClick}
-                  variant="default"
-                  size="sm"
-                  className="bg-primary hover:bg-primary/90"
-                >
-                  Analyser un devis
-                </Button>
               </>
             )}
           </div>
@@ -246,17 +225,6 @@ export const Header = () => {
                   <Button
                     onClick={() => {
                       setMobileMenuOpen(false);
-                      handleAnalyzeClick();
-                    }}
-                    variant="default"
-                    size="sm"
-                    className="w-full bg-primary hover:bg-primary/90"
-                  >
-                    Analyser un devis
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
                       handleLogout();
                     }}
                     variant="outline"
@@ -278,17 +246,6 @@ export const Header = () => {
                       Inscription
                     </Button>
                   </Link>
-                  <Button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      handleAnalyzeClick();
-                    }}
-                    variant="default"
-                    size="sm"
-                    className="w-full bg-primary hover:bg-primary/90"
-                  >
-                    Analyser un devis
-                  </Button>
                 </>
               )}
             </div>
