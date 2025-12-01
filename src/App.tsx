@@ -23,6 +23,10 @@ import PrescripteursDashboard from "./pages/PrescripteursDashboard";
 import ProDashboard from "@/pages/pro/ProDashboard";
 import ProOnboarding from "@/pages/pro/ProOnboarding";
 import NewProAnalysis from "@/pages/pro/NewProAnalysis";
+import ProAnalysisDetail from "@/pages/pro/ProAnalysisDetail";
+import ProDocuments from "@/pages/pro/ProDocuments";
+import ProAnalysesList from "@/pages/pro/ProAnalysesList";
+import ProSettings from "@/pages/pro/ProSettings";
 import B2CDashboard from "./pages/B2CDashboard";
 import NotFound from "./pages/NotFound";
 import DiscoveryFlow from "./pages/DiscoveryFlow";
@@ -63,6 +67,10 @@ const AppContent = () => {
           <Route path="/pro/dashboard" element={<ProDashboard />} />
           <Route path="/pro/onboarding" element={<ProOnboarding />} />
           <Route path="/pro/new-analysis" element={<NewProAnalysis />} />
+          <Route path="/pro/analysis/:id" element={<ProAnalysisDetail />} />
+          <Route path="/pro/analyses" element={<ProAnalysesList />} />
+          <Route path="/pro/documents" element={<ProDocuments />} />
+          <Route path="/pro/settings" element={<ProSettings />} />
           <Route path="/improved-b2b-dashboard" element={<ProDashboard />} /> {/* Redirection ancienne URL */}
           <Route path="/b2c-dashboard" element={<B2CDashboard />} />
           {/* Route désactivée - wizard obsolète */}
