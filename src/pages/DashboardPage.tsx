@@ -333,11 +333,11 @@ export default function DashboardPage() {
                         <Link to={`/results?devisId=${project.id}`} className="block">
                           <div className="flex items-center justify-between p-4 pr-14 border border-border rounded-lg hover:shadow-soft hover:border-primary/50 transition-all cursor-pointer">
                             <div className="flex items-center space-x-4">
-                              <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg
-                                             ${project.score && project.score >= 800 ? 'bg-success' :
-                                               project.score && project.score >= 600 ? 'bg-warning' :
-                                               project.score ? 'bg-destructive' : 'bg-muted'}`}>
-                                {project.grade || '?'}
+                              <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg
+                                             ${project.score >= 800 ? 'bg-success text-white' :
+                                               project.score >= 600 ? 'bg-warning text-white' :
+                                               project.score > 0 ? 'bg-destructive text-white' : 'bg-muted text-muted-foreground'}`}>
+                                {project.grade}
                               </div>
                               <div>
                                 <h3 className="font-semibold text-foreground">{project.name}</h3>
