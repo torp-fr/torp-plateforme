@@ -6,7 +6,8 @@ import { Header } from '@/components/Header';
 import { BackButton } from '@/components/BackButton';
 import { AdvancedAnalytics } from '@/components/AdvancedAnalytics';
 import { FileText, TrendingUp, PiggyBank, Hammer, Eye, Plus, BarChart3, Users, Building, Clock, Activity, Target, Calendar, Download, Home, MoreVertical, Trash2, Filter } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +19,14 @@ import { toast } from 'sonner';
 
 export default function DashboardPage() {
   const { user, userType, projects, setProjects } = useApp();
+  const navigate = useNavigate();
+
+  // Rediriger les utilisateurs B2B vers le nouveau dashboard Pro
+  useEffect(() => {
+    if (userType === 'B2B' || userType === 'B2B2C') {
+      navigate('/pro/dashboard', { replace: true });
+    }
+  }, [userType, navigate]);
 
   const completedProjects = projects.filter(p => p.status === 'completed');
 

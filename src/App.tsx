@@ -20,7 +20,7 @@ import FormulaPicker from "./pages/FormulaPicker";
 import AdminDashboard from "./pages/AdminDashboard";
 import ProjectDashboard from "./pages/ProjectDashboard";
 import PrescripteursDashboard from "./pages/PrescripteursDashboard";
-import ImprovedB2BDashboard from "@/pages/ImprovedB2BDashboard";
+import ProDashboard from "@/pages/pro/ProDashboard";
 import B2CDashboard from "./pages/B2CDashboard";
 import NotFound from "./pages/NotFound";
 import DiscoveryFlow from "./pages/DiscoveryFlow";
@@ -57,7 +57,9 @@ const AppContent = () => {
           <Route path="/admin/analytics" element={<AdminAnalytics />} />
           <Route path="/admin/diagnostic" element={<AdminDiagnostic />} />
           <Route path="/project-dashboard" element={<ProjectDashboard />} />
-          <Route path="/improved-b2b-dashboard" element={<ImprovedB2BDashboard />} />
+          {/* Routes B2B Pro - Module professionnel */}
+          <Route path="/pro/dashboard" element={<ProDashboard />} />
+          <Route path="/improved-b2b-dashboard" element={<ProDashboard />} /> {/* Redirection ancienne URL */}
           <Route path="/b2c-dashboard" element={<B2CDashboard />} />
           {/* Route désactivée - wizard obsolète */}
           {/* <Route path="/discovery" element={<DiscoveryFlow />} /> */}
