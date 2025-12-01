@@ -11,10 +11,10 @@
  * @route /pro/analysis/:id
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '@/context/AppContext';
-import { getAnalysis, generateTicket } from '@/services/api/pro/analysisService';
+import { getAnalysis, generateTicket, reanalyzeDevis } from '@/services/api/pro/analysisService';
 import { getCompanyProfile } from '@/services/api/pro/companyService';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -41,6 +41,7 @@ import {
   Building2,
   Lightbulb,
   Loader2,
+  Upload,
 } from 'lucide-react';
 import type { ProDevisAnalysis, CompanyProfile, Recommendation } from '@/types/pro';
 
@@ -55,6 +56,8 @@ export default function ProAnalysisDetail() {
   const [analysis, setAnalysis] = useState<ProDevisAnalysis | null>(null);
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [generatingTicket, setGeneratingTicket] = useState(false);
+  const [reanalyzing, setReanalyzing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (userType !== 'B2B') {
@@ -116,6 +119,63 @@ export default function ProAnalysisDetail() {
       });
     } finally {
       setGeneratingTicket(false);
+    }
+  };
+
+  const handleReanalyze = () => {
+    // Ouvrir le file picker
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !analysis) return;
+
+    // Vérifier le type de fichier
+    if (file.type !== 'application/pdf') {
+      toast({
+        variant: "destructive",
+        title: "Format invalide",
+        description: "Seuls les fichiers PDF sont acceptés",
+      });
+      return;
+    }
+
+    // Vérifier la taille (max 10MB)
+    const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+    if (file.size > MAX_SIZE) {
+      toast({
+        variant: "destructive",
+        title: "Fichier trop volumineux",
+        description: "La taille maximale est de 10 MB",
+      });
+      return;
+    }
+
+    try {
+      setReanalyzing(true);
+
+      const newAnalysis = await reanalyzeDevis(analysis.id, file);
+
+      toast({
+        title: "✅ Nouvelle analyse créée !",
+        description: `Version ${newAnalysis.version} en cours d'analyse...`,
+      });
+
+      // Rediriger vers la nouvelle analyse
+      navigate(`/pro/analysis/${newAnalysis.id}`);
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Erreur",
+        description: err.message || 'Impossible de créer la nouvelle analyse',
+      });
+    } finally {
+      setReanalyzing(false);
+      // Reset l'input file
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -660,13 +720,75 @@ export default function ProAnalysisDetail() {
               </Button>
             )}
 
-            <Button variant="outline" className="w-full" disabled>
-              <Sparkles className="w-4 h-4 mr-2" />
-              Ré-analyser avec un devis amélioré
-              <Badge variant="secondary" className="ml-2">Bientôt</Badge>
-            </Button>
+            {/* Hidden file input for re-analysis */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+
+            {analysis.status === 'COMPLETED' && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={handleReanalyze}
+                disabled={reanalyzing}
+              >
+                {reanalyzing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Création en cours...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4 mr-2" />
+                    Ré-analyser avec un devis amélioré
+                  </>
+                )}
+              </Button>
+            )}
+
+            {analysis.status !== 'COMPLETED' && (
+              <Button variant="outline" className="w-full" disabled>
+                <Sparkles className="w-4 h-4 mr-2" />
+                Ré-analyser avec un devis amélioré
+                <Badge variant="secondary" className="ml-2">Analyse requise</Badge>
+              </Button>
+            )}
           </CardContent>
         </Card>
+
+        {/* Version history */}
+        {(analysis.version > 1 || analysis.parent_analysis_id) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" />
+                Historique des versions
+              </CardTitle>
+              <CardDescription>
+                Ce devis a été re-analysé {analysis.version} fois
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Badge variant="outline">Version {analysis.version}</Badge>
+                {analysis.parent_analysis_id && (
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="text-blue-600 p-0 h-auto"
+                    onClick={() => navigate(`/pro/analysis/${analysis.parent_analysis_id}`)}
+                  >
+                    Voir la version précédente
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
