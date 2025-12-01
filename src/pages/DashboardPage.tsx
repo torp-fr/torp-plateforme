@@ -424,46 +424,6 @@ export default function DashboardPage() {
                   </Link>
                 </CardContent>
               </Card>
-
-              {/* Recommandations */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recommandations</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {userType === 'B2C' ? (
-                    <>
-                      <div className="p-3 bg-info/10 rounded-lg">
-                        <p className="text-sm font-medium text-info">Conseil du jour</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Toujours demander 3 devis pour comparer les offres
-                        </p>
-                      </div>
-                      <div className="p-3 bg-warning/10 rounded-lg">
-                        <p className="text-sm font-medium text-warning">Attention</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Méfiez-vous des acomptes supérieurs à 30%
-                        </p>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="p-3 bg-success/10 rounded-lg">
-                        <p className="text-sm font-medium text-success">Optimisation</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Vos devis obtiennent une note moyenne de A
-                        </p>
-                      </div>
-                      <div className="p-3 bg-info/10 rounded-lg">
-                        <p className="text-sm font-medium text-info">Suggestion</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Précisez davantage les délais pour améliorer vos scores
-                        </p>
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
             </div>
 
             {/* Analytics avancés pour B2B */}
