@@ -13,9 +13,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { devisService } from '@/services/api';
+import { toast } from 'sonner';
 
 export default function DashboardPage() {
-  const { user, userType, projects } = useApp();
+  const { user, userType, projects, setProjects } = useApp();
 
   const completedProjects = projects.filter(p => p.status === 'completed');
 
@@ -51,6 +53,22 @@ export default function DashboardPage() {
     if (score >= 80) return 'text-success';
     if (score >= 60) return 'text-warning';
     return 'text-destructive';
+  };
+
+  const handleDeleteDevis = async (projectId: string, projectName: string) => {
+    const confirmed = window.confirm(`Êtes-vous sûr de vouloir supprimer "${projectName}" ? Cette action est irréversible.`);
+
+    if (!confirmed) return;
+
+    try {
+      await devisService.deleteDevis(projectId);
+      // Update local state
+      setProjects(projects.filter(p => p.id !== projectId));
+      toast.success('Devis supprimé avec succès');
+    } catch (error) {
+      console.error('Error deleting devis:', error);
+      toast.error('Erreur lors de la suppression du devis');
+    }
   };
 
   return (
@@ -341,7 +359,7 @@ export default function DashboardPage() {
                         <div className="absolute top-4 right-4" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
@@ -356,7 +374,7 @@ export default function DashboardPage() {
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="text-destructive"
-                                onClick={() => console.log('Delete', project.id)}
+                                onClick={() => handleDeleteDevis(project.id, project.name)}
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Supprimer

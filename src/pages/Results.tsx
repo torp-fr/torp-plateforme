@@ -229,6 +229,23 @@ export default function Results() {
     return 'text-destructive';
   };
 
+  // Helper function to format strength/warning items (can be string or object)
+  const formatItem = (item: any): string => {
+    if (typeof item === 'string') return item;
+    if (typeof item === 'object' && item !== null) {
+      // Handle different object structures
+      if (item.aspect && item.detail) {
+        return `${item.aspect}: ${item.detail}${item.impact ? ` (${item.impact})` : ''}`;
+      }
+      if (item.gravite && item.resolution) {
+        return `${item.aspect || ''}: ${item.detail || ''} - ${item.resolution || ''}`;
+      }
+      // Fallback: convert object to string
+      return JSON.stringify(item);
+    }
+    return String(item);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -367,10 +384,10 @@ export default function Results() {
                     </CardHeader>
                     <CardContent>
                       <ul className="space-y-3">
-                        {analysisResult.strengths?.map((strength: string, index: number) => (
+                        {analysisResult.strengths?.map((strength: any, index: number) => (
                           <li key={index} className="flex items-start gap-3">
                             <div className="w-2 h-2 bg-success rounded-full mt-2 flex-shrink-0"></div>
-                            <span className="text-foreground">{strength}</span>
+                            <span className="text-foreground">{formatItem(strength)}</span>
                           </li>
                         ))}
                       </ul>
@@ -388,10 +405,10 @@ export default function Results() {
                       </CardHeader>
                       <CardContent>
                         <ul className="space-y-3">
-                          {analysisResult.warnings.map((warning: string, index: number) => (
+                          {analysisResult.warnings.map((warning: any, index: number) => (
                             <li key={index} className="flex items-start gap-3">
                               <div className="w-2 h-2 bg-warning rounded-full mt-2 flex-shrink-0"></div>
-                              <span className="text-foreground">{warning}</span>
+                              <span className="text-foreground">{formatItem(warning)}</span>
                             </li>
                           ))}
                         </ul>
