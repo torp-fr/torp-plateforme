@@ -347,9 +347,6 @@ export default function DashboardPage() {
                               </div>
                             </div>
                             <div className="flex items-center space-x-4">
-                              <Badge className={getStatusColor(project.status)}>
-                                {getStatusText(project.status)}
-                              </Badge>
                               <span className="text-lg font-semibold text-foreground">{project.amount}</span>
                             </div>
                           </div>
