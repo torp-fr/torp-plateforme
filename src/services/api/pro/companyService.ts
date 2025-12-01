@@ -178,7 +178,8 @@ export async function deleteCompanyProfile(id: string): Promise<void> {
  * 1. API SIRENE open data (gratuite, prioritaire)
  * 2. Base Adresse Nationale (normalisation adresse)
  * 3. Pappers (enrichissement optionnel : capital, dirigeants, CA)
- * 4. Mock (développement)
+ *
+ * AUCUN MOCK : Si données non disponibles, retourne "Non disponible"
  */
 export async function verifySiret(siret: string): Promise<VerifySiretResponse> {
   // Validation basique du format SIRET (14 chiffres)
@@ -195,8 +196,10 @@ export async function verifySiret(siret: string): Promise<VerifySiretResponse> {
   const sireneData = await getSireneData(siretClean);
 
   if (!sireneData) {
-    console.warn('⚠️ SIRENE non disponible, fallback vers mock');
-    return await verifySiretMock(siretClean);
+    return {
+      valid: false,
+      error: 'SIRET non trouvé dans la base SIRENE. Vérifiez le numéro saisi.',
+    };
   }
 
   console.log('✅ Données SIRENE récupérées:', sireneData.denomination);
@@ -227,14 +230,14 @@ export async function verifySiret(siret: string): Promise<VerifySiretResponse> {
   let finalData = {
     siren: sireneData.siren,
     siret: sireneData.siret,
-    raison_sociale: sireneData.denomination,
-    forme_juridique: sireneData.forme_juridique,
-    code_naf: sireneData.code_naf,
-    adresse: adresseComplete,
-    code_postal: codePostal,
-    ville: ville,
-    date_creation: sireneData.date_creation,
-    effectif: sireneData.tranche_effectif,
+    raison_sociale: sireneData.denomination || 'Non disponible',
+    forme_juridique: sireneData.forme_juridique || 'Non disponible',
+    code_naf: sireneData.code_naf || 'Non disponible',
+    adresse: adresseComplete || 'Non disponible',
+    code_postal: codePostal || 'Non disponible',
+    ville: ville || 'Non disponible',
+    date_creation: sireneData.date_creation || 'Non disponible',
+    effectif: sireneData.tranche_effectif || 'Non disponible',
   };
 
   // ÉTAPE 3 : Enrichissement optionnel avec Pappers (données financières, dirigeants)
@@ -255,31 +258,5 @@ export async function verifySiret(siret: string): Promise<VerifySiretResponse> {
   return {
     valid: true,
     data: finalData,
-  };
-}
-
-/**
- * Version mock pour développement sans API key
- */
-async function verifySiretMock(siretClean: string): Promise<VerifySiretResponse> {
-  // Simuler un délai réseau
-  await new Promise(resolve => setTimeout(resolve, 500));
-
-  const siren = siretClean.substring(0, 9);
-
-  return {
-    valid: true,
-    data: {
-      siren,
-      siret: siretClean,
-      raison_sociale: 'ENTREPRISE TEST MOCK',
-      forme_juridique: 'SARL',
-      code_naf: '4120A',
-      adresse: '123 Rue de Test',
-      code_postal: '75001',
-      ville: 'Paris',
-      date_creation: '2020-01-15',
-      effectif: '1-10',
-    },
   };
 }

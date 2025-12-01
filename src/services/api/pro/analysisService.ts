@@ -226,73 +226,24 @@ export async function createAnalysis(data: CreateAnalysisData): Promise<ProDevis
     throw dbError;
   }
 
-  // 3. Déclencher l'analyse IA en arrière-plan
-  // TODO: Implémenter l'appel à l'API d'analyse IA
-  // Pour l'instant, simuler une analyse mock
+  // 3. L'analyse IA doit être implémentée
+  // Marquer comme PENDING - l'analyse sera déclenchée par un worker/cron job
+  // ou implémentée ultérieurement
   setTimeout(async () => {
-    await runMockAnalysis(analysis.id);
-  }, 2000);
+    await supabase
+      .from('pro_devis_analyses')
+      .update({
+        status: 'FAILED',
+        metadata: {
+          error: 'Moteur d\'analyse IA non configuré',
+          message: 'Le système d\'analyse automatique n\'est pas encore implémenté. Veuillez configurer OpenAI ou Claude API.',
+          next_steps: 'Consultez GUIDE_IMPLEMENTATION_B2B.md pour intégrer le moteur d\'analyse',
+        },
+      })
+      .eq('id', analysis.id);
+  }, 1000);
 
   return analysis;
-}
-
-/**
- * Fonction mock pour simuler l'analyse IA
- * TODO: Remplacer par un vrai appel API (OpenAI, Claude, etc.)
- */
-async function runMockAnalysis(analysisId: string): Promise<void> {
-  console.warn('⚠️ Running MOCK analysis. Implement real AI analysis in production.');
-
-  // Simuler un délai d'analyse
-  await new Promise(resolve => setTimeout(resolve, 3000));
-
-  // Scores mock
-  const scores: ScoreDetails = {
-    transparence: Math.floor(Math.random() * 100) + 150, // 150-250
-    offre: Math.floor(Math.random() * 100) + 150,
-    robustesse: Math.floor(Math.random() * 100) + 150,
-    prix: Math.floor(Math.random() * 100) + 150,
-  };
-
-  const scoreTotal = scores.transparence + scores.offre + scores.robustesse + scores.prix;
-
-  // Calculer le grade via la fonction SQL
-  const { data: gradeData } = await supabase
-    .rpc('calculate_grade_from_score', { score: scoreTotal });
-
-  const grade = gradeData || 'B';
-
-  // Recommandations mock
-  const recommandations: Recommendation[] = [
-    {
-      type: 'transparence',
-      message: 'Ajoutez les références exactes des matériaux utilisés',
-      impact: '+30pts',
-      priority: 'high',
-      difficulty: 'easy',
-      example: 'Ex: Parquet chêne massif 14mm - Réf. OAK-PRE-14',
-    },
-    {
-      type: 'robustesse',
-      message: 'Mentionnez explicitement la garantie décennale',
-      impact: '+25pts',
-      priority: 'high',
-      difficulty: 'easy',
-    },
-  ];
-
-  // Mettre à jour l'analyse avec les résultats
-  await supabase
-    .from('pro_devis_analyses')
-    .update({
-      status: 'COMPLETED',
-      score_total: scoreTotal,
-      grade,
-      score_details: scores,
-      recommandations,
-      analyzed_at: new Date().toISOString(),
-    })
-    .eq('id', analysisId);
 }
 
 /**
