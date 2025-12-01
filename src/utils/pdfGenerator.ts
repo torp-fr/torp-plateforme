@@ -7,6 +7,24 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { Project } from '@/context/AppContext';
 
+// Helper function to format strength/warning items (can be string or object)
+const formatItem = (item: any): string => {
+  if (typeof item === 'string') return item;
+  if (typeof item === 'object' && item !== null) {
+    // Handle different object structures
+    if (item.aspect && item.detail) {
+      return `${item.aspect}: ${item.detail}${item.impact ? ` (Impact: ${item.impact})` : ''}`;
+    }
+    if (item.gravite && item.resolution) {
+      return `${item.aspect || ''}: ${item.detail || ''}\nGravite: ${item.gravite || ''}\nResolution: ${item.resolution || ''}`;
+    }
+    // Fallback: try to extract meaningful text
+    const text = item.detail || item.description || item.message || '';
+    return text || 'Information non disponible';
+  }
+  return String(item);
+};
+
 export const generateAnalysisReportPDF = (project: Project) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -95,7 +113,7 @@ export const generateAnalysisReportPDF = (project: Project) => {
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(34, 197, 94);
-  doc.text('✓ Points Forts', 20, yPosition);
+  doc.text('Points Forts', 20, yPosition);
   yPosition += 7;
 
   doc.setFontSize(10);
@@ -103,12 +121,13 @@ export const generateAnalysisReportPDF = (project: Project) => {
   doc.setTextColor(0, 0, 0);
 
   const strengths = analysisResult?.strengths || [];
-  strengths.forEach((strength: string, index: number) => {
+  strengths.forEach((strength: any, index: number) => {
     if (yPosition > pageHeight - 20) {
       doc.addPage();
       yPosition = 20;
     }
-    const lines = doc.splitTextToSize(`• ${strength}`, pageWidth - 50);
+    const formattedStrength = formatItem(strength);
+    const lines = doc.splitTextToSize(`- ${formattedStrength}`, pageWidth - 50);
     doc.text(lines, 25, yPosition);
     yPosition += lines.length * 5 + 2;
   });
@@ -126,19 +145,20 @@ export const generateAnalysisReportPDF = (project: Project) => {
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(234, 179, 8);
-    doc.text('⚠ Points à Vérifier', 20, yPosition);
+    doc.text('Points a Verifier', 20, yPosition);
     yPosition += 7;
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(0, 0, 0);
 
-    warnings.forEach((warning: string) => {
+    warnings.forEach((warning: any) => {
       if (yPosition > pageHeight - 20) {
         doc.addPage();
         yPosition = 20;
       }
-      const lines = doc.splitTextToSize(`• ${warning}`, pageWidth - 50);
+      const formattedWarning = formatItem(warning);
+      const lines = doc.splitTextToSize(`- ${formattedWarning}`, pageWidth - 50);
       doc.text(lines, 25, yPosition);
       yPosition += lines.length * 5 + 2;
     });
@@ -157,19 +177,20 @@ export const generateAnalysisReportPDF = (project: Project) => {
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(59, 130, 246);
-    doc.text('? Questions à Poser', 20, yPosition);
+    doc.text('Questions a Poser', 20, yPosition);
     yPosition += 7;
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(0, 0, 0);
 
-    questions.forEach((question: string) => {
+    questions.forEach((question: any) => {
       if (yPosition > pageHeight - 20) {
         doc.addPage();
         yPosition = 20;
       }
-      const lines = doc.splitTextToSize(`• ${question}`, pageWidth - 50);
+      const formattedQuestion = typeof question === 'string' ? question : formatItem(question);
+      const lines = doc.splitTextToSize(`- ${formattedQuestion}`, pageWidth - 50);
       doc.text(lines, 25, yPosition);
       yPosition += lines.length * 5 + 2;
     });
