@@ -47,8 +47,10 @@ export interface VerifySiretResponse {
     forme_juridique?: string;
     code_naf?: string;
     adresse?: string;
+    code_postal?: string;
+    ville?: string;
     date_creation?: string;
-    // ... autres données de l'API
+    effectif?: string;
   };
   error?: string;
 }
@@ -167,10 +169,10 @@ export async function deleteCompanyProfile(id: string): Promise<void> {
 }
 
 /**
- * Vérifier un numéro SIRET via API externe
+ * Vérifier un numéro SIRET via API Entreprise (API gouvernementale gratuite)
  *
- * Version mock pour développement.
- * En production, remplacer par un appel à l'API Pappers ou API Entreprise.
+ * Documentation: https://api.gouv.fr/les-api/api-entreprise
+ * Fallback vers mock si VITE_API_ENTREPRISE_TOKEN non configuré
  */
 export async function verifySiret(siret: string): Promise<VerifySiretResponse> {
   // Validation basique du format SIRET (14 chiffres)
@@ -182,36 +184,98 @@ export async function verifySiret(siret: string): Promise<VerifySiretResponse> {
     };
   }
 
-  // TODO: En production, utiliser une vraie API
-  // Exemple avec Pappers API:
-  /*
-  const response = await fetch(
-    `https://api.pappers.fr/v2/entreprise?siret=${siretClean}&api_token=${import.meta.env.VITE_PAPPERS_API_KEY}`
-  );
+  // Vérifier si l'API Entreprise est configurée
+  const API_KEY = import.meta.env.VITE_API_ENTREPRISE_TOKEN;
 
-  if (!response.ok) {
-    return { valid: false, error: 'Erreur lors de la vérification' };
+  if (!API_KEY) {
+    console.warn('⚠️ VITE_API_ENTREPRISE_TOKEN non configuré, utilisation du mock');
+    return await verifySiretMock(siretClean);
   }
 
-  const data = await response.json();
+  try {
+    const siren = siretClean.substring(0, 9);
 
-  return {
-    valid: !!data.siren,
-    data: {
-      siren: data.siren,
-      siret: data.siege.siret,
-      raison_sociale: data.nom_entreprise,
-      forme_juridique: data.forme_juridique,
-      code_naf: data.code_naf,
-      adresse: data.siege.adresse_ligne_1,
-      date_creation: data.date_creation,
-    },
-  };
-  */
+    // 1. Récupérer les informations de l'unité légale (entreprise)
+    const uniteResponse = await fetch(
+      `https://entreprise.api.gouv.fr/v3/insee/sirene/unites_legales/${siren}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`,
+          'Accept': 'application/json'
+        }
+      }
+    );
 
-  // Version MOCK pour développement
-  console.warn('⚠️ Utilisation de la version MOCK de verifySiret. Configurer l\'API Pappers pour la production.');
+    if (!uniteResponse.ok) {
+      if (uniteResponse.status === 404) {
+        return { valid: false, error: 'SIREN non trouvé dans la base SIRENE' };
+      }
+      if (uniteResponse.status === 401 || uniteResponse.status === 403) {
+        console.error('❌ API Entreprise: Token invalide ou non autorisé');
+        return { valid: false, error: 'Erreur d\'authentification API Entreprise' };
+      }
+      return { valid: false, error: 'API Entreprise temporairement indisponible' };
+    }
 
+    const uniteData = await uniteResponse.json();
+    const unite = uniteData.data?.unite_legale;
+
+    if (!unite) {
+      return { valid: false, error: 'Données entreprise non disponibles' };
+    }
+
+    // 2. Récupérer les informations de l'établissement (adresse, etc.)
+    const etablissementResponse = await fetch(
+      `https://entreprise.api.gouv.fr/v3/insee/sirene/etablissements/${siretClean}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`,
+          'Accept': 'application/json'
+        }
+      }
+    );
+
+    let etablissement = null;
+    if (etablissementResponse.ok) {
+      const etablissementData = await etablissementResponse.json();
+      etablissement = etablissementData.data?.etablissement;
+    }
+
+    // 3. Construire la réponse avec les données récupérées
+    return {
+      valid: true,
+      data: {
+        siren: unite.siren,
+        siret: siretClean,
+        raison_sociale: unite.personne_morale_attributs?.raison_sociale || unite.denomination || 'Non renseigné',
+        forme_juridique: unite.forme_juridique?.libelle,
+        code_naf: unite.activite_principale,
+        adresse: etablissement?.adresse
+          ? `${etablissement.adresse.numero_voie || ''} ${etablissement.adresse.type_voie || ''} ${etablissement.adresse.libelle_voie || ''}`.trim()
+          : undefined,
+        code_postal: etablissement?.adresse?.code_postal,
+        ville: etablissement?.adresse?.libelle_commune,
+        date_creation: unite.date_creation,
+        effectif: etablissement?.tranche_effectifs?.libelle,
+      },
+    };
+  } catch (error) {
+    console.error('❌ Erreur API Entreprise:', error);
+
+    // En cas d'erreur réseau, fallback vers mock
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.warn('⚠️ Erreur réseau, utilisation du mock');
+      return await verifySiretMock(siretClean);
+    }
+
+    return { valid: false, error: 'Erreur lors de la vérification SIRET' };
+  }
+}
+
+/**
+ * Version mock pour développement sans API key
+ */
+async function verifySiretMock(siretClean: string): Promise<VerifySiretResponse> {
   // Simuler un délai réseau
   await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -225,8 +289,11 @@ export async function verifySiret(siret: string): Promise<VerifySiretResponse> {
       raison_sociale: 'ENTREPRISE TEST MOCK',
       forme_juridique: 'SARL',
       code_naf: '4120A',
-      adresse: '123 Rue de Test, 75001 Paris',
+      adresse: '123 Rue de Test',
+      code_postal: '75001',
+      ville: 'Paris',
       date_creation: '2020-01-15',
+      effectif: '1-10',
     },
   };
 }

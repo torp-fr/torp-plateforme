@@ -14,8 +14,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '@/context/AppContext';
-import { getAnalysis } from '@/services/api/pro/analysisService';
+import { getAnalysis, generateTicket } from '@/services/api/pro/analysisService';
 import { getCompanyProfile } from '@/services/api/pro/companyService';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +40,7 @@ import {
   Euro,
   Building2,
   Lightbulb,
+  Loader2,
 } from 'lucide-react';
 import type { ProDevisAnalysis, CompanyProfile, Recommendation } from '@/types/pro';
 
@@ -46,11 +48,13 @@ export default function ProAnalysisDetail() {
   const navigate = useNavigate();
   const { userType } = useApp();
   const { id } = useParams<{ id: string }>();
+  const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<ProDevisAnalysis | null>(null);
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
+  const [generatingTicket, setGeneratingTicket] = useState(false);
 
   useEffect(() => {
     if (userType !== 'B2B') {
@@ -86,6 +90,32 @@ export default function ProAnalysisDetail() {
       setError(err.message || 'Erreur lors du chargement de l\'analyse');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGenerateTicket = async () => {
+    if (!analysis) return;
+
+    try {
+      setGeneratingTicket(true);
+
+      const ticket = await generateTicket(analysis.id);
+
+      // Recharger l'analyse pour afficher le ticket
+      await loadAnalysis();
+
+      toast({
+        title: "✅ Ticket généré avec succès !",
+        description: `Code : ${ticket.ticket_code}`,
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Erreur",
+        description: err.message || 'Impossible de générer le ticket',
+      });
+    } finally {
+      setGeneratingTicket(false);
     }
   };
 
@@ -588,11 +618,47 @@ export default function ProAnalysisDetail() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button className="w-full" size="lg" disabled>
-              <QrCode className="w-5 h-5 mr-2" />
-              Générer un ticket TORP
-              <Badge variant="secondary" className="ml-2">Bientôt</Badge>
-            </Button>
+            {analysis.status === 'COMPLETED' && !analysis.ticket_genere && (
+              <Button
+                className="w-full"
+                size="lg"
+                onClick={handleGenerateTicket}
+                disabled={generatingTicket}
+              >
+                {generatingTicket ? (
+                  <>
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    Génération en cours...
+                  </>
+                ) : (
+                  <>
+                    <QrCode className="w-5 h-5 mr-2" />
+                    Générer un ticket TORP
+                  </>
+                )}
+              </Button>
+            )}
+
+            {analysis.status === 'COMPLETED' && analysis.ticket_genere && (
+              <Button
+                className="w-full"
+                size="lg"
+                variant="outline"
+                onClick={() => window.open(`/t/${analysis.ticket_code}`, '_blank')}
+              >
+                <CheckCircle2 className="w-5 h-5 mr-2 text-green-600" />
+                Voir le ticket TORP
+                <Badge variant="secondary" className="ml-2">{analysis.ticket_code}</Badge>
+              </Button>
+            )}
+
+            {analysis.status !== 'COMPLETED' && (
+              <Button className="w-full" size="lg" disabled>
+                <QrCode className="w-5 h-5 mr-2" />
+                Générer un ticket TORP
+                <Badge variant="secondary" className="ml-2">Analyse requise</Badge>
+              </Button>
+            )}
 
             <Button variant="outline" className="w-full" disabled>
               <Sparkles className="w-4 h-4 mr-2" />

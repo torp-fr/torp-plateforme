@@ -27,6 +27,7 @@ import ProAnalysisDetail from "@/pages/pro/ProAnalysisDetail";
 import ProDocuments from "@/pages/pro/ProDocuments";
 import ProAnalysesList from "@/pages/pro/ProAnalysesList";
 import ProSettings from "@/pages/pro/ProSettings";
+import TicketPublicView from "./pages/TicketPublicView";
 import B2CDashboard from "./pages/B2CDashboard";
 import NotFound from "./pages/NotFound";
 import DiscoveryFlow from "./pages/DiscoveryFlow";
@@ -72,6 +73,8 @@ const AppContent = () => {
           <Route path="/pro/documents" element={<ProDocuments />} />
           <Route path="/pro/settings" element={<ProSettings />} />
           <Route path="/improved-b2b-dashboard" element={<ProDashboard />} /> {/* Redirection ancienne URL */}
+          {/* Route publique pour les tickets TORP (accessible sans auth) */}
+          <Route path="/t/:code" element={<TicketPublicView />} />
           <Route path="/b2c-dashboard" element={<B2CDashboard />} />
           {/* Route désactivée - wizard obsolète */}
           {/* <Route path="/discovery" element={<DiscoveryFlow />} /> */}
