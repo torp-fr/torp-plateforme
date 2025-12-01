@@ -22,6 +22,7 @@ import ProjectDashboard from "./pages/ProjectDashboard";
 import PrescripteursDashboard from "./pages/PrescripteursDashboard";
 import ProDashboard from "@/pages/pro/ProDashboard";
 import ProOnboarding from "@/pages/pro/ProOnboarding";
+import NewProAnalysis from "@/pages/pro/NewProAnalysis";
 import B2CDashboard from "./pages/B2CDashboard";
 import NotFound from "./pages/NotFound";
 import DiscoveryFlow from "./pages/DiscoveryFlow";
@@ -61,6 +62,7 @@ const AppContent = () => {
           {/* Routes B2B Pro - Module professionnel */}
           <Route path="/pro/dashboard" element={<ProDashboard />} />
           <Route path="/pro/onboarding" element={<ProOnboarding />} />
+          <Route path="/pro/new-analysis" element={<NewProAnalysis />} />
           <Route path="/improved-b2b-dashboard" element={<ProDashboard />} /> {/* Redirection ancienne URL */}
           <Route path="/b2c-dashboard" element={<B2CDashboard />} />
           {/* Route désactivée - wizard obsolète */}
