@@ -216,10 +216,10 @@ export default function Projects() {
                       <div className="flex gap-2">
                         {project.status === 'completed' && (
                           <>
-                            <Link to="/project-dashboard">
+                            <Link to={`/results?devisId=${project.id}`}>
                               <Button variant="outline" size="sm">
                                 <Eye className="w-4 h-4 mr-1" />
-                                Gérer
+                                Voir résultats
                               </Button>
                             </Link>
                             <Button variant="outline" size="sm">

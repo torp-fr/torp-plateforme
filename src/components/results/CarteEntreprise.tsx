@@ -1,7 +1,9 @@
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Building2, Shield, Award, AlertCircle, CheckCircle, ExternalLink, Phone, MapPin, Calendar } from 'lucide-react';
+import { Building2, Shield, Award, AlertCircle, CheckCircle, ExternalLink, Phone, MapPin, Calendar, Users, TrendingUp, Briefcase } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { pappersService, type EnrichedEntrepriseData } from '@/services/api/pappers.service';
 
 interface EntrepriseInfo {
   nom?: string;
@@ -36,6 +38,46 @@ interface CarteEntrepriseProps {
 }
 
 export function CarteEntreprise({ entreprise, scoreEntreprise }: CarteEntrepriseProps) {
+  const [pappersData, setPappersData] = useState<EnrichedEntrepriseData | null>(null);
+  const [loadingPappers, setLoadingPappers] = useState(false);
+
+  // Charger les données Pappers si SIRET disponible
+  useEffect(() => {
+    const loadPappersData = async () => {
+      console.log('[CarteEntreprise] SIRET disponible:', entreprise?.siret);
+      console.log('[CarteEntreprise] Pappers configuré:', pappersService.isConfigured());
+
+      if (!entreprise?.siret) {
+        console.warn('[CarteEntreprise] Aucun SIRET disponible pour enrichissement Pappers');
+        return;
+      }
+
+      if (!pappersService.isConfigured()) {
+        console.warn('[CarteEntreprise] Service Pappers non configuré');
+        return;
+      }
+
+      setLoadingPappers(true);
+      console.log('[CarteEntreprise] Chargement données Pappers pour:', entreprise.siret);
+
+      try {
+        const data = await pappersService.getEntrepriseBySiret(entreprise.siret);
+        if (data) {
+          console.log('[CarteEntreprise] Données Pappers chargées:', data.nom);
+          setPappersData(data);
+        } else {
+          console.warn('[CarteEntreprise] Aucune donnée Pappers retournée');
+        }
+      } catch (error) {
+        console.error('[CarteEntreprise] Error loading Pappers data:', error);
+      } finally {
+        setLoadingPappers(false);
+      }
+    };
+
+    loadPappersData();
+  }, [entreprise?.siret]);
+
   if (!entreprise && !scoreEntreprise) {
     return null;
   }
@@ -47,11 +89,21 @@ export function CarteEntreprise({ entreprise, scoreEntreprise }: CarteEntreprise
     return 'text-destructive';
   };
 
-  const getScoreBadgeVariant = (score: number | undefined): "default" | "secondary" | "destructive" | "outline" => {
-    if (!score) return 'secondary';
-    if (score >= 80) return 'default';
-    if (score >= 60) return 'outline';
-    return 'destructive';
+  const getScoreBadgeClass = (score: number | undefined): string => {
+    if (!score) return 'bg-muted text-muted-foreground';
+    if (score >= 80) return 'bg-success/10 text-success border-success/30';
+    if (score >= 60) return 'bg-warning/10 text-warning border-warning/30';
+    return 'bg-destructive/10 text-destructive border-destructive/30';
+  };
+
+  const formatCurrency = (value: number | null | undefined) => {
+    if (!value) return 'N/A';
+    return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(value);
+  };
+
+  const formatDate = (date: string | null | undefined) => {
+    if (!date) return 'N/A';
+    return new Date(date).toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
   return (
@@ -133,7 +185,7 @@ export function CarteEntreprise({ entreprise, scoreEntreprise }: CarteEntreprise
               {scoreEntreprise.fiabilite !== undefined && (
                 <div className="flex justify-between items-center p-2 bg-muted/30 rounded-lg">
                   <span className="text-sm text-muted-foreground">Fiabilité</span>
-                  <Badge variant={getScoreBadgeVariant(scoreEntreprise.fiabilite)} className={getScoreColor(scoreEntreprise.fiabilite)}>
+                  <Badge variant="outline" className={getScoreBadgeClass(scoreEntreprise.fiabilite)}>
                     {scoreEntreprise.fiabilite}/100
                   </Badge>
                 </div>
@@ -142,7 +194,7 @@ export function CarteEntreprise({ entreprise, scoreEntreprise }: CarteEntreprise
               {scoreEntreprise.santeFinnaciere !== undefined && (
                 <div className="flex justify-between items-center p-2 bg-muted/30 rounded-lg">
                   <span className="text-sm text-muted-foreground">Santé financière</span>
-                  <Badge variant={getScoreBadgeVariant(scoreEntreprise.santeFinnaciere)} className={getScoreColor(scoreEntreprise.santeFinnaciere)}>
+                  <Badge variant="outline" className={getScoreBadgeClass(scoreEntreprise.santeFinnaciere)}>
                     {scoreEntreprise.santeFinnaciere}/100
                   </Badge>
                 </div>
@@ -151,7 +203,7 @@ export function CarteEntreprise({ entreprise, scoreEntreprise }: CarteEntreprise
               {scoreEntreprise.reputation !== undefined && (
                 <div className="flex justify-between items-center p-2 bg-muted/30 rounded-lg">
                   <span className="text-sm text-muted-foreground">Réputation</span>
-                  <Badge variant={getScoreBadgeVariant(scoreEntreprise.reputation)} className={getScoreColor(scoreEntreprise.reputation)}>
+                  <Badge variant="outline" className={getScoreBadgeClass(scoreEntreprise.reputation)}>
                     {scoreEntreprise.reputation}/100
                   </Badge>
                 </div>
@@ -259,6 +311,158 @@ export function CarteEntreprise({ entreprise, scoreEntreprise }: CarteEntreprise
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {/* Données enrichies Pappers */}
+        {pappersData && (
+          <>
+            {/* Informations légales détaillées */}
+            <div className="space-y-3 pt-4 border-t">
+              <h4 className="font-semibold text-foreground flex items-center gap-2">
+                <Briefcase className="w-4 h-4" />
+                Informations légales
+              </h4>
+
+              <div className="grid md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Forme juridique</p>
+                  <p className="text-sm font-medium">{pappersData.formeJuridique}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Capital social</p>
+                  <p className="text-sm font-medium">{formatCurrency(pappersData.capital)}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Date de création</p>
+                  <p className="text-sm font-medium">{formatDate(pappersData.dateCreation)}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Immatriculée le</p>
+                  <p className="text-sm font-medium">{formatDate(pappersData.dateImmatriculation)}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Secteur d'activité</p>
+                  <p className="text-sm font-medium">{pappersData.libelleNAF}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Statut</p>
+                  <Badge variant={pappersData.etatAdministratif === 'Actif' ? 'default' : 'destructive'} className="text-xs">
+                    {pappersData.etatAdministratif}
+                  </Badge>
+                </div>
+              </div>
+
+              {pappersData.adresse.ligne1 && (
+                <div className="space-y-1 pt-2">
+                  <p className="text-xs text-muted-foreground">Adresse du siège social</p>
+                  <p className="text-sm font-medium">
+                    {pappersData.adresse.ligne1}<br />
+                    {pappersData.adresse.codePostal} {pappersData.adresse.ville}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Indicateurs financiers */}
+            {(pappersData.chiffreAffaires || pappersData.resultat || pappersData.effectif) && (
+              <div className="space-y-3 pt-4 border-t">
+                <h4 className="font-semibold text-foreground flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  Indicateurs financiers
+                </h4>
+
+                <div className="grid md:grid-cols-3 gap-3">
+                  {pappersData.chiffreAffaires !== null && (
+                    <div className="p-3 bg-muted/30 rounded-lg">
+                      <p className="text-xs text-muted-foreground mb-1">Chiffre d'affaires</p>
+                      <p className="text-lg font-bold text-foreground">{formatCurrency(pappersData.chiffreAffaires)}</p>
+                    </div>
+                  )}
+
+                  {pappersData.resultat !== null && (
+                    <div className="p-3 bg-muted/30 rounded-lg">
+                      <p className="text-xs text-muted-foreground mb-1">Résultat</p>
+                      <p className={`text-lg font-bold ${pappersData.resultat >= 0 ? 'text-success' : 'text-destructive'}`}>
+                        {formatCurrency(pappersData.resultat)}
+                      </p>
+                    </div>
+                  )}
+
+                  {pappersData.effectif !== null && (
+                    <div className="p-3 bg-muted/30 rounded-lg">
+                      <p className="text-xs text-muted-foreground mb-1">Effectif</p>
+                      <p className="text-lg font-bold text-foreground flex items-center gap-1">
+                        <Users className="w-4 h-4" />
+                        {pappersData.effectif}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Dirigeants */}
+            {pappersData.dirigeants && pappersData.dirigeants.length > 0 && (
+              <div className="space-y-3 pt-4 border-t">
+                <h4 className="font-semibold text-foreground flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  Direction
+                </h4>
+
+                <div className="space-y-2">
+                  {pappersData.dirigeants.slice(0, 3).map((dirigeant, index) => (
+                    <div key={index} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
+                      <span className="text-sm font-medium">
+                        {dirigeant.prenom} {dirigeant.nom}
+                      </span>
+                      <Badge variant="secondary" className="text-xs">
+                        {dirigeant.fonction}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Certifications RGE */}
+            {pappersData.certificationsRGE && pappersData.certificationsRGE.length > 0 && (
+              <div className="space-y-3 pt-4 border-t">
+                <h4 className="font-semibold text-foreground flex items-center gap-2">
+                  <Award className="w-4 h-4 text-success" />
+                  Certifications RGE
+                </h4>
+
+                <div className="space-y-2">
+                  {pappersData.certificationsRGE.map((cert, index) => (
+                    <div key={index} className="p-3 bg-success/10 border border-success/30 rounded-lg">
+                      <div className="flex items-start justify-between mb-1">
+                        <p className="text-sm font-semibold text-success">{cert.nom}</p>
+                        <Badge variant="outline" className="bg-success/20 text-success border-success/30 text-xs">
+                          {cert.domaine}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        N° {cert.numero} • {cert.validite}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {loadingPappers && (
+          <div className="pt-4 border-t">
+            <p className="text-sm text-muted-foreground text-center">
+              Chargement des informations détaillées...
+            </p>
           </div>
         )}
       </CardContent>

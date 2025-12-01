@@ -193,6 +193,12 @@ export class TorpAnalyzerService {
       temperature: 0.2, // Low temperature for accurate extraction
     });
 
+    // Log critical extraction data for debugging
+    console.log('[TORP Extraction] Entreprise:', data.entreprise.nom);
+    console.log('[TORP Extraction] SIRET extrait:', data.entreprise.siret || 'NON TROUVÉ');
+    console.log('[TORP Extraction] Certifications:', data.entreprise.certifications);
+    console.log('[TORP Extraction] Montant total:', data.devis.montantTotal);
+
     return data;
   }
 

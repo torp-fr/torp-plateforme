@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { authService } from '@/services/api/supabase/auth.service';
+import { devisService } from '@/services/api/supabase/devis.service';
 
 // User types - Simplifié: Particulier (B2C) et Professionnel (B2B)
 export type UserType = 'B2C' | 'B2B' | 'admin';
@@ -244,6 +245,61 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     };
   }, []);
+
+  // Load user's analyzed devis when user changes
+  useEffect(() => {
+    const loadUserDevis = async () => {
+      if (!user?.id) {
+        setProjects([]);
+        return;
+      }
+
+      try {
+        console.log('[AppContext] Loading analyzed devis for user:', user.id);
+        const analyzedDevis = await devisService.getUserAnalyzedDevis(user.id, 50);
+
+        // Transform devis to Project format for compatibility
+        const devisProjects: Project[] = analyzedDevis.map(devis => ({
+          id: devis.id,
+          name: (devis as any).projectName || devis.fileName?.replace('.pdf', '') || `Devis ${(devis as any).devisNumber || 'sans numéro'}`,
+          type: 'Analyse devis',
+          status: devis.status === 'analyzed' ? 'completed' : devis.status as any,
+          score: devis.score_total || 0,
+          grade: devis.grade || 'N/A',
+          amount: `${devis.amount || 0}€`,
+          createdAt: devis.created_at || new Date().toISOString(),
+          analysisResult: {
+            detailedScores: {
+              entreprise: (devis.score_entreprise as any)?.scoreTotal || 0,
+              prix: (devis.score_prix as any)?.scoreTotal || 0,
+              completude: (devis.score_completude as any)?.scoreTotal || 0,
+              conformite: (devis.score_conformite as any)?.scoreTotal || 0,
+              delais: (devis.score_delais as any)?.scoreTotal || 0,
+            },
+            rawData: {
+              scoreEntreprise: devis.score_entreprise,
+              scorePrix: devis.score_prix,
+              scoreCompletude: devis.score_completude,
+              scoreConformite: devis.score_conformite,
+              scoreDelais: devis.score_delais,
+              montantTotal: devis.recommendations?.budgetRealEstime || devis.amount || 0,
+              margeNegociation: devis.recommendations?.margeNegociation,
+              surcoutsDetectes: devis.detected_overcosts || 0,
+              budgetRealEstime: devis.recommendations?.budgetRealEstime || devis.amount || 0,
+            },
+          },
+        }));
+
+        console.log(`[AppContext] Loaded ${devisProjects.length} analyzed devis`);
+        setProjects(devisProjects);
+      } catch (error) {
+        console.error('[AppContext] Error loading user devis:', error);
+        setProjects([]);
+      }
+    };
+
+    loadUserDevis();
+  }, [user?.id]);
 
   const addProject = (project: Project) => {
     setProjects(prev => [project, ...prev]);

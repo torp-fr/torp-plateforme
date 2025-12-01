@@ -55,6 +55,13 @@ export function AnalysePrixDetaillee({
     return 'text-destructive';
   };
 
+  const getScoreBadgeClass = (score: number | undefined): string => {
+    if (!score) return 'bg-muted text-muted-foreground';
+    if (score >= 80) return 'bg-success/10 text-success border-success/30';
+    if (score >= 60) return 'bg-warning/10 text-warning border-warning/30';
+    return 'bg-destructive/10 text-destructive border-destructive/30';
+  };
+
   const getPositionMarche = () => {
     if (!comparaisonMarche) return null;
     const { low, current, high } = comparaisonMarche;
@@ -160,7 +167,7 @@ export function AnalysePrixDetaillee({
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Cohérence avec le marché</span>
-                  <Badge variant="secondary" className={getScoreColor(scorePrix.vsMarche)}>
+                  <Badge variant="outline" className={getScoreBadgeClass(scorePrix.vsMarche)}>
                     {scorePrix.vsMarche}%
                   </Badge>
                 </div>
@@ -177,7 +184,7 @@ export function AnalysePrixDetaillee({
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Transparence tarifaire</span>
-                  <Badge variant="secondary" className={getScoreColor(scorePrix.transparence)}>
+                  <Badge variant="outline" className={getScoreBadgeClass(scorePrix.transparence)}>
                     {scorePrix.transparence}%
                   </Badge>
                 </div>
@@ -194,7 +201,7 @@ export function AnalysePrixDetaillee({
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Cohérence interne</span>
-                  <Badge variant="secondary" className={getScoreColor(scorePrix.coherence)}>
+                  <Badge variant="outline" className={getScoreBadgeClass(scorePrix.coherence)}>
                     {scorePrix.coherence}%
                   </Badge>
                 </div>

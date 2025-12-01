@@ -154,7 +154,7 @@ export const env: EnvConfig = {
     anthropic: getEnv('VITE_ANTHROPIC_API_KEY') ? {
       apiKey: getEnv('VITE_ANTHROPIC_API_KEY'),
     } : undefined,
-    primaryProvider: (getEnv('VITE_AI_PRIMARY_PROVIDER', 'claude') as 'openai' | 'claude'),
+    primaryProvider: (getEnv('VITE_AI_PRIMARY_PROVIDER', 'openai') as 'openai' | 'claude'),
     fallbackEnabled: getBoolEnv('VITE_AI_FALLBACK_ENABLED', true),
   },
 
