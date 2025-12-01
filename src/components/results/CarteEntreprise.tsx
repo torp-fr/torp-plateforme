@@ -47,11 +47,11 @@ export function CarteEntreprise({ entreprise, scoreEntreprise }: CarteEntreprise
     return 'text-destructive';
   };
 
-  const getScoreBadgeVariant = (score: number | undefined): "default" | "secondary" | "destructive" | "outline" => {
-    if (!score) return 'secondary';
-    if (score >= 80) return 'default';
-    if (score >= 60) return 'outline';
-    return 'destructive';
+  const getScoreBadgeClass = (score: number | undefined): string => {
+    if (!score) return 'bg-muted text-muted-foreground';
+    if (score >= 80) return 'bg-success/10 text-success border-success/30';
+    if (score >= 60) return 'bg-warning/10 text-warning border-warning/30';
+    return 'bg-destructive/10 text-destructive border-destructive/30';
   };
 
   return (
@@ -133,7 +133,7 @@ export function CarteEntreprise({ entreprise, scoreEntreprise }: CarteEntreprise
               {scoreEntreprise.fiabilite !== undefined && (
                 <div className="flex justify-between items-center p-2 bg-muted/30 rounded-lg">
                   <span className="text-sm text-muted-foreground">Fiabilité</span>
-                  <Badge variant={getScoreBadgeVariant(scoreEntreprise.fiabilite)} className={getScoreColor(scoreEntreprise.fiabilite)}>
+                  <Badge variant="outline" className={getScoreBadgeClass(scoreEntreprise.fiabilite)}>
                     {scoreEntreprise.fiabilite}/100
                   </Badge>
                 </div>
@@ -142,7 +142,7 @@ export function CarteEntreprise({ entreprise, scoreEntreprise }: CarteEntreprise
               {scoreEntreprise.santeFinnaciere !== undefined && (
                 <div className="flex justify-between items-center p-2 bg-muted/30 rounded-lg">
                   <span className="text-sm text-muted-foreground">Santé financière</span>
-                  <Badge variant={getScoreBadgeVariant(scoreEntreprise.santeFinnaciere)} className={getScoreColor(scoreEntreprise.santeFinnaciere)}>
+                  <Badge variant="outline" className={getScoreBadgeClass(scoreEntreprise.santeFinnaciere)}>
                     {scoreEntreprise.santeFinnaciere}/100
                   </Badge>
                 </div>
@@ -151,7 +151,7 @@ export function CarteEntreprise({ entreprise, scoreEntreprise }: CarteEntreprise
               {scoreEntreprise.reputation !== undefined && (
                 <div className="flex justify-between items-center p-2 bg-muted/30 rounded-lg">
                   <span className="text-sm text-muted-foreground">Réputation</span>
-                  <Badge variant={getScoreBadgeVariant(scoreEntreprise.reputation)} className={getScoreColor(scoreEntreprise.reputation)}>
+                  <Badge variant="outline" className={getScoreBadgeClass(scoreEntreprise.reputation)}>
                     {scoreEntreprise.reputation}/100
                   </Badge>
                 </div>
