@@ -18,10 +18,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Building2, CheckCircle2, Loader2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Building2, CheckCircle2, Loader2, AlertTriangle, ArrowRight, FileText, Upload } from 'lucide-react';
+import { DocumentUploader } from '@/components/pro/onboarding/DocumentUploader';
 import type { VerifySiretData } from '@/types/pro';
 
-type OnboardingStep = 'siret' | 'form' | 'success';
+type OnboardingStep = 'siret' | 'form' | 'documents' | 'success';
 
 export default function ProOnboarding() {
   const navigate = useNavigate();
@@ -33,6 +34,7 @@ export default function ProOnboarding() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verifiedData, setVerifiedData] = useState<VerifySiretData | null>(null);
+  const [createdCompanyId, setCreatedCompanyId] = useState<string | null>(null);
 
   // Données du formulaire
   const [formData, setFormData] = useState({
@@ -98,7 +100,7 @@ export default function ProOnboarding() {
     }
 
     try {
-      await createCompanyProfile({
+      const company = await createCompanyProfile({
         siret: verifiedData.siret,
         siren: verifiedData.siren,
         raison_sociale: verifiedData.raison_sociale,
@@ -115,12 +117,8 @@ export default function ProOnboarding() {
         siret_verifie_le: new Date().toISOString(),
       });
 
-      setStep('success');
-
-      // Rediriger vers le dashboard après 2 secondes
-      setTimeout(() => {
-        navigate('/pro/dashboard');
-      }, 2000);
+      setCreatedCompanyId(company.id);
+      setStep('documents');
     } catch (err: any) {
       setError(err.message || 'Erreur lors de la création du profil');
     } finally {
@@ -413,7 +411,76 @@ export default function ProOnboarding() {
     );
   }
 
-  // Étape 3 : Succès
+  // Étape 3 : Upload documents (optionnel)
+  if (step === 'documents' && createdCompanyId) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2 mb-2">
+                <Badge variant="default" className="bg-green-600">
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  Profil créé
+                </Badge>
+              </div>
+              <CardTitle className="text-2xl flex items-center gap-2">
+                <FileText className="w-6 h-6" />
+                Documents entreprise
+              </CardTitle>
+              <CardDescription>
+                Ajoutez vos documents pour compléter votre profil (optionnel - vous pourrez le faire plus tard)
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-6">
+              <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                  Pourquoi ajouter des documents ?
+                </h4>
+                <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                  <li>• Complétez votre profil et gagnez en crédibilité</li>
+                  <li>• Les documents obligatoires (KBIS, Décennale) sont requis pour générer des tickets TORP</li>
+                  <li>• Vous pourrez ajouter d'autres documents depuis votre dashboard</li>
+                </ul>
+              </div>
+
+              <DocumentUploader
+                companyId={createdCompanyId}
+                onlyRequired={true}
+              />
+            </CardContent>
+
+            <CardFooter className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setStep('success');
+                  setTimeout(() => navigate('/pro/dashboard'), 2000);
+                }}
+                className="flex-1"
+              >
+                Passer cette étape
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+              <Button
+                onClick={() => {
+                  setStep('success');
+                  setTimeout(() => navigate('/pro/dashboard'), 2000);
+                }}
+                className="flex-1"
+              >
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                Terminer l'inscription
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // Étape 4 : Succès
   if (step === 'success') {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -423,9 +490,9 @@ export default function ProOnboarding() {
               <div className="mx-auto w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4">
                 <CheckCircle2 className="w-10 h-10 text-green-600" />
               </div>
-              <CardTitle className="text-2xl">Profil créé avec succès !</CardTitle>
+              <CardTitle className="text-2xl">Bienvenue sur TORP Pro !</CardTitle>
               <CardDescription className="text-base mt-2">
-                Bienvenue sur TORP Pro. Redirection vers votre dashboard...
+                Votre profil a été créé avec succès. Redirection vers votre dashboard...
               </CardDescription>
             </CardHeader>
             <CardContent>

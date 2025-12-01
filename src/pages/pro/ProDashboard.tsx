@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ProfileCompletenessIndicator } from '@/components/pro/ProfileCompletenessIndicator';
 import {
   Building2,
   FileText,
@@ -326,15 +327,23 @@ export default function ProDashboard() {
         </Card>
       </div>
 
-      {/* Actions rapides */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Actions rapides</CardTitle>
-          <CardDescription>Accès rapide aux fonctionnalités principales</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Button
+      {/* Indicateur de complétude du profil */}
+      {profile && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1">
+            <ProfileCompletenessIndicator companyId={profile.id} />
+          </div>
+
+          {/* Actions rapides */}
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Actions rapides</CardTitle>
+                <CardDescription>Accès rapide aux fonctionnalités principales</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <Button
               variant="outline"
               className="h-auto py-4 flex flex-col items-center gap-2"
               onClick={() => navigate('/pro/new-analysis')}
@@ -372,6 +381,9 @@ export default function ProDashboard() {
           </div>
         </CardContent>
       </Card>
+          </div>
+        </div>
+      )}
 
       {/* Liste des analyses récentes */}
       <Card>
