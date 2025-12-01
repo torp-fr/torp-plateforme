@@ -3,10 +3,15 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
-import { CheckCircle, AlertTriangle, Lightbulb, TrendingUp, Download, Eye, ArrowLeft, MessageSquare } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Lightbulb, Download, Eye, ArrowLeft, MessageSquare, Building2, DollarSign, FileCheck, Shield, Clock } from 'lucide-react';
 import type { Project } from '@/context/AppContext';
+import { CarteEntreprise } from '@/components/results/CarteEntreprise';
+import { AnalysePrixDetaillee } from '@/components/results/AnalysePrixDetaillee';
+import { AnalyseCompletetudeConformite } from '@/components/results/AnalyseCompletetudeConformite';
+import { ConseilsPersonnalises } from '@/components/results/ConseilsPersonnalises';
 
 export default function Results() {
   const { currentProject, setCurrentProject } = useApp();
@@ -134,6 +139,18 @@ export default function Results() {
               completude: scoreCompletude,
               conformite: scoreConformite,
               delais: scoreDelais,
+            },
+            // Store raw data for new components
+            rawData: {
+              scoreEntreprise: scoreEntrepriseData,
+              scorePrix: scorePrixData,
+              scoreCompletude: scoreCompletudeData,
+              scoreConformite: scoreConformiteData,
+              scoreDelais: scoreDelaisData,
+              montantTotal: data.montant_total,
+              margeNegociation: data.marge_negociation,
+              surcoutsDetectes: data.surcouts_detectes,
+              budgetRealEstime: data.budget_reel_estime,
             }
           }
         };
@@ -197,6 +214,8 @@ export default function Results() {
     delais: 0
   };
 
+  const rawData = analysisResult?.rawData || {};
+
   // Convert score from /1000 to percentage for color coding
   const scorePercentage = (score / 1000) * 100;
 
@@ -206,18 +225,12 @@ export default function Results() {
     return 'text-destructive';
   };
 
-  const getGradientColor = (score: number) => {
-    if (score >= 80) return 'from-success/20 to-success/5';
-    if (score >= 60) return 'from-warning/20 to-warning/5';
-    return 'from-destructive/20 to-destructive/5';
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
+
       <div className="container mx-auto px-4 py-12">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           <div className="flex items-center gap-4 mb-8">
             <Button variant="outline" onClick={() => navigate('/dashboard')}>
               <ArrowLeft className="w-4 h-4 mr-2" />
@@ -227,10 +240,10 @@ export default function Results() {
 
           <div className="text-center mb-12">
             <h1 className="text-4xl font-bold text-foreground mb-4">
-              Analyse terminée
+              Analyse TORP terminée
             </h1>
             <p className="text-xl text-muted-foreground">
-              Voici le score TORP et nos recommandations détaillées
+              Voici le score détaillé et nos recommandations personnalisées
             </p>
           </div>
 
@@ -246,14 +259,14 @@ export default function Results() {
                   <div className="relative w-48 h-48 mx-auto">
                     <svg className="w-48 h-48 transform -rotate-90">
                       <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="8" fill="none" className="text-muted" />
-                      <circle 
-                        cx="96" 
-                        cy="96" 
-                        r="88" 
-                        stroke="currentColor" 
-                        strokeWidth="8" 
+                      <circle
+                        cx="96"
+                        cy="96"
+                        r="88"
+                        stroke="currentColor"
+                        strokeWidth="8"
                         fill="none"
-                        strokeDasharray="552" 
+                        strokeDasharray="552"
                         strokeDashoffset={552 - (552 * displayScore) / 1000}
                         className={`transition-all duration-1000 ease-out ${getScoreColor(scorePercentage)}`}
                       />
@@ -309,161 +322,151 @@ export default function Results() {
               </Card>
             </div>
 
-            {/* Détails de l'analyse */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Points forts */}
-              <Card className="border-success/50 bg-gradient-to-br from-success/10 to-success/5">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-success">
-                    <CheckCircle className="w-5 h-5" />
-                    Points forts détectés
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-3">
-                    {analysisResult.strengths?.map((strength: string, index: number) => (
-                      <li key={index} className="flex items-start gap-3">
-                        <div className="w-2 h-2 bg-success rounded-full mt-2 flex-shrink-0"></div>
-                        <span className="text-foreground">{strength}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
+            {/* Détails de l'analyse - Nouveaux onglets */}
+            <div className="lg:col-span-2">
+              <Tabs defaultValue="synthese" className="w-full">
+                <TabsList className="grid w-full grid-cols-5 mb-6">
+                  <TabsTrigger value="synthese">
+                    <Lightbulb className="w-4 h-4 mr-2" />
+                    Synthèse
+                  </TabsTrigger>
+                  <TabsTrigger value="entreprise">
+                    <Building2 className="w-4 h-4 mr-2" />
+                    Entreprise
+                  </TabsTrigger>
+                  <TabsTrigger value="prix">
+                    <DollarSign className="w-4 h-4 mr-2" />
+                    Prix
+                  </TabsTrigger>
+                  <TabsTrigger value="technique">
+                    <FileCheck className="w-4 h-4 mr-2" />
+                    Technique
+                  </TabsTrigger>
+                  <TabsTrigger value="conseils">
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    Conseils
+                  </TabsTrigger>
+                </TabsList>
 
-              {/* Points d'attention */}
-              {analysisResult.warnings && (
-                <Card className="border-warning/50 bg-gradient-to-br from-warning/10 to-warning/5">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-warning">
-                      <AlertTriangle className="w-5 h-5" />
-                      Points à vérifier
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="space-y-3">
-                      {analysisResult.warnings.map((warning: string, index: number) => (
-                        <li key={index} className="flex items-start gap-3">
-                          <div className="w-2 h-2 bg-warning rounded-full mt-2 flex-shrink-0"></div>
-                          <span className="text-foreground">{warning}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-              )}
+                {/* Onglet Synthèse */}
+                <TabsContent value="synthese" className="space-y-6">
+                  {/* Points forts */}
+                  <Card className="border-success/50 bg-gradient-to-br from-success/10 to-success/5">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-success">
+                        <CheckCircle className="w-5 h-5" />
+                        Points forts détectés
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-3">
+                        {analysisResult.strengths?.map((strength: string, index: number) => (
+                          <li key={index} className="flex items-start gap-3">
+                            <div className="w-2 h-2 bg-success rounded-full mt-2 flex-shrink-0"></div>
+                            <span className="text-foreground">{strength}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
 
-              {/* Recommandations */}
-              <Card className="border-info/50 bg-gradient-to-br from-info/10 to-info/5">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-info">
-                    <Lightbulb className="w-5 h-5" />
-                    Recommandations TORP
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Recommandations détaillées avec priorités */}
-                  {analysisResult.recommendations?.actions && Array.isArray(analysisResult.recommendations.actions) && analysisResult.recommendations.actions.length > 0 && (
-                    <div className="space-y-3">
-                      <h4 className="font-semibold text-foreground">Actions prioritaires</h4>
-                      {analysisResult.recommendations.actions.map((action: any, index: number) => (
-                        <div key={index} className={`p-4 rounded-lg border-l-4 ${
-                          action.priorite === 'haute' ? 'bg-destructive/5 border-destructive' :
-                          action.priorite === 'moyenne' ? 'bg-warning/5 border-warning' :
-                          'bg-muted/30 border-muted'
-                        }`}>
-                          <div className="flex items-start justify-between mb-2">
-                            <h5 className="font-semibold text-foreground">{action.titre}</h5>
-                            <Badge variant={action.priorite === 'haute' ? 'destructive' : action.priorite === 'moyenne' ? 'default' : 'secondary'}>
-                              {action.priorite}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground mb-2">{action.description}</p>
-                          <p className="text-sm font-medium text-foreground">→ {action.actionSuggeree}</p>
-                          {action.impactBudget && (
-                            <p className="text-sm text-success mt-2">💰 Économie potentielle : {action.impactBudget}€</p>
-                          )}
-                          {action.delaiAction && (
-                            <p className="text-xs text-muted-foreground mt-1">⏱️ À faire sous {action.delaiAction} jours</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                  {/* Points d'attention */}
+                  {analysisResult.warnings && analysisResult.warnings.length > 0 && (
+                    <Card className="border-warning/50 bg-gradient-to-br from-warning/10 to-warning/5">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-warning">
+                          <AlertTriangle className="w-5 h-5" />
+                          Points à vérifier
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-3">
+                          {analysisResult.warnings.map((warning: string, index: number) => (
+                            <li key={index} className="flex items-start gap-3">
+                              <div className="w-2 h-2 bg-warning rounded-full mt-2 flex-shrink-0"></div>
+                              <span className="text-foreground">{warning}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
                   )}
 
                   {/* Questions à poser */}
                   {analysisResult.recommendations?.questions && analysisResult.recommendations.questions.length > 0 && (
-                    <div className="p-4 bg-background rounded-lg border">
-                      <h4 className="font-semibold text-foreground mb-3">❓ Questions à poser à l'entreprise</h4>
-                      <ul className="space-y-2">
-                        {analysisResult.recommendations.questions.map((question: string, index: number) => (
-                          <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
-                            <span className="text-info mt-0.5">•</span>
-                            <span>{question}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    <Card className="border-info/30">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-info">
+                          <MessageSquare className="w-5 h-5" />
+                          Questions à poser à l'entreprise
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <ul className="space-y-2">
+                          {analysisResult.recommendations.questions.map((question: string, index: number) => (
+                            <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
+                              <span className="text-info mt-0.5">•</span>
+                              <span>{question}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
                   )}
+                </TabsContent>
 
-                  {/* Points de négociation */}
-                  {analysisResult.recommendations?.negotiation && (
-                    <div className="p-4 bg-background rounded-lg border">
-                      <h4 className="font-semibold text-foreground mb-2">💬 Points de négociation</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {analysisResult.recommendations.negotiation}
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                {/* Onglet Entreprise */}
+                <TabsContent value="entreprise">
+                  <CarteEntreprise
+                    entreprise={rawData.entreprise}
+                    scoreEntreprise={rawData.scoreEntreprise}
+                  />
+                </TabsContent>
 
-              {/* Comparaison marché */}
-              {analysisResult.priceComparison && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <TrendingUp className="w-5 h-5" />
-                      Comparaison prix marché local
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div className="p-4 bg-muted/50 rounded-lg">
-                        <div className="text-2xl font-bold text-muted-foreground">
-                          {analysisResult.priceComparison.low.toLocaleString()}€
-                        </div>
-                        <div className="text-sm text-muted-foreground">Fourchette basse</div>
-                      </div>
-                      <div className="p-4 bg-primary/10 rounded-lg border-2 border-primary/20">
-                        <div className="text-2xl font-bold text-primary">
-                          {analysisResult.priceComparison.current.toLocaleString()}€
-                        </div>
-                        <div className="text-sm text-muted-foreground">Votre devis</div>
-                      </div>
-                      <div className="p-4 bg-muted/50 rounded-lg">
-                        <div className="text-2xl font-bold text-muted-foreground">
-                          {analysisResult.priceComparison.high.toLocaleString()}€
-                        </div>
-                        <div className="text-sm text-muted-foreground">Fourchette haute</div>
-                      </div>
-                    </div>
-                    <div className="mt-4 text-center text-sm text-muted-foreground">
-                      Prix basé sur 847 devis similaires dans votre région
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+                {/* Onglet Prix */}
+                <TabsContent value="prix">
+                  <AnalysePrixDetaillee
+                    scorePrix={rawData.scorePrix}
+                    montantTotal={rawData.montantTotal}
+                    margeNegociation={rawData.margeNegociation}
+                    surcoutsDetectes={rawData.surcoutsDetectes}
+                    budgetRealEstime={rawData.budgetRealEstime}
+                    comparaisonMarche={analysisResult.priceComparison}
+                  />
+                </TabsContent>
+
+                {/* Onglet Technique */}
+                <TabsContent value="technique">
+                  <AnalyseCompletetudeConformite
+                    scoreCompletude={rawData.scoreCompletude}
+                    scoreConformite={rawData.scoreConformite}
+                  />
+                </TabsContent>
+
+                {/* Onglet Conseils */}
+                <TabsContent value="conseils">
+                  <ConseilsPersonnalises
+                    grade={grade}
+                    scoreTotal={score}
+                    scoreEntreprise={detailedScores.entreprise}
+                    scorePrix={detailedScores.prix}
+                    scoreCompletude={detailedScores.completude}
+                    scoreConformite={detailedScores.conformite}
+                    scoreDelais={detailedScores.delais}
+                    recommendations={analysisResult.recommendations}
+                  />
+                </TabsContent>
+              </Tabs>
 
               {/* Actions post-analyse */}
-              <Card>
+              <Card className="mt-6">
                 <CardHeader>
                   <CardTitle>Actions disponibles</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid md:grid-cols-3 gap-4">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       className="h-auto p-4 flex flex-col items-center gap-2"
                       onClick={() => {
                         // Logique pour accepter le devis
@@ -473,9 +476,9 @@ export default function Results() {
                       <CheckCircle className="w-6 h-6 text-success" />
                       <span>Accepter le devis</span>
                     </Button>
-                    
-                    <Button 
-                      variant="outline" 
+
+                    <Button
+                      variant="outline"
                       className="h-auto p-4 flex flex-col items-center gap-2"
                       onClick={() => {
                         // Logique pour négocier
@@ -485,9 +488,9 @@ export default function Results() {
                       <Lightbulb className="w-6 h-6 text-warning" />
                       <span>Négocier</span>
                     </Button>
-                    
-                    <Button 
-                      variant="outline" 
+
+                    <Button
+                      variant="outline"
                       className="h-auto p-4 flex flex-col items-center gap-2"
                       onClick={() => {
                         // Logique pour refuser
