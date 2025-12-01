@@ -12,6 +12,7 @@ import { CarteEntreprise } from '@/components/results/CarteEntreprise';
 import { AnalysePrixDetaillee } from '@/components/results/AnalysePrixDetaillee';
 import { AnalyseCompletetudeConformite } from '@/components/results/AnalyseCompletetudeConformite';
 import { ConseilsPersonnalises } from '@/components/results/ConseilsPersonnalises';
+import { generateAnalysisReportPDF } from '@/utils/pdfGenerator';
 
 export default function Results() {
   const { currentProject, setCurrentProject } = useApp();
@@ -308,17 +309,20 @@ export default function Results() {
                   </div>
 
                   <div className="space-y-3">
-                    <Button className="w-full">
+                    <Button
+                      className="w-full"
+                      onClick={() => {
+                        if (currentProject) {
+                          generateAnalysisReportPDF(currentProject);
+                        }
+                      }}
+                    >
                       <Download className="w-4 h-4 mr-2" />
                       Télécharger le rapport PDF
                     </Button>
-                    <Button variant="outline" className="w-full" onClick={() => navigate('/projects')}>
+                    <Button variant="outline" className="w-full" onClick={() => navigate('/dashboard')}>
                       <Eye className="w-4 h-4 mr-2" />
                       Voir tous mes projets
-                    </Button>
-                    <Button variant="outline" className="w-full" onClick={() => navigate('/results-interactive')}>
-                      <MessageSquare className="w-4 h-4 mr-2" />
-                      Accompagnement personnalisé
                     </Button>
                   </div>
                 </CardContent>

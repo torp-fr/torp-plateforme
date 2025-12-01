@@ -97,10 +97,10 @@ export const Header = () => {
 
             {user && (
               <Link
-                to="/projects"
+                to="/dashboard"
                 className="text-sm font-medium text-foreground hover:text-primary transition-colors"
               >
-                Mes Projets
+                Mes Analyses
               </Link>
             )}
           </nav>
@@ -119,9 +119,6 @@ export const Header = () => {
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem onClick={() => navigate('/dashboard')}>
                       📊 Dashboard
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/projects')}>
-                      📁 Mes Projets
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/profile')}>
                       👤 Mon Profil
@@ -198,11 +195,11 @@ export const Header = () => {
 
             {user && (
               <Link
-                to="/projects"
+                to="/dashboard"
                 className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Mes Projets
+                Mes Analyses
               </Link>
             )}
 
@@ -215,11 +212,6 @@ export const Header = () => {
                   <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
                     <Button variant="outline" size="sm" className="w-full justify-start">
                       📊 Dashboard
-                    </Button>
-                  </Link>
-                  <Link to="/projects" onClick={() => setMobileMenuOpen(false)}>
-                    <Button variant="outline" size="sm" className="w-full justify-start">
-                      📁 Mes Projets
                     </Button>
                   </Link>
                   <Button

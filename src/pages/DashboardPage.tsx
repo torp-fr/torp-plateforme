@@ -5,8 +5,14 @@ import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
 import { BackButton } from '@/components/BackButton';
 import { AdvancedAnalytics } from '@/components/AdvancedAnalytics';
-import { FileText, TrendingUp, PiggyBank, Hammer, Eye, Plus, BarChart3, Users, Building, Clock, Activity, Target, Calendar, Download, Home } from 'lucide-react';
+import { FileText, TrendingUp, PiggyBank, Hammer, Eye, Plus, BarChart3, Users, Building, Clock, Activity, Target, Calendar, Download, Home, MoreVertical, Trash2, Filter } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export default function DashboardPage() {
   const { user, userType, projects } = useApp();
@@ -34,7 +40,7 @@ export default function DashboardPage() {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'completed': return 'Terminé';
+      case 'completed': return 'Analysé';
       case 'analyzing': return 'En cours';
       case 'draft': return 'Brouillon';
       default: return 'Inconnu';
@@ -289,49 +295,66 @@ export default function DashboardPage() {
             <div className="lg:col-span-2">
               <Card>
                 <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <CardTitle className="flex items-center gap-2">
-                      <BarChart3 className="w-5 h-5" />
-                      {userType === 'B2C' ? 'Mes analyses' : 'Analyses clients'}
-                    </CardTitle>
-                    <Link to="/projects">
-                      <Button variant="outline" size="sm">
-                        Voir tout
-                      </Button>
-                    </Link>
-                  </div>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5" />
+                    {userType === 'B2C' ? 'Mes analyses' : 'Analyses clients'}
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     {projects.slice(0, 5).map(project => (
-                      <div key={project.id} 
-                           className="flex items-center justify-between p-4 border border-border rounded-lg hover:shadow-soft transition-shadow">
-                        <div className="flex items-center space-x-4">
-                          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold
-                                         ${project.score && project.score >= 80 ? 'bg-success' : 
-                                           project.score && project.score >= 60 ? 'bg-warning' : 
-                                           project.score ? 'bg-destructive' : 'bg-muted'}`}>
-                            {project.grade || '?'}
+                      <div key={project.id} className="relative group">
+                        <Link to={`/results?devisId=${project.id}`} className="block">
+                          <div className="flex items-center justify-between p-4 border border-border rounded-lg hover:shadow-soft hover:border-primary/50 transition-all cursor-pointer">
+                            <div className="flex items-center space-x-4">
+                              <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold
+                                             ${project.score && project.score >= 80 ? 'bg-success' :
+                                               project.score && project.score >= 60 ? 'bg-warning' :
+                                               project.score ? 'bg-destructive' : 'bg-muted'}`}>
+                                {project.grade || '?'}
+                              </div>
+                              <div>
+                                <h3 className="font-semibold text-foreground">{project.name}</h3>
+                                <p className="text-sm text-muted-foreground">
+                                  {project.company || 'Entreprise'} • {new Date(project.createdAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-4">
+                              <Badge className={getStatusColor(project.status)}>
+                                {getStatusText(project.status)}
+                              </Badge>
+                              <span className="text-lg font-semibold text-foreground">{project.amount}</span>
+                            </div>
                           </div>
-                          <div>
-                            <h3 className="font-semibold text-foreground">{project.name}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              {project.company} • {new Date(project.createdAt).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                          <Badge className={getStatusColor(project.status)}>
-                            {getStatusText(project.status)}
-                          </Badge>
-                          <span className="text-lg font-semibold text-foreground">{project.amount}</span>
-                          {project.status === 'completed' && (
-                            <Link to={`/results?devisId=${project.id}`}>
-                              <Button variant="outline" size="sm">
-                                <Eye className="w-4 h-4" />
+                        </Link>
+
+                        {/* Menu contextuel */}
+                        <div className="absolute top-4 right-4" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <MoreVertical className="h-4 w-4" />
                               </Button>
-                            </Link>
-                          )}
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => console.log('Voir détails', project.id)}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                Voir l'analyse
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => console.log('Filter', project.id)}>
+                                <Filter className="mr-2 h-4 w-4" />
+                                Filtrer similaires
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={() => console.log('Delete', project.id)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Supprimer
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
                     ))}

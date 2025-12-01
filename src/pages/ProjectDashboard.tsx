@@ -123,7 +123,7 @@ export default function ProjectDashboard() {
           {/* En-tête du projet */}
           <div className="mb-8">
             <div className="flex items-center gap-4 mb-4">
-              <BackButton to="/projects" label="Mes projets" />
+              <BackButton to="/dashboard" label="Mes analyses" />
               <div className="flex-1">
                 <h1 className="text-3xl font-bold text-foreground">{project.name}</h1>
                 <div className="flex items-center gap-4 mt-2">

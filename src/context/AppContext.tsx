@@ -266,7 +266,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           status: devis.status === 'analyzed' ? 'completed' : devis.status as any,
           score: devis.score_total || 0,
           grade: devis.grade || 'N/A',
-          amount: `${devis.amount || 0}€`,
+          amount: `${((devis as any).recommendations?.budgetRealEstime || devis.amount || 0).toLocaleString('fr-FR')}€`,
           createdAt: devis.created_at || new Date().toISOString(),
           analysisResult: {
             detailedScores: {
