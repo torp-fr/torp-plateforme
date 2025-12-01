@@ -105,6 +105,7 @@ export async function listAnalyses(
     grade?: string;
     dateFrom?: string;
     dateTo?: string;
+    limit?: number;
   }
 ): Promise<ProDevisAnalysis[]> {
   let query = supabase
@@ -127,6 +128,11 @@ export async function listAnalyses(
 
   if (filters?.dateTo) {
     query = query.lte('created_at', filters.dateTo);
+  }
+
+  // Appliquer la limite si spécifiée
+  if (filters?.limit) {
+    query = query.limit(filters.limit);
   }
 
   const { data, error } = await query.order('created_at', { ascending: false });
@@ -287,87 +293,6 @@ async function runMockAnalysis(analysisId: string): Promise<void> {
     })
     .eq('id', analysisId);
 }
-
-/**
- * TODO: Re-analyser un devis (créer une nouvelle version)
- */
-export async function reanalyzeDevis(
-  parentAnalysisId: string,
-  file?: File
-): Promise<ProDevisAnalysis> {
-  // TODO: 1. Créer une nouvelle analyse avec parent_analysis_id
-  // TODO: 2. Incrémenter la version
-  // TODO: 3. Lancer l'analyse
-  throw new Error('Not implemented');
-}
-
-/**
- * TODO: Mettre à jour une analyse
- */
-export async function updateAnalysis(
-  analysisId: string,
-  data: Partial<ProDevisAnalysis>
-): Promise<ProDevisAnalysis> {
-  // TODO: Implémenter l'appel Supabase
-  throw new Error('Not implemented');
-}
-
-/**
- * TODO: Supprimer une analyse
- */
-export async function deleteAnalysis(analysisId: string): Promise<void> {
-  // TODO: 1. Supprimer le fichier de Supabase Storage
-  // TODO: 2. Supprimer l'entrée de la base de données
-  throw new Error('Not implemented');
-}
-
-/**
- * TODO: Générer un ticket TORP (badge de certification)
- */
-export async function generateTicket(analysisId: string): Promise<{
-  ticket_url: string;
-  ticket_code: string;
-  qr_code_url: string;
-}> {
-  // TODO: 1. Générer un code unique (ex: TORP-ABC123XY)
-  // TODO: 2. Générer le QR code (lien vers /t/:code)
-  // TODO: 3. Générer le PDF du ticket
-  // TODO: 4. Mettre à jour l'analyse avec les infos du ticket
-  throw new Error('Not implemented');
-}
-
-/**
- * TODO: Récupérer les événements de tracking d'un ticket
- */
-export async function getTicketTracking(analysisId: string): Promise<TicketTrackingEvent[]> {
-  // TODO: Implémenter l'appel Supabase
-  throw new Error('Not implemented');
-}
-
-/**
- * TODO: Récupérer une analyse via son ticket_code (pour la page publique)
- */
-export async function getAnalysisByTicketCode(
-  ticketCode: string
-): Promise<ProDevisAnalysis | null> {
-  // TODO: Implémenter l'appel Supabase (accessible sans auth)
-  throw new Error('Not implemented');
-}
-
-/**
- * TODO: Enregistrer un événement de tracking de ticket
- */
-export async function trackTicketView(
-  ticketCode: string,
-  eventType: 'qr_scanned' | 'link_viewed' | 'pdf_downloaded',
-  metadata?: Record<string, any>
-): Promise<void> {
-  // TODO: 1. Récupérer l'analysis_id depuis le ticket_code
-  // TODO: 2. Créer un événement de tracking
-  // TODO: 3. Incrémenter le compteur de vues
-  throw new Error('Not implemented');
-}
-// Fonctions restantes à ajouter dans analysisService.ts
 
 /**
  * Re-analyser un devis (créer une nouvelle version)
