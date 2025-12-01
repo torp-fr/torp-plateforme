@@ -20,9 +20,10 @@ export class ClaudeService {
 
   /**
    * Check if Claude is configured
+   * DISABLED: Force return false to prevent 404 errors with outdated model
    */
   isConfigured(): boolean {
-    return this.client !== null;
+    return false; // Temporarily disabled - model 'claude-3-5-sonnet-20240620' returns 404
   }
 
   /**
