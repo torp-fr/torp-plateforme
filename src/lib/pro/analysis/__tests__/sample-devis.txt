@@ -1,0 +1,39 @@
+ENTREPRISE MARTIN PLOMBERIE
+SARL au capital de 10 000€
+15 rue des Artisans, 75011 Paris
+Tél: 01 23 45 67 89
+Email: contact@martin-plomberie.fr
+SIRET: 123 456 789 00012
+RCS Paris B 123 456 789
+TVA: FR12345678901
+
+Assurance décennale n°DEC-2024-123456
+Compagnie AXA France
+
+DEVIS N° DEV-2025-042
+Date: 15/01/2025
+Validité: 3 mois
+
+Client: M. Dupont Jean
+12 avenue des Fleurs, 75012 Paris
+
+Objet: Rénovation salle de bain complète
+
+Désignation                          Qté    Unité    PU HT     Total HT
+---------------------------------------------------------------------------
+Dépose sanitaires existants           1     forfait   250,00     250,00
+Fourniture baignoire JACOB DELAFON    1     unité     850,00     850,00
+Pose baignoire + raccordements        1     forfait   450,00     450,00
+Fourniture WC suspendu GROHE          1     unité     620,00     620,00
+Pose WC suspendu                      1     forfait   380,00     380,00
+Création point d'eau supplémentaire   1     forfait   520,00     520,00
+---------------------------------------------------------------------------
+                                              Total HT:        3 070,00 €
+                                              TVA 10%:           307,00 €
+                                              Total TTC:       3 377,00 €
+
+Acompte de 30% à la commande: 1 013,10 €
+Solde à réception des travaux.
+
+Délai d'exécution: 5 jours ouvrés
+Garantie décennale et biennale applicables.
