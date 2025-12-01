@@ -6,7 +6,6 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -126,93 +125,56 @@ export const TicketVerification = () => {
   }, [scannerOpen]);
 
   return (
-    <section className="py-16 lg:py-20 bg-gradient-to-br from-primary/5 via-background to-accent/5">
+    <section className="py-12 bg-muted/30">
       <div className="container mx-auto px-4">
-        <div className="max-w-3xl mx-auto">
-          <Card className="shadow-xl border-2">
-            <CardHeader className="text-center pb-6">
-              <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-                <QrCode className="w-8 h-8 text-primary" />
+        <div className="max-w-4xl mx-auto">
+          {/* Conteneur rectangulaire compact */}
+          <div className="bg-background rounded-lg border-2 border-border shadow-sm p-6">
+            <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6">
+              {/* Icône et titre */}
+              <div className="flex items-center gap-3 md:min-w-fit">
+                <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <QrCode className="w-5 h-5 text-primary" />
+                </div>
+                <h3 className="font-semibold text-lg whitespace-nowrap">Vérifiez vos devis</h3>
               </div>
-              <CardTitle className="text-2xl md:text-3xl">
-                Vous avez reçu un code TORP ?
-              </CardTitle>
-              <CardDescription className="text-base mt-2">
-                Accédez à l'analyse complète de votre devis en quelques secondes
-              </CardDescription>
-            </CardHeader>
 
-            <CardContent className="space-y-6">
-              {/* Formulaire de saisie */}
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label htmlFor="ticket-code" className="text-sm font-medium block mb-2">
-                    Code de vérification
-                  </label>
+              {/* Formulaire horizontal */}
+              <div className="flex-1 w-full">
+                <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">
+                  <Input
+                    type="text"
+                    placeholder="Insérez votre code de vérification"
+                    value={ticketCode}
+                    onChange={(e) => {
+                      setTicketCode(e.target.value);
+                      setError(null);
+                    }}
+                    className="flex-1"
+                    autoComplete="off"
+                  />
                   <div className="flex gap-2">
-                    <Input
-                      id="ticket-code"
-                      type="text"
-                      placeholder="Ex: TORP-ABC123"
-                      value={ticketCode}
-                      onChange={(e) => {
-                        setTicketCode(e.target.value);
-                        setError(null);
-                      }}
-                      className="flex-1 h-12 text-base"
-                      autoComplete="off"
-                    />
-                    <Button type="submit" size="lg" className="h-12 px-6">
-                      <Search className="w-5 h-5 mr-2" />
+                    <Button type="submit" className="flex-1 sm:flex-initial">
+                      <Search className="w-4 h-4 mr-2" />
                       Consulter
                     </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleOpenScanner}
+                      className="flex-1 sm:flex-initial"
+                    >
+                      <Camera className="w-4 h-4 mr-2" />
+                      Scanner QR
+                    </Button>
                   </div>
-                  {error && (
-                    <p className="text-sm text-red-600 mt-2">{error}</p>
-                  )}
-                </div>
-              </form>
-
-              {/* Séparateur */}
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-4 bg-background text-muted-foreground">ou</span>
-                </div>
+                </form>
+                {error && (
+                  <p className="text-sm text-red-600 mt-2">{error}</p>
+                )}
               </div>
-
-              {/* Bouton scanner QR */}
-              <div className="text-center">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  onClick={handleOpenScanner}
-                  className="w-full h-14 text-base border-2 border-dashed hover:border-primary hover:bg-primary/5"
-                >
-                  <Camera className="w-5 h-5 mr-2" />
-                  Scanner le QR code
-                </Button>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Le QR code se trouve sur votre ticket TORP ou dans l'email reçu
-                </p>
-              </div>
-
-              {/* Info supplémentaire */}
-              <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mt-6">
-                <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                  Où trouver mon code TORP ?
-                </h4>
-                <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-                  <li>• Sur le ticket TORP remis par l'entreprise avec votre devis</li>
-                  <li>• Dans l'email de confirmation envoyé après l'analyse</li>
-                  <li>• Format: TORP-XXXXXX (6 caractères alphanumériques)</li>
-                </ul>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -222,7 +184,7 @@ export const TicketVerification = () => {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Camera className="w-5 h-5" />
-              Scanner le QR code
+              Scannez votre QR code
             </DialogTitle>
             <DialogDescription>
               Positionnez le QR code dans le cadre pour scanner
