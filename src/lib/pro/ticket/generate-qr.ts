@@ -30,6 +30,8 @@ export async function generateQRCode(options: QRCodeOptions): Promise<QRCodeResu
     lightColor = '#FFFFFF',
   } = options;
 
+  console.log('[QR] 🔲 Génération QR code pour URL:', url);
+
   const qrOptions = {
     width: size,
     margin,
@@ -42,15 +44,34 @@ export async function generateQRCode(options: QRCodeOptions): Promise<QRCodeResu
 
   // Générer en PNG (data URL) pour affichage web
   const dataUrl = await QRCode.toDataURL(url, qrOptions);
+  console.log('[QR] ✓ Data URL généré, longueur:', dataUrl.length);
 
   // Convertir data URL en Uint8Array (pour PDF - compatible navigateur)
   // Data URL format: "data:image/png;base64,iVBORw0KG..."
   const base64Data = dataUrl.split(',')[1];
+  console.log('[QR] ✓ Base64 extrait, longueur:', base64Data.length);
+
   const binaryString = atob(base64Data);
+  console.log('[QR] ✓ Décodé en binaire, longueur:', binaryString.length);
+
   const bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i);
   }
+
+  // Vérifier la signature PNG (89 50 4E 47 = PNG)
+  const pngSignature = [0x89, 0x50, 0x4E, 0x47];
+  const isValidPng = pngSignature.every((byte, i) => bytes[i] === byte);
+
+  if (!isValidPng) {
+    console.error('[QR] ❌ ERREUR: Les bytes ne correspondent pas à un PNG valide !');
+    console.error('[QR] Premiers bytes:', Array.from(bytes.slice(0, 8)));
+    console.error('[QR] Attendu:', pngSignature);
+  } else {
+    console.log('[QR] ✅ Signature PNG valide');
+  }
+
+  console.log('[QR] Buffer PNG créé:', bytes.length, 'bytes');
 
   // Générer en SVG
   const svg = await QRCode.toString(url, {
@@ -62,6 +83,8 @@ export async function generateQRCode(options: QRCodeOptions): Promise<QRCodeResu
       light: lightColor,
     },
   });
+
+  console.log('[QR] ✅ QR code complet généré (PNG + SVG)');
 
   return {
     dataUrl,

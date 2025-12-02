@@ -75,18 +75,30 @@ function getGradeColor(grade: string) {
  * Génère le PDF du ticket TORP
  */
 export async function generateTicketPDF(data: TicketData): Promise<TicketPDFResult> {
+  console.log('[PDF] 🚀 Début génération PDF...');
+  console.log('[PDF] Données reçues:', {
+    ticketCode: data.ticketCode,
+    grade: data.grade,
+    scoreTotal: data.scoreTotal,
+    qrCodeBufferLength: data.qrCodeBuffer?.length || 0,
+  });
+
   // Créer un document PDF
   const pdfDoc = await PDFDocument.create();
+  console.log('[PDF] ✓ Document PDF créé');
 
   // Format ticket : 210mm x 99mm (format DL/tiers de A4)
   // En points (72 dpi) : 595 x 280
   const page = pdfDoc.addPage([595, 280]);
+  console.log('[PDF] ✓ Page ajoutée:', page.getWidth(), 'x', page.getHeight());
 
   // Charger les fonts
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  console.log('[PDF] ✓ Fonts chargées');
 
   const gradeColor = getGradeColor(data.grade);
+  console.log('[PDF] ✓ Couleur grade:', data.grade);
 
   // ===== BANDEAU GAUCHE (Score) =====
   page.drawRectangle({
@@ -152,6 +164,8 @@ export async function generateTicketPDF(data: TicketData): Promise<TicketPDFResu
     color: COLORS.white,
   });
 
+  console.log('[PDF] ✓ Bandeau gauche et score dessinés');
+
   // ===== PARTIE CENTRALE (Infos) =====
 
   // Titre
@@ -162,6 +176,7 @@ export async function generateTicketPDF(data: TicketData): Promise<TicketPDFResu
     font: fontBold,
     color: COLORS.primary,
   });
+  console.log('[PDF] ✓ Titre dessiné');
 
   // Ligne séparatrice
   page.drawLine({
@@ -269,18 +284,25 @@ export async function generateTicketPDF(data: TicketData): Promise<TicketPDFResu
     color: COLORS.textLight,
   });
 
+  console.log('[PDF] ✓ Informations centrales dessinées');
+
   // ===== QR CODE (Droite) =====
   try {
     console.log('[PDF] 📱 Intégration du QR code...');
     console.log('[PDF] QR buffer length:', data.qrCodeBuffer.length);
+    console.log('[PDF] QR buffer first bytes:', Array.from(data.qrCodeBuffer.slice(0, 8)));
+
     const qrImage = await pdfDoc.embedPng(data.qrCodeBuffer);
-    console.log('[PDF] ✅ QR code intégré');
+    console.log('[PDF] ✅ QR code PNG intégré dans le document');
+    console.log('[PDF] QR dimensions:', qrImage.width, 'x', qrImage.height);
+
     page.drawImage(qrImage, {
       x: 470,
       y: 80,
       width: 110,
       height: 110,
     });
+    console.log('[PDF] ✅ QR code dessiné sur la page');
 
     // Label sous QR
     const qrLabelText = 'Voir l\'analyse';
@@ -294,6 +316,8 @@ export async function generateTicketPDF(data: TicketData): Promise<TicketPDFResu
     });
   } catch (error) {
     console.error('[PDF] ❌ Error embedding QR code:', error);
+    console.error('[PDF] Error details:', error instanceof Error ? error.message : String(error));
+    console.error('[PDF] Error stack:', error instanceof Error ? error.stack : 'No stack');
     // Continue without QR code if error
   }
 
@@ -308,11 +332,29 @@ export async function generateTicketPDF(data: TicketData): Promise<TicketPDFResu
     color: rgb(0, 0, 0, 0), // Transparent
   });
 
+  console.log('[PDF] ✓ Bordure dessinée');
+  console.log('[PDF] 💾 Début de la sauvegarde du PDF...');
+
   // Générer le PDF
   const pdfBytes = await pdfDoc.save();
   // pdfBytes est déjà un Uint8Array, pas besoin de conversion
 
+  console.log('[PDF] ✅ PDF sauvegardé !');
+  console.log('[PDF] Taille du PDF:', pdfBytes.length, 'bytes');
+  console.log('[PDF] Premiers bytes:', Array.from(pdfBytes.slice(0, 8)));
+  console.log('[PDF] Signature PDF:', String.fromCharCode(...pdfBytes.slice(0, 5)));
+
+  // Vérifier que le PDF commence par %PDF
+  const pdfSignature = String.fromCharCode(...pdfBytes.slice(0, 4));
+  if (pdfSignature !== '%PDF') {
+    console.error('[PDF] ⚠️ ALERTE: Le fichier ne commence pas par %PDF !');
+    console.error('[PDF] Signature trouvée:', pdfSignature);
+  } else {
+    console.log('[PDF] ✅ Signature PDF valide');
+  }
+
   const fileName = `ticket-torp-${data.ticketCode.toLowerCase().replace('torp-', '')}.pdf`;
 
+  console.log('[PDF] 🎉 Génération terminée:', fileName);
   return { buffer: pdfBytes, fileName };
 }
