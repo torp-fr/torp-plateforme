@@ -226,24 +226,21 @@ export async function createAnalysis(data: CreateAnalysisData): Promise<ProDevis
     throw dbError;
   }
 
-  // 3. L'analyse IA doit être implémentée
-  // Marquer comme PENDING - l'analyse sera déclenchée par un worker/cron job
-  // ou implémentée ultérieurement
-  setTimeout(async () => {
-    await supabase
-      .from('pro_devis_analyses')
-      .update({
-        status: 'FAILED',
-        metadata: {
-          error: 'Moteur d\'analyse IA non configuré',
-          message: 'Le système d\'analyse automatique n\'est pas encore implémenté. Veuillez configurer OpenAI ou Claude API.',
-          next_steps: 'Consultez GUIDE_IMPLEMENTATION_B2B.md pour intégrer le moteur d\'analyse',
-        },
-      })
-      .eq('id', analysis.id);
-  }, 1000);
+  // 3. Déclencher l'analyse du devis
+  try {
+    const { analyzeProDevis } = await import('@/lib/pro/analysis');
 
-  return analysis;
+    // Lancer l'analyse en arrière-plan (async, ne pas attendre)
+    analyzeProDevis(analysis.id).catch((error) => {
+      console.error('[createAnalysis] Analysis failed:', error);
+    });
+
+    // Retourner immédiatement l'analyse en status PENDING
+    return analysis;
+  } catch (error) {
+    console.error('[createAnalysis] Failed to trigger analysis:', error);
+    throw error;
+  }
 }
 
 /**
