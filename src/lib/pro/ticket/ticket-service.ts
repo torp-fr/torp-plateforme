@@ -95,10 +95,10 @@ export async function generateTicket(analysisId: string): Promise<GenerateTicket
   const pdf = await generateTicketPDF(ticketData);
 
   // 8. Upload le PDF vers Supabase Storage
-  const storagePath = `${analysis.company_id}/${pdf.fileName}`;
+  const storagePath = `${analysis.user_id}/${pdf.fileName}`;
 
   const { data: uploadData, error: uploadError } = await supabase.storage
-    .from('pro-tickets')
+    .from('tickets-torp')
     .upload(storagePath, pdf.buffer, {
       contentType: 'application/pdf',
       upsert: true, // Remplacer si existe déjà
@@ -111,7 +111,7 @@ export async function generateTicket(analysisId: string): Promise<GenerateTicket
 
   // 9. Obtenir l'URL publique du PDF
   const { data: urlData } = supabase.storage
-    .from('pro-tickets')
+    .from('tickets-torp')
     .getPublicUrl(storagePath);
 
   const pdfUrl = urlData.publicUrl;
