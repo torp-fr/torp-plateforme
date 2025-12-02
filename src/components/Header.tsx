@@ -214,6 +214,11 @@ export const Header = () => {
                       📊 Dashboard
                     </Button>
                   </Link>
+                  <Link to="/profile" onClick={() => setMobileMenuOpen(false)}>
+                    <Button variant="outline" size="sm" className="w-full justify-start">
+                      👤 Mon Profil
+                    </Button>
+                  </Link>
                   <Button
                     onClick={() => {
                       setMobileMenuOpen(false);

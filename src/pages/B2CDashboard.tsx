@@ -46,78 +46,20 @@ export default function B2CDashboard() {
   const { user, projects } = useApp();
   const [activeTab, setActiveTab] = useState("overview");
 
-  // Statistics calculation
+  // Statistics calculation based on real data
   const completedProjects = projects.filter(p => p.status === 'completed');
-  const avgScore = completedProjects.length > 0 
+  const avgScore = completedProjects.length > 0
     ? Math.round(completedProjects.reduce((sum, p) => sum + (p.score || 0), 0) / completedProjects.length)
     : 0;
-  const totalSavings = 2850;
-  const protectionEvents = 3;
 
-  // Mock data for payment tracking
-  const activePaymentTracking = [
-    {
-      id: 1,
-      projectName: "Rénovation Cuisine",
-      company: "BatiCuisine Pro",
-      totalAmount: 15600,
-      paidAmount: 4680, // 30%
-      stages: [
-        { name: "Signature", amount: 4680, status: "completed", date: "2024-01-15" },
-        { name: "Démolition", amount: 6240, status: "pending", date: "2024-02-01" },
-        { name: "Installation", amount: 3120, status: "upcoming", date: "2024-02-15" },
-        { name: "Finition", amount: 1560, status: "upcoming", date: "2024-03-01" }
-      ]
-    },
-    {
-      id: 2,
-      projectName: "Isolation Combles",
-      company: "IsoTherm Expert",
-      totalAmount: 8900,
-      paidAmount: 2670, // 30%
-      stages: [
-        { name: "Acompte", amount: 2670, status: "completed", date: "2024-01-20" },
-        { name: "Livraison matériaux", amount: 3560, status: "pending", date: "2024-02-05" },
-        { name: "Solde travaux", amount: 2670, status: "upcoming", date: "2024-02-20" }
-      ]
-    }
-  ];
+  // Calculate real stats from projects (no mock data)
+  const totalSavings = completedProjects.reduce((sum, p) => {
+    const surcouts = p.analysisResult?.rawData?.surcoutsDetectes || 0;
+    return sum + surcouts;
+  }, 0);
 
-  const analysisHistory = [
-    {
-      id: 1,
-      type: "Analyse Flash",
-      projectName: "Carrelage Salon",
-      company: "Sol Parfait",
-      amount: "€3,200",
-      score: "B+",
-      savings: "€380",
-      date: "2024-01-18",
-      status: "completed"
-    },
-    {
-      id: 2,
-      type: "Analyse Complète + Suivi",
-      projectName: "Rénovation Cuisine",
-      company: "BatiCuisine Pro", 
-      amount: "€15,600",
-      score: "A-",
-      savings: "€1,200",
-      date: "2024-01-15",
-      status: "tracking"
-    },
-    {
-      id: 3,
-      type: "Comparaison Multi-devis",
-      projectName: "Isolation Combles",
-      company: "IsoTherm Expert",
-      amount: "€8,900",
-      score: "A",
-      savings: "€1,100",
-      date: "2024-01-20",
-      status: "tracking"
-    }
-  ];
+  // Count projects with payment tracking enabled
+  const protectionEvents = projects.filter(p => p.status === 'completed' || p.status === 'analyzing').length;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -127,10 +69,6 @@ export default function B2CDashboard() {
       case 'upcoming': return 'secondary';
       default: return 'secondary';
     }
-  };
-
-  const getPaymentProgress = (paidAmount: number, totalAmount: number) => {
-    return (paidAmount / totalAmount) * 100;
   };
 
   return (
@@ -397,48 +335,57 @@ export default function B2CDashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                {completedProjects.length === 0 ? (
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <h4 className="font-medium text-muted-foreground mb-2">Aucune analyse terminée</h4>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Analysez votre premier devis pour voir vos résultats ici.
+                    </p>
+                    <Link to="/analyze">
+                      <Button size="sm">
+                        <Upload className="h-4 w-4 mr-2" />
+                        Analyser un devis
+                      </Button>
+                    </Link>
+                  </div>
+                ) : (
                 <div className="space-y-4">
-                  {analysisHistory.map((analysis) => (
-                    <div key={analysis.id} className="p-4 border rounded-lg">
+                  {completedProjects.map((project) => (
+                    <div key={project.id} className="p-4 border rounded-lg">
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
-                            <Badge variant="outline">{analysis.type}</Badge>
-                            <Badge variant={getStatusColor(analysis.status)}>
-                              {analysis.status === 'tracking' ? 'Suivi actif' : 'Terminé'}
-                            </Badge>
+                            <Badge variant="outline">Analyse TORP</Badge>
+                            <Badge variant="success">Terminé</Badge>
                           </div>
-                          <h4 className="font-medium">{analysis.projectName}</h4>
-                          <p className="text-sm text-muted-foreground">{analysis.company} • {analysis.date}</p>
+                          <h4 className="font-medium">{project.name}</h4>
+                          <p className="text-sm text-muted-foreground">{project.company || 'Entreprise'} • {new Date(project.createdAt).toLocaleDateString('fr-FR')}</p>
                           <div className="flex items-center gap-4 mt-2 text-sm">
-                            <span className="font-medium">Montant: {analysis.amount}</span>
-                            <span className="text-success">Score: {analysis.score}</span>
-                            <span className="text-primary">Économies: {analysis.savings}</span>
+                            <span className="font-medium">Montant: {project.amount}</span>
+                            <span className="text-success">Score: {project.score}/1000 ({project.grade})</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Button variant="outline" size="sm">
-                            <Eye className="h-4 w-4 mr-1" />
-                            Rapport
-                          </Button>
-                          {analysis.status === 'tracking' && (
+                          <Link to={`/results?devisId=${project.id}`}>
                             <Button variant="outline" size="sm">
-                              <Shield className="h-4 w-4 mr-1" />
-                              Suivi
+                              <Eye className="h-4 w-4 mr-1" />
+                              Rapport
                             </Button>
-                          )}
+                          </Link>
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
 
           {/* TAB: TIMELINE */}
           <TabsContent value="timeline" className="space-y-6">
-            <ProjectTimeline projectId={activePaymentTracking[0]?.id?.toString() || "demo"} />
+            <ProjectTimeline projectId={projects[0]?.id || undefined} />
           </TabsContent>
 
           {/* TAB: CCTP GENERATOR */}
@@ -448,12 +395,12 @@ export default function B2CDashboard() {
 
           {/* TAB: BUDGET */}
           <TabsContent value="budget" className="space-y-6">
-            <ProjectBudget projectId={activePaymentTracking[0]?.id?.toString() || "demo"} />
+            <ProjectBudget projectId={projects[0]?.id || undefined} />
           </TabsContent>
 
           {/* TAB: DOCUMENTS */}
           <TabsContent value="documents" className="space-y-6">
-            <ProjectDocuments projectId={activePaymentTracking[0]?.id?.toString() || "demo"} />
+            <ProjectDocuments projectId={projects[0]?.id || undefined} />
           </TabsContent>
 
           {/* TAB: CONSTRUCTION TRACKING */}
@@ -484,50 +431,18 @@ export default function B2CDashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
-                  {activePaymentTracking.map((project) => (
-                    <div key={project.id} className="p-4 border rounded-lg">
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <h4 className="font-medium">{project.projectName}</h4>
-                          <p className="text-sm text-muted-foreground">{project.company}</p>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-bold">€{project.paidAmount.toLocaleString()} / €{project.totalAmount.toLocaleString()}</div>
-                          <Progress value={getPaymentProgress(project.paidAmount, project.totalAmount)} className="w-32 mt-1" />
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        <h5 className="font-medium text-sm">Échéancier :</h5>
-                        {project.stages.map((stage, index) => (
-                          <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded">
-                            <div className="flex items-center gap-3">
-                              {stage.status === 'completed' && <CheckCircle className="h-4 w-4 text-success" />}
-                              {stage.status === 'pending' && <Clock className="h-4 w-4 text-warning" />}
-                              {stage.status === 'upcoming' && <Calendar className="h-4 w-4 text-muted-foreground" />}
-                              <div>
-                                <div className="font-medium text-sm">{stage.name}</div>
-                                <div className="text-xs text-muted-foreground">{stage.date}</div>
-                              </div>
-                            </div>
-                            <div className="font-medium">€{stage.amount.toLocaleString()}</div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="flex items-center gap-2 mt-4">
-                        <Button variant="outline" size="sm">
-                          <Phone className="h-4 w-4 mr-1" />
-                          Contacter entreprise
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          <AlertTriangle className="h-4 w-4 mr-1" />
-                          Signaler problème
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                <div className="text-center py-8">
+                  <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h4 className="font-medium text-muted-foreground mb-2">Aucun suivi de paiement actif</h4>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Le suivi des paiements sera disponible après une analyse complète de votre devis.
+                  </p>
+                  <Link to="/analyze">
+                    <Button size="sm">
+                      <Upload className="h-4 w-4 mr-2" />
+                      Analyser un devis
+                    </Button>
+                  </Link>
                 </div>
               </CardContent>
             </Card>
@@ -569,34 +484,14 @@ export default function B2CDashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    <div className="p-4 border rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-medium">EcoBat Solutions</h4>
-                          <p className="text-sm text-muted-foreground">Rénovation énergétique</p>
-                          <div className="flex items-center gap-1 mt-1">
-                            <Badge variant="success">Score A</Badge>
-                            <QrCode className="h-4 w-4 text-primary" />
-                          </div>
-                        </div>
-                        <Button variant="outline" size="sm">Contacter</Button>
-                      </div>
-                    </div>
-
-                    <div className="p-4 border rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-medium">BatiCuisine Pro</h4>
-                          <p className="text-sm text-muted-foreground">Cuisine & salle de bain</p>
-                          <div className="flex items-center gap-1 mt-1">
-                            <Badge variant="success">Score A-</Badge>
-                            <QrCode className="h-4 w-4 text-primary" />
-                          </div>
-                        </div>
-                        <Button variant="outline" size="sm">Contacter</Button>
-                      </div>
-                    </div>
+                  <div className="text-center py-6">
+                    <Users className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Fonctionnalité bientôt disponible
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Nous travaillons à établir un réseau d'entreprises de confiance vérifiées par TORP.
+                    </p>
                   </div>
                 </CardContent>
               </Card>
