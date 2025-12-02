@@ -399,7 +399,7 @@ export async function generateTicket(analysisId: string): Promise<{
 
     return {
       ticket_code: result.ticketCode,
-      short_code: result.shortCode,
+      short_code: result.ticketCode.replace('TORP-', ''),
       ticket_url: result.ticketUrl,
       pdf_url: result.pdfUrl,
       pdf_file_name: result.pdfFileName,
@@ -423,7 +423,20 @@ export async function getTicketInfo(analysisId: string): Promise<{
   const { getTicketInfo: getTicketInfoService } = await import('@/lib/pro/ticket/ticket-service');
 
   try {
-    return await getTicketInfoService(analysisId);
+    const result = await getTicketInfoService(analysisId);
+
+    if (!result) {
+      return null;
+    }
+
+    // Adapter le format camelCase vers snake_case pour le frontend
+    return {
+      ticket_code: result.ticketCode,
+      short_code: result.ticketCode.replace('TORP-', ''),
+      ticket_url: result.ticketUrl,
+      pdf_url: result.pdfUrl,
+      pdf_file_name: result.pdfFileName,
+    };
   } catch (error) {
     console.error('[getTicketInfo] Error:', error);
     return null;
