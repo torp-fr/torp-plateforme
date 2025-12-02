@@ -25,12 +25,12 @@ export interface TicketData {
   dateAnalyse: Date;
 
   // QR Code
-  qrCodeBuffer: Buffer;
+  qrCodeBuffer: Uint8Array;
   ticketUrl: string;
 }
 
 export interface TicketPDFResult {
-  buffer: Buffer;
+  buffer: Uint8Array;
   fileName: string;
 }
 
@@ -307,9 +307,9 @@ export async function generateTicketPDF(data: TicketData): Promise<TicketPDFResu
 
   // Générer le PDF
   const pdfBytes = await pdfDoc.save();
-  const buffer = Buffer.from(pdfBytes);
+  // pdfBytes est déjà un Uint8Array, pas besoin de conversion
 
   const fileName = `ticket-torp-${data.ticketCode.toLowerCase().replace('torp-', '')}.pdf`;
 
-  return { buffer, fileName };
+  return { buffer: pdfBytes, fileName };
 }

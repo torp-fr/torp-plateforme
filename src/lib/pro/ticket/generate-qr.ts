@@ -14,7 +14,7 @@ export interface QRCodeOptions {
 
 export interface QRCodeResult {
   dataUrl: string;         // Data URL base64 pour affichage
-  buffer: Buffer;          // Buffer pour inclusion dans PDF
+  buffer: Uint8Array;      // Uint8Array pour inclusion dans PDF (compatible navigateur)
   svg: string;             // Version SVG
 }
 
@@ -43,8 +43,14 @@ export async function generateQRCode(options: QRCodeOptions): Promise<QRCodeResu
   // Générer en PNG (data URL) pour affichage web
   const dataUrl = await QRCode.toDataURL(url, qrOptions);
 
-  // Générer en Buffer (pour PDF)
-  const buffer = await QRCode.toBuffer(url, qrOptions);
+  // Convertir data URL en Uint8Array (pour PDF - compatible navigateur)
+  // Data URL format: "data:image/png;base64,iVBORw0KG..."
+  const base64Data = dataUrl.split(',')[1];
+  const binaryString = atob(base64Data);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
 
   // Générer en SVG
   const svg = await QRCode.toString(url, {
@@ -59,7 +65,7 @@ export async function generateQRCode(options: QRCodeOptions): Promise<QRCodeResu
 
   return {
     dataUrl,
-    buffer: Buffer.from(buffer),
+    buffer: bytes,
     svg,
   };
 }
