@@ -271,7 +271,10 @@ export async function generateTicketPDF(data: TicketData): Promise<TicketPDFResu
 
   // ===== QR CODE (Droite) =====
   try {
+    console.log('[PDF] 📱 Intégration du QR code...');
+    console.log('[PDF] QR buffer length:', data.qrCodeBuffer.length);
     const qrImage = await pdfDoc.embedPng(data.qrCodeBuffer);
+    console.log('[PDF] ✅ QR code intégré');
     page.drawImage(qrImage, {
       x: 470,
       y: 80,
@@ -290,7 +293,7 @@ export async function generateTicketPDF(data: TicketData): Promise<TicketPDFResu
       color: COLORS.textDark,
     });
   } catch (error) {
-    console.error('Error embedding QR code in PDF:', error);
+    console.error('[PDF] ❌ Error embedding QR code:', error);
     // Continue without QR code if error
   }
 
