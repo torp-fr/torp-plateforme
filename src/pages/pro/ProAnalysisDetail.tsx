@@ -43,6 +43,7 @@ import {
   Lightbulb,
   Loader2,
   Upload,
+  ExternalLink,
 } from 'lucide-react';
 import type { ProDevisAnalysis, CompanyProfile, Recommendation } from '@/types/pro';
 
