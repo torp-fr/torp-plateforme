@@ -508,3 +508,268 @@ export async function trackTicketView(
     console.error('Error incrementing view count:', countError);
   }
 }
+
+/**
+ * Interface pour les données publiques du ticket
+ */
+export interface PublicTicketData {
+  valid: boolean;
+  error?: string;
+  data?: {
+    ticketCode: string;
+    grade: 'A' | 'B' | 'C' | 'D' | 'E';
+    scoreTotal: number;
+    gradeLabel: string;
+    gradeDescription: string;
+    entreprise: {
+      raisonSociale: string;
+      ville: string;
+      siretPartiel: string;
+      anciennete: string;
+      siretVerifie: boolean;
+    };
+    referenceDevis: string;
+    dateAnalyse: string;
+    axes: Array<{
+      label: string;
+      score: number;
+      status: 'excellent' | 'bon' | 'moyen' | 'faible';
+    }>;
+    pointsForts: string[];
+    documentsVerifies: Array<{
+      type: string;
+      statut: 'valide' | 'present';
+    }>;
+    certifications: string[];
+  };
+}
+
+/**
+ * Récupère les données publiques d'un ticket pour affichage
+ * Fonction accessible sans authentification
+ */
+export async function getPublicTicketData(ticketCode: string): Promise<PublicTicketData> {
+  try {
+    // Validation du format
+    if (!/^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$/.test(ticketCode.toUpperCase())) {
+      return {
+        valid: false,
+        error: 'Code invalide',
+      };
+    }
+
+    const code = ticketCode.toUpperCase();
+
+    // Récupérer l'analyse
+    const { data: analysis, error: analysisError } = await supabase
+      .from('pro_devis_analyses')
+      .select(`
+        *,
+        company:pro_company_profiles!inner(
+          raison_sociale,
+          ville,
+          siret,
+          siret_verifie,
+          date_creation
+        )
+      `)
+      .eq('ticket_code', code)
+      .eq('ticket_genere', true)
+      .eq('status', 'COMPLETED')
+      .single();
+
+    if (analysisError || !analysis) {
+      return {
+        valid: false,
+        error: 'Ticket non trouvé',
+      };
+    }
+
+    // Récupérer les documents
+    const { data: documents } = await supabase
+      .from('company_documents')
+      .select('*')
+      .eq('company_id', analysis.company_id)
+      .in('statut', ['VALID', 'EXPIRING']);
+
+    // Formater les données
+    const gradeInfo = getGradeInfo(analysis.grade);
+    const axes = formatAxesForPublic(analysis.score_details);
+    const pointsForts = extractPointsForts(analysis.score_details);
+    const documentsVerifies = formatDocuments(documents || []);
+    const certifications = extractCertifications(documents || []);
+
+    return {
+      valid: true,
+      data: {
+        ticketCode: `TORP-${code}`,
+        grade: analysis.grade as 'A' | 'B' | 'C' | 'D' | 'E',
+        scoreTotal: analysis.score_total || 0,
+        gradeLabel: gradeInfo.label,
+        gradeDescription: gradeInfo.description,
+        entreprise: {
+          raisonSociale: analysis.company.raison_sociale,
+          ville: analysis.company.ville || 'Non renseigné',
+          siretPartiel: formatSiret(analysis.company.siret),
+          anciennete: calculateAnciennete(analysis.company.date_creation),
+          siretVerifie: analysis.company.siret_verifie || false,
+        },
+        referenceDevis: analysis.reference_devis || 'Non renseigné',
+        dateAnalyse: formatDateFr(analysis.analyzed_at),
+        axes,
+        pointsForts,
+        documentsVerifies,
+        certifications,
+      },
+    };
+  } catch (error) {
+    console.error('Error fetching public ticket data:', error);
+    return {
+      valid: false,
+      error: 'Erreur serveur',
+    };
+  }
+}
+
+// Helper functions
+
+function getGradeInfo(grade: string | null): { label: string; description: string } {
+  const grades: Record<string, { label: string; description: string }> = {
+    A: {
+      label: 'Excellent',
+      description: 'Ce devis présente toutes les garanties de qualité et de professionnalisme.',
+    },
+    B: {
+      label: 'Bon',
+      description: 'Ce devis est de bonne qualité avec des garanties solides.',
+    },
+    C: {
+      label: 'Correct',
+      description: 'Ce devis est acceptable mais présente quelques points d\'attention.',
+    },
+    D: {
+      label: 'Insuffisant',
+      description: 'Ce devis présente des lacunes importantes à clarifier avant engagement.',
+    },
+    E: {
+      label: 'Critique',
+      description: 'Ce devis présente des problèmes majeurs. Prudence recommandée.',
+    },
+  };
+  return grades[grade || 'C'] || grades.C;
+}
+
+function formatAxesForPublic(scoreDetails: any): Array<{ label: string; score: number; status: string }> {
+  if (!scoreDetails) return [];
+
+  const axeLabels: Record<string, string> = {
+    fiabilite: 'Fiabilité entreprise',
+    assurances: 'Assurances',
+    tarifs: 'Transparence tarifaire',
+    qualite: 'Qualité du devis',
+    conformite: 'Conformité légale',
+    transparence: 'Transparence',
+  };
+
+  return Object.entries(scoreDetails)
+    .filter(([key]) => axeLabels[key])
+    .map(([key, value]: [string, any]) => {
+      const pointsObtenus = value?.points_obtenus || value?.pointsObtenus || 0;
+      const maxPoints = value?.max_points || value?.maxPoints || 100;
+      const pourcentage = Math.round((pointsObtenus / maxPoints) * 100);
+
+      let status: 'excellent' | 'bon' | 'moyen' | 'faible' = 'moyen';
+      if (pourcentage >= 80) status = 'excellent';
+      else if (pourcentage >= 60) status = 'bon';
+      else if (pourcentage < 40) status = 'faible';
+
+      return {
+        label: axeLabels[key],
+        score: pourcentage,
+        status,
+      };
+    });
+}
+
+function extractPointsForts(scoreDetails: any): string[] {
+  const points: string[] = [];
+
+  if (!scoreDetails) return points;
+
+  // Extraire les points forts basés sur les scores
+  const assurances = scoreDetails.assurances || scoreDetails.Assurances;
+  const fiabilite = scoreDetails.fiabilite || scoreDetails.Fiabilité;
+  const qualite = scoreDetails.qualite || scoreDetails.Qualité;
+  const conformite = scoreDetails.conformite || scoreDetails.Conformité;
+  const tarifs = scoreDetails.tarifs || scoreDetails.Tarifs;
+
+  if (assurances && (assurances.points_obtenus || assurances.pointsObtenus) >= 160) {
+    points.push('Assurances vérifiées et à jour');
+  }
+  if (fiabilite && (fiabilite.points_obtenus || fiabilite.pointsObtenus) >= 200) {
+    points.push('Entreprise établie et fiable');
+  }
+  if (qualite && (qualite.points_obtenus || qualite.pointsObtenus) >= 120) {
+    points.push('Devis clair et détaillé');
+  }
+  if (conformite && (conformite.points_obtenus || conformite.pointsObtenus) >= 100) {
+    points.push('Mentions légales conformes');
+  }
+  if (tarifs && (tarifs.points_obtenus || tarifs.pointsObtenus) >= 160) {
+    points.push('Tarification transparente');
+  }
+
+  return points.slice(0, 3);
+}
+
+function formatDocuments(documents: any[]): Array<{ type: string; statut: string }> {
+  const docLabels: Record<string, string> = {
+    KBIS: 'Extrait Kbis',
+    ASSURANCE_DECENNALE: 'Assurance décennale',
+    ASSURANCE_RC_PRO: 'RC Professionnelle',
+    ATTESTATION_URSSAF: 'Attestation URSSAF',
+    CERTIFICATION_RGE: 'Certification RGE',
+    CERTIFICATION_QUALIBAT: 'Certification Qualibat',
+  };
+
+  return documents
+    .filter((doc) =>
+      ['KBIS', 'ASSURANCE_DECENNALE', 'ASSURANCE_RC_PRO', 'CERTIFICATION_RGE', 'CERTIFICATION_QUALIBAT'].includes(
+        doc.type
+      )
+    )
+    .map((doc) => ({
+      type: docLabels[doc.type] || doc.type,
+      statut: doc.statut === 'VALID' ? 'valide' : 'present',
+    }));
+}
+
+function extractCertifications(documents: any[]): string[] {
+  const certifTypes = ['CERTIFICATION_RGE', 'CERTIFICATION_QUALIBAT', 'CERTIFICATION_QUALIFELEC', 'CERTIFICATION_QUALIPAC'];
+  return documents
+    .filter((doc) => certifTypes.includes(doc.type) && doc.statut === 'VALID')
+    .map((doc) => doc.type.replace('CERTIFICATION_', ''));
+}
+
+function formatSiret(siret: string): string {
+  const clean = siret.replace(/\s/g, '');
+  if (clean.length !== 14) return siret;
+  return `${clean.slice(0, 3)} ${clean.slice(3, 6)} ${clean.slice(6, 9)} ${clean.slice(9)}`;
+}
+
+function calculateAnciennete(dateCreation: string | null): string {
+  if (!dateCreation) return 'Non renseigné';
+  const years = Math.floor((Date.now() - new Date(dateCreation).getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+  if (years < 1) return 'Moins d\'un an';
+  if (years === 1) return '1 an d\'activité';
+  return `${years} ans d'activité`;
+}
+
+function formatDateFr(date: string | null): string {
+  if (!date) return 'Non renseigné';
+  return new Date(date).toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}

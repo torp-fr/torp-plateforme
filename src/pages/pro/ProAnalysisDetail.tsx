@@ -659,6 +659,30 @@ export default function ProAnalysisDetail() {
               onSuccess={() => loadAnalysis()}
             />
 
+            {/* Lien vers la page publique */}
+            {analysis.ticket_genere && analysis.ticket_code && (
+              <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">
+                      Page publique de votre analyse
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      C'est cette page que vos clients verront en scannant le QR code.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(`/t/${analysis.ticket_code}`, '_blank')}
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Prévisualiser
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Hidden file input for re-analysis */}
             <input
               ref={fileInputRef}
