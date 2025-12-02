@@ -1,5 +1,5 @@
 /**
- * Génération de code unique pour les tickets TORP
+ * Génération de codes uniques pour les tickets TORP
  * Format : TORP-XXXXXX (6 caractères alphanumériques)
  */
 
@@ -17,7 +17,7 @@ export interface TicketCode {
 }
 
 /**
- * Génère un code aléatoire de la longueur spécifiée
+ * Génère un code aléatoire de longueur donnée
  */
 function generateRandomCode(length: number): string {
   let result = '';
@@ -28,43 +28,39 @@ function generateRandomCode(length: number): string {
 }
 
 /**
- * Vérifie si un code existe déjà en base
- */
-async function codeExists(code: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('pro_devis_analyses')
-    .select('id')
-    .eq('ticket_code', code)
-    .single();
-
-  // Si data existe, le code est déjà utilisé
-  // Si error et code PGRST116 (not found), le code est disponible
-  return !!data;
-}
-
-/**
- * Génère un code unique pour un ticket
+ * Génère un code unique pour un ticket TORP
  */
 export async function generateTicketCode(analysisId: string): Promise<TicketCode> {
   let attempts = 0;
   let shortCode: string;
   let exists = true;
 
-  // Essayer de générer un code unique (max 10 tentatives)
+  // Générer un code unique (max 5 tentatives)
   do {
     shortCode = generateRandomCode(6);
-    exists = await codeExists(shortCode);
-    attempts++;
 
-    if (!exists) break;
+    // Vérifier si le code existe déjà
+    const { data, error } = await supabase
+      .from('pro_devis_analyses')
+      .select('id')
+      .eq('ticket_code', shortCode)
+      .maybeSingle();
 
-    if (attempts >= 10) {
-      throw new Error('Unable to generate unique ticket code after 10 attempts');
+    if (error) {
+      console.error('Error checking ticket code uniqueness:', error);
+      throw new Error('Failed to generate unique ticket code');
     }
-  } while (exists);
 
-  // Construire l'URL complète
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://torp.fr';
+    exists = !!data;
+    attempts++;
+  } while (exists && attempts < 5);
+
+  if (attempts >= 5 && exists) {
+    throw new Error('Unable to generate unique ticket code after 5 attempts');
+  }
+
+  // Construire l'URL
+  const baseUrl = import.meta.env.VITE_APP_URL || window.location.origin;
   const url = `${baseUrl}/t/${shortCode}`;
 
   return {
@@ -76,29 +72,9 @@ export async function generateTicketCode(analysisId: string): Promise<TicketCode
 }
 
 /**
- * Formatte un code pour l'affichage (ajoute le préfixe TORP-)
- */
-export function formatTicketCode(shortCode: string): string {
-  return `TORP-${shortCode}`;
-}
-
-/**
  * Valide le format d'un code ticket
  */
 export function validateTicketCode(code: string): boolean {
-  // Vérifier le format : 6 caractères de l'alphabet autorisé
-  const codeWithoutPrefix = code.replace('TORP-', '');
-
-  if (codeWithoutPrefix.length !== 6) {
-    return false;
-  }
-
-  // Vérifier que tous les caractères sont dans l'alphabet
-  for (const char of codeWithoutPrefix) {
-    if (!ALPHABET.includes(char)) {
-      return false;
-    }
-  }
-
-  return true;
+  const pattern = /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$/;
+  return pattern.test(code);
 }

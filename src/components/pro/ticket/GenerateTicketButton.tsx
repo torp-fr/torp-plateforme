@@ -1,173 +1,162 @@
 /**
- * TORP B2B - Bouton Générer/Voir Ticket TORP
- *
- * Composant réutilisable pour gérer la génération et l'accès aux tickets TORP
- * Utilisable dans la page détail d'analyse et dans la liste des analyses
- *
- * Props:
- * - analysis: L'analyse dont on veut générer/voir le ticket
- * - variant: 'full' (bouton complet) ou 'compact' (version liste)
- * - onSuccess: Callback après génération réussie
+ * Bouton réutilisable pour générer/accéder au ticket TORP
+ * Utilisé dans la page détail analyse et la liste
  */
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
-import { generateTicket } from '@/services/api/pro/analysisService';
-import {
-  QrCode,
-  Loader2,
-  CheckCircle2,
-  Eye,
-  Download,
-} from 'lucide-react';
+import { Ticket, Download, Loader2, QrCode } from 'lucide-react';
+import { generateTicket } from '@/lib/pro/ticket/ticket-service';
 import type { ProDevisAnalysis } from '@/types/pro';
 
-interface GenerateTicketButtonProps {
+// Support pour deux interfaces : objet analysis complet ou props individuelles
+interface GenerateTicketButtonPropsWithAnalysis {
   analysis: ProDevisAnalysis;
-  variant?: 'full' | 'compact';
+  variant?: 'default' | 'outline' | 'ghost' | 'secondary' | 'full';
+  size?: 'default' | 'sm' | 'lg';
   showDownload?: boolean;
-  onSuccess?: (ticketData: any) => void;
+  onSuccess?: () => void;
 }
 
-export default function GenerateTicketButton({
-  analysis,
-  variant = 'full',
-  showDownload = false,
-  onSuccess,
-}: GenerateTicketButtonProps) {
+interface GenerateTicketButtonPropsIndividual {
+  analysisId: string;
+  ticketGenere: boolean;
+  ticketUrl?: string | null;
+  variant?: 'default' | 'outline' | 'ghost' | 'secondary' | 'full';
+  size?: 'default' | 'sm' | 'lg';
+  showDownload?: boolean;
+  onSuccess?: () => void;
+}
+
+type GenerateTicketButtonProps = GenerateTicketButtonPropsWithAnalysis | GenerateTicketButtonPropsIndividual;
+
+// Type guard pour vérifier si on a l'objet analysis
+function hasAnalysis(props: GenerateTicketButtonProps): props is GenerateTicketButtonPropsWithAnalysis {
+  return 'analysis' in props;
+}
+
+export function GenerateTicketButton(props: GenerateTicketButtonProps) {
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const [generating, setGenerating] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleGenerateTicket = async (e?: React.MouseEvent) => {
-    e?.stopPropagation(); // Empêcher la propagation si dans une liste cliquable
+  // Extraire les valeurs selon l'interface utilisée
+  const analysisId = hasAnalysis(props) ? props.analysis.id : props.analysisId;
+  const ticketGenere = hasAnalysis(props) ? props.analysis.ticket_genere : props.ticketGenere;
+  const ticketUrl = hasAnalysis(props) ? props.analysis.ticket_url : props.ticketUrl;
+  const variant = props.variant || 'default';
+  const size = props.size || 'default';
+  const showDownload = props.showDownload ?? false;
+  const onSuccess = props.onSuccess;
 
-    if (!analysis) return;
-
+  async function handleGenerate() {
+    setLoading(true);
     try {
-      setGenerating(true);
-
-      const ticket = await generateTicket(analysis.id);
-
-      toast({
-        title: "✅ Ticket généré avec succès !",
-        description: `Code : ${ticket.ticket_code}`,
-      });
-
+      await generateTicket(analysisId);
       if (onSuccess) {
-        onSuccess(ticket);
+        onSuccess();
       }
-
-      // Naviguer vers la page de prévisualisation
-      navigate(`/pro/analyses/${analysis.id}/ticket`);
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Erreur",
-        description: err.message || 'Impossible de générer le ticket',
-      });
+      navigate(`/pro/analyses/${analysisId}/ticket`);
+    } catch (error) {
+      console.error('Error generating ticket:', error);
+      alert('Erreur lors de la génération du ticket');
     } finally {
-      setGenerating(false);
+      setLoading(false);
     }
-  };
+  }
 
-  const handleViewTicket = (e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    navigate(`/pro/analyses/${analysis.id}/ticket`);
-  };
-
-  // Analyse non terminée
-  if (analysis.status !== 'COMPLETED') {
-    if (variant === 'compact') {
+  // Variant "full" : affichage complet avec card
+  if (variant === 'full') {
+    if (ticketGenere) {
       return (
-        <Button variant="ghost" size="sm" disabled>
-          <QrCode className="w-4 h-4 mr-1" />
-          Ticket
-        </Button>
+        <div className="border rounded-lg p-4 bg-green-50 dark:bg-green-950/20">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2 bg-green-600 rounded-lg">
+              <QrCode className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="font-semibold text-green-900 dark:text-green-100">
+                Ticket TORP généré
+              </p>
+              <p className="text-sm text-green-700 dark:text-green-300">
+                Prêt à être intégré à votre devis
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => navigate(`/pro/analyses/${analysisId}/ticket`)}
+              className="flex-1"
+            >
+              <Ticket className="mr-2 h-4 w-4" />
+              Voir le ticket
+            </Button>
+            {ticketUrl && (
+              <Button
+                variant="outline"
+                onClick={() => window.open(ticketUrl, '_blank')}
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
       );
     }
 
     return (
-      <Button className="w-full" size="lg" disabled>
-        <QrCode className="w-5 h-5 mr-2" />
-        Générer un ticket TORP
-        <Badge variant="secondary" className="ml-2">Analyse requise</Badge>
-      </Button>
-    );
-  }
-
-  // Ticket non généré
-  if (!analysis.ticket_genere) {
-    if (variant === 'compact') {
-      return (
+      <div className="border rounded-lg p-4">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="p-2 bg-primary/10 rounded-lg">
+            <QrCode className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <p className="font-semibold">Générer un ticket TORP</p>
+            <p className="text-sm text-muted-foreground">
+              Badge de certification pour votre devis
+            </p>
+          </div>
+        </div>
         <Button
-          variant="default"
-          size="sm"
-          onClick={handleGenerateTicket}
-          disabled={generating}
+          onClick={handleGenerate}
+          disabled={loading}
+          className="w-full"
         >
-          {generating ? (
+          {loading ? (
             <>
-              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-              Génération...
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Génération en cours...
             </>
           ) : (
             <>
-              <QrCode className="w-4 h-4 mr-1" />
-              Générer ticket
+              <QrCode className="mr-2 h-4 w-4" />
+              Générer le ticket
             </>
           )}
         </Button>
-      );
-    }
-
-    return (
-      <Button
-        className="w-full"
-        size="lg"
-        onClick={handleGenerateTicket}
-        disabled={generating}
-      >
-        {generating ? (
-          <>
-            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-            Génération en cours...
-          </>
-        ) : (
-          <>
-            <QrCode className="w-5 h-5 mr-2" />
-            Générer un ticket TORP
-          </>
-        )}
-      </Button>
+      </div>
     );
   }
 
-  // Ticket déjà généré
-  if (variant === 'compact') {
+  // Variants normaux : bouton simple
+  if (ticketGenere) {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex gap-2">
         <Button
-          variant="outline"
-          size="sm"
-          onClick={handleViewTicket}
+          variant={variant === 'full' ? 'default' : variant}
+          size={size}
+          onClick={() => navigate(`/pro/analyses/${analysisId}/ticket`)}
         >
-          <Eye className="w-4 h-4 mr-1" />
-          Voir ticket
+          <Ticket className="mr-2 h-4 w-4" />
+          Voir le ticket
         </Button>
-        {showDownload && analysis.ticket_url && (
+        {showDownload && ticketUrl && (
           <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              window.open(analysis.ticket_url, '_blank');
-            }}
+            variant="outline"
+            size={size}
+            onClick={() => window.open(ticketUrl, '_blank')}
           >
-            <Download className="w-4 h-4" />
+            <Download className="h-4 w-4" />
           </Button>
         )}
       </div>
@@ -175,36 +164,25 @@ export default function GenerateTicketButton({
   }
 
   return (
-    <div className="space-y-2">
-      <Button
-        className="w-full"
-        size="lg"
-        variant="default"
-        onClick={handleViewTicket}
-      >
-        <CheckCircle2 className="w-5 h-5 mr-2 text-white" />
-        Voir le ticket TORP
-        {analysis.ticket_code && (
-          <Badge variant="secondary" className="ml-2 bg-white/20 text-white border-white/30">
-            {analysis.ticket_code}
-          </Badge>
-        )}
-      </Button>
-
-      {showDownload && analysis.ticket_url && (
-        <Button
-          variant="outline"
-          className="w-full"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            window.open(analysis.ticket_url, '_blank');
-          }}
-        >
-          <Download className="w-4 h-4 mr-2" />
-          Télécharger le PDF
-        </Button>
+    <Button
+      variant={variant === 'full' ? 'default' : variant}
+      size={size}
+      onClick={handleGenerate}
+      disabled={loading}
+    >
+      {loading ? (
+        <>
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Génération...
+        </>
+      ) : (
+        <>
+          <Ticket className="mr-2 h-4 w-4" />
+          Générer le ticket
+        </>
       )}
-    </div>
+    </Button>
   );
 }
+
+export default GenerateTicketButton;

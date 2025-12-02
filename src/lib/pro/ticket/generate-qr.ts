@@ -1,6 +1,5 @@
 /**
  * Génération de QR codes pour les tickets TORP
- * Utilise la librairie qrcode
  */
 
 import QRCode from 'qrcode';
@@ -11,7 +10,6 @@ export interface QRCodeOptions {
   margin?: number;         // Marge (défaut: 2)
   darkColor?: string;      // Couleur modules (défaut: #1E3A5F)
   lightColor?: string;     // Couleur fond (défaut: #FFFFFF)
-  logoUrl?: string;        // Logo au centre (optionnel)
 }
 
 export interface QRCodeResult {
@@ -21,7 +19,7 @@ export interface QRCodeResult {
 }
 
 /**
- * Génère un QR code aux formats PNG, Buffer et SVG
+ * Génère un QR code sous différents formats
  */
 export async function generateQRCode(options: QRCodeOptions): Promise<QRCodeResult> {
   const {
@@ -39,71 +37,44 @@ export async function generateQRCode(options: QRCodeOptions): Promise<QRCodeResu
       dark: darkColor,
       light: lightColor,
     },
-    errorCorrectionLevel: 'M' as const,  // Medium correction
+    errorCorrectionLevel: 'M' as const,  // Medium correction pour logo optionnel
   };
 
-  try {
-    // Générer en PNG (data URL) pour affichage web
-    const dataUrl = await QRCode.toDataURL(url, qrOptions);
+  // Générer en PNG (data URL) pour affichage web
+  const dataUrl = await QRCode.toDataURL(url, qrOptions);
 
-    // Générer en Buffer (pour PDF)
-    const buffer = await QRCode.toBuffer(url, qrOptions);
+  // Générer en Buffer (pour PDF)
+  const buffer = await QRCode.toBuffer(url, qrOptions);
 
-    // Générer en SVG
-    const svg = await QRCode.toString(url, {
-      type: 'svg',
-      ...qrOptions,
-    });
+  // Générer en SVG
+  const svg = await QRCode.toString(url, {
+    type: 'svg',
+    width: size,
+    margin,
+    color: {
+      dark: darkColor,
+      light: lightColor,
+    },
+  });
 
-    return { dataUrl, buffer, svg };
-  } catch (error) {
-    console.error('Error generating QR code:', error);
-    throw new Error('Failed to generate QR code');
-  }
+  return {
+    dataUrl,
+    buffer: Buffer.from(buffer),
+    svg,
+  };
 }
 
 /**
- * Génère uniquement le buffer PNG (plus rapide pour PDF)
+ * Génère uniquement le data URL (plus léger pour affichage rapide)
  */
-export async function generateQRCodeBuffer(
-  url: string,
-  size: number = 200
-): Promise<Buffer> {
-  try {
-    return await QRCode.toBuffer(url, {
-      width: size,
-      margin: 2,
-      color: {
-        dark: '#1E3A5F',
-        light: '#FFFFFF',
-      },
-      errorCorrectionLevel: 'M',
-    });
-  } catch (error) {
-    console.error('Error generating QR code buffer:', error);
-    throw new Error('Failed to generate QR code buffer');
-  }
-}
-
-/**
- * Génère uniquement la data URL (pour affichage)
- */
-export async function generateQRCodeDataUrl(
-  url: string,
-  size: number = 200
-): Promise<string> {
-  try {
-    return await QRCode.toDataURL(url, {
-      width: size,
-      margin: 2,
-      color: {
-        dark: '#1E3A5F',
-        light: '#FFFFFF',
-      },
-      errorCorrectionLevel: 'M',
-    });
-  } catch (error) {
-    console.error('Error generating QR code data URL:', error);
-    throw new Error('Failed to generate QR code data URL');
-  }
+export async function generateQRCodeDataUrl(url: string, size = 200): Promise<string> {
+  return QRCode.toDataURL(url, {
+    width: size,
+    margin: 2,
+    color: {
+      dark: '#1E3A5F',
+      light: '#FFFFFF',
+    },
+    errorCorrectionLevel: 'M',
+  });
 }
