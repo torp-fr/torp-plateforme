@@ -19,7 +19,10 @@ export interface GenerateTicketResult {
  * Génère un ticket TORP complet pour une analyse
  */
 export async function generateTicket(analysisId: string): Promise<GenerateTicketResult> {
+  console.log('[TICKET] 🎫 Début génération ticket pour:', analysisId);
+
   // 1. Récupérer les données de l'analyse
+  console.log('[TICKET] 📊 Récupération de l\'analyse...');
   const { data: analysis, error: analysisError } = await supabase
     .from('pro_devis_analyses')
     .select(`
@@ -33,19 +36,25 @@ export async function generateTicket(analysisId: string): Promise<GenerateTicket
     .single();
 
   if (analysisError || !analysis) {
+    console.error('[TICKET] ❌ Erreur récupération analyse:', analysisError);
     throw new Error('Analysis not found');
   }
 
+  console.log('[TICKET] ✅ Analyse récupérée:', analysis.reference_devis);
+
   if (analysis.status !== 'COMPLETED') {
+    console.error('[TICKET] ❌ Analyse non complétée:', analysis.status);
     throw new Error('Analysis not completed yet');
   }
 
   if (!analysis.grade || analysis.score_total === null) {
+    console.error('[TICKET] ❌ Pas de score');
     throw new Error('Analysis has no score');
   }
 
   // 2. Vérifier si ticket déjà généré
   if (analysis.ticket_genere && analysis.ticket_code && analysis.ticket_url) {
+    console.log('[TICKET] ℹ️ Ticket déjà généré:', analysis.ticket_code);
     const baseUrl = import.meta.env.VITE_APP_URL || window.location.origin;
     const ticketCode = analysis.ticket_code.toLowerCase();
     return {
@@ -57,25 +66,32 @@ export async function generateTicket(analysisId: string): Promise<GenerateTicket
   }
 
   // 3. Générer le code unique
+  console.log('[TICKET] 🔑 Génération du code unique...');
   const codeData = await generateTicketCode(analysisId);
+  console.log('[TICKET] ✅ Code généré:', codeData.code);
 
   // 4. Sauvegarder le code en base
+  console.log('[TICKET] 💾 Sauvegarde du code en base...');
   const { error: updateCodeError } = await supabase
     .from('pro_devis_analyses')
     .update({ ticket_code: codeData.shortCode })
     .eq('id', analysisId);
 
   if (updateCodeError) {
+    console.error('[TICKET] ❌ Erreur sauvegarde code:', updateCodeError);
     throw new Error('Failed to save ticket code');
   }
 
   // 5. Générer le QR code
+  console.log('[TICKET] 📱 Génération du QR code...');
   const qrCode = await generateQRCode({
     url: codeData.url,
     size: 200,
   });
+  console.log('[TICKET] ✅ QR code généré');
 
   // 6. Préparer les données du ticket
+  console.log('[TICKET] 📄 Préparation des données PDF...');
   const ticketData: TicketData = {
     ticketCode: codeData.code,
     analysisId,
@@ -92,10 +108,13 @@ export async function generateTicket(analysisId: string): Promise<GenerateTicket
   };
 
   // 7. Générer le PDF
+  console.log('[TICKET] 📝 Génération du PDF...');
   const pdf = await generateTicketPDF(ticketData);
+  console.log('[TICKET] ✅ PDF généré:', pdf.fileName);
 
   // 8. Upload le PDF vers Supabase Storage
   const storagePath = `${analysis.user_id}/${pdf.fileName}`;
+  console.log('[TICKET] ☁️ Upload vers Storage:', storagePath);
 
   const { data: uploadData, error: uploadError } = await supabase.storage
     .from('tickets-torp')
@@ -105,9 +124,10 @@ export async function generateTicket(analysisId: string): Promise<GenerateTicket
     });
 
   if (uploadError) {
-    console.error('Error uploading ticket PDF:', uploadError);
+    console.error('[TICKET] ❌ Erreur upload Storage:', uploadError);
     throw new Error('Failed to upload ticket PDF');
   }
+  console.log('[TICKET] ✅ PDF uploadé dans Storage');
 
   // 9. Obtenir l'URL publique du PDF
   const { data: urlData } = supabase.storage
@@ -115,8 +135,10 @@ export async function generateTicket(analysisId: string): Promise<GenerateTicket
     .getPublicUrl(storagePath);
 
   const pdfUrl = urlData.publicUrl;
+  console.log('[TICKET] 🔗 URL publique:', pdfUrl);
 
   // 10. Mettre à jour l'analyse avec les infos du ticket
+  console.log('[TICKET] 💾 Mise à jour de l\'analyse...');
   const { error: updateError } = await supabase
     .from('pro_devis_analyses')
     .update({
@@ -126,10 +148,11 @@ export async function generateTicket(analysisId: string): Promise<GenerateTicket
     .eq('id', analysisId);
 
   if (updateError) {
-    console.error('Error updating analysis with ticket info:', updateError);
+    console.error('[TICKET] ❌ Erreur mise à jour analyse:', updateError);
     throw new Error('Failed to update analysis');
   }
 
+  console.log('[TICKET] ✅ Ticket généré avec succès !');
   return {
     ticketCode: codeData.code,
     ticketUrl: codeData.url,
