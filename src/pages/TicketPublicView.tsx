@@ -21,8 +21,13 @@ export default function TicketPublicView() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<PublicTicketViewData | null>(null);
 
+  console.log('[PUBLIC] 🎬 Composant TicketPublicView rendu, état:', { code, loading, error, hasData: !!data });
+
   useEffect(() => {
+    console.log('[PUBLIC] 🌐 Page publique chargée, code:', code);
+
     if (!code) {
+      console.error('[PUBLIC] ❌ Code manquant');
       setError('Code manquant');
       setLoading(false);
       return;
@@ -33,32 +38,39 @@ export default function TicketPublicView() {
 
   async function loadTicketData() {
     try {
+      console.log('[PUBLIC] 📡 Chargement des données pour code:', code);
       setLoading(true);
       setError(null);
 
       const result = await getPublicTicketData(code!);
+      console.log('[PUBLIC] 📥 Résultat reçu:', result);
 
       if (!result.valid || !result.data) {
+        console.error('[PUBLIC] ❌ Ticket invalide ou non trouvé:', result.error);
         setError(result.error || 'Ticket non trouvé');
         return;
       }
 
+      console.log('[PUBLIC] ✅ Données du ticket:', result.data);
       setData(result.data);
 
       // Tracker la vue
       try {
+        console.log('[PUBLIC] 📊 Tracking de la vue...');
         await trackTicketView(code!, 'link_viewed', {
           userAgent: navigator.userAgent,
           referrer: document.referrer,
         });
+        console.log('[PUBLIC] ✅ Vue trackée');
       } catch (trackError) {
         // Ne pas bloquer si tracking échoue
-        console.error('Error tracking ticket view:', trackError);
+        console.error('[PUBLIC] ⚠️ Error tracking ticket view:', trackError);
       }
     } catch (err: any) {
-      console.error('Error loading ticket data:', err);
+      console.error('[PUBLIC] ❌ Error loading ticket data:', err);
       setError(err.message || 'Erreur lors du chargement');
     } finally {
+      console.log('[PUBLIC] ✓ Loading terminé');
       setLoading(false);
     }
   }
