@@ -1,18 +1,70 @@
 -- Migration: Notifications et Tables B2B
--- Mise à jour de la table notifications et création des tables B2B
+-- Création table notifications (si inexistante) et tables B2B
 
 -- =====================================================
--- TABLE NOTIFICATIONS (mise à jour)
+-- TABLE NOTIFICATIONS (création ou mise à jour)
 -- =====================================================
 
--- Ajouter les colonnes manquantes si elles n'existent pas
-ALTER TABLE public.notifications
-  ADD COLUMN IF NOT EXISTS data JSONB,
-  ADD COLUMN IF NOT EXISTS email_sent BOOLEAN DEFAULT FALSE;
+-- Créer la table notifications si elle n'existe pas
+CREATE TABLE IF NOT EXISTS public.notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  type VARCHAR(50) DEFAULT 'info',
+  title TEXT NOT NULL,
+  message TEXT,
+  data JSONB,
+  link_url TEXT,
+  link_type TEXT,
+  link_id UUID,
+  read BOOLEAN DEFAULT FALSE,
+  read_at TIMESTAMPTZ,
+  email_sent BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- Index pour les notifications non lues
+-- Ajouter les colonnes manquantes si la table existait déjà
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'notifications' AND column_name = 'data') THEN
+    ALTER TABLE public.notifications ADD COLUMN data JSONB;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'notifications' AND column_name = 'email_sent') THEN
+    ALTER TABLE public.notifications ADD COLUMN email_sent BOOLEAN DEFAULT FALSE;
+  END IF;
+END $$;
+
+-- Index pour les notifications
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_read ON public.notifications(read);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
   ON public.notifications(user_id, read) WHERE read = FALSE;
+
+-- RLS pour notifications
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view own notifications" ON public.notifications;
+CREATE POLICY "Users can view own notifications" ON public.notifications
+  FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update own notifications" ON public.notifications;
+CREATE POLICY "Users can update own notifications" ON public.notifications
+  FOR UPDATE USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "System can insert notifications" ON public.notifications;
+CREATE POLICY "System can insert notifications" ON public.notifications
+  FOR INSERT WITH CHECK (true);
+
+-- =====================================================
+-- FONCTION update_updated_at_column (si inexistante)
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
 -- =====================================================
 -- TABLE COMPANIES (entreprises B2B)
@@ -165,10 +217,17 @@ CREATE INDEX IF NOT EXISTS idx_tickets_code ON public.tickets(code);
 CREATE INDEX IF NOT EXISTS idx_tickets_company_id ON public.tickets(company_id);
 
 -- =====================================================
--- AJOUTER company_id à users
+-- AJOUTER company_id à users (si la table existe)
 -- =====================================================
 
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES public.companies(id);
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users') THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'company_id') THEN
+      ALTER TABLE public.users ADD COLUMN company_id UUID REFERENCES public.companies(id);
+    END IF;
+  END IF;
+END $$;
 
 -- =====================================================
 -- ROW LEVEL SECURITY
