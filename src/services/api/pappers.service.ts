@@ -147,15 +147,25 @@ class PappersService {
   }
 
   /**
-   * Rechercher une entreprise par SIRET - avec fallback API SIRENE
+   * Rechercher une entreprise par SIRET
+   * Priorité : API SIRENE gratuite, puis Pappers en fallback (optimisation coûts)
    */
   async getEntrepriseBySiret(siret: string): Promise<EnrichedEntrepriseData | null> {
     const cleanedSiret = siret.replace(/\s/g, '');
 
-    // Essayer d'abord Pappers si configuré
+    // 1. Essayer d'abord l'API SIRENE gratuite (recherche-entreprises.api.gouv.fr)
+    console.log('[SIRENE] Recherche SIRET:', cleanedSiret);
+    const sireneResult = await this.getEntrepriseFromSirene(cleanedSiret);
+
+    if (sireneResult) {
+      console.log('[SIRENE] Entreprise trouvée:', sireneResult.nom);
+      return sireneResult;
+    }
+
+    // 2. Fallback: API Pappers (payante) pour données enrichies ou si SIRENE échoue
     if (this.isConfigured()) {
       try {
-        console.log('[Pappers] Fetching data for SIRET:', cleanedSiret);
+        console.log('[Pappers] Fallback - Fetching data for SIRET:', cleanedSiret);
 
         const response = await fetch(
           `${this.baseUrl}/entreprise?api_token=${this.apiKey}&siret=${cleanedSiret}`
@@ -186,9 +196,8 @@ class PappersService {
       }
     }
 
-    // Fallback: API SIRENE via recherche-entreprises.api.gouv.fr (gratuit, sans clé)
-    console.log('[SIRENE] Fallback - Fetching data for SIRET:', cleanedSiret);
-    return this.getEntrepriseFromSirene(cleanedSiret);
+    console.warn('[Entreprise] Aucune donnée trouvée pour SIRET:', cleanedSiret);
+    return null;
   }
 
   /**
