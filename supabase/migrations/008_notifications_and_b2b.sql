@@ -5,8 +5,10 @@
 -- TABLE NOTIFICATIONS (création ou mise à jour)
 -- =====================================================
 
--- Créer la table notifications si elle n'existe pas
-CREATE TABLE IF NOT EXISTS public.notifications (
+-- Supprimer et recréer la table notifications pour assurer la bonne structure
+DROP TABLE IF EXISTS public.notifications CASCADE;
+
+CREATE TABLE public.notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   type VARCHAR(50) DEFAULT 'info',
@@ -22,35 +24,21 @@ CREATE TABLE IF NOT EXISTS public.notifications (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Ajouter les colonnes manquantes si la table existait déjà
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'notifications' AND column_name = 'data') THEN
-    ALTER TABLE public.notifications ADD COLUMN data JSONB;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'notifications' AND column_name = 'email_sent') THEN
-    ALTER TABLE public.notifications ADD COLUMN email_sent BOOLEAN DEFAULT FALSE;
-  END IF;
-END $$;
-
 -- Index pour les notifications
-CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_read ON public.notifications(read);
-CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+CREATE INDEX idx_notifications_user_id ON public.notifications(user_id);
+CREATE INDEX idx_notifications_read ON public.notifications(read);
+CREATE INDEX idx_notifications_user_unread
   ON public.notifications(user_id, read) WHERE read = FALSE;
 
 -- RLS pour notifications
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Users can view own notifications" ON public.notifications;
 CREATE POLICY "Users can view own notifications" ON public.notifications
   FOR SELECT USING (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can update own notifications" ON public.notifications;
 CREATE POLICY "Users can update own notifications" ON public.notifications
   FOR UPDATE USING (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "System can insert notifications" ON public.notifications;
 CREATE POLICY "System can insert notifications" ON public.notifications
   FOR INSERT WITH CHECK (true);
 
