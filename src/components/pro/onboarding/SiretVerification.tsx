@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   CheckCircle2,
@@ -14,19 +15,22 @@ import {
   Calendar,
   Users,
   AlertTriangle,
+  Edit3,
 } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
 
 interface Props {
   onVerified: (data: SireneEntreprise) => void;
+  onNotFound: (siret: string) => void;
   onError: (error: string) => void;
   initialSiret?: string;
 }
 
-export function SiretVerification({ onVerified, onError, initialSiret = '' }: Props) {
+export function SiretVerification({ onVerified, onNotFound, onError, initialSiret = '' }: Props) {
   const [siret, setSiret] = useState(initialSiret);
   const [loading, setLoading] = useState(false);
   const [verified, setVerified] = useState(false);
+  const [notFound, setNotFound] = useState(false);
   const [entreprise, setEntreprise] = useState<SireneEntreprise | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +52,7 @@ export function SiretVerification({ onVerified, onError, initialSiret = '' }: Pr
     const formatted = formatSiretInput(e.target.value);
     setSiret(formatted);
     setVerified(false);
+    setNotFound(false);
     setEntreprise(null);
     setError(null);
   }
@@ -62,6 +67,7 @@ export function SiretVerification({ onVerified, onError, initialSiret = '' }: Pr
   async function verifySiret(siretToVerify: string) {
     setLoading(true);
     setError(null);
+    setNotFound(false);
 
     try {
       const result = await sireneService.getEtablissementBySiret(siretToVerify);
@@ -69,24 +75,36 @@ export function SiretVerification({ onVerified, onError, initialSiret = '' }: Pr
       if (result.success && result.data) {
         setEntreprise(result.data);
         setVerified(true);
+        setNotFound(false);
         onVerified(result.data);
 
         // Alerte si entreprise cessée
         if (!result.data.estActif) {
           setError('Attention : cette entreprise n\'est plus active');
         }
-      } else {
-        setError(result.error || 'SIRET non trouvé');
+      } else if (result.notFound) {
+        // Entreprise non trouvée dans les bases - permettre saisie manuelle
+        setNotFound(true);
         setVerified(false);
-        onError(result.error || 'SIRET non trouvé');
+        setError(null);
+      } else {
+        setError(result.error || 'Erreur lors de la recherche');
+        setVerified(false);
+        onError(result.error || 'Erreur lors de la recherche');
       }
     } catch (err) {
-      const errorMessage = 'Erreur lors de la vérification';
-      setError(errorMessage);
-      onError(errorMessage);
+      console.error('[SiretVerification] Erreur:', err);
+      // En cas d'erreur réseau, permettre la saisie manuelle
+      setNotFound(true);
+      setVerified(false);
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleManualEntry() {
+    const cleanSiret = siret.replace(/\s/g, '');
+    onNotFound(cleanSiret);
   }
 
   return (
@@ -104,6 +122,7 @@ export function SiretVerification({ onVerified, onError, initialSiret = '' }: Pr
             placeholder="XXX XXX XXX XXXXX"
             className={`pr-10 font-mono text-lg ${
               verified ? 'border-green-500 bg-green-50' :
+              notFound ? 'border-orange-500 bg-orange-50' :
               error ? 'border-red-500 bg-red-50' : ''
             }`}
             disabled={loading}
@@ -111,7 +130,8 @@ export function SiretVerification({ onVerified, onError, initialSiret = '' }: Pr
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
             {loading && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
             {verified && !loading && <CheckCircle2 className="h-5 w-5 text-green-500" />}
-            {error && !loading && !verified && <XCircle className="h-5 w-5 text-red-500" />}
+            {notFound && !loading && <AlertTriangle className="h-5 w-5 text-orange-500" />}
+            {error && !loading && !verified && !notFound && <XCircle className="h-5 w-5 text-red-500" />}
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -120,15 +140,47 @@ export function SiretVerification({ onVerified, onError, initialSiret = '' }: Pr
       </div>
 
       {/* Message d'erreur */}
-      {error && (
+      {error && !notFound && (
         <Alert variant={entreprise?.estActif === false ? 'default' : 'destructive'}>
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
+      {/* Entreprise non trouvée - permettre saisie manuelle */}
+      {notFound && !verified && (
+        <Card className="p-4 bg-orange-50 border-orange-200">
+          <div className="space-y-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 text-orange-500 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-orange-800">Entreprise non trouvée</h3>
+                <p className="text-sm text-orange-700 mt-1">
+                  Votre entreprise n'a pas été trouvée dans les bases de données publiques (INSEE/Sirene).
+                  Cela peut arriver pour les entreprises récemment créées ou dans certains cas particuliers.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-white/50 rounded p-3 text-sm">
+              <p className="font-medium text-orange-800">SIRET saisi :</p>
+              <p className="font-mono text-lg">{siret}</p>
+            </div>
+
+            <Button
+              onClick={handleManualEntry}
+              className="w-full"
+              variant="outline"
+            >
+              <Edit3 className="h-4 w-4 mr-2" />
+              Continuer avec saisie manuelle
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* Données entreprise vérifiées */}
-      {entreprise && (
+      {entreprise && verified && (
         <Card className={`p-4 ${entreprise.estActif ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'}`}>
           <div className="space-y-3">
             {/* En-tête */}
