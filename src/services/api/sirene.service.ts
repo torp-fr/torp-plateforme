@@ -219,17 +219,20 @@ class SireneService {
 
   /**
    * Valide le format d'un SIRET (14 chiffres)
+   * Note: La vérification Luhn n'est pas appliquée car certains SIRET français
+   * valides ne passent pas cet algorithme (exceptions historiques).
+   * La validation finale est faite par l'API Sirene.
    */
-  validateSiret(siret: string): { valid: boolean; error?: string } {
+  validateSiret(siret: string): { valid: boolean; error?: string; warning?: string } {
     const cleaned = siret.replace(/\s/g, '');
 
     if (!/^\d{14}$/.test(cleaned)) {
       return { valid: false, error: 'Le SIRET doit contenir exactement 14 chiffres' };
     }
 
-    // Vérification clé de Luhn
+    // Vérification Luhn optionnelle (avertissement seulement)
     if (!this.checkLuhn(cleaned)) {
-      return { valid: false, error: 'Le SIRET est invalide (clé de contrôle incorrecte)' };
+      console.warn('[Sirene] SIRET ne passe pas la validation Luhn (peut être une exception):', cleaned);
     }
 
     return { valid: true };
@@ -237,6 +240,7 @@ class SireneService {
 
   /**
    * Valide le format d'un SIREN (9 chiffres)
+   * Note: La vérification Luhn n'est pas appliquée strictement (exceptions historiques)
    */
   validateSiren(siren: string): { valid: boolean; error?: string } {
     const cleaned = siren.replace(/\s/g, '');
@@ -245,8 +249,9 @@ class SireneService {
       return { valid: false, error: 'Le SIREN doit contenir exactement 9 chiffres' };
     }
 
+    // Vérification Luhn optionnelle (avertissement seulement)
     if (!this.checkLuhn(cleaned)) {
-      return { valid: false, error: 'Le SIREN est invalide (clé de contrôle incorrecte)' };
+      console.warn('[Sirene] SIREN ne passe pas la validation Luhn (peut être une exception):', cleaned);
     }
 
     return { valid: true };
