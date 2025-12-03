@@ -6,13 +6,14 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
-import { CheckCircle, AlertTriangle, Lightbulb, Download, Eye, ArrowLeft, MessageSquare, Building2, DollarSign, FileCheck, Shield, Clock, Ticket, TrendingUp, RefreshCw, Loader2 } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Lightbulb, Download, Eye, ArrowLeft, MessageSquare, Building2, DollarSign, FileCheck, Shield, Clock, Ticket, TrendingUp, RefreshCw, Loader2, MapPin } from 'lucide-react';
 import type { Project } from '@/context/AppContext';
 import { CarteEntreprise } from '@/components/results/CarteEntreprise';
 import { AnalysePrixDetaillee } from '@/components/results/AnalysePrixDetaillee';
 import { AnalyseCompletetudeConformite } from '@/components/results/AnalyseCompletetudeConformite';
 import { ConseilsPersonnalises } from '@/components/results/ConseilsPersonnalises';
 import { InfosEntreprisePappers } from '@/components/results/InfosEntreprisePappers';
+import { OngletLocalisation } from '@/components/results/OngletLocalisation';
 import { generateAnalysisReportPDF } from '@/utils/pdfGenerator';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
@@ -203,9 +204,22 @@ export default function Results() {
         const scoreConformiteData = parseIfString(data.score_conformite);
         const scoreDelaisData = parseIfString(data.score_delais);
         const recommendationsData = parseIfString(data.recommendations);
+        const extractedData = parseIfString(data.extracted_data);
+        const analysisResultData = parseIfString(data.analysis_result);
 
         console.log('[Results] Parsed score_entreprise:', scoreEntrepriseData);
         console.log('[Results] Parsed recommendations:', recommendationsData);
+        console.log('[Results] Parsed extracted_data:', extractedData);
+
+        // Extraire l'adresse du chantier depuis différentes sources possibles
+        const adresseChantier =
+          extractedData?.travaux?.adresseChantier ||
+          extractedData?.adresseChantier ||
+          analysisResultData?.travaux?.adresseChantier ||
+          data.adresse_chantier ||
+          null;
+
+        console.log('[Results] Adresse chantier détectée:', adresseChantier);
 
         // Extract scores from analysis objects and convert to percentages
         // TORP scores: Entreprise /250, Prix /300, Complétude /200, Conformité /150, Délais /100
@@ -318,6 +332,8 @@ export default function Results() {
               },
               surcoutsDetectes: data.detected_overcosts || data.surcouts_detectes || 0,
               budgetRealEstime: data.recommendations?.budgetRealEstime || data.amount || data.budget_reel_estime || 0,
+              // Adresse du chantier pour le géocodage
+              adresseChantier: adresseChantier,
             }
           }
         };
@@ -512,7 +528,7 @@ export default function Results() {
             {/* Détails de l'analyse - Nouveaux onglets */}
             <div className="lg:col-span-2">
               <Tabs defaultValue="synthese" className="w-full">
-                <TabsList className="grid w-full grid-cols-5 mb-6">
+                <TabsList className="grid w-full grid-cols-6 mb-6">
                   <TabsTrigger value="synthese">
                     <Lightbulb className="w-4 h-4 mr-2" />
                     Synthèse
@@ -520,6 +536,10 @@ export default function Results() {
                   <TabsTrigger value="entreprise">
                     <Building2 className="w-4 h-4 mr-2" />
                     Entreprise
+                  </TabsTrigger>
+                  <TabsTrigger value="localisation">
+                    <MapPin className="w-4 h-4 mr-2" />
+                    Localisation
                   </TabsTrigger>
                   <TabsTrigger value="prix">
                     <DollarSign className="w-4 h-4 mr-2" />
@@ -617,6 +637,15 @@ export default function Results() {
                       autoLoad={false}
                     />
                   )}
+                </TabsContent>
+
+                {/* Onglet Localisation */}
+                <TabsContent value="localisation">
+                  <OngletLocalisation
+                    entrepriseAdresse={rawData.entreprise?.adresse}
+                    chantierAdresse={rawData.adresseChantier}
+                    entrepriseNom={rawData.entreprise?.nom}
+                  />
                 </TabsContent>
 
                 {/* Onglet Prix */}
