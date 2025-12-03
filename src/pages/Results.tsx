@@ -262,13 +262,54 @@ export default function Results() {
                 adresse: scoreEntrepriseData?.adresse || null,
                 telephone: scoreEntrepriseData?.telephone || null,
                 age: scoreEntrepriseData?.anciennete || scoreEntrepriseData?.age || null,
-                certifications: scoreEntrepriseData?.certifications || [],
+                certifications: Array.isArray(scoreEntrepriseData?.certifications)
+                  ? scoreEntrepriseData.certifications.map((c: any) => typeof c === 'string' ? c : c?.nom || c?.name || String(c))
+                  : [],
                 assurances: scoreEntrepriseData?.assurances || null,
               },
-              scoreEntreprise: scoreEntrepriseData,
+              scoreEntreprise: {
+                ...scoreEntrepriseData,
+                // S'assurer que risques et benefices sont des arrays de strings
+                risques: Array.isArray(scoreEntrepriseData?.risques)
+                  ? scoreEntrepriseData.risques.map((r: any) => typeof r === 'string' ? r : r?.description || r?.message || String(r))
+                  : [],
+                benefices: Array.isArray(scoreEntrepriseData?.benefices)
+                  ? scoreEntrepriseData.benefices.map((b: any) => typeof b === 'string' ? b : b?.description || b?.message || String(b))
+                  : [],
+              },
               scorePrix: scorePrixData,
-              scoreCompletude: scoreCompletudeData,
-              scoreConformite: scoreConformiteData,
+              // Transformer scoreCompletude pour s'assurer que les arrays sont des strings
+              scoreCompletude: {
+                ...scoreCompletudeData,
+                elementsManquants: Array.isArray(scoreCompletudeData?.elementsManquants)
+                  ? scoreCompletudeData.elementsManquants.map((e: any) => typeof e === 'string' ? e : e?.element || e?.description || String(e))
+                  : [],
+                incoherences: Array.isArray(scoreCompletudeData?.incoherences)
+                  ? scoreCompletudeData.incoherences.map((i: any) => typeof i === 'string' ? i : i?.description || i?.message || String(i))
+                  : [],
+                risquesTechniques: Array.isArray(scoreCompletudeData?.risquesTechniques)
+                  ? scoreCompletudeData.risquesTechniques.map((r: any) => typeof r === 'string' ? r : r?.description || r?.risque || String(r))
+                  : [],
+              },
+              // Transformer scoreConformite pour extraire les booléens des objets
+              scoreConformite: {
+                scoreTotal: scoreConformiteData?.scoreTotal || 0,
+                assurances: typeof scoreConformiteData?.assurances === 'boolean'
+                  ? scoreConformiteData.assurances
+                  : scoreConformiteData?.assurances?.conforme ?? false,
+                plu: typeof scoreConformiteData?.plu === 'boolean'
+                  ? scoreConformiteData.plu
+                  : scoreConformiteData?.plu?.conforme ?? false,
+                normes: typeof scoreConformiteData?.normes === 'boolean'
+                  ? scoreConformiteData.normes
+                  : (scoreConformiteData?.normes?.respectees?.length > 0 || scoreConformiteData?.normes?.conforme) ?? false,
+                accessibilite: typeof scoreConformiteData?.accessibilite === 'boolean'
+                  ? scoreConformiteData.accessibilite
+                  : scoreConformiteData?.accessibilite?.conforme ?? false,
+                defauts: Array.isArray(scoreConformiteData?.defauts)
+                  ? scoreConformiteData.defauts.map((d: any) => typeof d === 'string' ? d : d?.description || d?.defaut || String(d))
+                  : [],
+              },
               scoreDelais: scoreDelaisData,
               montantTotal: data.recommendations?.budgetRealEstime || data.amount || data.montant_total || 0,
               margeNegociation: data.recommendations?.margeNegociation || {
