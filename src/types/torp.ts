@@ -234,6 +234,18 @@ export interface TorpAnalysisResult {
     entreprise: {
       nom: string;
       siret: string | null;
+      siretVerification?: {
+        source: 'document' | 'pappers_lookup' | 'non_trouve';
+        confidence: 'high' | 'medium' | 'low';
+        verified: boolean;
+        message: string;
+        pappersMatch?: {
+          nomEntreprise: string;
+          adresse: string;
+          siret: string;
+          matchScore: number;
+        };
+      };
       adresse: string | null;
       telephone: string | null;
       email: string | null;
