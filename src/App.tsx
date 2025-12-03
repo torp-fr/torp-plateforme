@@ -37,7 +37,9 @@ import { ProRoute } from "@/components/auth/ProRoute";
 import ProDashboard from "./pages/pro/ProDashboard";
 import ProOnboarding from "./pages/pro/ProOnboarding";
 import ProAnalyses from "./pages/pro/ProAnalyses";
+import ProNewAnalysis from "./pages/pro/ProNewAnalysis";
 import ProDocuments from "./pages/pro/ProDocuments";
+import ProTickets from "./pages/pro/ProTickets";
 import ProSettings from "./pages/pro/ProSettings";
 
 const queryClient = new QueryClient();
@@ -82,7 +84,9 @@ const AppContent = () => {
           <Route path="/pro" element={<ProRoute><ProDashboard /></ProRoute>} />
           <Route path="/pro/onboarding" element={<ProRoute><ProOnboarding /></ProRoute>} />
           <Route path="/pro/analyses" element={<ProRoute><ProAnalyses /></ProRoute>} />
+          <Route path="/pro/analyses/new" element={<ProRoute><ProNewAnalysis /></ProRoute>} />
           <Route path="/pro/documents" element={<ProRoute><ProDocuments /></ProRoute>} />
+          <Route path="/pro/tickets" element={<ProRoute><ProTickets /></ProRoute>} />
           <Route path="/pro/settings" element={<ProRoute><ProSettings /></ProRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -11,6 +11,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { useApp } from '@/context/AppContext';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
@@ -21,6 +30,9 @@ import {
   Lock,
   Save,
   Loader2,
+  Mail,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface CompanyInfo {
@@ -35,7 +47,7 @@ interface CompanyInfo {
 }
 
 export default function ProSettings() {
-  const { user } = useApp();
+  const { user, setUser } = useApp();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -45,10 +57,29 @@ export default function ProSettings() {
   // Préférences notifications
   const [emailAnalyse, setEmailAnalyse] = useState(true);
   const [emailDocuments, setEmailDocuments] = useState(true);
+  const [savingNotifications, setSavingNotifications] = useState(false);
+
+  // Changement mot de passe
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  // Changement email
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [emailPassword, setEmailPassword] = useState('');
+  const [changingEmail, setChangingEmail] = useState(false);
+
+  // Modification nom
+  const [userName, setUserName] = useState('');
+  const [savingName, setSavingName] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
       loadSettings();
+      setUserName(user.name || '');
     }
   }, [user?.id]);
 
@@ -115,6 +146,166 @@ export default function ProSettings() {
     }
   }
 
+  async function handlePasswordChange() {
+    if (newPassword !== confirmPassword) {
+      toast({
+        variant: 'destructive',
+        title: 'Erreur',
+        description: 'Les mots de passe ne correspondent pas.',
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast({
+        variant: 'destructive',
+        title: 'Erreur',
+        description: 'Le mot de passe doit contenir au moins 6 caractères.',
+      });
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Mot de passe modifié',
+        description: 'Votre mot de passe a été mis à jour avec succès.',
+      });
+
+      setPasswordDialogOpen(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error: any) {
+      console.error('[ProSettings] Erreur changement mot de passe:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erreur',
+        description: error.message || 'Impossible de changer le mot de passe.',
+      });
+    } finally {
+      setChangingPassword(false);
+    }
+  }
+
+  async function handleEmailChange() {
+    if (!newEmail || !newEmail.includes('@')) {
+      toast({
+        variant: 'destructive',
+        title: 'Erreur',
+        description: 'Veuillez saisir une adresse email valide.',
+      });
+      return;
+    }
+
+    setChangingEmail(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        email: newEmail,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Email de confirmation envoyé',
+        description: `Un email de confirmation a été envoyé à ${newEmail}. Cliquez sur le lien pour confirmer le changement.`,
+      });
+
+      setEmailDialogOpen(false);
+      setNewEmail('');
+      setEmailPassword('');
+    } catch (error: any) {
+      console.error('[ProSettings] Erreur changement email:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erreur',
+        description: error.message || 'Impossible de changer l\'adresse email.',
+      });
+    } finally {
+      setChangingEmail(false);
+    }
+  }
+
+  async function handleNameChange() {
+    if (!userName.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Erreur',
+        description: 'Le nom ne peut pas être vide.',
+      });
+      return;
+    }
+
+    setSavingName(true);
+    try {
+      // Mettre à jour dans la table users
+      const { error } = await supabase
+        .from('users')
+        .update({ name: userName.trim() })
+        .eq('id', user!.id);
+
+      if (error) throw error;
+
+      // Mettre à jour le contexte local
+      if (user) {
+        setUser({ ...user, name: userName.trim() });
+      }
+
+      toast({
+        title: 'Nom mis à jour',
+        description: 'Votre nom a été modifié avec succès.',
+      });
+    } catch (error: any) {
+      console.error('[ProSettings] Erreur changement nom:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erreur',
+        description: error.message || 'Impossible de modifier le nom.',
+      });
+    } finally {
+      setSavingName(false);
+    }
+  }
+
+  async function saveNotificationPreferences() {
+    setSavingNotifications(true);
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({
+          preferences: {
+            notifications: {
+              email_analyse: emailAnalyse,
+              email_documents: emailDocuments,
+            },
+          },
+        })
+        .eq('id', user!.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Préférences enregistrées',
+        description: 'Vos préférences de notifications ont été mises à jour.',
+      });
+    } catch (error) {
+      console.error('[ProSettings] Erreur sauvegarde notifications:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erreur',
+        description: 'Impossible de sauvegarder les préférences.',
+      });
+    } finally {
+      setSavingNotifications(false);
+    }
+  }
+
   if (loading) {
     return (
       <ProLayout>
@@ -177,7 +368,7 @@ export default function ProSettings() {
                         />
                       </div>
                       <div>
-                        <Label>Email</Label>
+                        <Label>Email entreprise</Label>
                         <Input
                           value={companyInfo.email}
                           onChange={(e) =>
@@ -240,23 +431,182 @@ export default function ProSettings() {
 
           {/* Onglet Compte */}
           <TabsContent value="compte" className="space-y-6 mt-6">
+            {/* Informations personnelles */}
             <Card>
               <CardHeader>
-                <CardTitle>Compte utilisateur</CardTitle>
+                <CardTitle>Informations personnelles</CardTitle>
+                <CardDescription>
+                  Gérez vos informations de compte
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label>Email</Label>
-                  <Input value={user?.email || ''} disabled />
+                  <Label htmlFor="userName">Nom complet</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="userName"
+                      value={userName}
+                      onChange={(e) => setUserName(e.target.value)}
+                      placeholder="Votre nom"
+                    />
+                    <Button
+                      onClick={handleNameChange}
+                      disabled={savingName || userName === user?.name}
+                    >
+                      {savingName ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
-                <div>
-                  <Label>Nom</Label>
-                  <Input value={user?.name || ''} disabled />
+              </CardContent>
+            </Card>
+
+            {/* Adresse email */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="h-5 w-5" />
+                  Adresse email
+                </CardTitle>
+                <CardDescription>
+                  Email utilisé pour la connexion et les notifications
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div>
+                    <p className="font-medium">{user?.email}</p>
+                    <p className="text-sm text-muted-foreground">Email actuel</p>
+                  </div>
+                  <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline">
+                        <Mail className="h-4 w-4 mr-2" />
+                        Modifier
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Changer l'adresse email</DialogTitle>
+                        <DialogDescription>
+                          Un email de confirmation sera envoyé à la nouvelle adresse.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="newEmail">Nouvelle adresse email</Label>
+                          <Input
+                            id="newEmail"
+                            type="email"
+                            placeholder="nouvelle@email.com"
+                            value={newEmail}
+                            onChange={(e) => setNewEmail(e.target.value)}
+                          />
+                        </div>
+                        <div className="p-3 bg-blue-50 rounded-lg flex gap-2">
+                          <AlertCircle className="h-5 w-5 text-blue-500 shrink-0" />
+                          <p className="text-sm text-blue-700">
+                            Vous devrez cliquer sur le lien de confirmation envoyé
+                            à votre nouvelle adresse email pour finaliser le changement.
+                          </p>
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setEmailDialogOpen(false)}>
+                          Annuler
+                        </Button>
+                        <Button onClick={handleEmailChange} disabled={changingEmail}>
+                          {changingEmail ? (
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          ) : null}
+                          Envoyer la confirmation
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
-                <Button variant="outline" disabled>
-                  <Lock className="h-4 w-4 mr-2" />
-                  Changer le mot de passe
-                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Mot de passe */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Lock className="h-5 w-5" />
+                  Mot de passe
+                </CardTitle>
+                <CardDescription>
+                  Modifiez votre mot de passe de connexion
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline">
+                      <Lock className="h-4 w-4 mr-2" />
+                      Changer le mot de passe
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Changer le mot de passe</DialogTitle>
+                      <DialogDescription>
+                        Choisissez un nouveau mot de passe sécurisé.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="newPassword">Nouveau mot de passe</Label>
+                        <Input
+                          id="newPassword"
+                          type="password"
+                          placeholder="••••••••"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
+                        <Input
+                          id="confirmPassword"
+                          type="password"
+                          placeholder="••••••••"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                        />
+                      </div>
+                      {newPassword && confirmPassword && newPassword !== confirmPassword && (
+                        <p className="text-sm text-red-500 flex items-center gap-1">
+                          <AlertCircle className="h-4 w-4" />
+                          Les mots de passe ne correspondent pas
+                        </p>
+                      )}
+                      {newPassword && newPassword === confirmPassword && newPassword.length >= 6 && (
+                        <p className="text-sm text-green-500 flex items-center gap-1">
+                          <CheckCircle2 className="h-4 w-4" />
+                          Les mots de passe correspondent
+                        </p>
+                      )}
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setPasswordDialogOpen(false)}>
+                        Annuler
+                      </Button>
+                      <Button
+                        onClick={handlePasswordChange}
+                        disabled={changingPassword || newPassword !== confirmPassword || newPassword.length < 6}
+                      >
+                        {changingPassword ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        ) : null}
+                        Modifier
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </CardContent>
             </Card>
           </TabsContent>
@@ -295,6 +645,15 @@ export default function ProSettings() {
                     onCheckedChange={setEmailDocuments}
                   />
                 </div>
+
+                <Button onClick={saveNotificationPreferences} disabled={savingNotifications}>
+                  {savingNotifications ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Save className="h-4 w-4 mr-2" />
+                  )}
+                  Enregistrer les préférences
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
