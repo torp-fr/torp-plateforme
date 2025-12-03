@@ -22,7 +22,6 @@ import ProjectTracking from "./pages/ProjectTracking";
 import FormulaPicker from "./pages/FormulaPicker";
 import AdminDashboard from "./pages/AdminDashboard";
 import ProjectDashboard from "./pages/ProjectDashboard";
-import PrescripteursDashboard from "./pages/PrescripteursDashboard";
 import ImprovedB2BDashboard from "@/pages/ImprovedB2BDashboard";
 import B2CDashboard from "./pages/B2CDashboard";
 import NotFound from "./pages/NotFound";

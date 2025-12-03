@@ -19,7 +19,7 @@ export interface Database {
           id: string
           email: string
           name: string | null
-          user_type: 'B2C' | 'B2B' | 'B2G' | 'B2B2C' | 'admin'
+          user_type: 'B2C' | 'B2B' | 'admin'
           company: string | null
           phone: string | null
           address: Json | null
@@ -39,7 +39,7 @@ export interface Database {
           id: string
           email: string
           name?: string | null
-          user_type?: 'B2C' | 'B2B' | 'B2G' | 'B2B2C' | 'admin'
+          user_type?: 'B2C' | 'B2B' | 'admin'
           company?: string | null
           phone?: string | null
           address?: Json | null
@@ -59,7 +59,7 @@ export interface Database {
           id?: string
           email?: string
           name?: string | null
-          user_type?: 'B2C' | 'B2B' | 'B2G' | 'B2B2C' | 'admin'
+          user_type?: 'B2C' | 'B2B' | 'admin'
           company?: string | null
           phone?: string | null
           address?: Json | null
@@ -552,7 +552,7 @@ export interface Database {
       }
     }
     Enums: {
-      user_type: 'B2C' | 'B2B' | 'B2G' | 'B2B2C' | 'admin'
+      user_type: 'B2C' | 'B2B' | 'admin'
       project_status: 'draft' | 'analyzing' | 'completed' | 'accepted' | 'rejected' | 'in_progress' | 'finished'
       devis_status: 'uploaded' | 'analyzing' | 'analyzed' | 'accepted' | 'rejected'
       payment_status: 'pending' | 'paid' | 'validated' | 'dispute' | 'refunded'
