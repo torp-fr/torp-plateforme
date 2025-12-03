@@ -70,11 +70,12 @@ export default function Results() {
         companyId = existingCompany.id;
       }
 
-      // Générer une référence unique
-      const date = new Date();
-      const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
-      const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
-      const reference = `TORP-${dateStr}-${randomPart}`;
+      // Générer une référence unique de 12 caractères alphanumériques
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      let reference = '';
+      for (let i = 0; i < 12; i++) {
+        reference += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
 
       // Calculer la date d'expiration (6 mois)
       const expirationDate = new Date();
