@@ -132,6 +132,7 @@ export interface EnrichedEntrepriseData {
 class PappersService {
   private apiKey: string | null = null;
   private baseUrl = 'https://api.pappers.fr/v2';
+  private sireneApiUrl = 'https://api.insee.fr/entreprises/sirene/V3.11';
 
   constructor() {
     // Récupérer la clé API depuis les variables d'environnement
@@ -146,48 +147,177 @@ class PappersService {
   }
 
   /**
-   * Rechercher une entreprise par SIRET
+   * Rechercher une entreprise par SIRET - avec fallback API SIRENE
    */
   async getEntrepriseBySiret(siret: string): Promise<EnrichedEntrepriseData | null> {
-    if (!this.isConfigured()) {
-      console.warn('[Pappers] API key not configured - set VITE_PAPPERS_API_KEY in your .env');
-      return null;
+    const cleanedSiret = siret.replace(/\s/g, '');
+
+    // Essayer d'abord Pappers si configuré
+    if (this.isConfigured()) {
+      try {
+        console.log('[Pappers] Fetching data for SIRET:', cleanedSiret);
+
+        const response = await fetch(
+          `${this.baseUrl}/entreprise?api_token=${this.apiKey}&siret=${cleanedSiret}`
+        );
+
+        console.log('[Pappers] Response status:', response.status);
+
+        if (response.ok) {
+          const data: PappersEntreprise = await response.json();
+          console.log('[Pappers] Data received:', {
+            nom: data.nom_entreprise,
+            siret: data.siret,
+            forme: data.forme_juridique,
+            hasFinancials: !!(data.chiffre_affaires?.length),
+            hasRGE: !!(data.certifications_rge?.length)
+          });
+          return this.transformPappersData(data);
+        }
+
+        if (response.status !== 404) {
+          const errorText = await response.text();
+          console.error('[Pappers] API error:', response.status, errorText);
+        } else {
+          console.warn('[Pappers] Entreprise non trouvée:', siret);
+        }
+      } catch (error) {
+        console.error('[Pappers] Error fetching entreprise:', error);
+      }
     }
 
-    try {
-      const cleanedSiret = siret.replace(/\s/g, '');
-      console.log('[Pappers] Fetching data for SIRET:', cleanedSiret);
+    // Fallback: API SIRENE via recherche-entreprises.api.gouv.fr (gratuit, sans clé)
+    console.log('[SIRENE] Fallback - Fetching data for SIRET:', cleanedSiret);
+    return this.getEntrepriseFromSirene(cleanedSiret);
+  }
 
+  /**
+   * Récupérer les données depuis l'API SIRENE gratuite
+   * https://recherche-entreprises.api.gouv.fr/
+   */
+  private async getEntrepriseFromSirene(siret: string): Promise<EnrichedEntrepriseData | null> {
+    try {
+      // API recherche-entreprises (gratuite, open data)
       const response = await fetch(
-        `${this.baseUrl}/entreprise?api_token=${this.apiKey}&siret=${cleanedSiret}`
+        `https://recherche-entreprises.api.gouv.fr/search?q=${siret}&page=1&per_page=1`
       );
 
-      console.log('[Pappers] Response status:', response.status);
-
       if (!response.ok) {
-        if (response.status === 404) {
-          console.warn('[Pappers] Entreprise non trouvée:', siret);
-          return null;
-        }
-        const errorText = await response.text();
-        console.error('[Pappers] API error:', response.status, errorText);
-        throw new Error(`Pappers API error: ${response.status}`);
+        console.error('[SIRENE] API error:', response.status);
+        return null;
       }
 
-      const data: PappersEntreprise = await response.json();
-      console.log('[Pappers] Data received:', {
-        nom: data.nom_entreprise,
-        siret: data.siret,
-        forme: data.forme_juridique,
-        hasFinancials: !!(data.chiffre_affaires?.length),
-        hasRGE: !!(data.certifications_rge?.length)
+      const data = await response.json();
+
+      if (!data.results || data.results.length === 0) {
+        console.warn('[SIRENE] Entreprise non trouvée:', siret);
+        return null;
+      }
+
+      const entreprise = data.results[0];
+      console.log('[SIRENE] Data received:', {
+        nom: entreprise.nom_complet,
+        siret: entreprise.siege?.siret,
+        siren: entreprise.siren
       });
 
-      return this.transformPappersData(data);
+      // Transformer les données SIRENE au format attendu
+      return this.transformSireneData(entreprise, siret);
     } catch (error) {
-      console.error('[Pappers] Error fetching entreprise:', error);
+      console.error('[SIRENE] Error fetching entreprise:', error);
       return null;
     }
+  }
+
+  /**
+   * Transformer les données SIRENE en format utilisable
+   */
+  private transformSireneData(data: any, originalSiret: string): EnrichedEntrepriseData {
+    const siege = data.siege || {};
+    const dirigeants = data.dirigeants || [];
+
+    // Calculer l'ancienneté
+    const dateCreation = data.date_creation || siege.date_creation || '';
+    const ancienneteAnnees = this.calculateAnciennete(dateCreation);
+
+    return {
+      nom: data.nom_complet || data.nom_raison_sociale || 'Non renseigné',
+      formeJuridique: data.nature_juridique || 'Non renseigné',
+      siret: siege.siret || originalSiret,
+      siren: data.siren || originalSiret.substring(0, 9),
+
+      codeNAF: siege.activite_principale || data.activite_principale || '',
+      libelleNAF: siege.libelle_activite_principale || data.libelle_activite_principale || '',
+
+      dateCreation: dateCreation,
+      dateImmatriculation: dateCreation,
+      ancienneteAnnees,
+
+      adresse: {
+        ligne1: siege.adresse || siege.geo_adresse || '',
+        codePostal: siege.code_postal || '',
+        ville: siege.libelle_commune || siege.commune || '',
+        pays: 'France',
+      },
+
+      capital: 0, // Non disponible dans l'API gratuite
+      chiffreAffaires: null,
+      resultat: null,
+      effectif: this.parseEffectif(data.tranche_effectif_salarie || siege.tranche_effectif_salarie),
+      tendanceCA: 'inconnu',
+      historiqueCA: [],
+
+      healthScore: {
+        score: 50,
+        niveau: 'inconnu',
+        couleur: '#6b7280',
+        details: {
+          anciennete: { score: Math.min(25, ancienneteAnnees * 2.5), label: `${ancienneteAnnees} an(s)` },
+          capital: { score: 12, label: 'Non disponible' },
+          resultat: { score: 12, label: 'Non disponible' },
+          tendanceCA: { score: 12, label: 'Non disponible' },
+        },
+      },
+
+      dirigeants: dirigeants.map((d: any) => ({
+        nom: d.nom || '',
+        prenom: d.prenoms || '',
+        fonction: d.qualite || 'Dirigeant',
+      })),
+
+      certificationsRGE: [],
+      labels: [],
+
+      statutRCS: 'Non renseigné',
+      etatAdministratif: data.etat_administratif === 'A' ? 'Actif' : (data.etat_administratif || 'Inconnu'),
+      estActive: data.etat_administratif === 'A',
+    };
+  }
+
+  /**
+   * Parser la tranche d'effectif
+   */
+  private parseEffectif(tranche: string | null): number | null {
+    if (!tranche) return null;
+
+    const tranches: Record<string, number> = {
+      '00': 0,
+      '01': 1,
+      '02': 3,
+      '03': 6,
+      '11': 15,
+      '12': 30,
+      '21': 75,
+      '22': 150,
+      '31': 350,
+      '32': 750,
+      '41': 1500,
+      '42': 3500,
+      '51': 7500,
+      '52': 9999,
+    };
+
+    return tranches[tranche] || null;
   }
 
   /**
