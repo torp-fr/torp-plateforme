@@ -13,6 +13,7 @@ import {
   buildConformiteAnalysisPrompt,
   buildDelaisAnalysisPrompt,
   buildSynthesisPrompt,
+  type EnrichedCompanyData,
 } from './prompts/torp-analysis.prompts';
 import type { TorpAnalysisResult } from '@/types/torp';
 import { pappersService } from '@/services/api/pappers.service';
@@ -467,6 +468,64 @@ export class TorpAnalyzerService {
   }
 
   /**
+   * Validation de l'algorithme de Luhn pour SIRET/SIREN
+   * Le SIRET utilise une variante de Luhn (somme paire des chiffres)
+   */
+  private validateLuhn(num: string): boolean {
+    if (!num || !/^\d+$/.test(num)) return false;
+
+    let sum = 0;
+    for (let i = 0; i < num.length; i++) {
+      let digit = parseInt(num[i], 10);
+      // Pour SIRET/SIREN, on double les chiffres en position paire (0-indexé)
+      if (i % 2 === 0) {
+        digit *= 2;
+        if (digit > 9) digit -= 9;
+      }
+      sum += digit;
+    }
+    return sum % 10 === 0;
+  }
+
+  /**
+   * Extrait le SIREN depuis un numéro de TVA intracommunautaire
+   * Format: FR + clé (2 chiffres) + SIREN (9 chiffres)
+   */
+  private extractSirenFromTVA(tvaNumber: string | null, devisText: string): string | null {
+    if (!tvaNumber && !devisText) return null;
+
+    // Patterns pour trouver le numéro TVA
+    const tvaPatterns = [
+      /FR\s*(\d{2})\s*(\d{3})\s*(\d{3})\s*(\d{3})/gi,
+      /FR\s*(\d{2})\s*(\d{9})/gi,
+      /TVA\s*:?\s*FR\s*(\d{2})\s*(\d{9})/gi,
+      /N°?\s*TVA\s*:?\s*FR\s*(\d{11})/gi,
+      /intracommunautaire\s*:?\s*FR\s*(\d{11})/gi,
+    ];
+
+    const textToSearch = tvaNumber || devisText;
+
+    for (const pattern of tvaPatterns) {
+      const matches = textToSearch.matchAll(pattern);
+      for (const match of matches) {
+        // Reconstruire le numéro complet
+        let fullNumber = match[0].replace(/[^0-9]/g, '');
+
+        // Le numéro TVA a 11 chiffres (2 clé + 9 SIREN)
+        if (fullNumber.length === 11) {
+          const siren = fullNumber.slice(2); // Les 9 derniers chiffres sont le SIREN
+          if (/^\d{9}$/.test(siren)) {
+            console.log('[TORP TVA] SIREN extrait du numéro TVA:', siren);
+            return siren;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Nettoie et valide le SIRET extrait
    * SIRET = 14 chiffres (SIREN 9 chiffres + NIC 5 chiffres)
    */
@@ -474,14 +533,27 @@ export class TorpAnalyzerService {
     // Nettoyer : enlever espaces, tirets, points
     let cleaned = (siret || '').replace(/[\s\-\.]/g, '');
 
-    // Si déjà 14 chiffres, c'est bon
+    // Si déjà 14 chiffres, valider avec Luhn
     if (/^\d{14}$/.test(cleaned)) {
-      console.log('[TORP SIRET] Valide (14 chiffres):', cleaned);
+      const isValid = this.validateLuhn(cleaned);
+      console.log('[TORP SIRET] 14 chiffres:', cleaned, '| Luhn:', isValid ? '✓' : '✗');
+      if (isValid) {
+        return cleaned;
+      }
+      // Si Luhn échoue, on continue quand même car certains SIRET ne passent pas Luhn
+      console.log('[TORP SIRET] Luhn invalide mais on continue avec ce SIRET');
       return cleaned;
     }
 
     // Normaliser le texte pour la recherche (enlever retours ligne multiples)
     const normalizedText = devisText.replace(/\n+/g, ' ').replace(/\s+/g, ' ');
+
+    // Essayer d'extraire le SIREN depuis le numéro TVA si disponible
+    const sirenFromTVA = this.extractSirenFromTVA(null, normalizedText);
+    if (sirenFromTVA && !cleaned) {
+      console.log('[TORP SIRET] SIREN extrait du numéro TVA, recherche NIC...');
+      cleaned = sirenFromTVA;
+    }
 
     // D'abord chercher tous les SIRET potentiels dans le texte (14 chiffres consécutifs avec séparateurs possibles)
     const findAllSirets = (): string[] => {
@@ -621,9 +693,62 @@ export class TorpAnalyzerService {
 
   /**
    * Analyze entreprise (250 points)
+   * Enrichit automatiquement les données entreprise via Pappers si SIRET disponible
    */
   private async analyzeEntreprise(devisData: ExtractedDevisData): Promise<any> {
-    const prompt = buildEntrepriseAnalysisPrompt(JSON.stringify(devisData, null, 2));
+    // Essayer d'enrichir les données entreprise si SIRET disponible
+    let enrichedData: EnrichedCompanyData | null = null;
+
+    if (devisData.entreprise.siret) {
+      try {
+        console.log('[TORP Entreprise] Enrichissement via Pappers pour SIRET:', devisData.entreprise.siret);
+        const pappersResult = await pappersService.getEntrepriseBySiret(devisData.entreprise.siret);
+
+        if (pappersResult) {
+          console.log('[TORP Entreprise] Données Pappers récupérées:', pappersResult.nom);
+
+          // Calculer l'ancienneté
+          let ancienneteAnnees: number | undefined;
+          if (pappersResult.dateCreation) {
+            const creation = new Date(pappersResult.dateCreation);
+            ancienneteAnnees = Math.floor((Date.now() - creation.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+          }
+
+          enrichedData = {
+            siret: pappersResult.siret,
+            siren: pappersResult.siren,
+            raisonSociale: pappersResult.nom,
+            formeJuridique: pappersResult.formeJuridique,
+            codeNAF: pappersResult.codeNAF,
+            libelleNAF: pappersResult.libelleNAF,
+            dateCreation: pappersResult.dateCreation,
+            ancienneteAnnees,
+            estActif: pappersResult.estActive,
+            effectif: pappersResult.effectif?.toString(),
+            capitalSocial: pappersResult.capital,
+            chiffreAffaires: pappersResult.chiffreAffaires || undefined,
+            resultatNet: pappersResult.resultat || undefined,
+            scorePappers: pappersResult.healthScore?.score,
+            risquePappers: pappersResult.healthScore?.niveau,
+            labelsRGE: pappersResult.certificationsRGE?.map(c => ({
+              nom: c.nom,
+              domaines: c.domaine ? [c.domaine] : undefined,
+              dateFinValidite: c.validite
+            })),
+            labelsQualite: pappersResult.labels?.map(l => ({ nom: l })),
+            adresseComplete: `${pappersResult.adresse.ligne1} ${pappersResult.adresse.codePostal} ${pappersResult.adresse.ville}`.trim(),
+            siretVerification: devisData.entreprise.siretVerification
+          };
+
+          console.log('[TORP Entreprise] Enrichissement terminé - Score santé:', enrichedData.scorePappers);
+        }
+      } catch (error) {
+        console.error('[TORP Entreprise] Erreur enrichissement Pappers:', error);
+        // Continue sans enrichissement
+      }
+    }
+
+    const prompt = buildEntrepriseAnalysisPrompt(JSON.stringify(devisData, null, 2), enrichedData);
 
     const { data } = await hybridAIService.generateJSON(prompt, {
       systemPrompt: TORP_SYSTEM_PROMPT,

@@ -137,11 +137,121 @@ IMPORTANT:
 - Retourne UNIQUEMENT le JSON, sans commentaires`;
 };
 
+// Interface pour les données d'enrichissement entreprise
+export interface EnrichedCompanyData {
+  siret?: string;
+  siren?: string;
+  raisonSociale?: string;
+  formeJuridique?: string;
+  codeNAF?: string;
+  libelleNAF?: string;
+  dateCreation?: string;
+  ancienneteAnnees?: number;
+  estActif?: boolean;
+  effectif?: string;
+  capitalSocial?: number;
+  chiffreAffaires?: number;
+  resultatNet?: number;
+  scorePappers?: number;
+  risquePappers?: string;
+  labelsRGE?: Array<{ nom: string; domaines?: string[]; dateFinValidite?: string }>;
+  labelsQualite?: Array<{ nom: string }>;
+  proceduresCollectives?: Array<{ type: string; dateDebut?: string }>;
+  dirigeants?: Array<{ nom: string; prenom?: string; qualite?: string }>;
+  adresseComplete?: string;
+  departement?: string;
+  region?: string;
+  coefficientPrixBTP?: number;
+  siretVerification?: {
+    source: 'document' | 'pappers_lookup' | 'non_trouve';
+    confidence: 'high' | 'medium' | 'low';
+    message: string;
+  };
+}
+
+/**
+ * Formate un montant en euros de façon lisible
+ */
+function formatMontantEuro(montant: number | undefined | null): string {
+  if (montant === undefined || montant === null) return 'Non disponible';
+  if (Math.abs(montant) >= 1000000) {
+    return `${(montant / 1000000).toFixed(1)} M€`;
+  }
+  if (Math.abs(montant) >= 1000) {
+    return `${(montant / 1000).toFixed(0)} k€`;
+  }
+  return `${montant.toLocaleString('fr-FR')} €`;
+}
+
 /**
  * Prompt pour l'analyse de l'entreprise (250 points)
  */
-export const buildEntrepriseAnalysisPrompt = (devisData: string): string => {
+export const buildEntrepriseAnalysisPrompt = (devisData: string, enrichedData?: EnrichedCompanyData | null): string => {
+  // Construire le contexte d'enrichissement si disponible
+  let enrichmentContext = '';
+
+  if (enrichedData?.siret) {
+    enrichmentContext = `
+## DONNÉES ENTREPRISE VÉRIFIÉES (Sources: INSEE Sirene, Pappers)
+
+### Identification légale
+- **SIRET:** ${enrichedData.siret} ✓ Vérifié INSEE
+${enrichedData.siretVerification?.source === 'pappers_lookup' ? `  ⚠️ ${enrichedData.siretVerification.message}` : ''}
+- **Raison sociale:** ${enrichedData.raisonSociale || 'Non renseignée'}
+- **Forme juridique:** ${enrichedData.formeJuridique || 'Non renseignée'}
+- **Code NAF:** ${enrichedData.codeNAF || 'N/A'} - ${enrichedData.libelleNAF || ''}
+- **Date création:** ${enrichedData.dateCreation || 'Inconnue'} (${enrichedData.ancienneteAnnees !== undefined ? `${enrichedData.ancienneteAnnees} ans` : 'ancienneté inconnue'})
+- **Statut:** ${enrichedData.estActif === false ? '❌ CESSÉE - ALERTE CRITIQUE' : enrichedData.estActif === true ? '✅ ACTIVE' : '⚠️ Statut inconnu'}
+- **Effectif:** ${enrichedData.effectif || 'Non renseigné'}
+
+### Santé financière ${enrichedData.chiffreAffaires ? '(Source: Pappers - données vérifiées)' : '(Données limitées)'}
+- **Capital social:** ${enrichedData.capitalSocial ? formatMontantEuro(enrichedData.capitalSocial) : 'Non renseigné'}
+- **Chiffre d'affaires:** ${enrichedData.chiffreAffaires ? formatMontantEuro(enrichedData.chiffreAffaires) : 'Non communiqué'}
+- **Résultat net:** ${enrichedData.resultatNet !== undefined ? `${formatMontantEuro(enrichedData.resultatNet)} ${enrichedData.resultatNet >= 0 ? '✅' : '⚠️ Déficitaire'}` : 'Non disponible'}
+${enrichedData.scorePappers ? `- **Score financier Pappers:** ${enrichedData.scorePappers}/100 (Risque: ${enrichedData.risquePappers || 'N/A'})` : ''}
+
+### Certifications & Labels (Source: Pappers)
+${enrichedData.labelsRGE && enrichedData.labelsRGE.length > 0
+      ? `- **RGE:** ✅ CERTIFIÉ\n${enrichedData.labelsRGE.map(l => `  - ${l.nom}${l.domaines ? ` (${l.domaines.join(', ')})` : ''} - Valide jusqu'au ${l.dateFinValidite || 'N/A'}`).join('\n')}`
+      : '- **RGE:** ❌ Non certifié ou certification non trouvée'}
+${enrichedData.labelsQualite && enrichedData.labelsQualite.length > 0
+      ? `- **Qualibat/Autres:** ${enrichedData.labelsQualite.map(l => l.nom).join(', ')}`
+      : ''}
+
+### Alertes automatiques
+${enrichedData.estActif === false ? '🚨 **ENTREPRISE CESSÉE** - NE PAS SIGNER CE DEVIS' : ''}
+${enrichedData.proceduresCollectives && enrichedData.proceduresCollectives.length > 0
+      ? `⚠️ **PROCÉDURE COLLECTIVE:** ${enrichedData.proceduresCollectives[0].type} depuis ${enrichedData.proceduresCollectives[0].dateDebut || 'N/A'}`
+      : '✅ Aucune procédure collective en cours'}
+${enrichedData.ancienneteAnnees !== undefined && enrichedData.ancienneteAnnees < 1 ? '⚠️ **ENTREPRISE TRÈS RÉCENTE** (<1 an) - Risque élevé de défaillance' : ''}
+${enrichedData.resultatNet !== undefined && enrichedData.resultatNet < 0 ? '⚠️ **RÉSULTAT DÉFICITAIRE** - Surveiller la santé financière' : ''}
+
+### Localisation
+${enrichedData.adresseComplete ? `- Adresse: ${enrichedData.adresseComplete}` : ''}
+${enrichedData.departement ? `- Département: ${enrichedData.departement}` : ''}
+${enrichedData.region ? `- Région: ${enrichedData.region}` : ''}
+${enrichedData.coefficientPrixBTP ? `- **Coefficient prix BTP régional:** ${enrichedData.coefficientPrixBTP.toFixed(2)} (1.0 = référence nationale)` : ''}
+
+---
+
+**UTILISE CES DONNÉES VÉRIFIÉES** pour ton analyse. Elles sont plus fiables que les informations du devis.
+Si tu détectes des incohérences entre le devis et ces données vérifiées, signale-les comme risques.
+
+`;
+  } else {
+    enrichmentContext = `
+## DONNÉES ENTREPRISE NON VÉRIFIÉES
+
+⚠️ **Le SIRET n'a pas pu être extrait ou vérifié.**
+Analyse basée uniquement sur les informations du devis (moins fiable).
+Recommandation: Demander au client de vérifier le SIRET sur https://www.societe.com ou https://www.pappers.fr
+
+`;
+  }
+
   return `ANALYSE APPROFONDIE DE LA FIABILITÉ ENTREPRISE - Tu es l'expert qui protège le client.
+
+${enrichmentContext}
 
 DONNÉES DU DEVIS:
 \`\`\`json
