@@ -228,7 +228,31 @@ export interface TorpAnalysisResult {
   surcoutsDetectes: number;
   budgetRealEstime: number;
   margeNegociation: { min: number; max: number };
-  
+
+  // Données extraites du devis (pour enrichissement et géocodage)
+  extractedData?: {
+    entreprise: {
+      nom: string;
+      siret: string | null;
+      adresse: string | null;
+      telephone: string | null;
+      email: string | null;
+      certifications: string[];
+    };
+    client?: {
+      nom: string | null;
+      adresse: string | null;
+    };
+    travaux?: {
+      type: string;
+      adresseChantier: string | null;
+    };
+    devis?: {
+      montantTotal: number;
+      montantHT: number | null;
+    };
+  };
+
   dateAnalyse: Date;
   dureeAnalyse: number; // en secondes
 }

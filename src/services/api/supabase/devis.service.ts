@@ -310,6 +310,10 @@ export class SupabaseDevisService {
             budgetRealEstime: analysis.budgetRealEstime || 0,
             margeNegociation: analysis.margeNegociation,
           },
+          // Sauvegarder les données extraites pour enrichissement et géocodage
+          extracted_data: analysis.extractedData || null,
+          // Sauvegarder l'adresse du chantier directement
+          adresse_chantier: analysis.extractedData?.travaux?.adresseChantier || null,
           detected_overcosts: analysis.surcoutsDetectes,
           potential_savings: analysis.scorePrix.economiesPotentielles || 0,
           updated_at: new Date().toISOString(),

@@ -190,16 +190,42 @@ export default function Analyze() {
         }
       };
 
-      // Poll every 3 seconds
+      // Poll every 3 seconds with error tracking
+      let pollErrorCount = 0;
+      let analyzedConfirmCount = 0;
+      let pollIntervalCleared = false;
+
       const pollInterval = setInterval(async () => {
+        if (pollIntervalCleared) return;
+
         const devisData = await checkAnalysisStatus();
 
-        if (!devisData) return;
+        if (!devisData) {
+          pollErrorCount++;
+          console.warn(`[Analyze] Polling error ${pollErrorCount}/10`);
 
-        console.log('[Analyze] Polling status:', devisData.status);
+          // After 10 consecutive errors (30 seconds), show warning but continue polling
+          if (pollErrorCount >= 10 && pollErrorCount % 10 === 0) {
+            console.error('[Analyze] Multiple polling errors, checking if still analyzing...');
+            setAnalysisProgress(prev => {
+              const errMsg = 'Vérification du statut en cours...';
+              if (!prev.includes(errMsg)) {
+                return [...prev, errMsg];
+              }
+              return prev;
+            });
+          }
+          return;
+        }
+
+        // Reset error count on successful poll
+        pollErrorCount = 0;
+
+        console.log('[Analyze] Polling status:', devisData.status, '| Score:', devisData.score_total);
 
         // Update progress based on status
         if (devisData.status === 'analyzing') {
+          analyzedConfirmCount = 0; // Reset confirmation count
           // Show random progress step
           const steps = [
             'Extraction des données du devis...',
@@ -218,20 +244,32 @@ export default function Analyze() {
             return prev;
           });
         } else if (devisData.status === 'analyzed') {
-          console.log('[Analyze] Analysis complete! Navigating to results...');
-          clearInterval(pollInterval);
-          setAnalysisProgress(prev => [...prev, 'Analyse terminée !']);
+          analyzedConfirmCount++;
+          console.log(`[Analyze] Status is 'analyzed' (confirmation ${analyzedConfirmCount}/2)`);
 
-          // Navigate directly to results page - let it load the data
-          setIsAnalyzing(false);
+          // Wait for 2 confirmations to avoid race conditions
+          if (analyzedConfirmCount >= 2) {
+            console.log('[Analyze] Analysis CONFIRMED complete! Navigating to results...');
+            pollIntervalCleared = true;
+            clearInterval(pollInterval);
+            setAnalysisProgress(prev => [...prev, 'Analyse terminée !']);
 
-          toast({
-            title: 'Analyse terminée !',
-            description: `Score TORP: ${devisData.score_total}/1000 (${devisData.grade})`,
-          });
+            // Navigate directly to results page - let it load the data
+            setIsAnalyzing(false);
 
-          navigate(`/results?devisId=${devis.id}`);
+            toast({
+              title: 'Analyse terminée !',
+              description: `Score TORP: ${devisData.score_total}/1000 (${devisData.grade})`,
+            });
+
+            // Use a small delay to ensure state is updated
+            setTimeout(() => {
+              console.log('[Analyze] Navigating NOW to /results?devisId=' + devis.id);
+              navigate(`/results?devisId=${devis.id}`);
+            }, 100);
+          }
         } else if (devisData.status === 'uploaded') {
+          analyzedConfirmCount = 0;
           // Still waiting for analysis to start
           setAnalysisProgress(prev => {
             const lastMsg = 'En attente de traitement...';
@@ -243,10 +281,11 @@ export default function Analyze() {
         }
       }, 3000);
 
-      // Timeout after 5 minutes
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        if (isAnalyzing) {
+      // Timeout after 10 minutes (analysis can take 6+ minutes)
+      const timeoutId = setTimeout(() => {
+        if (!pollIntervalCleared) {
+          pollIntervalCleared = true;
+          clearInterval(pollInterval);
           setIsAnalyzing(false);
           toast({
             title: 'Délai d\'analyse dépassé',
@@ -255,7 +294,14 @@ export default function Analyze() {
           });
           navigate('/dashboard');
         }
-      }, 300000);
+      }, 600000); // 10 minutes instead of 5
+
+      // Store cleanup function
+      (window as any).__analyzeCleanup = () => {
+        pollIntervalCleared = true;
+        clearInterval(pollInterval);
+        clearTimeout(timeoutId);
+      };
 
     } catch (error) {
       console.error('[Analyze] ===== CATCH BLOCK REACHED =====');
