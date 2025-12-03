@@ -32,6 +32,7 @@ import AlgorithmicSegments from "./pages/AlgorithmicSegments";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import AdminAnalytics from "./pages/AdminAnalytics";
 import AdminDiagnostic from "./pages/AdminDiagnostic";
+import Compare from "./pages/Compare";
 
 const queryClient = new QueryClient();
 
@@ -65,6 +66,7 @@ const AppContent = () => {
           <Route path="/project-dashboard" element={<ProjectDashboard />} />
           <Route path="/improved-b2b-dashboard" element={<ImprovedB2BDashboard />} />
           <Route path="/b2c-dashboard" element={<B2CDashboard />} />
+          <Route path="/compare" element={<Compare />} />
           {/* Route désactivée - wizard obsolète */}
           {/* <Route path="/discovery" element={<DiscoveryFlow />} /> */}
           <Route path="/torp-complete" element={<TorpCompleteFlow />} />

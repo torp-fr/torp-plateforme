@@ -12,6 +12,7 @@ import { CarteEntreprise } from '@/components/results/CarteEntreprise';
 import { AnalysePrixDetaillee } from '@/components/results/AnalysePrixDetaillee';
 import { AnalyseCompletetudeConformite } from '@/components/results/AnalyseCompletetudeConformite';
 import { ConseilsPersonnalises } from '@/components/results/ConseilsPersonnalises';
+import { InfosEntreprisePappers } from '@/components/results/InfosEntreprisePappers';
 import { generateAnalysisReportPDF } from '@/utils/pdfGenerator';
 
 export default function Results() {
@@ -440,11 +441,20 @@ export default function Results() {
                 </TabsContent>
 
                 {/* Onglet Entreprise */}
-                <TabsContent value="entreprise">
+                <TabsContent value="entreprise" className="space-y-6">
                   <CarteEntreprise
                     entreprise={rawData.entreprise}
                     scoreEntreprise={rawData.scoreEntreprise}
                   />
+
+                  {/* Données enrichies Pappers */}
+                  {(rawData.scoreEntreprise?.siret || rawData.scoreEntreprise?.siren) && (
+                    <InfosEntreprisePappers
+                      siret={rawData.scoreEntreprise?.siret}
+                      siren={rawData.scoreEntreprise?.siren}
+                      autoLoad={false}
+                    />
+                  )}
                 </TabsContent>
 
                 {/* Onglet Prix */}

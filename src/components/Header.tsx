@@ -96,12 +96,20 @@ export const Header = () => {
             </Link>
 
             {user && (
-              <Link
-                to="/dashboard"
-                className="text-sm font-medium text-foreground hover:text-primary transition-colors"
-              >
-                Mes Analyses
-              </Link>
+              <>
+                <Link
+                  to="/dashboard"
+                  className="text-sm font-medium text-foreground hover:text-primary transition-colors"
+                >
+                  Mes Analyses
+                </Link>
+                <Link
+                  to="/compare"
+                  className="text-sm font-medium text-foreground hover:text-primary transition-colors"
+                >
+                  Comparer
+                </Link>
+              </>
             )}
           </nav>
 
@@ -119,6 +127,9 @@ export const Header = () => {
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem onClick={() => navigate('/dashboard')}>
                       📊 Dashboard
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/compare')}>
+                      ⚖️ Comparer devis
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/profile')}>
                       👤 Mon Profil
@@ -194,13 +205,22 @@ export const Header = () => {
             </Link>
 
             {user && (
-              <Link
-                to="/dashboard"
-                className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Mes Analyses
-              </Link>
+              <>
+                <Link
+                  to="/dashboard"
+                  className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Mes Analyses
+                </Link>
+                <Link
+                  to="/compare"
+                  className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Comparer devis
+                </Link>
+              </>
             )}
 
             <div className="pt-4 space-y-2">
