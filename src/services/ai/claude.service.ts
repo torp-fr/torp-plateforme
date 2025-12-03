@@ -1,10 +1,27 @@
 /**
  * Anthropic Claude Service
  * Wrapper for Anthropic Claude API calls
+ *
+ * Modèles disponibles (2025):
+ * - claude-sonnet-4-20250514 (recommandé - bon rapport qualité/coût)
+ * - claude-opus-4-20250514 (premium - meilleure qualité)
+ * - claude-3-5-sonnet-20241022 (legacy - compatible)
  */
 
 import Anthropic from '@anthropic-ai/sdk';
 import { env } from '@/config/env';
+
+// Modèles Claude valides
+export const CLAUDE_MODELS = {
+  // Nouveaux modèles 2025
+  SONNET_4: 'claude-sonnet-4-20250514',
+  OPUS_4: 'claude-opus-4-20250514',
+  // Modèle legacy compatible
+  SONNET_35: 'claude-3-5-sonnet-20241022',
+} as const;
+
+// Modèle par défaut (bon rapport qualité/coût)
+const DEFAULT_MODEL = CLAUDE_MODELS.SONNET_4;
 
 export class ClaudeService {
   private client: Anthropic | null = null;
@@ -20,10 +37,9 @@ export class ClaudeService {
 
   /**
    * Check if Claude is configured
-   * DISABLED: Force return false to prevent 404 errors with outdated model
    */
   isConfigured(): boolean {
-    return false; // Temporarily disabled - model 'claude-3-5-sonnet-20240620' returns 404
+    return !!this.client && !!env.ai.anthropic?.apiKey;
   }
 
   /**
@@ -43,7 +59,7 @@ export class ClaudeService {
     }
 
     const {
-      model = 'claude-3-5-sonnet-20241022',
+      model = DEFAULT_MODEL,
       temperature = 0.7,
       maxTokens = 4000,
       systemPrompt = 'You are a helpful assistant specialized in construction and renovation project analysis.',
@@ -87,7 +103,7 @@ export class ClaudeService {
     }
 
     const {
-      model = 'claude-3-5-sonnet-20241022',
+      model = DEFAULT_MODEL,
       temperature = 0.3, // Lower temperature for more consistent JSON
       systemPrompt = 'You are a JSON-generating assistant. Always respond with valid JSON only.',
     } = options || {};
