@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
-import { CheckCircle, AlertTriangle, Lightbulb, Download, Eye, ArrowLeft, MessageSquare, Building2, DollarSign, FileCheck, Shield, Clock } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Lightbulb, Download, Eye, ArrowLeft, MessageSquare, Building2, DollarSign, FileCheck, Shield, Clock, Ticket, TrendingUp, RefreshCw } from 'lucide-react';
 import type { Project } from '@/context/AppContext';
 import { CarteEntreprise } from '@/components/results/CarteEntreprise';
 import { AnalysePrixDetaillee } from '@/components/results/AnalysePrixDetaillee';
@@ -16,7 +16,7 @@ import { InfosEntreprisePappers } from '@/components/results/InfosEntreprisePapp
 import { generateAnalysisReportPDF } from '@/utils/pdfGenerator';
 
 export default function Results() {
-  const { currentProject, setCurrentProject } = useApp();
+  const { currentProject, setCurrentProject, userType } = useApp();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [displayScore, setDisplayScore] = useState(0);
@@ -144,6 +144,17 @@ export default function Results() {
             },
             // Store raw data for new components
             rawData: {
+              // Extraire les données entreprise depuis scoreEntreprise
+              entreprise: {
+                nom: scoreEntrepriseData?.entreprise || scoreEntrepriseData?.nom || null,
+                siret: scoreEntrepriseData?.siret || null,
+                codeNaf: scoreEntrepriseData?.codeNaf || null,
+                adresse: scoreEntrepriseData?.adresse || null,
+                telephone: scoreEntrepriseData?.telephone || null,
+                age: scoreEntrepriseData?.anciennete || scoreEntrepriseData?.age || null,
+                certifications: scoreEntrepriseData?.certifications || [],
+                assurances: scoreEntrepriseData?.assurances || null,
+              },
               scoreEntreprise: scoreEntrepriseData,
               scorePrix: scorePrixData,
               scoreCompletude: scoreCompletudeData,
@@ -492,49 +503,91 @@ export default function Results() {
                 </TabsContent>
               </Tabs>
 
-              {/* Actions post-analyse */}
+              {/* Actions post-analyse - Adaptées selon le type d'utilisateur */}
               <Card className="mt-6">
                 <CardHeader>
                   <CardTitle>Actions disponibles</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid md:grid-cols-3 gap-4">
-                    <Button
-                      variant="outline"
-                      className="h-auto p-4 flex flex-col items-center gap-2"
-                      onClick={() => {
-                        // Logique pour accepter le devis
-                        console.log('Accepter le devis');
-                      }}
-                    >
-                      <CheckCircle className="w-6 h-6 text-success" />
-                      <span>Accepter le devis</span>
-                    </Button>
+                  {userType === 'B2B' ? (
+                    /* Actions pour profil B2B (Professionnel) */
+                    <div className="grid md:grid-cols-3 gap-4">
+                      <Button
+                        variant="outline"
+                        className="h-auto p-4 flex flex-col items-center gap-2"
+                        onClick={() => {
+                          // Rediriger vers la page de nouvelle analyse pour optimiser
+                          navigate('/pro/analyses/new');
+                        }}
+                      >
+                        <TrendingUp className="w-6 h-6 text-primary" />
+                        <span>Optimiser mon score</span>
+                        <span className="text-xs text-muted-foreground">Relancer une analyse</span>
+                      </Button>
 
-                    <Button
-                      variant="outline"
-                      className="h-auto p-4 flex flex-col items-center gap-2"
-                      onClick={() => {
-                        // Logique pour négocier
-                        console.log('Négocier le devis');
-                      }}
-                    >
-                      <Lightbulb className="w-6 h-6 text-warning" />
-                      <span>Négocier</span>
-                    </Button>
+                      <Button
+                        variant="outline"
+                        className="h-auto p-4 flex flex-col items-center gap-2"
+                        onClick={() => {
+                          // Valider le devis et marquer comme finalisé
+                          console.log('Valider le devis');
+                        }}
+                      >
+                        <CheckCircle className="w-6 h-6 text-success" />
+                        <span>Valider mon devis</span>
+                        <span className="text-xs text-muted-foreground">Marquer comme finalisé</span>
+                      </Button>
 
-                    <Button
-                      variant="outline"
-                      className="h-auto p-4 flex flex-col items-center gap-2"
-                      onClick={() => {
-                        // Logique pour refuser
-                        console.log('Refuser le devis');
-                      }}
-                    >
-                      <AlertTriangle className="w-6 h-6 text-destructive" />
-                      <span>Refuser</span>
-                    </Button>
-                  </div>
+                      <Button
+                        variant="outline"
+                        className="h-auto p-4 flex flex-col items-center gap-2"
+                        onClick={() => {
+                          // Rediriger vers la page des tickets
+                          navigate('/pro/tickets');
+                        }}
+                      >
+                        <Ticket className="w-6 h-6 text-warning" />
+                        <span>Générer un ticket</span>
+                        <span className="text-xs text-muted-foreground">Support TORP</span>
+                      </Button>
+                    </div>
+                  ) : (
+                    /* Actions pour profil B2C (Particulier) */
+                    <div className="grid md:grid-cols-3 gap-4">
+                      <Button
+                        variant="outline"
+                        className="h-auto p-4 flex flex-col items-center gap-2"
+                        onClick={() => {
+                          console.log('Accepter le devis');
+                        }}
+                      >
+                        <CheckCircle className="w-6 h-6 text-success" />
+                        <span>Accepter le devis</span>
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        className="h-auto p-4 flex flex-col items-center gap-2"
+                        onClick={() => {
+                          console.log('Négocier le devis');
+                        }}
+                      >
+                        <Lightbulb className="w-6 h-6 text-warning" />
+                        <span>Négocier</span>
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        className="h-auto p-4 flex flex-col items-center gap-2"
+                        onClick={() => {
+                          console.log('Refuser le devis');
+                        }}
+                      >
+                        <AlertTriangle className="w-6 h-6 text-destructive" />
+                        <span>Refuser</span>
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
