@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
-import { CheckCircle, AlertTriangle, Lightbulb, Download, Eye, ArrowLeft, MessageSquare, Building2, DollarSign, FileCheck, Shield, Clock, Ticket, TrendingUp, RefreshCw } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Lightbulb, Download, Eye, ArrowLeft, MessageSquare, Building2, DollarSign, FileCheck, Shield, Clock, Ticket, TrendingUp, RefreshCw, Loader2 } from 'lucide-react';
 import type { Project } from '@/context/AppContext';
 import { CarteEntreprise } from '@/components/results/CarteEntreprise';
 import { AnalysePrixDetaillee } from '@/components/results/AnalysePrixDetaillee';
@@ -14,13 +14,123 @@ import { AnalyseCompletetudeConformite } from '@/components/results/AnalyseCompl
 import { ConseilsPersonnalises } from '@/components/results/ConseilsPersonnalises';
 import { InfosEntreprisePappers } from '@/components/results/InfosEntreprisePappers';
 import { generateAnalysisReportPDF } from '@/utils/pdfGenerator';
+import { supabase } from '@/lib/supabase';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Results() {
-  const { currentProject, setCurrentProject, userType } = useApp();
+  const { currentProject, setCurrentProject, userType, user } = useApp();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [displayScore, setDisplayScore] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGeneratingTicket, setIsGeneratingTicket] = useState(false);
+  const { toast } = useToast();
+
+  // Fonction pour générer un ticket TORP
+  const generateTorpTicket = async () => {
+    if (!currentProject || !user?.id) {
+      toast({
+        title: 'Erreur',
+        description: 'Données insuffisantes pour générer le ticket',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsGeneratingTicket(true);
+
+    try {
+      // Récupérer la company de l'utilisateur avec son nom
+      let companyId: string;
+      let companyName: string = 'Mon entreprise';
+
+      const { data: existingCompany, error: companyError } = await supabase
+        .from('companies')
+        .select('id, name')
+        .eq('user_id', user.id)
+        .single();
+
+      if (companyError || !existingCompany) {
+        // Si pas de company, en créer une automatiquement pour l'utilisateur B2B
+        const { data: newCompany, error: createError } = await supabase
+          .from('companies')
+          .insert({
+            user_id: user.id,
+            name: user.name || 'Mon entreprise',
+            email: user.email,
+          })
+          .select('id, name')
+          .single();
+
+        if (createError || !newCompany) {
+          throw new Error('Impossible de créer l\'entreprise');
+        }
+
+        companyId = newCompany.id;
+        companyName = newCompany.name || 'Mon entreprise';
+      } else {
+        companyId = existingCompany.id;
+        companyName = existingCompany.name || 'Mon entreprise';
+      }
+
+      // Générer une référence unique de 12 caractères alphanumériques
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      let reference = '';
+      for (let i = 0; i < 12; i++) {
+        reference += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+
+      // Générer un code d'accès client de 8 caractères (plus court, facile à saisir)
+      let codeAcces = '';
+      for (let i = 0; i < 8; i++) {
+        codeAcces += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+
+      // Calculer la date d'expiration (6 mois)
+      const expirationDate = new Date();
+      expirationDate.setMonth(expirationDate.getMonth() + 6);
+
+      // Créer le ticket avec tous les champs
+      const { data: ticket, error: ticketError } = await supabase
+        .from('torp_tickets')
+        .insert({
+          company_id: companyId,
+          reference: reference,
+          code_acces: codeAcces,
+          entreprise_nom: companyName,
+          nom_projet: currentProject.name || 'Projet sans nom',
+          score_torp: currentProject.score || 0,
+          grade: currentProject.grade || 'C',
+          status: 'active',
+          date_emission: new Date().toISOString(),
+          date_expiration: expirationDate.toISOString(),
+          duree_validite: 30, // 30 jours par défaut
+        })
+        .select()
+        .single();
+
+      if (ticketError) {
+        throw ticketError;
+      }
+
+      toast({
+        title: 'Ticket TORP généré !',
+        description: `Référence: ${reference}`,
+      });
+
+      // Rediriger vers la page des tickets
+      navigate('/pro/tickets');
+    } catch (error) {
+      console.error('[Results] Erreur génération ticket:', error);
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de générer le ticket TORP',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGeneratingTicket(false);
+    }
+  };
 
   useEffect(() => {
     const loadProjectData = async () => {
@@ -152,13 +262,54 @@ export default function Results() {
                 adresse: scoreEntrepriseData?.adresse || null,
                 telephone: scoreEntrepriseData?.telephone || null,
                 age: scoreEntrepriseData?.anciennete || scoreEntrepriseData?.age || null,
-                certifications: scoreEntrepriseData?.certifications || [],
+                certifications: Array.isArray(scoreEntrepriseData?.certifications)
+                  ? scoreEntrepriseData.certifications.map((c: any) => typeof c === 'string' ? c : c?.nom || c?.name || String(c))
+                  : [],
                 assurances: scoreEntrepriseData?.assurances || null,
               },
-              scoreEntreprise: scoreEntrepriseData,
+              scoreEntreprise: {
+                ...scoreEntrepriseData,
+                // S'assurer que risques et benefices sont des arrays de strings
+                risques: Array.isArray(scoreEntrepriseData?.risques)
+                  ? scoreEntrepriseData.risques.map((r: any) => typeof r === 'string' ? r : r?.description || r?.message || String(r))
+                  : [],
+                benefices: Array.isArray(scoreEntrepriseData?.benefices)
+                  ? scoreEntrepriseData.benefices.map((b: any) => typeof b === 'string' ? b : b?.description || b?.message || String(b))
+                  : [],
+              },
               scorePrix: scorePrixData,
-              scoreCompletude: scoreCompletudeData,
-              scoreConformite: scoreConformiteData,
+              // Transformer scoreCompletude pour s'assurer que les arrays sont des strings
+              scoreCompletude: {
+                ...scoreCompletudeData,
+                elementsManquants: Array.isArray(scoreCompletudeData?.elementsManquants)
+                  ? scoreCompletudeData.elementsManquants.map((e: any) => typeof e === 'string' ? e : e?.element || e?.description || String(e))
+                  : [],
+                incoherences: Array.isArray(scoreCompletudeData?.incoherences)
+                  ? scoreCompletudeData.incoherences.map((i: any) => typeof i === 'string' ? i : i?.description || i?.message || String(i))
+                  : [],
+                risquesTechniques: Array.isArray(scoreCompletudeData?.risquesTechniques)
+                  ? scoreCompletudeData.risquesTechniques.map((r: any) => typeof r === 'string' ? r : r?.description || r?.risque || String(r))
+                  : [],
+              },
+              // Transformer scoreConformite pour extraire les booléens des objets
+              scoreConformite: {
+                scoreTotal: scoreConformiteData?.scoreTotal || 0,
+                assurances: typeof scoreConformiteData?.assurances === 'boolean'
+                  ? scoreConformiteData.assurances
+                  : scoreConformiteData?.assurances?.conforme ?? false,
+                plu: typeof scoreConformiteData?.plu === 'boolean'
+                  ? scoreConformiteData.plu
+                  : scoreConformiteData?.plu?.conforme ?? false,
+                normes: typeof scoreConformiteData?.normes === 'boolean'
+                  ? scoreConformiteData.normes
+                  : (scoreConformiteData?.normes?.respectees?.length > 0 || scoreConformiteData?.normes?.conforme) ?? false,
+                accessibilite: typeof scoreConformiteData?.accessibilite === 'boolean'
+                  ? scoreConformiteData.accessibilite
+                  : scoreConformiteData?.accessibilite?.conforme ?? false,
+                defauts: Array.isArray(scoreConformiteData?.defauts)
+                  ? scoreConformiteData.defauts.map((d: any) => typeof d === 'string' ? d : d?.description || d?.defaut || String(d))
+                  : [],
+              },
               scoreDelais: scoreDelaisData,
               montantTotal: data.recommendations?.budgetRealEstime || data.amount || data.montant_total || 0,
               margeNegociation: data.recommendations?.margeNegociation || {
@@ -541,14 +692,16 @@ export default function Results() {
                       <Button
                         variant="outline"
                         className="h-auto p-4 flex flex-col items-center gap-2"
-                        onClick={() => {
-                          // Rediriger vers la page des tickets
-                          navigate('/pro/tickets');
-                        }}
+                        onClick={generateTorpTicket}
+                        disabled={isGeneratingTicket}
                       >
-                        <Ticket className="w-6 h-6 text-warning" />
-                        <span>Générer un ticket</span>
-                        <span className="text-xs text-muted-foreground">Support TORP</span>
+                        {isGeneratingTicket ? (
+                          <Loader2 className="w-6 h-6 text-warning animate-spin" />
+                        ) : (
+                          <Ticket className="w-6 h-6 text-warning" />
+                        )}
+                        <span>{isGeneratingTicket ? 'Génération...' : 'Générer un ticket'}</span>
+                        <span className="text-xs text-muted-foreground">Certificat TORP</span>
                       </Button>
                     </div>
                   ) : (

@@ -40,6 +40,7 @@ import ProAnalyses from "./pages/pro/ProAnalyses";
 import ProNewAnalysis from "./pages/pro/ProNewAnalysis";
 import ProDocuments from "./pages/pro/ProDocuments";
 import ProTickets from "./pages/pro/ProTickets";
+import ProTicketDetail from "./pages/pro/ProTicketDetail";
 import ProSettings from "./pages/pro/ProSettings";
 
 const queryClient = new QueryClient();
@@ -87,6 +88,7 @@ const AppContent = () => {
           <Route path="/pro/analyses/new" element={<ProRoute><ProNewAnalysis /></ProRoute>} />
           <Route path="/pro/documents" element={<ProRoute><ProDocuments /></ProRoute>} />
           <Route path="/pro/tickets" element={<ProRoute><ProTickets /></ProRoute>} />
+          <Route path="/pro/tickets/:id" element={<ProRoute><ProTicketDetail /></ProRoute>} />
           <Route path="/pro/settings" element={<ProRoute><ProSettings /></ProRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
