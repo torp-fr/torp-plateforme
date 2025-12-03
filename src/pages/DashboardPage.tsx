@@ -4,9 +4,8 @@ import { Badge } from '@/components/ui/badge';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
 import { BackButton } from '@/components/BackButton';
-import { AdvancedAnalytics } from '@/components/AdvancedAnalytics';
-import { FileText, TrendingUp, PiggyBank, Hammer, Eye, Plus, BarChart3, Users, Building, Clock, Activity, Target, Calendar, Download, Home, MoreVertical, Trash2, Filter } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { FileText, PiggyBank, Hammer, Eye, Plus, BarChart3, Building, Target, MoreVertical, Trash2, Filter } from 'lucide-react';
+import { Link, Navigate } from 'react-router-dom';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +17,11 @@ import { toast } from 'sonner';
 
 export default function DashboardPage() {
   const { user, userType, projects, setProjects } = useApp();
+
+  // Redirection automatique des B2B vers /pro
+  if (userType === 'B2B') {
+    return <Navigate to="/pro" replace />;
+  }
 
   const completedProjects = projects.filter(p => p.status === 'completed');
 
@@ -82,43 +86,15 @@ export default function DashboardPage() {
             <div className="flex items-center gap-4">
               <BackButton />
               <div>
-                {userType === 'B2C' ? (
-                  <>
-                    <h1 className="text-3xl font-bold text-foreground">
-                      Tableau de bord
-                    </h1>
-                    <p className="text-muted-foreground mt-2">
-                      {user ? `Bonjour ${user.name}` : 'Bienvenue sur TORP'}
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <h1 className="text-3xl font-bold text-foreground">
-                      Espace Professionnel
-                    </h1>
-                    <p className="text-muted-foreground mt-2">
-                      {user ? `Bonjour ${user.name}` : 'Bienvenue sur TORP'}
-                      {(userType === 'B2B' || userType === 'B2B2C') && user?.company && ` - ${user.company}`}
-                    </p>
-                  </>
-                )}
+                <h1 className="text-3xl font-bold text-foreground">
+                  Tableau de bord
+                </h1>
+                <p className="text-muted-foreground mt-2">
+                  {user ? `Bonjour ${user.name}` : 'Bienvenue sur TORP'}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {userType === 'B2B' && (
-                <>
-                  <Button variant="outline" size="sm">
-                    <Download className="h-4 w-4 mr-2" />
-                    Exporter
-                  </Button>
-                  <Link to="/improved-b2b-dashboard">
-                    <Button variant="outline" size="sm">
-                      <BarChart3 className="h-4 w-4 mr-2" />
-                      Dashboard Avancé
-                    </Button>
-                  </Link>
-                </>
-              )}
               <Link to="/analyze">
                 <Button size="sm" className="bg-primary hover:bg-primary/90">
                   <Plus className="h-4 w-4 mr-2" />
@@ -128,75 +104,9 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Statistiques principales */}
+          {/* Statistiques principales - B2C uniquement */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {/* Métriques spécifiques pour entreprises */}
-            {(userType === 'B2B' || userType === 'B2B2C') && (
-              <>
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Chiffre d'affaires</p>
-                        <p className="text-2xl font-bold text-foreground">€142.5K</p>
-                        <p className="text-xs text-success">+12% ce mois</p>
-                      </div>
-                      <div className="w-12 h-12 bg-success/10 rounded-full flex items-center justify-center">
-                        <TrendingUp className="w-6 h-6 text-success" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Taux conversion</p>
-                        <p className="text-2xl font-bold text-foreground">73%</p>
-                        <p className="text-xs text-success">+5% ce mois</p>
-                      </div>
-                      <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                        <Target className="w-6 h-6 text-primary" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Délai moyen réponse</p>
-                        <p className="text-2xl font-bold text-foreground">2.3j</p>
-                        <p className="text-xs text-warning">Objectif: 2j</p>
-                      </div>
-                      <div className="w-12 h-12 bg-warning/10 rounded-full flex items-center justify-center">
-                        <Clock className="w-6 h-6 text-warning" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Projets actifs</p>
-                        <p className="text-2xl font-bold text-foreground">18</p>
-                        <p className="text-xs text-info">6 en cours</p>
-                      </div>
-                      <div className="w-12 h-12 bg-info/10 rounded-full flex items-center justify-center">
-                        <Activity className="w-6 h-6 text-info" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
-            )}
-
-            {/* Métriques simplifiées pour particuliers B2C */}
-            {userType === 'B2C' && (
+            {(
               <>
                 {completedProjects.length > 0 && (
                   <>
@@ -240,31 +150,6 @@ export default function DashboardPage() {
               </>
             )}
           </div>
-
-          {/* Redirection vers dashboard spécialisé pour B2B */}
-          {userType === 'B2B' && (
-            <div className="mb-8">
-              <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Building className="h-5 w-5 text-primary" />
-                    Dashboard Entreprise Avancé
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground mb-4">
-                    Accédez à votre dashboard professionnel avec analytics avancés, gestion d'équipe et suivi commercial.
-                  </p>
-                  <Link to="/improved-b2b-dashboard">
-                    <Button>
-                      <BarChart3 className="w-4 h-4 mr-2" />
-                      Accéder au dashboard avancé
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            </div>
-          )}
 
           {/* Redirection vers dashboard spécialisé pour B2G */}
           {userType === 'B2G' && (
@@ -323,7 +208,7 @@ export default function DashboardPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <BarChart3 className="w-5 h-5" />
-                    {userType === 'B2C' ? 'Mes analyses' : 'Analyses clients'}
+                    Mes analyses
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -407,23 +292,6 @@ export default function DashboardPage() {
             {/* Panneau latéral */}
             <div className="space-y-6">
             </div>
-
-            {/* Analytics avancés pour B2B */}
-            {userType === 'B2B' && (
-              <div className="lg:col-span-3 mt-8">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <BarChart3 className="h-5 w-5" />
-                      Analytics Commercial - Aperçu
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <AdvancedAnalytics userType="B2B" />
-                  </CardContent>
-                </Card>
-              </div>
-            )}
           </div>
         </div>
       </div>
