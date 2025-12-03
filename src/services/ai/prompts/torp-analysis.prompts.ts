@@ -37,14 +37,30 @@ DEVIS:
 ${devisText}
 \`\`\`
 
-**ATTENTION PARTICULIÈRE AU SIRET:**
-Le SIRET est un numéro à 14 chiffres identifiant l'entreprise.
-- Cherche des mentions comme: "SIRET", "Siret", "N° SIRET", "SIRET:", "SIRET :", "No SIRET"
-- Format: 14 chiffres, parfois espacés (XXX XXX XXX XXXXX) ou avec espaces
-- Exemple: "851 356 032 00015" ou "85135603200015"
-- **Extrais TOUS les chiffres du SIRET sans espace**
-- Si tu trouves un SIREN (9 chiffres), note-le comme partiel mais continue à chercher le SIRET complet
-- Le SIRET est CRITIQUE pour l'enrichissement de données - sois très attentif
+**ATTENTION TRÈS PARTICULIÈRE AU SIRET (CRITIQUE):**
+Le SIRET est un numéro UNIQUE de 14 chiffres identifiant l'entreprise: SIREN (9 chiffres) + NIC (5 chiffres).
+
+**OÙ LE CHERCHER:**
+- En-tête du devis (partie supérieure gauche, sous/près du logo)
+- Bloc coordonnées entreprise (avec adresse, téléphone, email)
+- Parfois en pied de page ou mentions légales
+- Près de mentions comme: N° TVA, RCS, APE/NAF
+
+**FORMATS POSSIBLES (tous correspondent à 14 chiffres):**
+- Complet sans espace: "49294200010016"
+- Avec espaces par groupes: "492 942 000 100 16" ou "492 942 000 10016"
+- Format SIREN + NIC: "492942000 10016" ou "SIREN 492942000 NIC 10016"
+- Avec tirets/points: "492.942.000.10016" ou "492-942-000-10016"
+- Sur plusieurs lignes: le SIREN peut être sur une ligne, le NIC sur la suivante
+
+**RÈGLES D'EXTRACTION:**
+1. Cherche d'abord la mention explicite "SIRET" puis lis les 14 chiffres qui suivent
+2. Si tu vois un numéro à 9 chiffres (SIREN), cherche les 5 chiffres du NIC à proximité
+3. Le NIC (5 chiffres) commence souvent par 000 pour le siège (ex: 00010, 00015, 00025)
+4. Extrais TOUS les 14 chiffres, sans espace ni ponctuation
+5. **NE RETOURNE JAMAIS un numéro de 10, 11, 12 ou 13 chiffres - c'est incomplet!**
+
+**EXEMPLE:** "SIRET: 492 942 000 100 16" → extrais "49294200010016"
 
 Retourne un JSON avec cette structure exacte:
 {

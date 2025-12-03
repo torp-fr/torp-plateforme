@@ -215,6 +215,15 @@ export class TorpAnalyzerService {
    * Extract structured data from devis text
    */
   private async extractDevisData(devisText: string): Promise<ExtractedDevisData> {
+    // Log un échantillon du texte OCR pour debug (premiers 1500 caractères - en-tête)
+    const headerSample = devisText.slice(0, 1500);
+    console.log('[TORP OCR] Échantillon en-tête (SIRET devrait être ici):');
+    console.log(headerSample);
+
+    // Chercher proactivement les mentions SIRET dans le texte brut
+    const siretMentions = devisText.match(/siret[:\s]*[\d\s\.\-]+/gi);
+    console.log('[TORP OCR] Mentions SIRET trouvées dans texte brut:', siretMentions);
+
     const prompt = buildExtractionPrompt(devisText);
 
     const { data } = await hybridAIService.generateJSON<ExtractedDevisData>(prompt, {
@@ -222,14 +231,24 @@ export class TorpAnalyzerService {
       temperature: 0.2, // Low temperature for accurate extraction
     });
 
+    console.log('[TORP Extraction] SIRET brut retourné par IA:', data.entreprise?.siret);
+
     // Valider et nettoyer le SIRET
     if (data.entreprise?.siret) {
       data.entreprise.siret = this.cleanAndValidateSiret(data.entreprise.siret, devisText);
+    } else {
+      // Si l'IA n'a pas trouvé de SIRET, essayer de le trouver directement dans le texte
+      console.log('[TORP Extraction] IA n\'a pas trouvé de SIRET, recherche directe...');
+      const directSearch = this.cleanAndValidateSiret('', devisText);
+      if (directSearch) {
+        data.entreprise.siret = directSearch;
+        console.log('[TORP Extraction] SIRET trouvé par recherche directe:', directSearch);
+      }
     }
 
     // Log critical extraction data for debugging
     console.log('[TORP Extraction] Entreprise:', data.entreprise.nom);
-    console.log('[TORP Extraction] SIRET extrait:', data.entreprise.siret || 'NON TROUVÉ');
+    console.log('[TORP Extraction] SIRET final:', data.entreprise.siret || 'NON TROUVÉ');
     console.log('[TORP Extraction] Adresse entreprise:', data.entreprise.adresse || 'NON TROUVÉE');
     console.log('[TORP Extraction] Adresse client:', data.client?.adresse || 'NON TROUVÉE');
     console.log('[TORP Extraction] Adresse chantier:', data.travaux?.adresseChantier || 'NON TROUVÉE');
@@ -245,7 +264,7 @@ export class TorpAnalyzerService {
    */
   private cleanAndValidateSiret(siret: string, devisText: string): string | null {
     // Nettoyer : enlever espaces, tirets, points
-    let cleaned = siret.replace(/[\s\-\.]/g, '');
+    let cleaned = (siret || '').replace(/[\s\-\.]/g, '');
 
     // Si déjà 14 chiffres, c'est bon
     if (/^\d{14}$/.test(cleaned)) {
@@ -253,26 +272,98 @@ export class TorpAnalyzerService {
       return cleaned;
     }
 
-    // Si 9 chiffres (SIREN), chercher le NIC dans le texte
-    if (/^\d{9}$/.test(cleaned)) {
-      console.log('[TORP SIRET] SIREN détecté (9 chiffres), recherche NIC...');
-      // Chercher le SIRET complet dans le texte avec différents formats
-      const siretPatterns = [
-        new RegExp(`${cleaned}\\s*(\\d{5})`, 'i'),
-        new RegExp(`${cleaned.slice(0, 3)}\\s*${cleaned.slice(3, 6)}\\s*${cleaned.slice(6, 9)}\\s*(\\d{5})`, 'i'),
-        /siret[:\s]*(\d{3}\s*\d{3}\s*\d{3}\s*\d{5})/i,
-        /siret[:\s]*(\d{14})/i,
+    // Normaliser le texte pour la recherche (enlever retours ligne multiples)
+    const normalizedText = devisText.replace(/\n+/g, ' ').replace(/\s+/g, ' ');
+
+    // D'abord chercher tous les SIRET potentiels dans le texte (14 chiffres consécutifs avec séparateurs possibles)
+    const findAllSirets = (): string[] => {
+      const patterns = [
+        // Recherche explicite après "SIRET" avec différents formats
+        /siret[:\s]*(\d{3}[\s\.\-]?\d{3}[\s\.\-]?\d{3}[\s\.\-]?\d{2}[\s\.\-]?\d{3})/gi,
+        /siret[:\s]*(\d{3}[\s\.\-]?\d{3}[\s\.\-]?\d{3}[\s\.\-]?\d{5})/gi,
+        /siret[:\s]*(\d{9}[\s\.\-]?\d{5})/gi,
+        /siret[:\s]*(\d{14})/gi,
+        // Recherche de 14 chiffres consécutifs (avec espaces possibles)
+        /\b(\d{3}[\s]?\d{3}[\s]?\d{3}[\s]?\d{5})\b/g,
+        /\b(\d{14})\b/g,
       ];
 
-      for (const pattern of siretPatterns) {
-        const match = devisText.match(pattern);
+      const found: string[] = [];
+      for (const pattern of patterns) {
+        const matches = normalizedText.matchAll(pattern);
+        for (const match of matches) {
+          const candidate = match[1]?.replace(/[\s\.\-]/g, '');
+          if (candidate && /^\d{14}$/.test(candidate) && !found.includes(candidate)) {
+            found.push(candidate);
+          }
+        }
+      }
+      return found;
+    };
+
+    const allSirets = findAllSirets();
+    console.log('[TORP SIRET] SIRETs trouvés dans texte:', allSirets);
+
+    // Si aucun SIRET fourni (recherche directe), utiliser le premier trouvé dans le texte
+    if (!cleaned && allSirets.length > 0) {
+      console.log('[TORP SIRET] Recherche directe - utilisation du premier SIRET trouvé:', allSirets[0]);
+      return allSirets[0];
+    }
+
+    // Si on a un SIRET partiel, chercher le complet qui commence par les mêmes chiffres
+    if (cleaned.length >= 9) {
+      const sirenPart = cleaned.slice(0, 9);
+
+      // Chercher parmi les SIRETs complets trouvés
+      for (const fullSiret of allSirets) {
+        if (fullSiret.startsWith(sirenPart)) {
+          console.log('[TORP SIRET] Correspondance trouvée pour SIREN', sirenPart, ':', fullSiret);
+          return fullSiret;
+        }
+      }
+
+      // Chercher le NIC juste après le SIREN dans le texte brut
+      const sirenWithNicPattern = new RegExp(
+        `${sirenPart.slice(0, 3)}[\\s\\.\\-]?${sirenPart.slice(3, 6)}[\\s\\.\\-]?${sirenPart.slice(6, 9)}[\\s\\.\\-]?(\\d{2}[\\s\\.\\-]?\\d{3}|\\d{5})`,
+        'gi'
+      );
+      const nicMatch = normalizedText.match(sirenWithNicPattern);
+      if (nicMatch) {
+        const fullSiret = nicMatch[0].replace(/[\s\.\-]/g, '');
+        if (/^\d{14}$/.test(fullSiret)) {
+          console.log('[TORP SIRET] SIREN + NIC reconstitué:', fullSiret);
+          return fullSiret;
+        }
+      }
+    }
+
+    // Si 9 chiffres (SIREN seul), chercher avec patterns alternatifs
+    if (/^\d{9}$/.test(cleaned)) {
+      console.log('[TORP SIRET] SIREN détecté (9 chiffres), recherche NIC...');
+
+      // Chercher si on trouve ce SIREN suivi de 5 chiffres n'importe où
+      const nicSearchPatterns = [
+        new RegExp(`${cleaned}[\\s\\.\\-]*(\\d{5})`, 'i'),
+        new RegExp(`${cleaned.slice(0, 3)}[\\s\\.\\-]*${cleaned.slice(3, 6)}[\\s\\.\\-]*${cleaned.slice(6, 9)}[\\s\\.\\-]*(\\d{5})`, 'i'),
+        new RegExp(`${cleaned.slice(0, 3)}[\\s\\.\\-]*${cleaned.slice(3, 6)}[\\s\\.\\-]*${cleaned.slice(6, 9)}[\\s\\.\\-]*(\\d{2})[\\s\\.\\-]*(\\d{3})`, 'i'),
+      ];
+
+      for (const pattern of nicSearchPatterns) {
+        const match = normalizedText.match(pattern);
         if (match) {
-          const fullSiret = match[1] ? cleaned + match[1].replace(/\s/g, '') : match[0]?.replace(/[^\d]/g, '');
-          if (fullSiret && /^\d{14}$/.test(fullSiret)) {
-            console.log('[TORP SIRET] Complet trouvé:', fullSiret);
+          const nic = match[2] ? match[1] + match[2] : match[1];
+          if (nic && /^\d{5}$/.test(nic.replace(/[\s\.\-]/g, ''))) {
+            const fullSiret = cleaned + nic.replace(/[\s\.\-]/g, '');
+            console.log('[TORP SIRET] NIC trouvé, SIRET complet:', fullSiret);
             return fullSiret;
           }
         }
+      }
+
+      // S'il y a un seul SIRET de 14 chiffres dans le texte, l'utiliser
+      if (allSirets.length === 1) {
+        console.log('[TORP SIRET] Utilisation du seul SIRET trouvé dans texte:', allSirets[0]);
+        return allSirets[0];
       }
 
       // Fallback: ajouter 00010 (siège social) - mieux que rien
@@ -282,23 +373,37 @@ export class TorpAnalyzerService {
 
     // Si entre 10 et 13 chiffres, possiblement mal formaté
     if (/^\d{10,13}$/.test(cleaned)) {
-      console.log('[TORP SIRET] Incomplet:', cleaned, '- recherche dans texte...');
+      console.log('[TORP SIRET] Incomplet (' + cleaned.length + ' chiffres):', cleaned, '- recherche élargie...');
 
-      // Chercher un SIRET complet dans le texte source
-      const fullSiretMatch = devisText.match(/siret[:\s]*(\d{3}[\s\.]?\d{3}[\s\.]?\d{3}[\s\.]?\d{5})/i);
-      if (fullSiretMatch) {
-        const fullSiret = fullSiretMatch[1].replace(/[\s\.]/g, '');
-        if (/^\d{14}$/.test(fullSiret)) {
-          console.log('[TORP SIRET] Complet trouvé dans texte:', fullSiret);
+      // S'il y a un seul SIRET complet dans le texte, l'utiliser
+      if (allSirets.length === 1) {
+        console.log('[TORP SIRET] Utilisation du seul SIRET trouvé:', allSirets[0]);
+        return allSirets[0];
+      }
+
+      // Chercher un SIRET qui contient les premiers 9 chiffres
+      const sirenPart = cleaned.slice(0, 9);
+      for (const fullSiret of allSirets) {
+        if (fullSiret.startsWith(sirenPart)) {
+          console.log('[TORP SIRET] Correspondance partielle trouvée:', fullSiret);
           return fullSiret;
         }
       }
 
-      // Chercher tout numéro de 14 chiffres qui commence par les mêmes chiffres
-      const partialMatch = devisText.match(new RegExp(`${cleaned.slice(0, 9)}\\d{5}`, 'g'));
-      if (partialMatch && partialMatch.length === 1) {
-        console.log('[TORP SIRET] Probable trouvé:', partialMatch[0]);
-        return partialMatch[0];
+      // Dernier essai : essayer de compléter à 14 chiffres en cherchant les chiffres manquants
+      const missingDigits = 14 - cleaned.length;
+      const searchPattern = new RegExp(
+        `${cleaned.slice(0, 3)}[\\s\\.\\-]?${cleaned.slice(3, 6)}[\\s\\.\\-]?${cleaned.slice(6, 9)}[\\s\\.\\-]?` +
+        `(\\d{${missingDigits + (cleaned.length - 9)}})`,
+        'gi'
+      );
+      const completionMatch = normalizedText.match(searchPattern);
+      if (completionMatch) {
+        const potential = cleaned.slice(0, 9) + completionMatch[1];
+        if (/^\d{14}$/.test(potential)) {
+          console.log('[TORP SIRET] Complété à 14 chiffres:', potential);
+          return potential;
+        }
       }
     }
 
