@@ -30,6 +30,10 @@ export interface ExtractedDevisData {
       numeroPolice: string | null;
     };
   };
+  client?: {
+    nom: string | null;
+    adresse: string | null;
+  };
   devis: {
     numero: string | null;
     date: string | null;
@@ -41,6 +45,7 @@ export interface ExtractedDevisData {
   travaux: {
     type: string;
     description: string;
+    adresseChantier?: string | null;
     surface: number | null;
     postes: Array<{
       designation: string;
@@ -169,6 +174,30 @@ export class TorpAnalyzerService {
         budgetRealEstime: synthesis.budgetRealEstime || extractedData.devis?.montantTotal || 0,
         margeNegociation: synthesis.margeNegociation || { min: 0, max: 0 },
 
+        // Données extraites pour enrichissement et géocodage
+        extractedData: {
+          entreprise: {
+            nom: extractedData.entreprise.nom,
+            siret: extractedData.entreprise.siret,
+            adresse: extractedData.entreprise.adresse || null,
+            telephone: extractedData.entreprise.telephone,
+            email: extractedData.entreprise.email,
+            certifications: extractedData.entreprise.certifications || [],
+          },
+          client: extractedData.client ? {
+            nom: extractedData.client.nom || null,
+            adresse: extractedData.client.adresse || null,
+          } : undefined,
+          travaux: {
+            type: extractedData.travaux.type,
+            adresseChantier: extractedData.travaux.adresseChantier || extractedData.client?.adresse || null,
+          },
+          devis: {
+            montantTotal: extractedData.devis.montantTotal,
+            montantHT: extractedData.devis.montantHT,
+          },
+        },
+
         dateAnalyse: new Date(),
         dureeAnalyse,
       };
@@ -193,13 +222,88 @@ export class TorpAnalyzerService {
       temperature: 0.2, // Low temperature for accurate extraction
     });
 
+    // Valider et nettoyer le SIRET
+    if (data.entreprise?.siret) {
+      data.entreprise.siret = this.cleanAndValidateSiret(data.entreprise.siret, devisText);
+    }
+
     // Log critical extraction data for debugging
     console.log('[TORP Extraction] Entreprise:', data.entreprise.nom);
     console.log('[TORP Extraction] SIRET extrait:', data.entreprise.siret || 'NON TROUVÉ');
+    console.log('[TORP Extraction] Adresse entreprise:', data.entreprise.adresse || 'NON TROUVÉE');
+    console.log('[TORP Extraction] Adresse client:', data.client?.adresse || 'NON TROUVÉE');
+    console.log('[TORP Extraction] Adresse chantier:', data.travaux?.adresseChantier || 'NON TROUVÉE');
     console.log('[TORP Extraction] Certifications:', data.entreprise.certifications);
     console.log('[TORP Extraction] Montant total:', data.devis.montantTotal);
 
     return data;
+  }
+
+  /**
+   * Nettoie et valide le SIRET extrait
+   * SIRET = 14 chiffres (SIREN 9 chiffres + NIC 5 chiffres)
+   */
+  private cleanAndValidateSiret(siret: string, devisText: string): string | null {
+    // Nettoyer : enlever espaces, tirets, points
+    let cleaned = siret.replace(/[\s\-\.]/g, '');
+
+    // Si déjà 14 chiffres, c'est bon
+    if (/^\d{14}$/.test(cleaned)) {
+      console.log('[TORP SIRET] Valide (14 chiffres):', cleaned);
+      return cleaned;
+    }
+
+    // Si 9 chiffres (SIREN), chercher le NIC dans le texte
+    if (/^\d{9}$/.test(cleaned)) {
+      console.log('[TORP SIRET] SIREN détecté (9 chiffres), recherche NIC...');
+      // Chercher le SIRET complet dans le texte avec différents formats
+      const siretPatterns = [
+        new RegExp(`${cleaned}\\s*(\\d{5})`, 'i'),
+        new RegExp(`${cleaned.slice(0, 3)}\\s*${cleaned.slice(3, 6)}\\s*${cleaned.slice(6, 9)}\\s*(\\d{5})`, 'i'),
+        /siret[:\s]*(\d{3}\s*\d{3}\s*\d{3}\s*\d{5})/i,
+        /siret[:\s]*(\d{14})/i,
+      ];
+
+      for (const pattern of siretPatterns) {
+        const match = devisText.match(pattern);
+        if (match) {
+          const fullSiret = match[1] ? cleaned + match[1].replace(/\s/g, '') : match[0]?.replace(/[^\d]/g, '');
+          if (fullSiret && /^\d{14}$/.test(fullSiret)) {
+            console.log('[TORP SIRET] Complet trouvé:', fullSiret);
+            return fullSiret;
+          }
+        }
+      }
+
+      // Fallback: ajouter 00010 (siège social) - mieux que rien
+      console.log('[TORP SIRET] NIC non trouvé, utilisation NIC par défaut (00010)');
+      return cleaned + '00010';
+    }
+
+    // Si entre 10 et 13 chiffres, possiblement mal formaté
+    if (/^\d{10,13}$/.test(cleaned)) {
+      console.log('[TORP SIRET] Incomplet:', cleaned, '- recherche dans texte...');
+
+      // Chercher un SIRET complet dans le texte source
+      const fullSiretMatch = devisText.match(/siret[:\s]*(\d{3}[\s\.]?\d{3}[\s\.]?\d{3}[\s\.]?\d{5})/i);
+      if (fullSiretMatch) {
+        const fullSiret = fullSiretMatch[1].replace(/[\s\.]/g, '');
+        if (/^\d{14}$/.test(fullSiret)) {
+          console.log('[TORP SIRET] Complet trouvé dans texte:', fullSiret);
+          return fullSiret;
+        }
+      }
+
+      // Chercher tout numéro de 14 chiffres qui commence par les mêmes chiffres
+      const partialMatch = devisText.match(new RegExp(`${cleaned.slice(0, 9)}\\d{5}`, 'g'));
+      if (partialMatch && partialMatch.length === 1) {
+        console.log('[TORP SIRET] Probable trouvé:', partialMatch[0]);
+        return partialMatch[0];
+      }
+    }
+
+    console.log('[TORP SIRET] Invalide, impossible de corriger:', siret);
+    return null;
   }
 
   /**

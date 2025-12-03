@@ -95,6 +95,7 @@ export class ClaudeService {
     options?: {
       model?: string;
       temperature?: number;
+      maxTokens?: number;
       systemPrompt?: string;
     }
   ): Promise<T> {
@@ -105,19 +106,20 @@ export class ClaudeService {
     const {
       model = DEFAULT_MODEL,
       temperature = 0.3, // Lower temperature for more consistent JSON
+      maxTokens = 8000, // Augmenté pour éviter troncature JSON (était 4000)
       systemPrompt = 'You are a JSON-generating assistant. Always respond with valid JSON only.',
     } = options || {};
 
     try {
       const message = await this.client.messages.create({
         model,
-        max_tokens: 4000,
+        max_tokens: maxTokens,
         temperature,
-        system: systemPrompt + ' Return only valid JSON, no markdown or explanations.',
+        system: systemPrompt + ' Return only valid JSON, no markdown or explanations. IMPORTANT: Complete the entire JSON structure - do not truncate.',
         messages: [
           {
             role: 'user',
-            content: prompt + '\n\nIMPORTANT: Return ONLY valid JSON without any markdown formatting, code blocks, or explanations.',
+            content: prompt + '\n\nIMPORTANT: Return ONLY valid JSON without any markdown formatting, code blocks, or explanations. Ensure the JSON is COMPLETE.',
           },
         ],
       });
