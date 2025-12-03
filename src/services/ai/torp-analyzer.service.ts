@@ -15,11 +15,27 @@ import {
   buildSynthesisPrompt,
 } from './prompts/torp-analysis.prompts';
 import type { TorpAnalysisResult } from '@/types/torp';
+import { pappersService } from '@/services/api/pappers.service';
+
+// Statut de vérification du SIRET
+export interface SiretVerification {
+  source: 'document' | 'pappers_lookup' | 'non_trouve';
+  confidence: 'high' | 'medium' | 'low';
+  verified: boolean;
+  message: string;
+  pappersMatch?: {
+    nomEntreprise: string;
+    adresse: string;
+    siret: string;
+    matchScore: number;
+  };
+}
 
 export interface ExtractedDevisData {
   entreprise: {
     nom: string;
     siret: string | null;
+    siretVerification?: SiretVerification;
     adresse: string;
     telephone: string | null;
     email: string | null;
@@ -179,6 +195,7 @@ export class TorpAnalyzerService {
           entreprise: {
             nom: extractedData.entreprise.nom,
             siret: extractedData.entreprise.siret,
+            siretVerification: extractedData.entreprise.siretVerification,
             adresse: extractedData.entreprise.adresse || null,
             telephone: extractedData.entreprise.telephone,
             email: extractedData.entreprise.email,
@@ -234,21 +251,75 @@ export class TorpAnalyzerService {
     console.log('[TORP Extraction] SIRET brut retourné par IA:', data.entreprise?.siret);
 
     // Valider et nettoyer le SIRET
+    let siretFoundInDocument = false;
     if (data.entreprise?.siret) {
-      data.entreprise.siret = this.cleanAndValidateSiret(data.entreprise.siret, devisText);
-    } else {
+      const cleanedSiret = this.cleanAndValidateSiret(data.entreprise.siret, devisText);
+      if (cleanedSiret) {
+        data.entreprise.siret = cleanedSiret;
+        siretFoundInDocument = true;
+      } else {
+        data.entreprise.siret = null;
+      }
+    }
+
+    if (!data.entreprise.siret) {
       // Si l'IA n'a pas trouvé de SIRET, essayer de le trouver directement dans le texte
       console.log('[TORP Extraction] IA n\'a pas trouvé de SIRET, recherche directe...');
       const directSearch = this.cleanAndValidateSiret('', devisText);
       if (directSearch) {
         data.entreprise.siret = directSearch;
+        siretFoundInDocument = true;
         console.log('[TORP Extraction] SIRET trouvé par recherche directe:', directSearch);
+      }
+    }
+
+    // Initialiser la vérification SIRET
+    if (siretFoundInDocument && data.entreprise.siret) {
+      data.entreprise.siretVerification = {
+        source: 'document',
+        confidence: 'high',
+        verified: true,
+        message: 'SIRET extrait du document (14 chiffres valides)'
+      };
+    } else {
+      // FALLBACK: Recherche via Pappers par nom d'entreprise + adresse
+      console.log('[TORP SIRET] Tentative de recherche via Pappers...');
+      const pappersResult = await this.lookupSiretViaPappers(
+        data.entreprise.nom,
+        data.entreprise.adresse
+      );
+
+      if (pappersResult) {
+        data.entreprise.siret = pappersResult.siret;
+        data.entreprise.siretVerification = {
+          source: 'pappers_lookup',
+          confidence: pappersResult.confidence,
+          verified: true,
+          message: pappersResult.message,
+          pappersMatch: {
+            nomEntreprise: pappersResult.nomEntreprise,
+            adresse: pappersResult.adresse,
+            siret: pappersResult.siret,
+            matchScore: pappersResult.matchScore
+          }
+        };
+        console.log('[TORP SIRET] ⚠️ SIRET trouvé via Pappers:', pappersResult.siret);
+        console.log('[TORP SIRET] Confiance:', pappersResult.confidence, '- Score:', pappersResult.matchScore);
+      } else {
+        data.entreprise.siretVerification = {
+          source: 'non_trouve',
+          confidence: 'low',
+          verified: false,
+          message: 'SIRET non trouvé dans le document et recherche Pappers infructueuse. Vérification manuelle requise.'
+        };
+        console.log('[TORP SIRET] ❌ SIRET non trouvé (document + Pappers)');
       }
     }
 
     // Log critical extraction data for debugging
     console.log('[TORP Extraction] Entreprise:', data.entreprise.nom);
     console.log('[TORP Extraction] SIRET final:', data.entreprise.siret || 'NON TROUVÉ');
+    console.log('[TORP Extraction] Source SIRET:', data.entreprise.siretVerification?.source);
     console.log('[TORP Extraction] Adresse entreprise:', data.entreprise.adresse || 'NON TROUVÉE');
     console.log('[TORP Extraction] Adresse client:', data.client?.adresse || 'NON TROUVÉE');
     console.log('[TORP Extraction] Adresse chantier:', data.travaux?.adresseChantier || 'NON TROUVÉE');
@@ -256,6 +327,143 @@ export class TorpAnalyzerService {
     console.log('[TORP Extraction] Montant total:', data.devis.montantTotal);
 
     return data;
+  }
+
+  /**
+   * Recherche le SIRET via l'API Pappers en utilisant le nom et l'adresse de l'entreprise
+   */
+  private async lookupSiretViaPappers(
+    nomEntreprise: string,
+    adresseEntreprise: string | null
+  ): Promise<{
+    siret: string;
+    nomEntreprise: string;
+    adresse: string;
+    confidence: 'high' | 'medium' | 'low';
+    matchScore: number;
+    message: string;
+  } | null> {
+    if (!pappersService.isConfigured()) {
+      console.log('[TORP SIRET Pappers] API Pappers non configurée');
+      return null;
+    }
+
+    if (!nomEntreprise || nomEntreprise.length < 3) {
+      console.log('[TORP SIRET Pappers] Nom d\'entreprise insuffisant pour recherche');
+      return null;
+    }
+
+    try {
+      // Extraire le code postal de l'adresse si disponible
+      const codePostalMatch = adresseEntreprise?.match(/\b(\d{5})\b/);
+      const codePostal = codePostalMatch ? codePostalMatch[1] : undefined;
+
+      console.log('[TORP SIRET Pappers] Recherche:', {
+        nom: nomEntreprise,
+        codePostal: codePostal || 'non trouvé'
+      });
+
+      // Recherche par nom d'entreprise
+      const result = await pappersService.recherche({
+        q: nomEntreprise,
+        code_postal: codePostal,
+        entreprise_cessee: false,
+        par_page: 5
+      });
+
+      if (!result.success || !result.data?.resultats?.length) {
+        console.log('[TORP SIRET Pappers] Aucun résultat trouvé');
+        return null;
+      }
+
+      console.log('[TORP SIRET Pappers] Résultats:', result.data.resultats.length);
+
+      // Calculer un score de correspondance pour chaque résultat
+      const scored = result.data.resultats.map(r => {
+        let score = 0;
+        const nomPappers = (r.nom_entreprise || r.denomination || '').toLowerCase();
+        const nomRecherche = nomEntreprise.toLowerCase();
+
+        // Score basé sur la similarité du nom
+        if (nomPappers === nomRecherche) {
+          score += 50;
+        } else if (nomPappers.includes(nomRecherche) || nomRecherche.includes(nomPappers)) {
+          score += 35;
+        } else {
+          // Vérifier les mots clés communs
+          const motsPappers = nomPappers.split(/[\s\-]+/);
+          const motsRecherche = nomRecherche.split(/[\s\-]+/);
+          const motsCommuns = motsPappers.filter(m =>
+            motsRecherche.some(mr => mr.includes(m) || m.includes(mr))
+          );
+          score += Math.min(30, motsCommuns.length * 10);
+        }
+
+        // Bonus pour le code postal correspondant
+        const cpPappers = r.siege?.code_postal;
+        if (codePostal && cpPappers === codePostal) {
+          score += 30;
+        } else if (codePostal && cpPappers?.slice(0, 2) === codePostal.slice(0, 2)) {
+          // Même département
+          score += 15;
+        }
+
+        // Bonus si entreprise active
+        if (!r.entreprise_cessee) {
+          score += 10;
+        }
+
+        // Bonus si dans le BTP (codes NAF F)
+        if (r.code_naf?.startsWith('F') || r.code_naf?.startsWith('43') || r.code_naf?.startsWith('41')) {
+          score += 10;
+        }
+
+        return {
+          ...r,
+          matchScore: score
+        };
+      });
+
+      // Trier par score et prendre le meilleur
+      scored.sort((a, b) => b.matchScore - a.matchScore);
+      const best = scored[0];
+
+      console.log('[TORP SIRET Pappers] Meilleur match:', {
+        nom: best.nom_entreprise || best.denomination,
+        siret: best.siret,
+        score: best.matchScore,
+        cp: best.siege?.code_postal
+      });
+
+      // Déterminer la confiance basée sur le score
+      let confidence: 'high' | 'medium' | 'low';
+      let message: string;
+
+      if (best.matchScore >= 70) {
+        confidence = 'high';
+        message = `SIRET trouvé via Pappers avec haute confiance (score: ${best.matchScore}/100). L'entreprise "${best.nom_entreprise || best.denomination}" correspond bien au devis.`;
+      } else if (best.matchScore >= 40) {
+        confidence = 'medium';
+        message = `SIRET possiblement trouvé via Pappers (score: ${best.matchScore}/100). ATTENTION: Le SIRET sur le devis semble incorrect ou absent. Vérifiez que "${best.nom_entreprise || best.denomination}" est bien l'entreprise du devis.`;
+      } else {
+        // Score trop bas, ne pas retourner de résultat
+        console.log('[TORP SIRET Pappers] Score trop bas, résultat ignoré');
+        return null;
+      }
+
+      return {
+        siret: best.siret,
+        nomEntreprise: best.nom_entreprise || best.denomination || '',
+        adresse: `${best.siege?.code_postal || ''} ${best.siege?.ville || ''}`.trim(),
+        confidence,
+        matchScore: best.matchScore,
+        message
+      };
+
+    } catch (error) {
+      console.error('[TORP SIRET Pappers] Erreur:', error);
+      return null;
+    }
   }
 
   /**
