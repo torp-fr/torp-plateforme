@@ -1,79 +1,58 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { 
-  TrendingUp, 
-  FileText, 
-  Clock, 
+import { Link } from "react-router-dom";
+import {
+  FileText,
+  Clock,
   Euro,
   BarChart3,
   CheckCircle,
-  AlertCircle
+  Shield,
+  TrendingUp,
+  Upload
 } from "lucide-react";
 
 export const Dashboard = () => {
-  const mockProjects = [
+  // Présentation des fonctionnalités du dashboard (pas de données mockées)
+  const features = [
     {
-      id: "DEV-001",
-      title: "Rénovation salle de bain",
-      company: "Rénov'Expert",
-      amount: 8500,
-      grade: "A",
-      status: "En cours",
-      progress: 75,
-      gradeColor: "grade-a"
+      title: "Analyse de devis",
+      description: "Score TORP sur 1000 points",
+      icon: FileText,
     },
     {
-      id: "DEV-002", 
-      title: "Isolation combles",
-      company: "Iso-Confort",
-      amount: 3200,
-      grade: "B",
-      status: "Accepté",
-      progress: 25,
-      gradeColor: "grade-b"
+      title: "Suivi projets",
+      description: "Timeline et étapes",
+      icon: Clock,
     },
     {
-      id: "DEV-003",
-      title: "Peinture façade",
-      company: "Couleur & Co",
-      amount: 5800,
-      grade: "C",
-      status: "En attente",
-      progress: 0,
-      gradeColor: "grade-c"
+      title: "Budget maîtrisé",
+      description: "Détection des surcoûts",
+      icon: Euro,
+    },
+    {
+      title: "Score détaillé",
+      description: "5 axes d'analyse",
+      icon: BarChart3,
     }
   ];
 
-  const stats = [
+  const advantages = [
     {
-      title: "Devis analysés",
-      value: "127",
-      change: "+12%",
-      icon: FileText,
-      trend: "up"
+      icon: CheckCircle,
+      title: "Vérification entreprise",
+      description: "SIRET, certifications RGE, assurances"
     },
     {
-      title: "Projets actifs",
-      value: "8",
-      change: "+3",
-      icon: Clock,
-      trend: "up"
+      icon: TrendingUp,
+      title: "Comparaison prix marché",
+      description: "Analyse des prix vs. référentiel local"
     },
     {
-      title: "Budget total",
-      value: "45 600€",
-      change: "+8%",
-      icon: Euro,
-      trend: "up"
-    },
-    {
-      title: "Note moyenne",
-      value: "B+",
-      change: "↗",
-      icon: BarChart3,
-      trend: "up"
+      icon: Shield,
+      title: "Protection complète",
+      description: "Détection des clauses abusives"
     }
   ];
 
@@ -89,85 +68,65 @@ export const Dashboard = () => {
           </p>
         </div>
 
-        {/* Stats Cards */}
+        {/* Features Cards */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          {stats.map((stat, index) => (
+          {features.map((feature, index) => (
             <Card key={index} variant="gradient" className="animate-fade-in">
               <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <stat.icon className="h-5 w-5 text-primary" />
-                  <Badge variant="success" className="text-xs">
-                    {stat.change}
-                  </Badge>
-                </div>
+                <feature.icon className="h-6 w-6 text-primary" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-foreground mb-1">
-                  {stat.value}
+                <div className="text-lg font-semibold text-foreground mb-1">
+                  {feature.title}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  {stat.title}
+                  {feature.description}
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
 
-        {/* Projects Table */}
+        {/* Advantages Section */}
         <Card variant="elevated" className="animate-fade-in">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-2xl">Projets récents</CardTitle>
-              <Button variant="outline" size="sm">
-                Voir tout
-              </Button>
+              <CardTitle className="text-2xl">Ce que TORP analyse pour vous</CardTitle>
+              <Link to="/analyze">
+                <Button size="sm">
+                  <Upload className="h-4 w-4 mr-2" />
+                  Analyser un devis
+                </Button>
+              </Link>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-6">
-              {mockProjects.map((project, index) => (
-                <div key={index} className="flex items-center justify-between p-4 bg-background rounded-lg border">
-                  <div className="flex items-center gap-4">
-                    <Badge variant={project.gradeColor as any} className="text-lg font-bold px-3 py-1">
-                      {project.grade}
-                    </Badge>
-                    <div>
-                      <h4 className="font-semibold text-foreground">{project.title}</h4>
-                      <p className="text-sm text-muted-foreground">{project.company}</p>
-                    </div>
+            <div className="grid md:grid-cols-3 gap-6">
+              {advantages.map((advantage, index) => (
+                <div key={index} className="flex items-start gap-4 p-4 bg-background rounded-lg border">
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <advantage.icon className="h-5 w-5 text-primary" />
                   </div>
-                  
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <div className="font-semibold text-foreground">
-                        {project.amount.toLocaleString()}€
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {project.status}
-                      </div>
-                    </div>
-                    
-                    <div className="w-24">
-                      <Progress value={project.progress} className="h-2" />
-                      <div className="text-xs text-muted-foreground mt-1 text-center">
-                        {project.progress}%
-                      </div>
-                    </div>
-                    
-                    <div className="flex gap-2">
-                      {project.status === "En cours" && (
-                        <Clock className="h-4 w-4 text-warning" />
-                      )}
-                      {project.status === "Accepté" && (
-                        <CheckCircle className="h-4 w-4 text-success" />
-                      )}
-                      {project.status === "En attente" && (
-                        <AlertCircle className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </div>
+                  <div>
+                    <h4 className="font-semibold text-foreground mb-1">{advantage.title}</h4>
+                    <p className="text-sm text-muted-foreground">{advantage.description}</p>
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* CTA */}
+            <div className="mt-8 text-center p-6 bg-primary/5 rounded-lg border border-primary/20">
+              <h3 className="text-lg font-semibold mb-2">Prêt à sécuriser vos projets ?</h3>
+              <p className="text-muted-foreground mb-4">
+                Uploadez votre premier devis et obtenez une analyse complète en quelques minutes.
+              </p>
+              <Link to="/analyze">
+                <Button size="lg" variant="hero">
+                  <Upload className="h-4 w-4 mr-2" />
+                  Commencer maintenant
+                </Button>
+              </Link>
             </div>
           </CardContent>
         </Card>

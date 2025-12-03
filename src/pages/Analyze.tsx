@@ -371,25 +371,6 @@ export default function Analyze() {
                         <p className="text-sm text-muted-foreground mb-4">
                           Formats acceptés : PDF, JPG, PNG (max 10MB)
                         </p>
-                        <div className="mt-4">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              // Simuler l'upload d'un devis exemple
-                              const mockFile = new File(['mock content'], 'devis-exemple-salle-de-bain.pdf', { type: 'application/pdf' });
-                              Object.defineProperty(mockFile, 'size', { value: 2548736 }); // 2.5MB
-                              setUploadedFile(mockFile);
-                              toast({
-                                title: 'Devis exemple chargé',
-                                description: 'Vous pouvez maintenant tester l\'analyse.',
-                              });
-                            }}
-                            className="text-sm text-primary hover:text-primary/80 underline"
-                          >
-                            Ou essayez avec notre devis d'exemple
-                          </button>
-                        </div>
                       </div>
                     </div>
                   )}

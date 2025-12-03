@@ -132,6 +132,14 @@ export default function Login() {
                   >
                     {isLoading ? 'Connexion...' : 'Se connecter'}
                   </Button>
+
+                  <div className="text-center">
+                    <Link to="/forgot-password">
+                      <Button variant="link" className="text-sm text-muted-foreground">
+                        Mot de passe oublié ?
+                      </Button>
+                    </Link>
+                  </div>
                 </form>
               </TabsContent>
 
@@ -166,6 +174,14 @@ export default function Login() {
                   >
                     {isLoading ? 'Connexion...' : 'Accéder à mon espace professionnel'}
                   </Button>
+
+                  <div className="text-center">
+                    <Link to="/forgot-password">
+                      <Button variant="link" className="text-sm text-muted-foreground">
+                        Mot de passe oublié ?
+                      </Button>
+                    </Link>
+                  </div>
                 </form>
               </TabsContent>
             </Tabs>

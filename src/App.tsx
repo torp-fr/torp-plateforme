@@ -9,6 +9,9 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import Profile from "./pages/Profile";
 import Analyze from "./pages/Analyze";
 import Results from "./pages/Results";
 import ResultsInteractive from "./pages/ResultsInteractive";
@@ -29,6 +32,7 @@ import AlgorithmicSegments from "./pages/AlgorithmicSegments";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import AdminAnalytics from "./pages/AdminAnalytics";
 import AdminDiagnostic from "./pages/AdminDiagnostic";
+import Compare from "./pages/Compare";
 
 const queryClient = new QueryClient();
 
@@ -45,6 +49,9 @@ const AppContent = () => {
           <Route path="/" element={<Index />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/profile" element={<Profile />} />
           <Route path="/analyze" element={<Analyze />} />
           <Route path="/results" element={<Results />} />
           <Route path="/results-interactive" element={<ResultsInteractive />} />
@@ -59,6 +66,7 @@ const AppContent = () => {
           <Route path="/project-dashboard" element={<ProjectDashboard />} />
           <Route path="/improved-b2b-dashboard" element={<ImprovedB2BDashboard />} />
           <Route path="/b2c-dashboard" element={<B2CDashboard />} />
+          <Route path="/compare" element={<Compare />} />
           {/* Route désactivée - wizard obsolète */}
           {/* <Route path="/discovery" element={<DiscoveryFlow />} /> */}
           <Route path="/torp-complete" element={<TorpCompleteFlow />} />

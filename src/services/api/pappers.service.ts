@@ -59,6 +59,18 @@ export interface PappersEntreprise {
   etat_administratif: string;
 }
 
+export interface HealthScore {
+  score: number; // 0-100
+  niveau: 'excellent' | 'bon' | 'moyen' | 'faible' | 'inconnu';
+  couleur: string;
+  details: {
+    anciennete: { score: number; label: string };
+    capital: { score: number; label: string };
+    resultat: { score: number; label: string };
+    tendanceCA: { score: number; label: string };
+  };
+}
+
 export interface EnrichedEntrepriseData {
   // Identité
   nom: string;
@@ -73,6 +85,7 @@ export interface EnrichedEntrepriseData {
   // Dates
   dateCreation: string;
   dateImmatriculation: string;
+  ancienneteAnnees: number;
 
   // Adresse complète
   adresse: {
@@ -87,6 +100,11 @@ export interface EnrichedEntrepriseData {
   chiffreAffaires: number | null; // Dernier CA disponible
   resultat: number | null; // Dernier résultat
   effectif: number | null; // Dernier effectif
+  tendanceCA: 'hausse' | 'baisse' | 'stable' | 'inconnu';
+  historiqueCA: Array<{ annee: number; valeur: number }>;
+
+  // Score de santé financière
+  healthScore: HealthScore;
 
   // Dirigeants
   dirigeants: Array<{
@@ -108,6 +126,7 @@ export interface EnrichedEntrepriseData {
   // Statut
   statutRCS: string;
   etatAdministratif: string;
+  estActive: boolean;
 }
 
 class PappersService {
@@ -220,6 +239,21 @@ class PappersService {
       ? data.effectif[data.effectif.length - 1].valeur
       : null;
 
+    // Calculer l'ancienneté
+    const ancienneteAnnees = this.calculateAnciennete(data.date_creation);
+
+    // Calculer la tendance CA
+    const tendanceCA = this.calculateTendanceCA(data.chiffre_affaires || []);
+
+    // Calculer le score de santé financière
+    const healthScore = this.calculateHealthScore(
+      ancienneteAnnees,
+      data.capital || 0,
+      dernierResultat,
+      tendanceCA,
+      data.etat_administratif
+    );
+
     return {
       nom: data.nom_entreprise,
       formeJuridique: data.forme_juridique,
@@ -231,6 +265,7 @@ class PappersService {
 
       dateCreation: data.date_creation,
       dateImmatriculation: data.date_immatriculation,
+      ancienneteAnnees,
 
       adresse: {
         ligne1: data.siege?.adresse_ligne_1 || '',
@@ -243,6 +278,13 @@ class PappersService {
       chiffreAffaires: dernierCA,
       resultat: dernierResultat,
       effectif: dernierEffectif,
+      tendanceCA,
+      historiqueCA: (data.chiffre_affaires || []).map(ca => ({
+        annee: ca.annee,
+        valeur: ca.valeur,
+      })),
+
+      healthScore,
 
       dirigeants: (data.representants || []).map(rep => ({
         nom: rep.nom,
@@ -261,6 +303,183 @@ class PappersService {
 
       statutRCS: data.statut_rcs,
       etatAdministratif: data.etat_administratif,
+      estActive: data.etat_administratif === 'Actif' || data.etat_administratif === 'Active',
+    };
+  }
+
+  /**
+   * Calculer l'ancienneté en années
+   */
+  private calculateAnciennete(dateCreation: string): number {
+    if (!dateCreation) return 0;
+    try {
+      const creation = new Date(dateCreation);
+      const now = new Date();
+      return Math.floor((now.getTime() - creation.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Calculer la tendance du chiffre d'affaires
+   */
+  private calculateTendanceCA(historique: Array<{ annee: number; valeur: number }>): 'hausse' | 'baisse' | 'stable' | 'inconnu' {
+    if (!historique || historique.length < 2) return 'inconnu';
+
+    // Trier par année
+    const sorted = [...historique].sort((a, b) => a.annee - b.annee);
+    const recent = sorted.slice(-2);
+
+    if (recent.length < 2) return 'inconnu';
+
+    const diff = recent[1].valeur - recent[0].valeur;
+    const percentChange = (diff / recent[0].valeur) * 100;
+
+    if (percentChange > 5) return 'hausse';
+    if (percentChange < -5) return 'baisse';
+    return 'stable';
+  }
+
+  /**
+   * Calculer le score de santé financière (0-100)
+   */
+  private calculateHealthScore(
+    anciennete: number,
+    capital: number,
+    resultat: number | null,
+    tendance: 'hausse' | 'baisse' | 'stable' | 'inconnu',
+    etatAdmin: string
+  ): HealthScore {
+    // Si entreprise inactive, score très faible
+    if (etatAdmin && !['Actif', 'Active'].includes(etatAdmin)) {
+      return {
+        score: 10,
+        niveau: 'faible',
+        couleur: '#ef4444', // red-500
+        details: {
+          anciennete: { score: 0, label: 'Entreprise inactive' },
+          capital: { score: 0, label: 'N/A' },
+          resultat: { score: 0, label: 'N/A' },
+          tendanceCA: { score: 0, label: 'N/A' },
+        },
+      };
+    }
+
+    // Score ancienneté (25 pts max)
+    let scoreAnciennete = 0;
+    let labelAnciennete = '';
+    if (anciennete >= 10) {
+      scoreAnciennete = 25;
+      labelAnciennete = `${anciennete} ans - Excellente ancienneté`;
+    } else if (anciennete >= 5) {
+      scoreAnciennete = 20;
+      labelAnciennete = `${anciennete} ans - Bonne ancienneté`;
+    } else if (anciennete >= 3) {
+      scoreAnciennete = 15;
+      labelAnciennete = `${anciennete} ans - Ancienneté correcte`;
+    } else if (anciennete >= 1) {
+      scoreAnciennete = 10;
+      labelAnciennete = `${anciennete} an(s) - Jeune entreprise`;
+    } else {
+      scoreAnciennete = 5;
+      labelAnciennete = 'Moins d\'1 an - Très jeune entreprise';
+    }
+
+    // Score capital (25 pts max)
+    let scoreCapital = 0;
+    let labelCapital = '';
+    if (capital >= 100000) {
+      scoreCapital = 25;
+      labelCapital = `${(capital / 1000).toLocaleString('fr-FR')}k€ - Capital solide`;
+    } else if (capital >= 50000) {
+      scoreCapital = 20;
+      labelCapital = `${(capital / 1000).toLocaleString('fr-FR')}k€ - Bon capital`;
+    } else if (capital >= 10000) {
+      scoreCapital = 15;
+      labelCapital = `${(capital / 1000).toLocaleString('fr-FR')}k€ - Capital correct`;
+    } else if (capital > 0) {
+      scoreCapital = 10;
+      labelCapital = `${capital.toLocaleString('fr-FR')}€ - Capital limité`;
+    } else {
+      scoreCapital = 5;
+      labelCapital = 'Non renseigné';
+    }
+
+    // Score résultat (25 pts max)
+    let scoreResultat = 0;
+    let labelResultat = '';
+    if (resultat === null) {
+      scoreResultat = 12; // Neutre si pas de données
+      labelResultat = 'Non disponible';
+    } else if (resultat > 50000) {
+      scoreResultat = 25;
+      labelResultat = 'Excellent résultat';
+    } else if (resultat > 10000) {
+      scoreResultat = 20;
+      labelResultat = 'Bon résultat';
+    } else if (resultat > 0) {
+      scoreResultat = 15;
+      labelResultat = 'Résultat positif';
+    } else if (resultat === 0) {
+      scoreResultat = 10;
+      labelResultat = 'À l\'équilibre';
+    } else {
+      scoreResultat = 5;
+      labelResultat = 'Résultat négatif';
+    }
+
+    // Score tendance CA (25 pts max)
+    let scoreTendance = 0;
+    let labelTendance = '';
+    switch (tendance) {
+      case 'hausse':
+        scoreTendance = 25;
+        labelTendance = 'CA en croissance';
+        break;
+      case 'stable':
+        scoreTendance = 20;
+        labelTendance = 'CA stable';
+        break;
+      case 'baisse':
+        scoreTendance = 10;
+        labelTendance = 'CA en baisse';
+        break;
+      default:
+        scoreTendance = 12;
+        labelTendance = 'Tendance inconnue';
+    }
+
+    // Score total
+    const totalScore = scoreAnciennete + scoreCapital + scoreResultat + scoreTendance;
+
+    // Déterminer le niveau et la couleur
+    let niveau: HealthScore['niveau'];
+    let couleur: string;
+    if (totalScore >= 80) {
+      niveau = 'excellent';
+      couleur = '#10b981'; // emerald-500
+    } else if (totalScore >= 60) {
+      niveau = 'bon';
+      couleur = '#22c55e'; // green-500
+    } else if (totalScore >= 40) {
+      niveau = 'moyen';
+      couleur = '#f59e0b'; // amber-500
+    } else {
+      niveau = 'faible';
+      couleur = '#ef4444'; // red-500
+    }
+
+    return {
+      score: totalScore,
+      niveau,
+      couleur,
+      details: {
+        anciennete: { score: scoreAnciennete, label: labelAnciennete },
+        capital: { score: scoreCapital, label: labelCapital },
+        resultat: { score: scoreResultat, label: labelResultat },
+        tendanceCA: { score: scoreTendance, label: labelTendance },
+      },
     };
   }
 }

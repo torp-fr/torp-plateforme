@@ -43,39 +43,8 @@ interface PaymentTrackingProps {
 export default function PaymentTrackingComponent({ userType, projects = [] }: PaymentTrackingProps) {
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
 
-  const mockProjects: PaymentProject[] = [
-    {
-      id: "1",
-      projectName: "Rénovation Cuisine",
-      company: "BatiCuisine Pro",
-      totalAmount: 15600,
-      paidAmount: 4680,
-      createdDate: "2024-01-15",
-      status: "active",
-      stages: [
-        { name: "Signature contrat", amount: 4680, status: "completed", date: "2024-01-15" },
-        { name: "Démolition", amount: 6240, status: "pending", date: "2024-02-01" },
-        { name: "Installation", amount: 3120, status: "upcoming", date: "2024-02-15" },
-        { name: "Finition", amount: 1560, status: "upcoming", date: "2024-03-01" }
-      ]
-    },
-    {
-      id: "2", 
-      projectName: "Isolation Combles",
-      company: "IsoTherm Expert",
-      totalAmount: 8900,
-      paidAmount: 2670,
-      createdDate: "2024-01-20",
-      status: "active",
-      stages: [
-        { name: "Acompte", amount: 2670, status: "completed", date: "2024-01-20" },
-        { name: "Livraison matériaux", amount: 3560, status: "pending", date: "2024-02-05" },
-        { name: "Solde travaux", amount: 2670, status: "upcoming", date: "2024-02-20" }
-      ]
-    }
-  ];
-
-  const activeProjects = projects.length > 0 ? projects : mockProjects;
+  // Utilise uniquement les projets réels fournis - pas de données mockées
+  const activeProjects = projects;
 
   const getPaymentProgress = (paidAmount: number, totalAmount: number) => {
     return Math.round((paidAmount / totalAmount) * 100);
@@ -173,6 +142,15 @@ export default function PaymentTrackingComponent({ userType, projects = [] }: Pa
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {activeProjects.length === 0 ? (
+            <div className="text-center py-8">
+              <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h4 className="font-medium text-muted-foreground mb-2">Aucun projet avec suivi paiements actif</h4>
+              <p className="text-sm text-muted-foreground">
+                Lancez une analyse TORP pour activer le suivi sécurisé de vos paiements.
+              </p>
+            </div>
+          ) : (
           <div className="space-y-6">
             {activeProjects.map((project) => (
               <div key={project.id} className="p-4 border rounded-lg">
@@ -246,6 +224,7 @@ export default function PaymentTrackingComponent({ userType, projects = [] }: Pa
               </div>
             ))}
           </div>
+          )}
         </CardContent>
       </Card>
 
