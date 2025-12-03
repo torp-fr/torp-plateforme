@@ -40,12 +40,13 @@ export default function Results() {
     setIsGeneratingTicket(true);
 
     try {
-      // Récupérer la company_id de l'utilisateur
+      // Récupérer la company de l'utilisateur avec son nom
       let companyId: string;
+      let companyName: string = 'Mon entreprise';
 
       const { data: existingCompany, error: companyError } = await supabase
         .from('companies')
-        .select('id')
+        .select('id, name')
         .eq('user_id', user.id)
         .single();
 
@@ -58,7 +59,7 @@ export default function Results() {
             name: user.name || 'Mon entreprise',
             email: user.email,
           })
-          .select('id')
+          .select('id, name')
           .single();
 
         if (createError || !newCompany) {
@@ -66,8 +67,10 @@ export default function Results() {
         }
 
         companyId = newCompany.id;
+        companyName = newCompany.name || 'Mon entreprise';
       } else {
         companyId = existingCompany.id;
+        companyName = existingCompany.name || 'Mon entreprise';
       }
 
       // Générer une référence unique de 12 caractères alphanumériques
@@ -77,21 +80,31 @@ export default function Results() {
         reference += chars.charAt(Math.floor(Math.random() * chars.length));
       }
 
+      // Générer un code d'accès client de 8 caractères (plus court, facile à saisir)
+      let codeAcces = '';
+      for (let i = 0; i < 8; i++) {
+        codeAcces += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+
       // Calculer la date d'expiration (6 mois)
       const expirationDate = new Date();
       expirationDate.setMonth(expirationDate.getMonth() + 6);
 
-      // Créer le ticket
+      // Créer le ticket avec tous les champs
       const { data: ticket, error: ticketError } = await supabase
         .from('torp_tickets')
         .insert({
           company_id: companyId,
           reference: reference,
+          code_acces: codeAcces,
+          entreprise_nom: companyName,
           nom_projet: currentProject.name || 'Projet sans nom',
           score_torp: currentProject.score || 0,
           grade: currentProject.grade || 'C',
           status: 'active',
+          date_emission: new Date().toISOString(),
           date_expiration: expirationDate.toISOString(),
+          duree_validite: 30, // 30 jours par défaut
         })
         .select()
         .single();
