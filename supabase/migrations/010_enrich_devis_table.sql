@@ -2,6 +2,7 @@
 -- Description: Ajoute les colonnes pour localisation, distance et coefficient de prix
 -- Author: Claude Code
 -- Date: 2025-12-03
+-- Version: 1.1 - Fix référence colonne amount
 
 -- =============================================================================
 -- SECTION 1: COLONNES LOCALISATION CHANTIER (Géocodage IGN)
@@ -162,6 +163,8 @@ CREATE TRIGGER trigger_update_devis_zone
 
 -- =============================================================================
 -- TRIGGER: Mise à jour automatique du coefficient régional
+-- Note: Le calcul du prix_ajuste est géré par l'application car le nom
+-- de la colonne montant peut varier (amount, montant, total_ht, etc.)
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION update_devis_coefficient_regional()
@@ -171,20 +174,13 @@ BEGIN
     NEW.coefficient_regional := get_coefficient_regional_btp(NEW.chantier_region_code);
     NEW.coefficient_source := 'FFB';
   END IF;
-
-  -- Calcul du prix ajusté si montant et coefficient disponibles
-  IF NEW.amount IS NOT NULL AND NEW.coefficient_regional IS NOT NULL THEN
-    -- Le prix ajusté normalise le prix pour comparaison (division par le coefficient)
-    NEW.prix_ajuste := NEW.amount / NEW.coefficient_regional;
-  END IF;
-
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS trigger_update_devis_coefficient ON public.devis;
 CREATE TRIGGER trigger_update_devis_coefficient
-  BEFORE INSERT OR UPDATE OF chantier_region_code, amount ON public.devis
+  BEFORE INSERT OR UPDATE OF chantier_region_code ON public.devis
   FOR EACH ROW
   EXECUTE FUNCTION update_devis_coefficient_regional();
 
