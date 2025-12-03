@@ -3,7 +3,7 @@
  * Créer une nouvelle analyse de devis pour les professionnels B2B
  */
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ProLayout } from '@/components/pro/ProLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -48,7 +48,7 @@ export default function ProNewAnalysis() {
   const [companyId, setCompanyId] = useState<string | null>(null);
 
   // Charger l'ID de l'entreprise
-  useState(() => {
+  useEffect(() => {
     async function loadCompany() {
       if (!user?.id) return;
       const { data } = await supabase
@@ -59,7 +59,7 @@ export default function ProNewAnalysis() {
       if (data) setCompanyId(data.id);
     }
     loadCompany();
-  });
+  }, [user?.id]);
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const selectedFiles = e.target.files;
@@ -108,11 +108,19 @@ export default function ProNewAnalysis() {
           .upload(fileName, fileData.file);
 
         if (uploadError) {
+          console.error('[ProNewAnalysis] Upload error:', uploadError);
+          const errorMsg = uploadError.message?.includes('bucket')
+            ? 'Bucket de stockage non configuré'
+            : 'Échec upload';
           setFiles((prev) =>
             prev.map((f, idx) =>
-              idx === i ? { ...f, uploading: false, error: 'Échec upload' } : f
+              idx === i ? { ...f, uploading: false, error: errorMsg } : f
             )
           );
+          // Si c'est une erreur de bucket, on arrête tout
+          if (uploadError.message?.includes('bucket') || uploadError.message?.includes('not found')) {
+            throw new Error('Le bucket de stockage "pro-devis" n\'existe pas. Veuillez contacter l\'administrateur.');
+          }
           continue;
         }
 
@@ -158,12 +166,13 @@ export default function ProNewAnalysis() {
 
       // Rediriger vers la liste des analyses
       navigate('/pro/analyses');
-    } catch (error) {
+    } catch (error: any) {
       console.error('[ProNewAnalysis] Erreur:', error);
+      const errorMessage = error?.message || 'Impossible de créer l\'analyse.';
       toast({
         variant: 'destructive',
         title: 'Erreur',
-        description: 'Impossible de créer l\'analyse.',
+        description: errorMessage,
       });
     } finally {
       setProcessing(false);
