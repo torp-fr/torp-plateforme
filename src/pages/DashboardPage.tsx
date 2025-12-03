@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
 import { BackButton } from '@/components/BackButton';
-import { FileText, PiggyBank, Hammer, Eye, Plus, BarChart3, Building, Target, MoreVertical, Trash2, Filter } from 'lucide-react';
+import { FileText, PiggyBank, Hammer, Eye, Plus, BarChart3, MoreVertical, Trash2, Filter } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import {
   DropdownMenu,
@@ -150,56 +150,6 @@ export default function DashboardPage() {
               </>
             )}
           </div>
-
-          {/* Redirection vers dashboard spécialisé pour B2G */}
-          {userType === 'B2G' && (
-            <div className="mb-8">
-              <Card className="border-success/20 bg-gradient-to-r from-success/5 to-success/10">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    🏛️
-                    Dashboard Collectivités
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground mb-4">
-                    Gestion intelligente de votre patrimoine immobilier avec maintenance prédictive et optimisation énergétique.
-                  </p>
-                  <Link to="/collectivites-dashboard">
-                    <Button className="bg-success hover:bg-success/90">
-                      <Building className="w-4 h-4 mr-2" />
-                      Accéder au dashboard patrimoine
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {/* Redirection vers dashboard spécialisé pour B2B2C */}
-          {userType === 'B2B2C' && (
-            <div className="mb-8">
-              <Card className="border-warning/20 bg-gradient-to-r from-warning/5 to-warning/10">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    🎯
-                    Dashboard Prescripteurs
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground mb-4">
-                    Certifiez la qualité des entreprises que vous recommandez avec les analyses TORP illimitées.
-                  </p>
-                  <Link to="/prescripteurs-dashboard">
-                    <Button className="bg-warning hover:bg-warning/90 text-warning-foreground">
-                      <Target className="w-4 h-4 mr-2" />
-                      Accéder au dashboard prescripteur
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            </div>
-          )}
 
           <div className="grid lg:grid-cols-3 gap-8">
             {/* Historique des analyses */}

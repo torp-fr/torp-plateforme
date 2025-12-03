@@ -147,15 +147,25 @@ class PappersService {
   }
 
   /**
-   * Rechercher une entreprise par SIRET - avec fallback API SIRENE
+   * Rechercher une entreprise par SIRET
+   * Priorité : API SIRENE gratuite, puis Pappers en fallback (optimisation coûts)
    */
   async getEntrepriseBySiret(siret: string): Promise<EnrichedEntrepriseData | null> {
     const cleanedSiret = siret.replace(/\s/g, '');
 
-    // Essayer d'abord Pappers si configuré
+    // 1. Essayer d'abord l'API SIRENE gratuite (recherche-entreprises.api.gouv.fr)
+    console.log('[SIRENE] Recherche SIRET:', cleanedSiret);
+    const sireneResult = await this.getEntrepriseFromSirene(cleanedSiret);
+
+    if (sireneResult) {
+      console.log('[SIRENE] Entreprise trouvée:', sireneResult.nom);
+      return sireneResult;
+    }
+
+    // 2. Fallback: API Pappers (payante) pour données enrichies ou si SIRENE échoue
     if (this.isConfigured()) {
       try {
-        console.log('[Pappers] Fetching data for SIRET:', cleanedSiret);
+        console.log('[Pappers] Fallback - Fetching data for SIRET:', cleanedSiret);
 
         const response = await fetch(
           `${this.baseUrl}/entreprise?api_token=${this.apiKey}&siret=${cleanedSiret}`
@@ -186,9 +196,8 @@ class PappersService {
       }
     }
 
-    // Fallback: API SIRENE via recherche-entreprises.api.gouv.fr (gratuit, sans clé)
-    console.log('[SIRENE] Fallback - Fetching data for SIRET:', cleanedSiret);
-    return this.getEntrepriseFromSirene(cleanedSiret);
+    console.warn('[Entreprise] Aucune donnée trouvée pour SIRET:', cleanedSiret);
+    return null;
   }
 
   /**
@@ -197,21 +206,28 @@ class PappersService {
    */
   private async getEntrepriseFromSirene(siret: string): Promise<EnrichedEntrepriseData | null> {
     try {
-      // API recherche-entreprises (gratuite, open data)
+      // API recherche-entreprises avec recherche exacte par SIRET
+      // Utiliser le format q=siret:NUMERO pour recherche exacte
       const response = await fetch(
-        `https://recherche-entreprises.api.gouv.fr/search?q=${siret}&page=1&per_page=1`
+        `https://recherche-entreprises.api.gouv.fr/search?q=siret:${siret}&page=1&per_page=1`,
+        {
+          headers: {
+            'Accept': 'application/json',
+          }
+        }
       );
 
       if (!response.ok) {
         console.error('[SIRENE] API error:', response.status);
-        return null;
+        // Essayer sans le préfixe siret: en fallback
+        return this.getEntrepriseFromSireneFallback(siret);
       }
 
       const data = await response.json();
 
       if (!data.results || data.results.length === 0) {
-        console.warn('[SIRENE] Entreprise non trouvée:', siret);
-        return null;
+        console.warn('[SIRENE] Pas de résultat exact, essai recherche libre...');
+        return this.getEntrepriseFromSireneFallback(siret);
       }
 
       const entreprise = data.results[0];
@@ -225,6 +241,52 @@ class PappersService {
       return this.transformSireneData(entreprise, siret);
     } catch (error) {
       console.error('[SIRENE] Error fetching entreprise:', error);
+      return this.getEntrepriseFromSireneFallback(siret);
+    }
+  }
+
+  /**
+   * Fallback: recherche libre dans l'API SIRENE
+   */
+  private async getEntrepriseFromSireneFallback(siret: string): Promise<EnrichedEntrepriseData | null> {
+    try {
+      // Recherche par SIREN (9 premiers chiffres) si SIRET pas trouvé
+      const siren = siret.substring(0, 9);
+      console.log('[SIRENE Fallback] Recherche par SIREN:', siren);
+
+      const response = await fetch(
+        `https://recherche-entreprises.api.gouv.fr/search?q=${siren}&page=1&per_page=5`,
+        {
+          headers: {
+            'Accept': 'application/json',
+          }
+        }
+      );
+
+      if (!response.ok) {
+        console.error('[SIRENE Fallback] API error:', response.status);
+        return null;
+      }
+
+      const data = await response.json();
+
+      if (!data.results || data.results.length === 0) {
+        console.warn('[SIRENE Fallback] Entreprise non trouvée:', siren);
+        return null;
+      }
+
+      // Chercher l'entreprise avec le bon SIREN
+      const entreprise = data.results.find((e: any) => e.siren === siren) || data.results[0];
+
+      console.log('[SIRENE Fallback] Data received:', {
+        nom: entreprise.nom_complet,
+        siret: entreprise.siege?.siret,
+        siren: entreprise.siren
+      });
+
+      return this.transformSireneData(entreprise, siret);
+    } catch (error) {
+      console.error('[SIRENE Fallback] Error:', error);
       return null;
     }
   }

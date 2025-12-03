@@ -5,7 +5,7 @@ export interface UserData {
   location?: LocationData;
   scoreInitial?: number;
   source?: TrafficSource;
-  profileType: 'B2B' | 'B2C' | 'B2G' | 'B2B2C';
+  profileType: 'B2B' | 'B2C';
 }
 
 export interface ParcelData {

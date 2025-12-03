@@ -1,6 +1,8 @@
 /**
  * ProOnboarding Page
  * Wizard de création du profil entreprise B2B
+ * Utilise l'API Sirene INSEE pour la vérification SIRET
+ * Permet la saisie manuelle si entreprise non trouvée
  */
 
 import { useState } from 'react';
@@ -9,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { useApp } from '@/context/AppContext';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
@@ -19,117 +22,106 @@ import {
   ArrowLeft,
   CheckCircle2,
   Loader2,
-  Search,
+  FileCheck,
+  Check,
+  Edit3,
 } from 'lucide-react';
-import { pappersService } from '@/services/api/pappers.service';
+import { SiretVerification } from '@/components/pro/onboarding/SiretVerification';
+import { SireneEntreprise } from '@/services/api/sirene.service';
 
-interface CompanyData {
+type Step = 'siret' | 'manual' | 'details' | 'success';
+
+interface ManualCompanyData {
   siret: string;
   siren: string;
   raisonSociale: string;
   formeJuridique: string;
   codeNaf: string;
-  libelleNaf: string;
   adresse: string;
   codePostal: string;
   ville: string;
-  telephone: string;
-  email: string;
-  siteWeb: string;
-  dateCreation: string;
-  capitalSocial: number;
-  dirigeantNom: string;
-  dirigeantPrenom: string;
 }
 
 export default function ProOnboarding() {
   const { user } = useApp();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [siretInput, setSiretInput] = useState('');
-  const [companyData, setCompanyData] = useState<CompanyData | null>(null);
 
-  // Recherche SIRET via Pappers
-  async function searchSiret() {
-    const cleanSiret = siretInput.replace(/\s/g, '');
-    if (cleanSiret.length !== 14) {
+  const [step, setStep] = useState<Step>('siret');
+  const [loading, setLoading] = useState(false);
+
+  // Données entreprise depuis Sirene (auto)
+  const [entrepriseData, setEntrepriseData] = useState<SireneEntreprise | null>(null);
+
+  // Données entreprise saisie manuelle
+  const [manualData, setManualData] = useState<ManualCompanyData>({
+    siret: '',
+    siren: '',
+    raisonSociale: '',
+    formeJuridique: '',
+    codeNaf: '',
+    adresse: '',
+    codePostal: '',
+    ville: '',
+  });
+
+  // Données complémentaires
+  const [formData, setFormData] = useState({
+    telephone: '',
+    emailPro: '',
+    siteWeb: '',
+    description: '',
+    dirigeantNom: '',
+  });
+
+  // Mode: 'auto' (données Sirene) ou 'manual' (saisie manuelle)
+  const isManualMode = step === 'manual' || (step === 'details' && !entrepriseData);
+
+  function handleSiretVerified(data: SireneEntreprise) {
+    setEntrepriseData(data);
+    setStep('details');
+  }
+
+  function handleSiretNotFound(siret: string) {
+    setManualData({
+      siret,
+      siren: siret.substring(0, 9),
+      raisonSociale: '',
+      formeJuridique: '',
+      codeNaf: '',
+      adresse: '',
+      codePostal: '',
+      ville: '',
+    });
+    setStep('manual');
+  }
+
+  function handleSiretError(error: string) {
+    toast({
+      variant: 'destructive',
+      title: 'Erreur de vérification',
+      description: error,
+    });
+  }
+
+  function handleManualContinue() {
+    if (!manualData.raisonSociale.trim()) {
       toast({
         variant: 'destructive',
-        title: 'SIRET invalide',
-        description: 'Le SIRET doit contenir 14 chiffres.',
+        title: 'Champ requis',
+        description: 'La raison sociale est obligatoire.',
       });
       return;
     }
-
-    setLoading(true);
-    try {
-      const data = await pappersService.getEntrepriseBySiret(cleanSiret);
-
-      if (data) {
-        setCompanyData({
-          siret: data.siret,
-          siren: data.siren,
-          raisonSociale: data.nom,
-          formeJuridique: data.formeJuridique,
-          codeNaf: data.codeNAF,
-          libelleNaf: data.libelleNAF,
-          adresse: data.adresse.ligne1,
-          codePostal: data.adresse.codePostal,
-          ville: data.adresse.ville,
-          telephone: '',
-          email: user?.email || '',
-          siteWeb: '',
-          dateCreation: data.dateCreation,
-          capitalSocial: data.capital,
-          dirigeantNom: data.dirigeants[0]?.nom || '',
-          dirigeantPrenom: data.dirigeants[0]?.prenom || '',
-        });
-        setStep(2);
-      } else {
-        // Entreprise non trouvée, permettre saisie manuelle
-        setCompanyData({
-          siret: cleanSiret,
-          siren: cleanSiret.substring(0, 9),
-          raisonSociale: '',
-          formeJuridique: '',
-          codeNaf: '',
-          libelleNaf: '',
-          adresse: '',
-          codePostal: '',
-          ville: '',
-          telephone: '',
-          email: user?.email || '',
-          siteWeb: '',
-          dateCreation: '',
-          capitalSocial: 0,
-          dirigeantNom: '',
-          dirigeantPrenom: '',
-        });
-        setStep(2);
-        toast({
-          title: 'Entreprise non trouvée',
-          description: 'Vous pouvez compléter les informations manuellement.',
-        });
-      }
-    } catch (error) {
-      console.error('[ProOnboarding] Erreur recherche:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Erreur',
-        description: 'Impossible de rechercher le SIRET.',
-      });
-    } finally {
-      setLoading(false);
-    }
+    setStep('details');
   }
 
-  // Créer l'entreprise
-  async function createCompany() {
-    if (!companyData || !user?.id) return;
+  async function handleSubmit() {
+    if (!user?.id) return;
 
-    if (!companyData.raisonSociale) {
+    // Vérifier les données requises
+    const raisonSociale = entrepriseData?.raisonSociale || manualData.raisonSociale;
+    if (!raisonSociale) {
       toast({
         variant: 'destructive',
         title: 'Champ requis',
@@ -139,47 +131,72 @@ export default function ProOnboarding() {
     }
 
     setLoading(true);
+
     try {
-      const { data, error } = await supabase
+      // Construire les données à insérer
+      const companyInsert = entrepriseData ? {
+        // Mode auto - données Sirene
+        user_id: user.id,
+        siret: entrepriseData.siret,
+        siren: entrepriseData.siren,
+        raison_sociale: entrepriseData.raisonSociale || 'Non renseigné',
+        forme_juridique: entrepriseData.categorieJuridiqueLibelle || null,
+        code_naf: entrepriseData.codeNAF || null,
+        libelle_naf: entrepriseData.libelleNAF || null,
+        adresse: entrepriseData.adresseComplete || null,
+        code_postal: entrepriseData.adresse.codePostal || null,
+        ville: entrepriseData.adresse.commune || null,
+        telephone: formData.telephone || null,
+        email: formData.emailPro || user.email || null,
+        site_web: formData.siteWeb || null,
+        date_creation: entrepriseData.dateCreation || null,
+        effectif: entrepriseData.trancheEffectifLibelle || null,
+        dirigeant_nom: formData.dirigeantNom || null,
+        siret_verifie: true,
+        siret_verifie_le: new Date().toISOString(),
+      } : {
+        // Mode manuel - saisie utilisateur
+        user_id: user.id,
+        siret: manualData.siret,
+        siren: manualData.siren,
+        raison_sociale: manualData.raisonSociale,
+        forme_juridique: manualData.formeJuridique || null,
+        code_naf: manualData.codeNaf || null,
+        adresse: manualData.adresse || null,
+        code_postal: manualData.codePostal || null,
+        ville: manualData.ville || null,
+        telephone: formData.telephone || null,
+        email: formData.emailPro || user.email || null,
+        site_web: formData.siteWeb || null,
+        dirigeant_nom: formData.dirigeantNom || null,
+        siret_verifie: false, // Non vérifié car saisie manuelle
+        siret_verifie_le: null,
+      };
+
+      // 1. Créer l'entreprise
+      const { data: company, error: companyError } = await supabase
         .from('companies')
-        .insert({
-          user_id: user.id,
-          siret: companyData.siret,
-          siren: companyData.siren,
-          raison_sociale: companyData.raisonSociale,
-          forme_juridique: companyData.formeJuridique || null,
-          code_naf: companyData.codeNaf || null,
-          libelle_naf: companyData.libelleNaf || null,
-          adresse: companyData.adresse || null,
-          code_postal: companyData.codePostal || null,
-          ville: companyData.ville || null,
-          telephone: companyData.telephone || null,
-          email: companyData.email || null,
-          site_web: companyData.siteWeb || null,
-          date_creation: companyData.dateCreation || null,
-          capital_social: companyData.capitalSocial || null,
-          dirigeant_nom: companyData.dirigeantNom || null,
-          dirigeant_prenom: companyData.dirigeantPrenom || null,
-          siret_verifie: !!pappersService.isConfigured(),
-          siret_verifie_le: pappersService.isConfigured() ? new Date().toISOString() : null,
-        })
+        .insert(companyInsert)
         .select()
         .single();
 
-      if (error) throw error;
+      if (companyError) throw companyError;
 
-      // Mettre à jour le user avec company_id
-      await supabase
+      // 2. Mettre à jour l'utilisateur avec le company_id
+      const { error: userError } = await supabase
         .from('users')
-        .update({ company_id: data.id })
+        .update({ company_id: company.id })
         .eq('id', user.id);
+
+      if (userError) throw userError;
 
       toast({
         title: 'Profil créé !',
         description: 'Votre entreprise est maintenant enregistrée.',
       });
 
-      setStep(3);
+      setStep('success');
+
     } catch (error) {
       console.error('[ProOnboarding] Erreur création:', error);
       toast({
@@ -192,155 +209,301 @@ export default function ProOnboarding() {
     }
   }
 
+  const stepNumber = step === 'siret' ? 1 : step === 'manual' ? 2 : step === 'details' ? (isManualMode ? 3 : 2) : 3;
+  const totalSteps = isManualMode ? 4 : 3;
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-lg">
+      <Card className="w-full max-w-2xl">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
             <img src={torpLogo} alt="TORP" className="h-12 w-auto" />
           </div>
           <CardTitle>Créer mon profil entreprise</CardTitle>
           <CardDescription>
-            Étape {step} sur 3
+            Étape {stepNumber} sur {totalSteps}
           </CardDescription>
+
+          {/* Stepper */}
+          <div className="flex items-center justify-center mt-4">
+            {Array.from({ length: totalSteps }).map((_, i) => (
+              <div key={i} className="flex items-center">
+                <div className={`
+                  w-10 h-10 rounded-full flex items-center justify-center font-medium text-sm
+                  ${stepNumber === i + 1 ? 'bg-primary text-white' :
+                    (i + 1 < stepNumber
+                      ? 'bg-green-500 text-white'
+                      : 'bg-gray-200 text-gray-500')}
+                `}>
+                  {i + 1 < stepNumber ? (
+                    <Check className="h-5 w-5" />
+                  ) : (
+                    i + 1
+                  )}
+                </div>
+                {i < totalSteps - 1 && (
+                  <div className={`w-12 sm:w-16 h-1 mx-1 sm:mx-2 ${
+                    i + 1 < stepNumber
+                      ? 'bg-green-500'
+                      : 'bg-gray-200'
+                  }`} />
+                )}
+              </div>
+            ))}
+          </div>
         </CardHeader>
+
         <CardContent>
-          {/* Step 1: SIRET */}
-          {step === 1 && (
+          {/* Étape 1 : Vérification SIRET */}
+          {step === 'siret' && (
             <div className="space-y-6">
-              <div className="text-center">
-                <Building2 className="h-12 w-12 text-primary mx-auto mb-4" />
+              <div className="flex items-center gap-2 mb-4">
+                <Building2 className="h-5 w-5 text-primary" />
+                <h2 className="font-semibold">Vérification SIRET</h2>
+              </div>
+
+              <div className="text-center mb-6">
                 <p className="text-muted-foreground">
                   Entrez votre numéro SIRET pour pré-remplir automatiquement
-                  les informations de votre entreprise.
+                  les informations de votre entreprise via l'API Sirene INSEE.
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="siret">Numéro SIRET</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="siret"
-                    placeholder="123 456 789 00012"
-                    value={siretInput}
-                    onChange={(e) => setSiretInput(e.target.value)}
-                    maxLength={17}
-                  />
-                  <Button onClick={searchSiret} disabled={loading}>
-                    {loading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Search className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  14 chiffres, espaces ignorés
-                </p>
-              </div>
+              <SiretVerification
+                onVerified={handleSiretVerified}
+                onNotFound={handleSiretNotFound}
+                onError={handleSiretError}
+              />
             </div>
           )}
 
-          {/* Step 2: Vérification/Complétion */}
-          {step === 2 && companyData && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <Label htmlFor="raisonSociale">Raison sociale *</Label>
+          {/* Étape 2 (manuel) : Saisie manuelle des infos entreprise */}
+          {step === 'manual' && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Edit3 className="h-5 w-5 text-primary" />
+                <h2 className="font-semibold">Informations entreprise</h2>
+              </div>
+
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm text-orange-700 mb-4">
+                Votre entreprise n'a pas été trouvée dans les bases publiques.
+                Veuillez compléter les informations manuellement.
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="siret">SIRET</Label>
+                    <Input
+                      id="siret"
+                      value={manualData.siret}
+                      disabled
+                      className="font-mono bg-gray-50"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="siren">SIREN</Label>
+                    <Input
+                      id="siren"
+                      value={manualData.siren}
+                      disabled
+                      className="font-mono bg-gray-50"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="raisonSociale">
+                    Raison sociale <span className="text-red-500">*</span>
+                  </Label>
                   <Input
                     id="raisonSociale"
-                    value={companyData.raisonSociale}
-                    onChange={(e) =>
-                      setCompanyData({ ...companyData, raisonSociale: e.target.value })
-                    }
+                    placeholder="Nom de votre entreprise"
+                    value={manualData.raisonSociale}
+                    onChange={e => setManualData(prev => ({ ...prev, raisonSociale: e.target.value }))}
                   />
                 </div>
 
-                <div>
-                  <Label>SIRET</Label>
-                  <Input value={companyData.siret} disabled />
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="formeJuridique">Forme juridique</Label>
+                    <Input
+                      id="formeJuridique"
+                      placeholder="SAS, SARL, etc."
+                      value={manualData.formeJuridique}
+                      onChange={e => setManualData(prev => ({ ...prev, formeJuridique: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="codeNaf">Code NAF</Label>
+                    <Input
+                      id="codeNaf"
+                      placeholder="6201Z"
+                      value={manualData.codeNaf}
+                      onChange={e => setManualData(prev => ({ ...prev, codeNaf: e.target.value }))}
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <Label>Forme juridique</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="adresse">Adresse</Label>
                   <Input
-                    value={companyData.formeJuridique}
-                    onChange={(e) =>
-                      setCompanyData({ ...companyData, formeJuridique: e.target.value })
-                    }
+                    id="adresse"
+                    placeholder="Numéro et rue"
+                    value={manualData.adresse}
+                    onChange={e => setManualData(prev => ({ ...prev, adresse: e.target.value }))}
                   />
                 </div>
 
-                <div className="col-span-2">
-                  <Label>Adresse</Label>
-                  <Input
-                    value={companyData.adresse}
-                    onChange={(e) =>
-                      setCompanyData({ ...companyData, adresse: e.target.value })
-                    }
-                  />
-                </div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="codePostal">Code postal</Label>
+                    <Input
+                      id="codePostal"
+                      placeholder="75001"
+                      value={manualData.codePostal}
+                      onChange={e => setManualData(prev => ({ ...prev, codePostal: e.target.value }))}
+                    />
+                  </div>
 
-                <div>
-                  <Label>Code postal</Label>
-                  <Input
-                    value={companyData.codePostal}
-                    onChange={(e) =>
-                      setCompanyData({ ...companyData, codePostal: e.target.value })
-                    }
-                  />
-                </div>
-
-                <div>
-                  <Label>Ville</Label>
-                  <Input
-                    value={companyData.ville}
-                    onChange={(e) =>
-                      setCompanyData({ ...companyData, ville: e.target.value })
-                    }
-                  />
-                </div>
-
-                <div>
-                  <Label>Téléphone</Label>
-                  <Input
-                    value={companyData.telephone}
-                    onChange={(e) =>
-                      setCompanyData({ ...companyData, telephone: e.target.value })
-                    }
-                  />
-                </div>
-
-                <div>
-                  <Label>Email</Label>
-                  <Input
-                    value={companyData.email}
-                    onChange={(e) =>
-                      setCompanyData({ ...companyData, email: e.target.value })
-                    }
-                  />
+                  <div className="space-y-2">
+                    <Label htmlFor="ville">Ville</Label>
+                    <Input
+                      id="ville"
+                      placeholder="Paris"
+                      value={manualData.ville}
+                      onChange={e => setManualData(prev => ({ ...prev, ville: e.target.value }))}
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="flex gap-3 pt-4">
-                <Button variant="outline" onClick={() => setStep(1)}>
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Retour
+              <div className="flex justify-between mt-6">
+                <Button variant="outline" onClick={() => setStep('siret')}>
+                  <ArrowLeft className="mr-2 h-4 w-4" /> Retour
                 </Button>
-                <Button className="flex-1" onClick={createCompany} disabled={loading}>
-                  {loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : null}
-                  Créer mon profil
+                <Button onClick={handleManualContinue}>
+                  Continuer <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </div>
             </div>
           )}
 
-          {/* Step 3: Succès */}
-          {step === 3 && (
+          {/* Étape 2/3 : Informations complémentaires */}
+          {step === 'details' && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-2 mb-4">
+                <FileCheck className="h-5 w-5 text-primary" />
+                <h2 className="font-semibold">Informations complémentaires</h2>
+              </div>
+
+              {/* Récap entreprise */}
+              <div className="bg-muted p-4 rounded-lg">
+                <p className="font-medium">
+                  {entrepriseData?.raisonSociale || manualData.raisonSociale}
+                </p>
+                <p className="text-sm text-muted-foreground font-mono">
+                  {entrepriseData?.siret || manualData.siret}
+                </p>
+                {(entrepriseData?.adresseComplete || manualData.adresse) && (
+                  <p className="text-sm text-muted-foreground">
+                    {entrepriseData?.adresseComplete ||
+                      [manualData.adresse, manualData.codePostal, manualData.ville].filter(Boolean).join(' ')}
+                  </p>
+                )}
+                {(entrepriseData?.categorieJuridiqueLibelle || manualData.formeJuridique) && (
+                  <p className="text-sm text-muted-foreground">
+                    {entrepriseData?.categorieJuridiqueLibelle || manualData.formeJuridique}
+                  </p>
+                )}
+                {!entrepriseData && (
+                  <p className="text-xs text-orange-600 mt-2">
+                    Saisie manuelle - SIRET non vérifié automatiquement
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="telephone">Téléphone professionnel</Label>
+                    <Input
+                      id="telephone"
+                      type="tel"
+                      placeholder="01 23 45 67 89"
+                      value={formData.telephone}
+                      onChange={e => setFormData(prev => ({ ...prev, telephone: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="emailPro">Email professionnel</Label>
+                    <Input
+                      id="emailPro"
+                      type="email"
+                      placeholder="contact@entreprise.fr"
+                      value={formData.emailPro}
+                      onChange={e => setFormData(prev => ({ ...prev, emailPro: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="siteWeb">Site web</Label>
+                  <Input
+                    id="siteWeb"
+                    type="url"
+                    placeholder="https://www.entreprise.fr"
+                    value={formData.siteWeb}
+                    onChange={e => setFormData(prev => ({ ...prev, siteWeb: e.target.value }))}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="dirigeant">Nom du dirigeant</Label>
+                  <Input
+                    id="dirigeant"
+                    placeholder="Jean Dupont"
+                    value={formData.dirigeantNom}
+                    onChange={e => setFormData(prev => ({ ...prev, dirigeantNom: e.target.value }))}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description de l'activité</Label>
+                  <Textarea
+                    id="description"
+                    placeholder="Décrivez brièvement votre activité..."
+                    rows={3}
+                    value={formData.description}
+                    onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-between mt-6">
+                <Button variant="outline" onClick={() => setStep(isManualMode ? 'manual' : 'siret')}>
+                  <ArrowLeft className="mr-2 h-4 w-4" /> Retour
+                </Button>
+                <Button onClick={handleSubmit} disabled={loading}>
+                  {loading ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Création...</>
+                  ) : (
+                    <>Créer mon profil <ArrowRight className="ml-2 h-4 w-4" /></>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Étape finale : Succès */}
+          {step === 'success' && (
             <div className="text-center space-y-6">
-              <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto" />
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                <CheckCircle2 className="h-10 w-10 text-green-500" />
+              </div>
               <div>
                 <h3 className="text-lg font-semibold">Profil créé avec succès !</h3>
                 <p className="text-muted-foreground mt-2">
@@ -349,13 +512,12 @@ export default function ProOnboarding() {
                 </p>
               </div>
 
-              <div className="space-y-3">
-                <Button className="w-full" onClick={() => navigate('/pro/analyses/new')}>
-                  Analyser un devis
-                  <ArrowRight className="h-4 w-4 ml-2" />
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Button variant="outline" onClick={() => navigate('/pro/documents')}>
+                  Ajouter mes documents
                 </Button>
-                <Button variant="outline" className="w-full" onClick={() => navigate('/pro')}>
-                  Aller au dashboard
+                <Button onClick={() => navigate('/pro')}>
+                  Accéder au dashboard
                 </Button>
               </div>
             </div>

@@ -37,10 +37,8 @@ export function ProtectedRoute({
   if (requiredTypes && !requiredTypes.includes(userType)) {
     // Redirect to appropriate dashboard based on user type
     const dashboardMap: Record<UserType, string> = {
-      B2C: '/b2c-dashboard',
-      B2B: '/improved-b2b-dashboard',
-      B2G: '/collectivites-dashboard',
-      B2B2C: '/prescripteurs-dashboard',
+      B2C: '/dashboard',
+      B2B: '/pro',
       admin: '/admin-dashboard',
     };
 
