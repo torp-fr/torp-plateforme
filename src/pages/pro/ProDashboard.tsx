@@ -1,6 +1,7 @@
 /**
  * ProDashboard Page
  * Tableau de bord pour les professionnels B2B
+ * Utilise la table devis (même que B2C)
  */
 
 import { useState, useEffect } from 'react';
@@ -22,6 +23,7 @@ import {
   CheckCircle2,
   Clock,
   Loader2,
+  Eye,
 } from 'lucide-react';
 
 interface DashboardStats {
@@ -34,13 +36,13 @@ interface DashboardStats {
 
 interface RecentAnalysis {
   id: string;
-  reference_devis: string;
   nom_projet: string | null;
+  file_name: string | null;
+  type_travaux: string | null;
   status: string;
   score_total: number | null;
   grade: string | null;
   created_at: string;
-  ticket_genere: boolean;
 }
 
 export default function ProDashboard() {
@@ -78,15 +80,15 @@ export default function ProDashboard() {
       setHasCompany(true);
       setCompanyId(company.id);
 
-      // Charger les analyses
+      // Charger les analyses depuis la table devis (même que B2C)
       const { data: analyses } = await supabase
-        .from('pro_devis_analyses')
-        .select('*')
-        .eq('company_id', company.id)
+        .from('devis')
+        .select('id, nom_projet, file_name, type_travaux, status, score_total, grade, created_at')
+        .eq('user_id', user!.id)
         .order('created_at', { ascending: false });
 
-      const completed = analyses?.filter((a) => a.status === 'completed') || [];
-      const pending = analyses?.filter((a) => a.status === 'analyzing' || a.status === 'pending') || [];
+      const completed = analyses?.filter((a) => a.status === 'analyzed') || [];
+      const pending = analyses?.filter((a) => a.status === 'analyzing' || a.status === 'uploaded') || [];
 
       // Calculer les stats
       const avgScore =
@@ -101,18 +103,38 @@ export default function ProDashboard() {
       const thirtyDaysFromNow = new Date();
       thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
 
-      const { count: expiringDocs } = await supabase
-        .from('company_documents')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', company.id)
-        .lt('date_expiration', thirtyDaysFromNow.toISOString())
-        .gt('date_expiration', new Date().toISOString());
+      let expiringDocs = 0;
+      try {
+        const { count } = await supabase
+          .from('company_documents')
+          .select('*', { count: 'exact', head: true })
+          .eq('company_id', company.id)
+          .lt('date_expiration', thirtyDaysFromNow.toISOString())
+          .gt('date_expiration', new Date().toISOString());
+        expiringDocs = count || 0;
+      } catch (e) {
+        // Table might not exist yet
+        console.log('[ProDashboard] company_documents table not available');
+      }
+
+      // Compter les tickets (table torp_tickets si elle existe)
+      let ticketsCount = 0;
+      try {
+        const { count } = await supabase
+          .from('torp_tickets')
+          .select('*', { count: 'exact', head: true })
+          .eq('company_id', company.id);
+        ticketsCount = count || 0;
+      } catch (e) {
+        // Table might not exist yet
+        console.log('[ProDashboard] torp_tickets table not available');
+      }
 
       setStats({
         totalAnalyses: completed.length,
         averageScore: avgScore,
-        ticketsGeneres: completed.filter((a) => a.ticket_genere).length,
-        documentsExpirant: expiringDocs || 0,
+        ticketsGeneres: ticketsCount,
+        documentsExpirant: expiringDocs,
         analysesEnCours: pending.length,
       });
 
@@ -145,11 +167,11 @@ export default function ProDashboard() {
 
   function getStatusBadge(status: string) {
     switch (status) {
-      case 'completed':
+      case 'analyzed':
         return <Badge variant="default" className="bg-green-500">Terminé</Badge>;
       case 'analyzing':
         return <Badge variant="secondary">En cours</Badge>;
-      case 'pending':
+      case 'uploaded':
         return <Badge variant="outline">En attente</Badge>;
       case 'failed':
         return <Badge variant="destructive">Échec</Badge>;
@@ -308,9 +330,8 @@ export default function ProDashboard() {
             ) : (
               <div className="space-y-2">
                 {recentAnalyses.map((analysis) => (
-                  <Link
+                  <div
                     key={analysis.id}
-                    to={`/pro/analyses/${analysis.id}`}
                     className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors"
                   >
                     <div className="flex items-center gap-3 min-w-0">
@@ -329,23 +350,24 @@ export default function ProDashboard() {
                       )}
                       <div className="min-w-0">
                         <p className="font-medium truncate">
-                          {analysis.reference_devis || 'Sans référence'}
+                          {analysis.nom_projet || analysis.file_name || 'Sans nom'}
                         </p>
                         <p className="text-sm text-muted-foreground truncate">
-                          {analysis.nom_projet || 'Projet non nommé'}
+                          {analysis.type_travaux || 'Type non spécifié'}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
                       {getStatusBadge(analysis.status)}
-                      {analysis.ticket_genere && (
-                        <Badge variant="outline" className="hidden sm:flex">
-                          <Ticket className="h-3 w-3 mr-1" />
-                          Ticket
-                        </Badge>
+                      {analysis.status === 'analyzed' && (
+                        <Button variant="outline" size="sm" asChild>
+                          <Link to={`/results?devisId=${analysis.id}`}>
+                            <Eye className="h-4 w-4" />
+                          </Link>
+                        </Button>
                       )}
                     </div>
-                  </Link>
+                  </div>
                 ))}
               </div>
             )}

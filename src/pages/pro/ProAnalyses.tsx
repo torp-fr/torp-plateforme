@@ -1,12 +1,13 @@
 /**
  * ProAnalyses Page
  * Liste des analyses pour les professionnels B2B
+ * Utilise la table devis existante (même que B2C)
  */
 
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ProLayout } from '@/components/pro/ProLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -17,22 +18,22 @@ import {
   Search,
   FileSearch,
   Clock,
-  Ticket,
   Loader2,
   Filter,
+  Eye,
 } from 'lucide-react';
 
 interface Analysis {
   id: string;
-  reference_devis: string;
   nom_projet: string | null;
+  type_travaux: string | null;
   status: string;
   score_total: number | null;
   grade: string | null;
-  montant_ht: number | null;
+  montant_total: number | null;
   created_at: string;
   analyzed_at: string | null;
-  ticket_genere: boolean;
+  file_name: string | null;
 }
 
 export default function ProAnalyses() {
@@ -49,22 +50,16 @@ export default function ProAnalyses() {
 
   async function loadAnalyses() {
     try {
-      const { data: company } = await supabase
-        .from('companies')
-        .select('id')
+      // Récupérer tous les devis de l'utilisateur (même table que B2C)
+      const { data, error } = await supabase
+        .from('devis')
+        .select('id, nom_projet, type_travaux, status, score_total, grade, montant_total, created_at, analyzed_at, file_name')
         .eq('user_id', user!.id)
-        .single();
-
-      if (!company) {
-        setLoading(false);
-        return;
-      }
-
-      const { data } = await supabase
-        .from('pro_devis_analyses')
-        .select('*')
-        .eq('company_id', company.id)
         .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('[ProAnalyses] Erreur:', error);
+      }
 
       setAnalyses(data || []);
     } catch (error) {
@@ -76,8 +71,9 @@ export default function ProAnalyses() {
 
   const filteredAnalyses = analyses.filter(
     (a) =>
-      a.reference_devis?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      a.nom_projet?.toLowerCase().includes(searchTerm.toLowerCase())
+      a.nom_projet?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      a.type_travaux?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      a.file_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   function getGradeBg(grade: string) {
@@ -98,11 +94,11 @@ export default function ProAnalyses() {
 
   function getStatusBadge(status: string) {
     switch (status) {
-      case 'completed':
+      case 'analyzed':
         return <Badge className="bg-green-500">Terminé</Badge>;
       case 'analyzing':
         return <Badge variant="secondary">En cours</Badge>;
-      case 'pending':
+      case 'uploaded':
         return <Badge variant="outline">En attente</Badge>;
       default:
         return <Badge variant="destructive">Échec</Badge>;
@@ -127,7 +123,7 @@ export default function ProAnalyses() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Rechercher par référence ou projet..."
+              placeholder="Rechercher par projet ou type..."
               className="pl-9"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -152,7 +148,7 @@ export default function ProAnalyses() {
               </p>
               {!searchTerm && (
                 <Button asChild>
-                  <Link to="/pro/analyses/new">Analyser un devis</Link>
+                  <Link to="/pro/analyses/new">Analyser mon premier devis</Link>
                 </Button>
               )}
             </CardContent>
@@ -160,60 +156,59 @@ export default function ProAnalyses() {
         ) : (
           <div className="space-y-2">
             {filteredAnalyses.map((analysis) => (
-              <Link
-                key={analysis.id}
-                to={`/pro/analyses/${analysis.id}`}
-                className="block"
-              >
-                <Card className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        {analysis.grade ? (
-                          <span
-                            className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${getGradeBg(
-                              analysis.grade
-                            )}`}
-                          >
-                            {analysis.grade}
-                          </span>
-                        ) : (
-                          <span className="w-12 h-12 rounded-full flex items-center justify-center bg-muted">
-                            <Clock className="h-5 w-5 text-muted-foreground" />
-                          </span>
-                        )}
-                        <div>
-                          <p className="font-medium">
-                            {analysis.reference_devis || 'Sans référence'}
+              <Card key={analysis.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      {analysis.grade ? (
+                        <span
+                          className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${getGradeBg(
+                            analysis.grade
+                          )}`}
+                        >
+                          {analysis.grade}
+                        </span>
+                      ) : (
+                        <span className="w-12 h-12 rounded-full flex items-center justify-center bg-muted">
+                          <Clock className="h-5 w-5 text-muted-foreground" />
+                        </span>
+                      )}
+                      <div>
+                        <p className="font-medium">
+                          {analysis.nom_projet || analysis.file_name || 'Projet sans nom'}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {analysis.type_travaux || 'Type non spécifié'}
+                        </p>
+                        {analysis.score_total && (
+                          <p className="text-sm font-medium mt-1">
+                            Score : {analysis.score_total}/1000
                           </p>
-                          <p className="text-sm text-muted-foreground">
-                            {analysis.nom_projet || 'Projet non nommé'}
-                          </p>
-                          {analysis.score_total && (
-                            <p className="text-sm font-medium mt-1">
-                              Score : {analysis.score_total}/1000
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {analysis.montant_ht && (
-                          <span className="text-sm font-medium hidden sm:inline">
-                            {analysis.montant_ht.toLocaleString('fr-FR')} € HT
-                          </span>
                         )}
-                        {getStatusBadge(analysis.status)}
-                        {analysis.ticket_genere && (
-                          <Badge variant="outline">
-                            <Ticket className="h-3 w-3 mr-1" />
-                            Ticket
-                          </Badge>
-                        )}
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {new Date(analysis.created_at).toLocaleDateString('fr-FR')}
+                        </p>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              </Link>
+                    <div className="flex items-center gap-3">
+                      {analysis.montant_total && analysis.montant_total > 0 && (
+                        <span className="text-sm font-medium hidden sm:inline">
+                          {analysis.montant_total.toLocaleString('fr-FR')} €
+                        </span>
+                      )}
+                      {getStatusBadge(analysis.status)}
+                      {analysis.status === 'analyzed' && (
+                        <Button variant="outline" size="sm" asChild>
+                          <Link to={`/results?devisId=${analysis.id}`}>
+                            <Eye className="h-4 w-4 mr-1" />
+                            Voir
+                          </Link>
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}

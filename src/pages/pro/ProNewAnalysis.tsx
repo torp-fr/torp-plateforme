@@ -1,6 +1,7 @@
 /**
  * ProNewAnalysis Page
  * Créer une nouvelle analyse de devis pour les professionnels B2B
+ * Utilise le même système que B2C (table devis + devisService)
  */
 
 import { useState, useRef, useEffect } from 'react';
@@ -11,8 +12,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Progress } from '@/components/ui/progress';
 import { useApp } from '@/context/AppContext';
-import { supabase } from '@/lib/supabase';
+import { devisService } from '@/services/api/supabase/devis.service';
 import { useToast } from '@/hooks/use-toast';
 import {
   Upload,
@@ -24,171 +26,187 @@ import {
   ArrowRight,
 } from 'lucide-react';
 
-interface UploadedFile {
-  file: File;
-  preview?: string;
-  uploading: boolean;
-  uploaded: boolean;
-  error?: string;
-  url?: string;
-}
-
 export default function ProNewAnalysis() {
   const navigate = useNavigate();
   const { user } = useApp();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [step, setStep] = useState<'upload' | 'details' | 'processing'>('upload');
-  const [files, setFiles] = useState<UploadedFile[]>([]);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [projectName, setProjectName] = useState('');
-  const [reference, setReference] = useState('');
+  const [projectType, setProjectType] = useState('');
   const [notes, setNotes] = useState('');
   const [processing, setProcessing] = useState(false);
-  const [companyId, setCompanyId] = useState<string | null>(null);
-
-  // Charger l'ID de l'entreprise
-  useEffect(() => {
-    async function loadCompany() {
-      if (!user?.id) return;
-      const { data } = await supabase
-        .from('companies')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-      if (data) setCompanyId(data.id);
-    }
-    loadCompany();
-  }, [user?.id]);
+  const [analysisProgress, setAnalysisProgress] = useState<string[]>([]);
+  const [progressPercent, setProgressPercent] = useState(0);
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const selectedFiles = e.target.files;
-    if (!selectedFiles) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    const newFiles: UploadedFile[] = Array.from(selectedFiles).map((file) => ({
-      file,
-      uploading: false,
-      uploaded: false,
-    }));
+    // Validation
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
 
-    setFiles((prev) => [...prev, ...newFiles]);
-  }
-
-  function removeFile(index: number) {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  async function uploadFiles() {
-    if (!companyId) {
+    if (file.size > maxSize) {
       toast({
         variant: 'destructive',
-        title: 'Erreur',
-        description: 'Entreprise non trouvée. Veuillez vous reconnecter.',
+        title: 'Fichier trop volumineux',
+        description: 'Le fichier ne doit pas dépasser 10 Mo.',
       });
+      return;
+    }
+
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        variant: 'destructive',
+        title: 'Format non supporté',
+        description: 'Utilisez un fichier PDF, JPG ou PNG.',
+      });
+      return;
+    }
+
+    setUploadedFile(file);
+    toast({
+      title: 'Fichier ajouté',
+      description: file.name,
+    });
+  }
+
+  function removeFile() {
+    setUploadedFile(null);
+  }
+
+  async function handleSubmit() {
+    if (!uploadedFile) {
+      toast({
+        variant: 'destructive',
+        title: 'Fichier requis',
+        description: 'Veuillez ajouter un devis à analyser.',
+      });
+      return;
+    }
+
+    if (!user?.id) {
+      toast({
+        variant: 'destructive',
+        title: 'Non authentifié',
+        description: 'Veuillez vous reconnecter.',
+      });
+      navigate('/login');
       return;
     }
 
     setProcessing(true);
+    setAnalysisProgress(['Préparation de l\'analyse...']);
+    setProgressPercent(10);
 
     try {
-      // Upload chaque fichier
-      const uploadedUrls: string[] = [];
+      // Upload et démarrer l'analyse via devisService existant
+      setAnalysisProgress(prev => [...prev, 'Upload du devis en cours...']);
+      setProgressPercent(20);
 
-      for (let i = 0; i < files.length; i++) {
-        const fileData = files[i];
-        setFiles((prev) =>
-          prev.map((f, idx) => (idx === i ? { ...f, uploading: true } : f))
-        );
-
-        const fileExt = fileData.file.name.split('.').pop();
-        const fileName = `${companyId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('pro-devis')
-          .upload(fileName, fileData.file);
-
-        if (uploadError) {
-          console.error('[ProNewAnalysis] Upload error:', uploadError);
-          const errorMsg = uploadError.message?.includes('bucket')
-            ? 'Bucket de stockage non configuré'
-            : 'Échec upload';
-          setFiles((prev) =>
-            prev.map((f, idx) =>
-              idx === i ? { ...f, uploading: false, error: errorMsg } : f
-            )
-          );
-          // Si c'est une erreur de bucket, on arrête tout
-          if (uploadError.message?.includes('bucket') || uploadError.message?.includes('not found')) {
-            throw new Error('Le bucket de stockage "pro-devis" n\'existe pas. Veuillez contacter l\'administrateur.');
-          }
-          continue;
+      const devis = await devisService.uploadDevis(
+        user.id,
+        uploadedFile,
+        projectName || 'Analyse Pro',
+        {
+          typeTravaux: projectType || 'pro',
+          description: notes,
         }
+      );
 
-        const { data: urlData } = supabase.storage
-          .from('pro-devis')
-          .getPublicUrl(fileName);
+      setAnalysisProgress(prev => [...prev, 'Devis uploadé avec succès', 'Analyse TORP en cours...']);
+      setProgressPercent(40);
 
-        uploadedUrls.push(urlData.publicUrl);
+      // Polling pour suivre l'avancement
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAuthKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
+      const sessionData = localStorage.getItem(supabaseAuthKey);
 
-        setFiles((prev) =>
-          prev.map((f, idx) =>
-            idx === i
-              ? { ...f, uploading: false, uploaded: true, url: urlData.publicUrl }
-              : f
-          )
-        );
+      let accessToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      if (sessionData) {
+        try {
+          const session = JSON.parse(sessionData);
+          accessToken = session.access_token;
+        } catch (e) {
+          console.error('Failed to parse session:', e);
+        }
       }
 
-      if (uploadedUrls.length === 0) {
-        throw new Error('Aucun fichier uploadé');
-      }
+      const checkStatus = async () => {
+        const queryUrl = `${supabaseUrl}/rest/v1/devis?id=eq.${devis.id}&select=*`;
+        const response = await fetch(queryUrl, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+        });
+        if (!response.ok) return null;
+        const data = await response.json();
+        return data[0] || null;
+      };
 
-      // Créer l'analyse en base
-      const { data: analysis, error: analysisError } = await supabase
-        .from('pro_devis_analyses')
-        .insert({
-          company_id: companyId,
-          nom_projet: projectName || null,
-          reference_devis: reference || `DEV-${Date.now()}`,
-          notes: notes || null,
-          fichiers_urls: uploadedUrls,
-          status: 'pending',
-        })
-        .select()
-        .single();
+      // Polling toutes les 3 secondes
+      const pollInterval = setInterval(async () => {
+        const devisData = await checkStatus();
+        if (!devisData) return;
 
-      if (analysisError) throw analysisError;
+        if (devisData.status === 'analyzing') {
+          const steps = [
+            'Extraction des données du devis...',
+            'Analyse de l\'entreprise (250 pts)...',
+            'Vérification des prix du marché (300 pts)...',
+            'Analyse de la complétude technique (200 pts)...',
+            'Vérification de la conformité (150 pts)...',
+            'Analyse des délais (100 pts)...',
+          ];
+          const randomStep = steps[Math.floor(Math.random() * steps.length)];
+          setAnalysisProgress(prev => {
+            if (!prev.includes(randomStep)) return [...prev, randomStep];
+            return prev;
+          });
+          setProgressPercent(prev => Math.min(prev + 10, 85));
+        } else if (devisData.status === 'analyzed') {
+          clearInterval(pollInterval);
+          setProgressPercent(100);
+          setAnalysisProgress(prev => [...prev, 'Analyse terminée !']);
 
-      toast({
-        title: 'Analyse créée',
-        description: 'Votre devis est en cours d\'analyse.',
-      });
+          toast({
+            title: 'Analyse terminée !',
+            description: `Score TORP: ${devisData.score_total}/1000 (${devisData.grade})`,
+          });
 
-      // Rediriger vers la liste des analyses
-      navigate('/pro/analyses');
+          // Rediriger vers les résultats
+          setTimeout(() => {
+            navigate(`/results?devisId=${devis.id}`);
+          }, 1000);
+        }
+      }, 3000);
+
+      // Timeout après 5 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        if (processing) {
+          setProcessing(false);
+          toast({
+            variant: 'destructive',
+            title: 'Timeout',
+            description: 'L\'analyse prend plus de temps que prévu. Vérifiez dans "Mes analyses".',
+          });
+          navigate('/pro/analyses');
+        }
+      }, 300000);
+
     } catch (error: any) {
       console.error('[ProNewAnalysis] Erreur:', error);
-      const errorMessage = error?.message || 'Impossible de créer l\'analyse.';
       toast({
         variant: 'destructive',
         title: 'Erreur',
-        description: errorMessage,
+        description: error?.message || 'Impossible de créer l\'analyse.',
       });
-    } finally {
       setProcessing(false);
     }
-  }
-
-  function handleSubmit() {
-    if (files.length === 0) {
-      toast({
-        variant: 'destructive',
-        title: 'Fichier requis',
-        description: 'Veuillez ajouter au moins un devis à analyser.',
-      });
-      return;
-    }
-    uploadFiles();
   }
 
   return (
@@ -201,145 +219,134 @@ export default function ProNewAnalysis() {
           </p>
         </div>
 
-        {/* Zone d'upload */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Upload className="h-5 w-5" />
-              Devis à analyser
-            </CardTitle>
-            <CardDescription>
-              Formats acceptés : PDF, JPG, PNG (max 10 Mo par fichier)
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Drop zone */}
-            <div
-              className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary transition-colors"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="h-10 w-10 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground mb-2">
-                Cliquez ou glissez-déposez vos fichiers ici
-              </p>
-              <Button variant="outline" size="sm">
-                Parcourir
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                multiple
-                className="hidden"
-                onChange={handleFileSelect}
-              />
-            </div>
-
-            {/* Liste des fichiers */}
-            {files.length > 0 && (
-              <div className="space-y-2">
-                {files.map((file, index) => (
+        {processing ? (
+          // Écran de progression
+          <Card>
+            <CardContent className="py-12">
+              <div className="text-center space-y-6">
+                <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
+                <div>
+                  <h3 className="text-lg font-semibold mb-2">Analyse en cours...</h3>
+                  <Progress value={progressPercent} className="h-2 mb-4" />
+                </div>
+                <div className="text-left bg-muted/50 rounded-lg p-4 max-h-48 overflow-y-auto">
+                  {analysisProgress.map((step, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm py-1">
+                      <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                      <span>{step}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Zone d'upload */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Upload className="h-5 w-5" />
+                  Devis à analyser
+                </CardTitle>
+                <CardDescription>
+                  Formats acceptés : PDF, JPG, PNG (max 10 Mo)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!uploadedFile ? (
                   <div
-                    key={index}
-                    className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
+                    className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary transition-colors"
+                    onClick={() => fileInputRef.current?.click()}
                   >
+                    <Upload className="h-10 w-10 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Cliquez ou glissez-déposez votre fichier ici
+                    </p>
+                    <Button variant="outline" size="sm">
+                      Parcourir
+                    </Button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      className="hidden"
+                      onChange={handleFileSelect}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                     <div className="flex items-center gap-3">
-                      <FileText className="h-5 w-5 text-muted-foreground" />
+                      <FileText className="h-8 w-8 text-primary" />
                       <div>
-                        <p className="text-sm font-medium">{file.file.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {(file.file.size / 1024 / 1024).toFixed(2)} Mo
+                        <p className="font-medium">{uploadedFile.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {(uploadedFile.size / 1024 / 1024).toFixed(2)} Mo
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {file.uploading && (
-                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                      )}
-                      {file.uploaded && (
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                      )}
-                      {file.error && (
-                        <AlertCircle className="h-4 w-4 text-red-500" />
-                      )}
-                      {!file.uploading && !file.uploaded && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeFile(index)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
+                    <Button variant="ghost" size="icon" onClick={removeFile}>
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                )}
+              </CardContent>
+            </Card>
 
-        {/* Informations optionnelles */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Informations (optionnel)</CardTitle>
-            <CardDescription>
-              Ajoutez des détails pour mieux identifier cette analyse
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="projectName">Nom du projet</Label>
-                <Input
-                  id="projectName"
-                  placeholder="Ex: Rénovation Villa Martin"
-                  value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="reference">Référence devis</Label>
-                <Input
-                  id="reference"
-                  placeholder="Ex: DEV-2024-001"
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea
-                id="notes"
-                placeholder="Informations complémentaires..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-              />
-            </div>
-          </CardContent>
-        </Card>
+            {/* Informations optionnelles */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Informations (optionnel)</CardTitle>
+                <CardDescription>
+                  Ajoutez des détails pour mieux identifier cette analyse
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="projectName">Nom du projet</Label>
+                    <Input
+                      id="projectName"
+                      placeholder="Ex: Rénovation Villa Martin"
+                      value={projectName}
+                      onChange={(e) => setProjectName(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="projectType">Type de travaux</Label>
+                    <Input
+                      id="projectType"
+                      placeholder="Ex: Plomberie, Électricité..."
+                      value={projectType}
+                      onChange={(e) => setProjectType(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="notes">Notes</Label>
+                  <Textarea
+                    id="notes"
+                    placeholder="Informations complémentaires..."
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+              </CardContent>
+            </Card>
 
-        {/* Actions */}
-        <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={() => navigate('/pro/analyses')}>
-            Annuler
-          </Button>
-          <Button onClick={handleSubmit} disabled={processing || files.length === 0}>
-            {processing ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Analyse en cours...
-              </>
-            ) : (
-              <>
+            {/* Actions */}
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => navigate('/pro/analyses')}>
+                Annuler
+              </Button>
+              <Button onClick={handleSubmit} disabled={!uploadedFile}>
                 Lancer l'analyse
                 <ArrowRight className="h-4 w-4 ml-2" />
-              </>
-            )}
-          </Button>
-        </div>
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </ProLayout>
   );
