@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
-import { CheckCircle, AlertTriangle, Lightbulb, Download, Eye, ArrowLeft, MessageSquare, Building2, DollarSign, FileCheck, Shield, Clock, Ticket, TrendingUp, RefreshCw } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Lightbulb, Download, Eye, ArrowLeft, MessageSquare, Building2, DollarSign, FileCheck, Shield, Clock, Ticket, TrendingUp, RefreshCw, Loader2 } from 'lucide-react';
 import type { Project } from '@/context/AppContext';
 import { CarteEntreprise } from '@/components/results/CarteEntreprise';
 import { AnalysePrixDetaillee } from '@/components/results/AnalysePrixDetaillee';
@@ -14,13 +14,109 @@ import { AnalyseCompletetudeConformite } from '@/components/results/AnalyseCompl
 import { ConseilsPersonnalises } from '@/components/results/ConseilsPersonnalises';
 import { InfosEntreprisePappers } from '@/components/results/InfosEntreprisePappers';
 import { generateAnalysisReportPDF } from '@/utils/pdfGenerator';
+import { supabase } from '@/lib/supabase';
+import { useToast } from '@/hooks/use-toast';
 
 export default function Results() {
-  const { currentProject, setCurrentProject, userType } = useApp();
+  const { currentProject, setCurrentProject, userType, user } = useApp();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [displayScore, setDisplayScore] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGeneratingTicket, setIsGeneratingTicket] = useState(false);
+  const { toast } = useToast();
+
+  // Fonction pour générer un ticket TORP
+  const generateTorpTicket = async () => {
+    if (!currentProject || !user?.id) {
+      toast({
+        title: 'Erreur',
+        description: 'Données insuffisantes pour générer le ticket',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsGeneratingTicket(true);
+
+    try {
+      // Récupérer la company_id de l'utilisateur
+      let companyId: string;
+
+      const { data: existingCompany, error: companyError } = await supabase
+        .from('companies')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (companyError || !existingCompany) {
+        // Si pas de company, en créer une automatiquement pour l'utilisateur B2B
+        const { data: newCompany, error: createError } = await supabase
+          .from('companies')
+          .insert({
+            user_id: user.id,
+            name: user.name || 'Mon entreprise',
+            email: user.email,
+          })
+          .select('id')
+          .single();
+
+        if (createError || !newCompany) {
+          throw new Error('Impossible de créer l\'entreprise');
+        }
+
+        companyId = newCompany.id;
+      } else {
+        companyId = existingCompany.id;
+      }
+
+      // Générer une référence unique
+      const date = new Date();
+      const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
+      const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const reference = `TORP-${dateStr}-${randomPart}`;
+
+      // Calculer la date d'expiration (6 mois)
+      const expirationDate = new Date();
+      expirationDate.setMonth(expirationDate.getMonth() + 6);
+
+      // Créer le ticket
+      const { data: ticket, error: ticketError } = await supabase
+        .from('torp_tickets')
+        .insert({
+          company_id: companyId,
+          reference: reference,
+          nom_projet: currentProject.name || 'Projet sans nom',
+          score_torp: currentProject.score || 0,
+          grade: currentProject.grade || 'C',
+          status: 'active',
+          date_expiration: expirationDate.toISOString(),
+        })
+        .select()
+        .single();
+
+      if (ticketError) {
+        throw ticketError;
+      }
+
+      toast({
+        title: 'Ticket TORP généré !',
+        description: `Référence: ${reference}`,
+      });
+
+      // Rediriger vers la page des tickets
+      navigate('/pro/tickets');
+    } catch (error) {
+      console.error('[Results] Erreur génération ticket:', error);
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de générer le ticket TORP',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGeneratingTicket(false);
+    }
+  };
 
   useEffect(() => {
     const loadProjectData = async () => {
@@ -541,14 +637,16 @@ export default function Results() {
                       <Button
                         variant="outline"
                         className="h-auto p-4 flex flex-col items-center gap-2"
-                        onClick={() => {
-                          // Rediriger vers la page des tickets
-                          navigate('/pro/tickets');
-                        }}
+                        onClick={generateTorpTicket}
+                        disabled={isGeneratingTicket}
                       >
-                        <Ticket className="w-6 h-6 text-warning" />
-                        <span>Générer un ticket</span>
-                        <span className="text-xs text-muted-foreground">Support TORP</span>
+                        {isGeneratingTicket ? (
+                          <Loader2 className="w-6 h-6 text-warning animate-spin" />
+                        ) : (
+                          <Ticket className="w-6 h-6 text-warning" />
+                        )}
+                        <span>{isGeneratingTicket ? 'Génération...' : 'Générer un ticket'}</span>
+                        <span className="text-xs text-muted-foreground">Certificat TORP</span>
                       </Button>
                     </div>
                   ) : (
