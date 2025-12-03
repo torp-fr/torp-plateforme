@@ -33,6 +33,13 @@ import KnowledgeBase from "./pages/KnowledgeBase";
 import AdminAnalytics from "./pages/AdminAnalytics";
 import AdminDiagnostic from "./pages/AdminDiagnostic";
 import Compare from "./pages/Compare";
+// B2B Pro Pages
+import { ProRoute } from "@/components/auth/ProRoute";
+import ProDashboard from "./pages/pro/ProDashboard";
+import ProOnboarding from "./pages/pro/ProOnboarding";
+import ProAnalyses from "./pages/pro/ProAnalyses";
+import ProDocuments from "./pages/pro/ProDocuments";
+import ProSettings from "./pages/pro/ProSettings";
 
 const queryClient = new QueryClient();
 
@@ -72,6 +79,12 @@ const AppContent = () => {
           <Route path="/torp-complete" element={<TorpCompleteFlow />} />
           <Route path="/segments" element={<AlgorithmicSegments />} />
           <Route path="/knowledge-base" element={<KnowledgeBase />} />
+          {/* Routes B2B Pro */}
+          <Route path="/pro" element={<ProRoute><ProDashboard /></ProRoute>} />
+          <Route path="/pro/onboarding" element={<ProRoute><ProOnboarding /></ProRoute>} />
+          <Route path="/pro/analyses" element={<ProRoute><ProAnalyses /></ProRoute>} />
+          <Route path="/pro/documents" element={<ProRoute><ProDocuments /></ProRoute>} />
+          <Route path="/pro/settings" element={<ProRoute><ProSettings /></ProRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
 

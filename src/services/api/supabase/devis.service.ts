@@ -9,6 +9,7 @@ import { DevisData, TorpAnalysisResult } from '@/types/torp';
 import type { Database } from '@/types/supabase';
 import { pdfExtractorService } from '@/services/pdf/pdf-extractor.service';
 import { torpAnalyzerService } from '@/services/ai/torp-analyzer.service';
+import { notificationService } from '@/services/notifications/notification.service';
 
 type DbDevis = Database['public']['Tables']['devis']['Row'];
 type DbDevisInsert = Database['public']['Tables']['devis']['Insert'];
@@ -322,6 +323,41 @@ export class SupabaseDevisService {
       }
 
       console.log('[DevisService] Analysis results saved successfully');
+
+      // Envoyer notification à l'utilisateur
+      try {
+        // Récupérer les infos du devis et de l'utilisateur
+        const { data: devisInfo } = await supabase
+          .from('devis')
+          .select('user_id, nom_projet')
+          .eq('id', devisId)
+          .single();
+
+        if (devisInfo?.user_id) {
+          const { data: userInfo } = await supabase
+            .from('users')
+            .select('email, name')
+            .eq('id', devisInfo.user_id)
+            .single();
+
+          if (userInfo) {
+            await notificationService.notifyAnalysisComplete({
+              userId: devisInfo.user_id,
+              userEmail: userInfo.email || '',
+              userName: userInfo.name || 'Utilisateur',
+              projectName: devisInfo.nom_projet || 'Projet sans nom',
+              entrepriseName: 'Entreprise', // TODO: extract from analysis if available
+              grade: analysis.grade,
+              score: analysis.scoreGlobal,
+              analysisId: devisId,
+            });
+            console.log('[DevisService] Notification envoyée à l\'utilisateur');
+          }
+        }
+      } catch (notifError) {
+        // Ne pas bloquer l'analyse si la notification échoue
+        console.error('[DevisService] Erreur envoi notification:', notifError);
+      }
 
       const totalDuration = Math.round((Date.now() - startTime) / 1000);
       console.log(`[Devis] Analysis complete for ${devisId} - ${totalDuration}s total - Score: ${analysis.scoreGlobal}/1000 (${analysis.grade})`);
