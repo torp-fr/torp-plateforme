@@ -40,7 +40,7 @@ export default function Analyze() {
   const [analysisProgress, setAnalysisProgress] = useState<string[]>([]);
   const [currentDevisId, setCurrentDevisId] = useState<string | null>(null);
 
-  const { user, addProject, setCurrentProject } = useApp();
+  const { user, addProject, setCurrentProject, userType } = useApp();
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -71,10 +71,7 @@ export default function Analyze() {
       }
 
       setUploadedFile(file);
-      toast({
-        title: 'Fichier uploadé',
-        description: `${file.name} a été ajouté avec succès.`,
-      });
+      // Toast supprimé pour une meilleure UX - l'affichage du fichier est suffisant
     }
   }, [toast]);
 
@@ -138,6 +135,7 @@ export default function Analyze() {
           delaiSouhaite: projectData.startDate,
           urgence: projectData.urgency,
           contraintes: projectData.constraints,
+          userType: userType, // Pass user type for differentiated analysis
         }
       );
 
@@ -257,10 +255,7 @@ export default function Analyze() {
             // Navigate directly to results page - let it load the data
             setIsAnalyzing(false);
 
-            toast({
-              title: 'Analyse terminée !',
-              description: `Score TORP: ${devisData.score_total}/1000 (${devisData.grade})`,
-            });
+            // Toast supprimé - la navigation vers les résultats est suffisante
 
             // Use a small delay to ensure state is updated
             setTimeout(() => {

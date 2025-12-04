@@ -1120,12 +1120,30 @@ export const buildSynthesisPrompt = (
   scoreConformite: number,
   scoreDelais: number,
   allAnalyses: string,
-  scoreInnovationDurable?: number
+  scoreInnovationDurable?: number,
+  userType: 'B2B' | 'B2C' | 'admin' = 'B2C'
 ): string => {
   const scoreTotal = scoreEntreprise + scorePrix + scoreCompletude + scoreConformite + scoreDelais + (scoreInnovationDurable || 0);
   const maxScore = scoreInnovationDurable !== undefined ? 1050 : 1000;
 
-  return `SYNTHÈSE FINALE - Verdict CLAIR et ACTIONNABLE. Le client doit savoir EXACTEMENT quoi faire.
+  // Adapter le contexte selon le type d'utilisateur
+  const userContext = userType === 'B2B'
+    ? `**CONTEXTE PROFESSIONNEL (B2B):**
+Tu analyses ce devis pour un PROFESSIONNEL du bâtiment (courtier, MOE, architecte, promoteur).
+- Focus sur : ROI, conversion client, marge projet, risques juridiques
+- Recommandations orientées : performance commerciale, optimisation des coûts, différenciation concurrentielle
+- Langage : technique, précis, orienté business
+- Objectif : Aider le pro à décider si ce devis est vendable/rentable et comment l'améliorer`
+    : `**CONTEXTE PARTICULIER (B2C):**
+Tu analyses ce devis pour un PARTICULIER qui fait des travaux chez lui.
+- Focus sur : protection contre les arnaques, rapport qualité/prix, compréhension simple
+- Recommandations orientées : ce qu'il doit négocier, vérifier, refuser
+- Langage : accessible, pédagogique, rassurant mais franc
+- Objectif : Aider le particulier à prendre une décision éclairée et se protéger`;
+
+  return `SYNTHÈSE FINALE - Verdict CLAIR et ACTIONNABLE.
+
+${userContext}
 
 SCORES OBTENUS:
 - Entreprise: ${scoreEntreprise}/250 (Fiabilité, assurances, certifications)

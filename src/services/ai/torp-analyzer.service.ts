@@ -89,6 +89,7 @@ export class TorpAnalyzerService {
     metadata?: {
       region?: string;
       typeTravaux?: string;
+      userType?: 'B2B' | 'B2C' | 'admin';
     }
   ): Promise<TorpAnalysisResult> {
     const startTime = Date.now();
@@ -141,14 +142,16 @@ export class TorpAnalyzerService {
       console.log(`[TORP] Innovation/Durable score: ${innovationDurableScore.total}/50 (Grade ${innovationDurableScore.grade})`);
 
       // Step 8: Generate synthesis and recommendations
-      console.log('[TORP] Generating synthesis...');
+      const userType = metadata?.userType || 'B2C';
+      console.log(`[TORP] Generating synthesis... (userType: ${userType})`);
       const synthesis = await this.generateSynthesis(
         entrepriseAnalysis,
         prixAnalysis,
         completudeAnalysis,
         conformiteAnalysis,
         delaisAnalysis,
-        innovationDurableScore.total
+        innovationDurableScore.total,
+        userType
       );
 
       const dureeAnalyse = Math.round((Date.now() - startTime) / 1000);
@@ -854,7 +857,8 @@ export class TorpAnalyzerService {
     completudeAnalysis: any,
     conformiteAnalysis: any,
     delaisAnalysis: any,
-    scoreInnovationDurable?: number
+    scoreInnovationDurable?: number,
+    userType: 'B2B' | 'B2C' | 'admin' = 'B2C'
   ): Promise<any> {
     const allAnalyses = JSON.stringify(
       {
@@ -875,7 +879,8 @@ export class TorpAnalyzerService {
       conformiteAnalysis.scoreTotal,
       delaisAnalysis.scoreTotal,
       allAnalyses,
-      scoreInnovationDurable
+      scoreInnovationDurable,
+      userType
     );
 
     const { data } = await hybridAIService.generateJSON(prompt, {

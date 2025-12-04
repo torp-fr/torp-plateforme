@@ -268,18 +268,23 @@ export default function Results() {
             },
             // Store raw data for new components
             rawData: {
-              // Extraire les données entreprise depuis scoreEntreprise
+              // Extraire les données entreprise depuis extractedData (données OCR) + scoreEntreprise (scores)
               entreprise: {
-                nom: scoreEntrepriseData?.entreprise || scoreEntrepriseData?.nom || null,
-                siret: scoreEntrepriseData?.siret || null,
-                codeNaf: scoreEntrepriseData?.codeNaf || null,
-                adresse: scoreEntrepriseData?.adresse || null,
-                telephone: scoreEntrepriseData?.telephone || null,
-                age: scoreEntrepriseData?.anciennete || scoreEntrepriseData?.age || null,
-                certifications: Array.isArray(scoreEntrepriseData?.certifications)
-                  ? scoreEntrepriseData.certifications.map((c: any) => typeof c === 'string' ? c : c?.nom || c?.name || String(c))
-                  : [],
-                assurances: scoreEntrepriseData?.assurances || null,
+                nom: extractedData?.entreprise?.nom || scoreEntrepriseData?.entreprise || scoreEntrepriseData?.nom || null,
+                siret: extractedData?.entreprise?.siret || scoreEntrepriseData?.siret || null,
+                codeNaf: extractedData?.entreprise?.codeNaf || scoreEntrepriseData?.codeNaf || null,
+                adresse: extractedData?.entreprise?.adresse || scoreEntrepriseData?.adresse || null,
+                telephone: extractedData?.entreprise?.telephone || scoreEntrepriseData?.telephone || null,
+                email: extractedData?.entreprise?.email || scoreEntrepriseData?.email || null,
+                age: scoreEntrepriseData?.details?.fiabilite?.anciennete || scoreEntrepriseData?.anciennete || scoreEntrepriseData?.age || null,
+                certifications: Array.isArray(extractedData?.entreprise?.certifications)
+                  ? extractedData.entreprise.certifications.map((c: any) => typeof c === 'string' ? c : c?.nom || c?.name || String(c))
+                  : Array.isArray(scoreEntrepriseData?.certifications)
+                    ? scoreEntrepriseData.certifications.map((c: any) => typeof c === 'string' ? c : c?.nom || c?.name || String(c))
+                    : [],
+                assurances: extractedData?.entreprise?.assurances || scoreEntrepriseData?.assurances || null,
+                // Données enrichies depuis SIRET verification
+                siretVerification: extractedData?.entreprise?.siretVerification || null,
               },
               scoreEntreprise: {
                 ...scoreEntrepriseData,
