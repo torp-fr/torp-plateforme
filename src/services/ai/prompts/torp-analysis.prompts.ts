@@ -169,6 +169,35 @@ export interface EnrichedCompanyData {
   };
 }
 
+// Interface pour les données RGE ADEME
+export interface RGEAdemeData {
+  estRGE: boolean;
+  scoreRGE: number;
+  nombreQualificationsActives: number;
+  nombreQualificationsTotales: number;
+  domainesActifs: string[];
+  metaDomainesActifs: string[];
+  organismesCertificateurs: string[];
+  qualificationsActives: Array<{
+    nomQualification: string;
+    codeQualification: string;
+    domaine: string;
+    metaDomaine: string;
+    organisme: string;
+    dateFin: string;
+    joursRestants: number;
+  }>;
+  prochaineExpiration: {
+    qualification: string;
+    dateFin: string;
+    joursRestants: number;
+  } | null;
+  alertes: Array<{
+    type: string;
+    message: string;
+  }>;
+}
+
 /**
  * Formate un montant en euros de façon lisible
  */
@@ -186,13 +215,45 @@ function formatMontantEuro(montant: number | undefined | null): string {
 /**
  * Prompt pour l'analyse de l'entreprise (250 points)
  */
-export const buildEntrepriseAnalysisPrompt = (devisData: string, enrichedData?: EnrichedCompanyData | null): string => {
+export const buildEntrepriseAnalysisPrompt = (devisData: string, enrichedData?: EnrichedCompanyData | null, rgeData?: RGEAdemeData | null): string => {
   // Construire le contexte d'enrichissement si disponible
   let enrichmentContext = '';
+  let rgeContext = '';
+
+  // Construire le contexte RGE ADEME si disponible
+  if (rgeData) {
+    if (rgeData.estRGE) {
+      rgeContext = `
+### Certification RGE (Source: ADEME Open Data - VÉRIFIÉ)
+- **Statut RGE:** ✅ CERTIFIÉ RGE - Score ${rgeData.scoreRGE}/100
+- **Qualifications actives:** ${rgeData.nombreQualificationsActives}/${rgeData.nombreQualificationsTotales}
+- **Domaines certifiés:** ${rgeData.metaDomainesActifs.join(', ') || 'Non renseigné'}
+- **Organismes certificateurs:** ${rgeData.organismesCertificateurs.join(', ') || 'Non renseigné'}
+
+**Détail des qualifications RGE actives:**
+${rgeData.qualificationsActives.map(q => `  - ${q.nomQualification || q.codeQualification} (${q.organisme}) - Valide jusqu'au ${new Date(q.dateFin).toLocaleDateString('fr-FR')} (${q.joursRestants} jours)`).join('\n')}
+
+${rgeData.prochaineExpiration ? `⏰ **Prochaine expiration:** ${rgeData.prochaineExpiration.qualification} dans ${rgeData.prochaineExpiration.joursRestants} jours` : ''}
+
+${rgeData.alertes.length > 0 ? `**Alertes RGE:**
+${rgeData.alertes.map(a => `⚠️ ${a.message}`).join('\n')}` : '✅ Aucune alerte RGE'}
+`;
+    } else {
+      rgeContext = `
+### Certification RGE (Source: ADEME Open Data - VÉRIFIÉ)
+- **Statut RGE:** ❌ NON CERTIFIÉ RGE
+- **Score RGE:** 0/100
+- **Conséquence:**
+  * ⚠️ CRITIQUE pour travaux éligibles aux aides (isolation, chauffage, etc.)
+  * Le client NE POURRA PAS bénéficier de MaPrimeRénov' ni des CEE
+  * Perte potentielle de plusieurs milliers d'euros d'aides
+`;
+    }
+  }
 
   if (enrichedData?.siret) {
     enrichmentContext = `
-## DONNÉES ENTREPRISE VÉRIFIÉES (Sources: INSEE Sirene, Pappers)
+## DONNÉES ENTREPRISE VÉRIFIÉES (Sources: INSEE Sirene, Pappers, ADEME)
 
 ### Identification légale
 - **SIRET:** ${enrichedData.siret} ✓ Vérifié INSEE
@@ -212,11 +273,13 @@ ${enrichedData.scorePappers ? `- **Score financier Pappers:** ${enrichedData.sco
 
 ### Certifications & Labels (Source: Pappers)
 ${enrichedData.labelsRGE && enrichedData.labelsRGE.length > 0
-      ? `- **RGE:** ✅ CERTIFIÉ\n${enrichedData.labelsRGE.map(l => `  - ${l.nom}${l.domaines ? ` (${l.domaines.join(', ')})` : ''} - Valide jusqu'au ${l.dateFinValidite || 'N/A'}`).join('\n')}`
-      : '- **RGE:** ❌ Non certifié ou certification non trouvée'}
+      ? `- **RGE (Pappers):** ✅ CERTIFIÉ\n${enrichedData.labelsRGE.map(l => `  - ${l.nom}${l.domaines ? ` (${l.domaines.join(', ')})` : ''} - Valide jusqu'au ${l.dateFinValidite || 'N/A'}`).join('\n')}`
+      : '- **RGE (Pappers):** ❌ Non certifié ou certification non trouvée'}
 ${enrichedData.labelsQualite && enrichedData.labelsQualite.length > 0
       ? `- **Qualibat/Autres:** ${enrichedData.labelsQualite.map(l => l.nom).join(', ')}`
       : ''}
+
+${rgeContext}
 
 ### Alertes automatiques
 ${enrichedData.estActif === false ? '🚨 **ENTREPRISE CESSÉE** - NE PAS SIGNER CE DEVIS' : ''}
@@ -246,6 +309,7 @@ Si tu détectes des incohérences entre le devis et ces données vérifiées, si
 Analyse basée uniquement sur les informations du devis (moins fiable).
 Recommandation: Demander au client de vérifier le SIRET sur https://www.societe.com ou https://www.pappers.fr
 
+${rgeContext}
 `;
   }
 
