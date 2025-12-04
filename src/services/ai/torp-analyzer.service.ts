@@ -14,10 +14,12 @@ import {
   buildDelaisAnalysisPrompt,
   buildSynthesisPrompt,
   type EnrichedCompanyData,
+  type RGEAdemeData,
 } from './prompts/torp-analysis.prompts';
 import type { TorpAnalysisResult } from '@/types/torp';
 import { pappersService } from '@/services/api/pappers.service';
 import { innovationDurableScoringService } from '@/services/scoring/innovation-durable.scoring';
+import { rgeAdemeService } from '@/services/api/rge-ademe.service';
 
 // Statut de vérification du SIRET
 export interface SiretVerification {
@@ -89,6 +91,7 @@ export class TorpAnalyzerService {
     metadata?: {
       region?: string;
       typeTravaux?: string;
+      userType?: 'B2B' | 'B2C' | 'admin';
     }
   ): Promise<TorpAnalysisResult> {
     const startTime = Date.now();
@@ -141,14 +144,16 @@ export class TorpAnalyzerService {
       console.log(`[TORP] Innovation/Durable score: ${innovationDurableScore.total}/50 (Grade ${innovationDurableScore.grade})`);
 
       // Step 8: Generate synthesis and recommendations
-      console.log('[TORP] Generating synthesis...');
+      const userType = metadata?.userType || 'B2C';
+      console.log(`[TORP] Generating synthesis... (userType: ${userType})`);
       const synthesis = await this.generateSynthesis(
         entrepriseAnalysis,
         prixAnalysis,
         completudeAnalysis,
         conformiteAnalysis,
         delaisAnalysis,
-        innovationDurableScore.total
+        innovationDurableScore.total,
+        userType
       );
 
       const dureeAnalyse = Math.round((Date.now() - startTime) / 1000);
@@ -724,62 +729,99 @@ export class TorpAnalyzerService {
 
   /**
    * Analyze entreprise (250 points)
-   * Enrichit automatiquement les données entreprise via Pappers si SIRET disponible
+   * Enrichit automatiquement les données entreprise via Pappers et RGE ADEME si SIRET disponible
    */
   private async analyzeEntreprise(devisData: ExtractedDevisData): Promise<any> {
     // Essayer d'enrichir les données entreprise si SIRET disponible
     let enrichedData: EnrichedCompanyData | null = null;
+    let rgeData: RGEAdemeData | null = null;
 
     if (devisData.entreprise.siret) {
-      try {
-        console.log('[TORP Entreprise] Enrichissement via Pappers pour SIRET:', devisData.entreprise.siret);
-        const pappersResult = await pappersService.getEntrepriseBySiret(devisData.entreprise.siret);
+      // Lancer les enrichissements en parallèle
+      const [pappersResult, rgeResult] = await Promise.allSettled([
+        pappersService.getEntrepriseBySiret(devisData.entreprise.siret),
+        rgeAdemeService.getQualificationsBySiret(devisData.entreprise.siret),
+      ]);
 
-        if (pappersResult) {
-          console.log('[TORP Entreprise] Données Pappers récupérées:', pappersResult.nom);
+      // Traiter les résultats Pappers
+      if (pappersResult.status === 'fulfilled' && pappersResult.value) {
+        console.log('[TORP Entreprise] Données Pappers récupérées:', pappersResult.value.nom);
 
-          // Calculer l'ancienneté
-          let ancienneteAnnees: number | undefined;
-          if (pappersResult.dateCreation) {
-            const creation = new Date(pappersResult.dateCreation);
-            ancienneteAnnees = Math.floor((Date.now() - creation.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-          }
-
-          enrichedData = {
-            siret: pappersResult.siret,
-            siren: pappersResult.siren,
-            raisonSociale: pappersResult.nom,
-            formeJuridique: pappersResult.formeJuridique,
-            codeNAF: pappersResult.codeNAF,
-            libelleNAF: pappersResult.libelleNAF,
-            dateCreation: pappersResult.dateCreation,
-            ancienneteAnnees,
-            estActif: pappersResult.estActive,
-            effectif: pappersResult.effectif?.toString(),
-            capitalSocial: pappersResult.capital,
-            chiffreAffaires: pappersResult.chiffreAffaires || undefined,
-            resultatNet: pappersResult.resultat || undefined,
-            scorePappers: pappersResult.healthScore?.score,
-            risquePappers: pappersResult.healthScore?.niveau,
-            labelsRGE: pappersResult.certificationsRGE?.map(c => ({
-              nom: c.nom,
-              domaines: c.domaine ? [c.domaine] : undefined,
-              dateFinValidite: c.validite
-            })),
-            labelsQualite: pappersResult.labels?.map(l => ({ nom: l })),
-            adresseComplete: `${pappersResult.adresse.ligne1} ${pappersResult.adresse.codePostal} ${pappersResult.adresse.ville}`.trim(),
-            siretVerification: devisData.entreprise.siretVerification
-          };
-
-          console.log('[TORP Entreprise] Enrichissement terminé - Score santé:', enrichedData.scorePappers);
+        // Calculer l'ancienneté
+        let ancienneteAnnees: number | undefined;
+        if (pappersResult.value.dateCreation) {
+          const creation = new Date(pappersResult.value.dateCreation);
+          ancienneteAnnees = Math.floor((Date.now() - creation.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
         }
-      } catch (error) {
-        console.error('[TORP Entreprise] Erreur enrichissement Pappers:', error);
-        // Continue sans enrichissement
+
+        enrichedData = {
+          siret: pappersResult.value.siret,
+          siren: pappersResult.value.siren,
+          raisonSociale: pappersResult.value.nom,
+          formeJuridique: pappersResult.value.formeJuridique,
+          codeNAF: pappersResult.value.codeNAF,
+          libelleNAF: pappersResult.value.libelleNAF,
+          dateCreation: pappersResult.value.dateCreation,
+          ancienneteAnnees,
+          estActif: pappersResult.value.estActive,
+          effectif: pappersResult.value.effectif?.toString(),
+          capitalSocial: pappersResult.value.capital,
+          chiffreAffaires: pappersResult.value.chiffreAffaires || undefined,
+          resultatNet: pappersResult.value.resultat || undefined,
+          scorePappers: pappersResult.value.healthScore?.score,
+          risquePappers: pappersResult.value.healthScore?.niveau,
+          labelsRGE: pappersResult.value.certificationsRGE?.map(c => ({
+            nom: c.nom,
+            domaines: c.domaine ? [c.domaine] : undefined,
+            dateFinValidite: c.validite
+          })),
+          labelsQualite: pappersResult.value.labels?.map(l => ({ nom: l })),
+          adresseComplete: `${pappersResult.value.adresse.ligne1} ${pappersResult.value.adresse.codePostal} ${pappersResult.value.adresse.ville}`.trim(),
+          siretVerification: devisData.entreprise.siretVerification
+        };
+
+        console.log('[TORP Entreprise] Enrichissement Pappers terminé - Score santé:', enrichedData.scorePappers);
+      } else if (pappersResult.status === 'rejected') {
+        console.error('[TORP Entreprise] Erreur enrichissement Pappers:', pappersResult.reason);
+      }
+
+      // Traiter les résultats RGE ADEME
+      if (rgeResult.status === 'fulfilled' && rgeResult.value.success && rgeResult.value.data) {
+        const rge = rgeResult.value.data;
+        console.log('[TORP Entreprise] Données RGE ADEME récupérées:', rge.estRGE ? 'CERTIFIÉ' : 'NON RGE');
+        console.log('[TORP Entreprise] Score RGE:', rge.scoreRGE, '| Qualifications actives:', rge.nombreQualificationsActives);
+
+        rgeData = {
+          estRGE: rge.estRGE,
+          scoreRGE: rge.scoreRGE,
+          nombreQualificationsActives: rge.nombreQualificationsActives,
+          nombreQualificationsTotales: rge.nombreQualificationsTotales,
+          domainesActifs: rge.domainesActifs,
+          metaDomainesActifs: rge.metaDomainesActifs,
+          organismesCertificateurs: rge.organismesCertificateurs,
+          qualificationsActives: rge.qualificationsActives.map(q => ({
+            nomQualification: q.nomQualification,
+            codeQualification: q.codeQualification,
+            domaine: q.domaine,
+            metaDomaine: q.metaDomaine,
+            organisme: q.organisme,
+            dateFin: q.dateFin,
+            joursRestants: q.joursRestants,
+          })),
+          prochaineExpiration: rge.prochaineExpiration,
+          alertes: rge.alertes.map(a => ({
+            type: a.type,
+            message: a.message,
+          })),
+        };
+      } else if (rgeResult.status === 'rejected') {
+        console.error('[TORP Entreprise] Erreur vérification RGE:', rgeResult.reason);
+      } else if (rgeResult.status === 'fulfilled' && !rgeResult.value.success) {
+        console.log('[TORP Entreprise] RGE non vérifié:', rgeResult.value.error);
       }
     }
 
-    const prompt = buildEntrepriseAnalysisPrompt(JSON.stringify(devisData, null, 2), enrichedData);
+    const prompt = buildEntrepriseAnalysisPrompt(JSON.stringify(devisData, null, 2), enrichedData, rgeData);
 
     const { data } = await hybridAIService.generateJSON(prompt, {
       systemPrompt: TORP_SYSTEM_PROMPT,
@@ -854,7 +896,8 @@ export class TorpAnalyzerService {
     completudeAnalysis: any,
     conformiteAnalysis: any,
     delaisAnalysis: any,
-    scoreInnovationDurable?: number
+    scoreInnovationDurable?: number,
+    userType: 'B2B' | 'B2C' | 'admin' = 'B2C'
   ): Promise<any> {
     const allAnalyses = JSON.stringify(
       {
@@ -875,7 +918,8 @@ export class TorpAnalyzerService {
       conformiteAnalysis.scoreTotal,
       delaisAnalysis.scoreTotal,
       allAnalyses,
-      scoreInnovationDurable
+      scoreInnovationDurable,
+      userType
     );
 
     const { data } = await hybridAIService.generateJSON(prompt, {

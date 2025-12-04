@@ -66,6 +66,7 @@ export class SupabaseDevisService {
       delaiSouhaite?: string;
       urgence?: string;
       contraintes?: string;
+      userType?: 'B2B' | 'B2C' | 'admin';
     }
   ): Promise<{ id: string; status: string }> {
     console.log('[DevisService] uploadDevis called with userId:', userId);
@@ -227,7 +228,7 @@ export class SupabaseDevisService {
   /**
    * Analyze a devis file using AI (TORP methodology)
    */
-  async analyzeDevisById(devisId: string, file?: File, metadata?: { region?: string; typeTravaux?: string }): Promise<void> {
+  async analyzeDevisById(devisId: string, file?: File, metadata?: { region?: string; typeTravaux?: string; userType?: 'B2B' | 'B2C' | 'admin' }): Promise<void> {
     const startTime = Date.now();
 
     try {
@@ -264,8 +265,11 @@ export class SupabaseDevisService {
       const devisText = await pdfExtractorService.extractText(devisFile);
 
       // Step 2: Run TORP analysis
-      console.log(`[Devis] Running TORP analysis...`);
-      const analysis = await torpAnalyzerService.analyzeDevis(devisText, metadata);
+      console.log(`[Devis] Running TORP analysis... (userType: ${metadata?.userType || 'B2C'})`);
+      const analysis = await torpAnalyzerService.analyzeDevis(devisText, {
+        ...metadata,
+        userType: metadata?.userType || 'B2C',
+      });
 
       // Step 3: Save results to database
       console.log(`[Devis] Saving analysis results...`);

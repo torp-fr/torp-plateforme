@@ -13,6 +13,7 @@
 import { supabase } from '@/lib/supabase';
 import { entrepriseUnifiedService, EntrepriseUnifiee, GetEntrepriseOptions } from './entreprise-unified.service';
 import { geocodingService, GeocodingResult } from '@/services/api/geocoding.service';
+import { rgeAdemeService, RGEEntreprise } from '@/services/api/rge-ademe.service';
 
 // ============================================
 // TYPES
@@ -78,6 +79,9 @@ export interface CompanyEnrichmentData {
     photosUrl?: string[];
   };
 
+  // Données RGE ADEME
+  rge?: RGEEntreprise;
+
   // Métadonnées
   dataSources: string[];
   dataQualityScore: number;
@@ -100,6 +104,9 @@ export interface EnrichmentOptions extends GetEntrepriseOptions {
 
   // Google (future)
   fetchGoogleReviews?: boolean;
+
+  // RGE ADEME
+  verifyRGE?: boolean;
 
   // Persistance
   persist?: boolean;
@@ -132,6 +139,7 @@ class CompanyEnrichmentService {
       enrichirProcedures = false,
       geocodeAddress = true,
       fetchGoogleReviews = false,
+      verifyRGE = true,
       persist = true,
       forceRefresh = false,
     } = options;
@@ -284,6 +292,35 @@ class CompanyEnrichmentService {
     }
 
     // ==========================================
+    // ÉTAPE 4.5: Vérification RGE ADEME
+    // ==========================================
+
+    if (verifyRGE) {
+      try {
+        console.log('[CompanyEnrichment] Vérification RGE ADEME...');
+        const rgeResult = await rgeAdemeService.getQualificationsBySiret(siret);
+
+        if (rgeResult.success && rgeResult.data) {
+          sourcesUsed.push('ademe_rge');
+          enrichmentData.rge = rgeResult.data;
+
+          console.log('[CompanyEnrichment] RGE:', rgeResult.data.estRGE ? 'OUI' : 'NON');
+          console.log('[CompanyEnrichment] Score RGE:', rgeResult.data.scoreRGE);
+
+          if (rgeResult.data.estRGE) {
+            console.log('[CompanyEnrichment] Qualifications actives:', rgeResult.data.nombreQualificationsActives);
+          }
+        } else {
+          warnings.push(`Vérification RGE: ${rgeResult.error || 'Non disponible'}`);
+        }
+      } catch (err) {
+        console.error('[CompanyEnrichment] Erreur vérification RGE:', err);
+        errors.push({ source: 'ademe_rge', error: err instanceof Error ? err.message : 'Erreur RGE' });
+        warnings.push('Erreur lors de la vérification RGE');
+      }
+    }
+
+    // ==========================================
     // ÉTAPE 5: Calcul du score de qualité
     // ==========================================
 
@@ -399,16 +436,16 @@ class CompanyEnrichmentService {
   private calculateDataQualityScore(data: CompanyEnrichmentData): number {
     let score = 0;
 
-    // Données de base obligatoires (30 points)
-    if (data.siret) score += 10;
-    if (data.name) score += 10;
-    if (data.sirene?.adresseComplete) score += 10;
+    // Données de base obligatoires (25 points)
+    if (data.siret) score += 8;
+    if (data.name) score += 8;
+    if (data.sirene?.adresseComplete) score += 9;
 
-    // Données Sirene (20 points)
-    if (data.sirene?.codeNaf) score += 5;
-    if (data.sirene?.dateCreation) score += 5;
-    if (data.sirene?.trancheEffectifs) score += 5;
-    if (data.sirene?.etatAdministratif === 'A') score += 5;
+    // Données Sirene (15 points)
+    if (data.sirene?.codeNaf) score += 4;
+    if (data.sirene?.dateCreation) score += 4;
+    if (data.sirene?.trancheEffectifs) score += 3;
+    if (data.sirene?.etatAdministratif === 'A') score += 4;
 
     // Géocodage (15 points)
     if (data.geo?.latitude && data.geo?.longitude) score += 10;
@@ -419,9 +456,15 @@ class CompanyEnrichmentService {
     if (data.pappers?.formeJuridique) score += 5;
     if (data.pappers?.dirigeants && data.pappers.dirigeants.length > 0) score += 5;
 
-    // Google (15 points)
-    if (data.google?.rating) score += 10;
-    if (data.google?.reviewsCount && data.google.reviewsCount > 0) score += 5;
+    // RGE ADEME (15 points)
+    if (data.rge) {
+      score += 5; // Données RGE disponibles
+      if (data.rge.estRGE) score += 10; // Bonus si entreprise RGE
+    }
+
+    // Google (10 points)
+    if (data.google?.rating) score += 7;
+    if (data.google?.reviewsCount && data.google.reviewsCount > 0) score += 3;
 
     return Math.min(score, 100);
   }
