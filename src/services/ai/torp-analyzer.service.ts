@@ -16,7 +16,7 @@ import {
   type EnrichedCompanyData,
   type RGEAdemeData,
 } from './prompts/torp-analysis.prompts';
-import type { TorpAnalysisResult } from '@/types/torp';
+import type { TorpAnalysisResult, RGEVerificationData } from '@/types/torp';
 import { pappersService } from '@/services/api/pappers.service';
 import { innovationDurableScoringService } from '@/services/scoring/innovation-durable.scoring';
 import { rgeAdemeService } from '@/services/api/rge-ademe.service';
@@ -104,9 +104,10 @@ export class TorpAnalyzerService {
       const region = metadata?.region || 'Île-de-France';
       const typeTravaux = metadata?.typeTravaux || extractedData.travaux.type || 'rénovation';
 
-      // Step 2: Analyze Entreprise (250 pts)
+      // Step 2: Analyze Entreprise (250 pts) + RGE data
       console.log('[TORP] Step 2/6: Analyzing entreprise...');
-      const entrepriseAnalysis = await this.analyzeEntreprise(extractedData);
+      const { analysis: entrepriseAnalysis, rgeData } = await this.analyzeEntreprise(extractedData);
+      console.log('[TORP] RGE data retrieved:', rgeData ? (rgeData.estRGE ? 'CERTIFIED' : 'NOT RGE') : 'NO DATA');
 
       // Step 3: Analyze Prix (300 pts)
       console.log('[TORP] Step 3/6: Analyzing prix...');
@@ -250,6 +251,8 @@ export class TorpAnalyzerService {
             montantTotal: extractedData.devis.montantTotal,
             montantHT: extractedData.devis.montantHT,
           },
+          // Données RGE ADEME (vérification externe)
+          rge: rgeData || undefined,
         },
 
         dateAnalyse: new Date(),
@@ -730,8 +733,12 @@ export class TorpAnalyzerService {
   /**
    * Analyze entreprise (250 points)
    * Enrichit automatiquement les données entreprise via Pappers et RGE ADEME si SIRET disponible
+   * Returns both AI analysis and raw RGE data for frontend display
    */
-  private async analyzeEntreprise(devisData: ExtractedDevisData): Promise<any> {
+  private async analyzeEntreprise(devisData: ExtractedDevisData): Promise<{
+    analysis: any;
+    rgeData: RGEVerificationData | null;
+  }> {
     // Essayer d'enrichir les données entreprise si SIRET disponible
     let enrichedData: EnrichedCompanyData | null = null;
     let rgeData: RGEAdemeData | null = null;
@@ -828,7 +835,37 @@ export class TorpAnalyzerService {
       temperature: 0.4,
     });
 
-    return data;
+    // Convert internal RGE data to the exported type for frontend
+    let rgeVerificationData: RGEVerificationData | null = null;
+    if (rgeData) {
+      rgeVerificationData = {
+        estRGE: rgeData.estRGE,
+        scoreRGE: rgeData.scoreRGE,
+        nombreQualificationsActives: rgeData.nombreQualificationsActives,
+        nombreQualificationsTotales: rgeData.nombreQualificationsTotales,
+        domainesActifs: rgeData.domainesActifs,
+        metaDomainesActifs: rgeData.metaDomainesActifs,
+        organismesCertificateurs: rgeData.organismesCertificateurs,
+        qualificationsActives: rgeData.qualificationsActives.map(q => ({
+          nomQualification: q.nomQualification,
+          codeQualification: q.codeQualification,
+          domaine: q.domaine,
+          metaDomaine: q.metaDomaine,
+          organisme: q.organisme,
+          dateFin: q.dateFin,
+          joursRestants: q.joursRestants,
+        })),
+        prochaineExpiration: rgeData.prochaineExpiration,
+        alertes: rgeData.alertes.map(a => ({
+          type: a.type as 'expiration_proche' | 'qualification_expiree' | 'aucune_qualification',
+          message: a.message,
+        })),
+        lastUpdate: new Date().toISOString(),
+        source: 'ademe_rge',
+      };
+    }
+
+    return { analysis: data, rgeData: rgeVerificationData };
   }
 
   /**
