@@ -309,6 +309,8 @@ export class SupabaseDevisService {
           score_completude: analysis.scoreCompletude,
           score_conformite: analysis.scoreConformite,
           score_delais: analysis.scoreDelais,
+          score_innovation_durable: analysis.scoreInnovationDurable || null,
+          score_transparence: analysis.scoreTransparence || null,
           recommendations: {
             ...analysis.recommandations,
             budgetRealEstime: analysis.budgetRealEstime || 0,
