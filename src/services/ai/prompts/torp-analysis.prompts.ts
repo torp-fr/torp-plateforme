@@ -1088,6 +1088,29 @@ Retourne un JSON avec analyse PRAGMATIQUE:
 };
 
 /**
+ * Critères environnementaux à rechercher dans le devis
+ * Utilisé pour l'enrichissement de l'analyse et le scoring Innovation/Durable
+ */
+export const INNOVATION_DURABLE_KEYWORDS = {
+  materiauxBiosources: [
+    'laine de bois', 'fibre de bois', 'ouate de cellulose', 'chanvre', 'lin',
+    'liège', 'paille', 'biosourcé', 'recyclé', 'réemploi', 'récupération'
+  ],
+  labelsEnvironnementaux: ['PEFC', 'FSC', 'Natureplus', 'Écolabel', 'HQE', 'FDES', 'PEP'],
+  economiesEnergetiques: [
+    'isolation', 'ITE', 'ITI', 'combles', 'double vitrage', 'triple vitrage',
+    'VMC double flux', 'pompe à chaleur', 'PAC', 'chaudière condensation',
+    'panneaux solaires', 'photovoltaïque', 'géothermie'
+  ],
+  technologiesInnovantes: [
+    'domotique', 'smart home', 'connecté', 'BIM', 'maquette numérique',
+    'thermodynamique', 'autoconsommation', 'ossature bois', 'préfabrication'
+  ],
+  gestionDechets: ['tri', 'valorisation', 'recyclage', 'économie circulaire', 'évacuation déchets'],
+  circuitsCourts: ['local', 'régional', 'proximité', 'circuit court', 'fabriqué en France', 'made in France']
+};
+
+/**
  * Prompt pour la synthèse et les recommandations finales
  */
 export const buildSynthesisPrompt = (
@@ -1096,9 +1119,11 @@ export const buildSynthesisPrompt = (
   scoreCompletude: number,
   scoreConformite: number,
   scoreDelais: number,
-  allAnalyses: string
+  allAnalyses: string,
+  scoreInnovationDurable?: number
 ): string => {
-  const scoreTotal = scoreEntreprise + scorePrix + scoreCompletude + scoreConformite + scoreDelais;
+  const scoreTotal = scoreEntreprise + scorePrix + scoreCompletude + scoreConformite + scoreDelais + (scoreInnovationDurable || 0);
+  const maxScore = scoreInnovationDurable !== undefined ? 1050 : 1000;
 
   return `SYNTHÈSE FINALE - Verdict CLAIR et ACTIONNABLE. Le client doit savoir EXACTEMENT quoi faire.
 
@@ -1108,7 +1133,8 @@ SCORES OBTENUS:
 - Complétude: ${scoreCompletude}/200 (Détails techniques, normes)
 - Conformité: ${scoreConformite}/150 (Légalité, réglementation)
 - Délais: ${scoreDelais}/100 (Réalisme planning)
-- **SCORE GLOBAL: ${scoreTotal}/1000**
+${scoreInnovationDurable !== undefined ? `- Innovation/Durable: ${scoreInnovationDurable}/50 (Environnement, technologies innovantes)` : ''}
+- **SCORE GLOBAL: ${scoreTotal}/${maxScore}**
 
 ANALYSES DÉTAILLÉES DE TOUTES LES SECTIONS:
 \`\`\`json
@@ -1122,13 +1148,13 @@ ${allAnalyses}
 4. **EXPERTE**: TU es la référence, pas "consultez un expert"
 5. **PROTECTRICE**: Protège le client des arnaques et risques
 
-**GRILLE DE NOTATION TORP:**
-- **A+ (900-1000 pts)**: EXCELLENT - Devis de qualité, accepter en confiance
-- **A (800-899 pts)**: TRÈS BON - Quelques points mineurs, accepter
-- **B (700-799 pts)**: BON - Négociations nécessaires mais devis viable
-- **C (600-699 pts)**: MOYEN - Problèmes sérieux, négociation OBLIGATOIRE
-- **D (500-599 pts)**: PASSABLE - Risques importants, chercher alternative recommandé
-- **F (<500 pts)**: INSUFFISANT - REFUSER ou exiger refonte complète
+**GRILLE DE NOTATION TORP (sur ${maxScore} pts):**
+- **A+ (${Math.round(maxScore * 0.9)}-${maxScore} pts)**: EXCELLENT - Devis de qualité, accepter en confiance
+- **A (${Math.round(maxScore * 0.8)}-${Math.round(maxScore * 0.9) - 1} pts)**: TRÈS BON - Quelques points mineurs, accepter
+- **B (${Math.round(maxScore * 0.7)}-${Math.round(maxScore * 0.8) - 1} pts)**: BON - Négociations nécessaires mais devis viable
+- **C (${Math.round(maxScore * 0.6)}-${Math.round(maxScore * 0.7) - 1} pts)**: MOYEN - Problèmes sérieux, négociation OBLIGATOIRE
+- **D (${Math.round(maxScore * 0.5)}-${Math.round(maxScore * 0.6) - 1} pts)**: PASSABLE - Risques importants, chercher alternative recommandé
+- **F (<${Math.round(maxScore * 0.5)} pts)**: INSUFFISANT - REFUSER ou exiger refonte complète
 
 **DÉCISION FINALE:**
 Si AU MOINS UN élément ⚠️ CRITIQUE détecté → REFUSER (même si score OK)

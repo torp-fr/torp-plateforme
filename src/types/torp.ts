@@ -223,7 +223,37 @@ export interface TorpAnalysisResult {
     planningDetaille: boolean;
     penalitesRetard: boolean;
   };
-  
+
+  // Innovation & Développement Durable (50 points)
+  scoreInnovationDurable?: {
+    scoreTotal: number;
+    pourcentage: number;
+    grade: 'A' | 'B' | 'C' | 'D' | 'F';
+    sousAxes: {
+      performanceEnvironnementale: {
+        total: number;
+        details: {
+          materiauxBasCarbone: number;
+          economiesEnergetiques: number;
+          gestionDechets: number;
+          circuitsCourts: number;
+        };
+        elementsDetectes: string[];
+      };
+      innovationTechnique: {
+        total: number;
+        details: {
+          solutionsInnovantes: number;
+          outilsNumeriques: number;
+          certificationsInnovation: number;
+        };
+        elementsDetectes: string[];
+      };
+    };
+    recommandations: string[];
+    pointsForts: string[];
+  };
+
   recommandations: Recommendation[];
   surcoutsDetectes: number;
   budgetRealEstime: number;

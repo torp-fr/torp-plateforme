@@ -17,6 +17,7 @@ import {
 } from './prompts/torp-analysis.prompts';
 import type { TorpAnalysisResult } from '@/types/torp';
 import { pappersService } from '@/services/api/pappers.service';
+import { innovationDurableScoringService } from '@/services/scoring/innovation-durable.scoring';
 
 // Statut de vérification du SIRET
 export interface SiretVerification {
@@ -117,17 +118,37 @@ export class TorpAnalyzerService {
       const conformiteAnalysis = await this.analyzeConformite(extractedData, typeTravaux);
 
       // Step 6: Analyze Délais (100 pts)
-      console.log('[TORP] Step 6/6: Analyzing délais...');
+      console.log('[TORP] Step 6/7: Analyzing délais...');
       const delaisAnalysis = await this.analyzeDelais(extractedData, typeTravaux);
 
-      // Step 7: Generate synthesis and recommendations
+      // Step 7: Analyze Innovation & Développement Durable (50 pts)
+      console.log('[TORP] Step 7/7: Analyzing innovation & développement durable...');
+      const innovationDurableScore = innovationDurableScoringService.calculateScore({
+        devisText,
+        devisExtrait: {
+          prestations: extractedData.travaux?.postes?.map(p => ({
+            description: p.designation,
+            detail: p.unite || undefined,
+          })),
+          typeTravauxPrincipal: extractedData.travaux?.type,
+        },
+        entreprise: {
+          labelsRGE: [], // Will be enriched from Pappers data if available
+          labelsQualite: [],
+          distanceChantierKm: undefined, // Could be calculated from geo data
+        },
+      });
+      console.log(`[TORP] Innovation/Durable score: ${innovationDurableScore.total}/50 (Grade ${innovationDurableScore.grade})`);
+
+      // Step 8: Generate synthesis and recommendations
       console.log('[TORP] Generating synthesis...');
       const synthesis = await this.generateSynthesis(
         entrepriseAnalysis,
         prixAnalysis,
         completudeAnalysis,
         conformiteAnalysis,
-        delaisAnalysis
+        delaisAnalysis,
+        innovationDurableScore.total
       );
 
       const dureeAnalyse = Math.round((Date.now() - startTime) / 1000);
@@ -186,6 +207,16 @@ export class TorpAnalyzerService {
           penalitesRetard: delaisAnalysis.penalites?.mentionnees ?? false,
         },
 
+        // Innovation & Développement Durable (50 pts)
+        scoreInnovationDurable: {
+          scoreTotal: innovationDurableScore.total,
+          pourcentage: innovationDurableScore.pourcentage,
+          grade: innovationDurableScore.grade,
+          sousAxes: innovationDurableScore.sousAxes,
+          recommandations: innovationDurableScore.recommandations,
+          pointsForts: innovationDurableScore.pointsForts,
+        },
+
         recommandations: synthesis, // Store entire synthesis object
         surcoutsDetectes: extractedData.devis?.montantTotal ? extractedData.devis.montantTotal - (synthesis.budgetRealEstime || extractedData.devis.montantTotal) : 0,
         budgetRealEstime: synthesis.budgetRealEstime || extractedData.devis?.montantTotal || 0,
@@ -220,7 +251,7 @@ export class TorpAnalyzerService {
         dureeAnalyse,
       };
 
-      console.log(`[TORP] Analysis complete in ${dureeAnalyse}s - Score: ${result.scoreGlobal}/1000 (${result.grade})`);
+      console.log(`[TORP] Analysis complete in ${dureeAnalyse}s - Score: ${result.scoreGlobal}/1050 (${result.grade}) [Innovation/Durable: ${innovationDurableScore.total}/50]`);
 
       return result;
     } catch (error) {
@@ -822,7 +853,8 @@ export class TorpAnalyzerService {
     prixAnalysis: any,
     completudeAnalysis: any,
     conformiteAnalysis: any,
-    delaisAnalysis: any
+    delaisAnalysis: any,
+    scoreInnovationDurable?: number
   ): Promise<any> {
     const allAnalyses = JSON.stringify(
       {
@@ -842,7 +874,8 @@ export class TorpAnalyzerService {
       completudeAnalysis.scoreTotal,
       conformiteAnalysis.scoreTotal,
       delaisAnalysis.scoreTotal,
-      allAnalyses
+      allAnalyses,
+      scoreInnovationDurable
     );
 
     const { data } = await hybridAIService.generateJSON(prompt, {
