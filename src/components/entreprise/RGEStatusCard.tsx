@@ -17,9 +17,13 @@ import {
   FileCheck,
 } from 'lucide-react';
 import type { RGEEntreprise, RGEQualification } from '@/services/api/rge-ademe.service';
+import type { RGEVerificationData, RGEQualificationData } from '@/types/torp';
+
+// Support both RGEEntreprise (from service) and RGEVerificationData (from analysis result)
+type RGEData = RGEEntreprise | RGEVerificationData;
 
 interface Props {
-  rgeData: RGEEntreprise | null;
+  rgeData: RGEData | null;
   loading?: boolean;
   showDetails?: boolean;
 }
@@ -241,7 +245,7 @@ export function RGEStatusCard({ rgeData, loading = false, showDetails = true }: 
             </div>
 
             {/* Certificats */}
-            {rgeData.certificats.length > 0 && (
+            {'certificats' in rgeData && rgeData.certificats && rgeData.certificats.length > 0 && (
               <div className="pt-2 border-t">
                 <h5 className="text-sm font-medium mb-2 flex items-center gap-1.5">
                   <ExternalLink className="h-4 w-4 text-indigo-600" />
@@ -281,7 +285,7 @@ export function RGEStatusCard({ rgeData, loading = false, showDetails = true }: 
   );
 }
 
-function QualificationItem({ qualification }: { qualification: RGEQualification }) {
+function QualificationItem({ qualification }: { qualification: RGEQualification | RGEQualificationData }) {
   const formatDate = (dateStr: string) => {
     try {
       return new Date(dateStr).toLocaleDateString('fr-FR', {
@@ -321,7 +325,7 @@ function QualificationItem({ qualification }: { qualification: RGEQualification 
           </div>
         </div>
       </div>
-      {qualification.urlCertificat && (
+      {'urlCertificat' in qualification && qualification.urlCertificat && (
         <a
           href={qualification.urlCertificat}
           target="_blank"
