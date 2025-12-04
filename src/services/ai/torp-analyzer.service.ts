@@ -16,9 +16,10 @@ import {
   type EnrichedCompanyData,
   type RGEAdemeData,
 } from './prompts/torp-analysis.prompts';
-import type { TorpAnalysisResult } from '@/types/torp';
+import type { TorpAnalysisResult, RGEVerificationData } from '@/types/torp';
 import { pappersService } from '@/services/api/pappers.service';
 import { innovationDurableScoringService } from '@/services/scoring/innovation-durable.scoring';
+import { transparencyScoringService } from '@/services/scoring/transparency-scoring.service';
 import { rgeAdemeService } from '@/services/api/rge-ademe.service';
 
 // Statut de vérification du SIRET
@@ -98,34 +99,35 @@ export class TorpAnalyzerService {
 
     try {
       // Step 1: Extract structured data from devis
-      console.log('[TORP] Step 1/6: Extracting structured data...');
+      console.log('[TORP] Step 1/9: Extracting structured data...');
       const extractedData = await this.extractDevisData(devisText);
 
       const region = metadata?.region || 'Île-de-France';
       const typeTravaux = metadata?.typeTravaux || extractedData.travaux.type || 'rénovation';
 
-      // Step 2: Analyze Entreprise (250 pts)
-      console.log('[TORP] Step 2/6: Analyzing entreprise...');
-      const entrepriseAnalysis = await this.analyzeEntreprise(extractedData);
+      // Step 2: Analyze Entreprise (250 pts) + RGE data
+      console.log('[TORP] Step 2/9: Analyzing entreprise...');
+      const { analysis: entrepriseAnalysis, rgeData } = await this.analyzeEntreprise(extractedData);
+      console.log('[TORP] RGE data retrieved:', rgeData ? (rgeData.estRGE ? 'CERTIFIED' : 'NOT RGE') : 'NO DATA');
 
       // Step 3: Analyze Prix (300 pts)
-      console.log('[TORP] Step 3/6: Analyzing prix...');
+      console.log('[TORP] Step 3/9: Analyzing prix...');
       const prixAnalysis = await this.analyzePrix(extractedData, typeTravaux, region);
 
       // Step 4: Analyze Complétude (200 pts)
-      console.log('[TORP] Step 4/6: Analyzing complétude...');
+      console.log('[TORP] Step 4/9: Analyzing complétude...');
       const completudeAnalysis = await this.analyzeCompletude(extractedData, typeTravaux);
 
       // Step 5: Analyze Conformité (150 pts)
-      console.log('[TORP] Step 5/6: Analyzing conformité...');
+      console.log('[TORP] Step 5/9: Analyzing conformité...');
       const conformiteAnalysis = await this.analyzeConformite(extractedData, typeTravaux);
 
       // Step 6: Analyze Délais (100 pts)
-      console.log('[TORP] Step 6/7: Analyzing délais...');
+      console.log('[TORP] Step 6/9: Analyzing délais...');
       const delaisAnalysis = await this.analyzeDelais(extractedData, typeTravaux);
 
       // Step 7: Analyze Innovation & Développement Durable (50 pts)
-      console.log('[TORP] Step 7/7: Analyzing innovation & développement durable...');
+      console.log('[TORP] Step 7/9: Analyzing innovation & développement durable...');
       const innovationDurableScore = innovationDurableScoringService.calculateScore({
         devisText,
         devisExtrait: {
@@ -143,7 +145,27 @@ export class TorpAnalyzerService {
       });
       console.log(`[TORP] Innovation/Durable score: ${innovationDurableScore.total}/50 (Grade ${innovationDurableScore.grade})`);
 
-      // Step 8: Generate synthesis and recommendations
+      // Step 8: Analyze Transparence (100 pts)
+      console.log('[TORP] Step 8/9: Analyzing transparence documentation...');
+      const transparenceAnalysis = transparencyScoringService.analyzeTransparency({
+        texteComplet: devisText,
+        prestations: extractedData.travaux?.postes?.map(p => ({
+          description: p.designation,
+          quantite: p.quantite,
+          unite: p.unite || undefined,
+          prixUnitaire: p.prixUnitaire,
+          prixTotal: p.prixTotal,
+        })),
+        entreprise: {
+          siret: extractedData.entreprise?.siret || undefined,
+          nom: extractedData.entreprise?.nom,
+          adresse: extractedData.entreprise?.adresse || undefined,
+        },
+        hasImages: false, // PDF extraction doesn't currently support images
+      });
+      console.log(`[TORP] Transparence score: ${transparenceAnalysis.scoreTotal}/100 (${transparenceAnalysis.niveau})`);
+
+      // Step 9: Generate synthesis and recommendations
       const userType = metadata?.userType || 'B2C';
       console.log(`[TORP] Generating synthesis... (userType: ${userType})`);
       const synthesis = await this.generateSynthesis(
@@ -153,6 +175,7 @@ export class TorpAnalyzerService {
         conformiteAnalysis,
         delaisAnalysis,
         innovationDurableScore.total,
+        transparenceAnalysis.scoreTotal,
         userType
       );
 
@@ -222,6 +245,89 @@ export class TorpAnalyzerService {
           pointsForts: innovationDurableScore.pointsForts,
         },
 
+        // Transparence Documentation (100 pts)
+        scoreTransparence: {
+          scoreTotal: transparenceAnalysis.scoreTotal,
+          niveau: transparenceAnalysis.niveau,
+          criteres: {
+            mentionsLegales: {
+              nom: transparenceAnalysis.criteres.mentionsLegales.nom,
+              score: transparenceAnalysis.criteres.mentionsLegales.score,
+              scoreMax: transparenceAnalysis.criteres.mentionsLegales.scoreMax,
+              pourcentage: transparenceAnalysis.criteres.mentionsLegales.pourcentage,
+              niveau: transparenceAnalysis.criteres.mentionsLegales.niveau,
+              elementsPresents: transparenceAnalysis.criteres.mentionsLegales.elementsPresents,
+              elementsManquants: transparenceAnalysis.criteres.mentionsLegales.elementsManquants,
+            },
+            detailPrestations: {
+              nom: transparenceAnalysis.criteres.detailPrestations.nom,
+              score: transparenceAnalysis.criteres.detailPrestations.score,
+              scoreMax: transparenceAnalysis.criteres.detailPrestations.scoreMax,
+              pourcentage: transparenceAnalysis.criteres.detailPrestations.pourcentage,
+              niveau: transparenceAnalysis.criteres.detailPrestations.niveau,
+              elementsPresents: transparenceAnalysis.criteres.detailPrestations.elementsPresents,
+              elementsManquants: transparenceAnalysis.criteres.detailPrestations.elementsManquants,
+            },
+            decompositionPrix: {
+              nom: transparenceAnalysis.criteres.decompositionPrix.nom,
+              score: transparenceAnalysis.criteres.decompositionPrix.score,
+              scoreMax: transparenceAnalysis.criteres.decompositionPrix.scoreMax,
+              pourcentage: transparenceAnalysis.criteres.decompositionPrix.pourcentage,
+              niveau: transparenceAnalysis.criteres.decompositionPrix.niveau,
+              elementsPresents: transparenceAnalysis.criteres.decompositionPrix.elementsPresents,
+              elementsManquants: transparenceAnalysis.criteres.decompositionPrix.elementsManquants,
+            },
+            conditionsGenerales: {
+              nom: transparenceAnalysis.criteres.conditionsGenerales.nom,
+              score: transparenceAnalysis.criteres.conditionsGenerales.score,
+              scoreMax: transparenceAnalysis.criteres.conditionsGenerales.scoreMax,
+              pourcentage: transparenceAnalysis.criteres.conditionsGenerales.pourcentage,
+              niveau: transparenceAnalysis.criteres.conditionsGenerales.niveau,
+              elementsPresents: transparenceAnalysis.criteres.conditionsGenerales.elementsPresents,
+              elementsManquants: transparenceAnalysis.criteres.conditionsGenerales.elementsManquants,
+            },
+            planningPrevisionnel: {
+              nom: transparenceAnalysis.criteres.planningPrevisionnel.nom,
+              score: transparenceAnalysis.criteres.planningPrevisionnel.score,
+              scoreMax: transparenceAnalysis.criteres.planningPrevisionnel.scoreMax,
+              pourcentage: transparenceAnalysis.criteres.planningPrevisionnel.pourcentage,
+              niveau: transparenceAnalysis.criteres.planningPrevisionnel.niveau,
+              elementsPresents: transparenceAnalysis.criteres.planningPrevisionnel.elementsPresents,
+              elementsManquants: transparenceAnalysis.criteres.planningPrevisionnel.elementsManquants,
+            },
+            referencesTechniques: {
+              nom: transparenceAnalysis.criteres.referencesTechniques.nom,
+              score: transparenceAnalysis.criteres.referencesTechniques.score,
+              scoreMax: transparenceAnalysis.criteres.referencesTechniques.scoreMax,
+              pourcentage: transparenceAnalysis.criteres.referencesTechniques.pourcentage,
+              niveau: transparenceAnalysis.criteres.referencesTechniques.niveau,
+              elementsPresents: transparenceAnalysis.criteres.referencesTechniques.elementsPresents,
+              elementsManquants: transparenceAnalysis.criteres.referencesTechniques.elementsManquants,
+            },
+            elementsVisuels: {
+              nom: transparenceAnalysis.criteres.elementsVisuels.nom,
+              score: transparenceAnalysis.criteres.elementsVisuels.score,
+              scoreMax: transparenceAnalysis.criteres.elementsVisuels.scoreMax,
+              pourcentage: transparenceAnalysis.criteres.elementsVisuels.pourcentage,
+              niveau: transparenceAnalysis.criteres.elementsVisuels.niveau,
+              elementsPresents: transparenceAnalysis.criteres.elementsVisuels.elementsPresents,
+              elementsManquants: transparenceAnalysis.criteres.elementsVisuels.elementsManquants,
+            },
+            certificationDevis: {
+              nom: transparenceAnalysis.criteres.certificationDevis.nom,
+              score: transparenceAnalysis.criteres.certificationDevis.score,
+              scoreMax: transparenceAnalysis.criteres.certificationDevis.scoreMax,
+              pourcentage: transparenceAnalysis.criteres.certificationDevis.pourcentage,
+              niveau: transparenceAnalysis.criteres.certificationDevis.niveau,
+              elementsPresents: transparenceAnalysis.criteres.certificationDevis.elementsPresents,
+              elementsManquants: transparenceAnalysis.criteres.certificationDevis.elementsManquants,
+            },
+          },
+          pointsForts: transparenceAnalysis.pointsForts,
+          pointsFaibles: transparenceAnalysis.pointsFaibles,
+          recommandations: transparenceAnalysis.recommandations,
+        },
+
         recommandations: synthesis, // Store entire synthesis object
         surcoutsDetectes: extractedData.devis?.montantTotal ? extractedData.devis.montantTotal - (synthesis.budgetRealEstime || extractedData.devis.montantTotal) : 0,
         budgetRealEstime: synthesis.budgetRealEstime || extractedData.devis?.montantTotal || 0,
@@ -250,13 +356,15 @@ export class TorpAnalyzerService {
             montantTotal: extractedData.devis.montantTotal,
             montantHT: extractedData.devis.montantHT,
           },
+          // Données RGE ADEME (vérification externe)
+          rge: rgeData || undefined,
         },
 
         dateAnalyse: new Date(),
         dureeAnalyse,
       };
 
-      console.log(`[TORP] Analysis complete in ${dureeAnalyse}s - Score: ${result.scoreGlobal}/1050 (${result.grade}) [Innovation/Durable: ${innovationDurableScore.total}/50]`);
+      console.log(`[TORP] Analysis complete in ${dureeAnalyse}s - Score: ${result.scoreGlobal}/1150 (${result.grade}) [Innovation/Durable: ${innovationDurableScore.total}/50, Transparence: ${transparenceAnalysis.scoreTotal}/100]`);
 
       return result;
     } catch (error) {
@@ -730,8 +838,12 @@ export class TorpAnalyzerService {
   /**
    * Analyze entreprise (250 points)
    * Enrichit automatiquement les données entreprise via Pappers et RGE ADEME si SIRET disponible
+   * Returns both AI analysis and raw RGE data for frontend display
    */
-  private async analyzeEntreprise(devisData: ExtractedDevisData): Promise<any> {
+  private async analyzeEntreprise(devisData: ExtractedDevisData): Promise<{
+    analysis: any;
+    rgeData: RGEVerificationData | null;
+  }> {
     // Essayer d'enrichir les données entreprise si SIRET disponible
     let enrichedData: EnrichedCompanyData | null = null;
     let rgeData: RGEAdemeData | null = null;
@@ -828,7 +940,37 @@ export class TorpAnalyzerService {
       temperature: 0.4,
     });
 
-    return data;
+    // Convert internal RGE data to the exported type for frontend
+    let rgeVerificationData: RGEVerificationData | null = null;
+    if (rgeData) {
+      rgeVerificationData = {
+        estRGE: rgeData.estRGE,
+        scoreRGE: rgeData.scoreRGE,
+        nombreQualificationsActives: rgeData.nombreQualificationsActives,
+        nombreQualificationsTotales: rgeData.nombreQualificationsTotales,
+        domainesActifs: rgeData.domainesActifs,
+        metaDomainesActifs: rgeData.metaDomainesActifs,
+        organismesCertificateurs: rgeData.organismesCertificateurs,
+        qualificationsActives: rgeData.qualificationsActives.map(q => ({
+          nomQualification: q.nomQualification,
+          codeQualification: q.codeQualification,
+          domaine: q.domaine,
+          metaDomaine: q.metaDomaine,
+          organisme: q.organisme,
+          dateFin: q.dateFin,
+          joursRestants: q.joursRestants,
+        })),
+        prochaineExpiration: rgeData.prochaineExpiration,
+        alertes: rgeData.alertes.map(a => ({
+          type: a.type as 'expiration_proche' | 'qualification_expiree' | 'aucune_qualification',
+          message: a.message,
+        })),
+        lastUpdate: new Date().toISOString(),
+        source: 'ademe_rge',
+      };
+    }
+
+    return { analysis: data, rgeData: rgeVerificationData };
   }
 
   /**
@@ -897,6 +1039,7 @@ export class TorpAnalyzerService {
     conformiteAnalysis: any,
     delaisAnalysis: any,
     scoreInnovationDurable?: number,
+    scoreTransparence?: number,
     userType: 'B2B' | 'B2C' | 'admin' = 'B2C'
   ): Promise<any> {
     const allAnalyses = JSON.stringify(
@@ -919,6 +1062,7 @@ export class TorpAnalyzerService {
       delaisAnalysis.scoreTotal,
       allAnalyses,
       scoreInnovationDurable,
+      scoreTransparence,
       userType
     );
 

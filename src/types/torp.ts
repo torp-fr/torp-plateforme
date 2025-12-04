@@ -254,6 +254,25 @@ export interface TorpAnalysisResult {
     pointsForts: string[];
   };
 
+  // Transparence Documentation (100 points)
+  scoreTransparence?: {
+    scoreTotal: number;
+    niveau: 'Excellent' | 'Bon' | 'Acceptable' | 'Insuffisant' | 'Critique';
+    criteres: {
+      mentionsLegales: TransparenceCritereScore;
+      detailPrestations: TransparenceCritereScore;
+      decompositionPrix: TransparenceCritereScore;
+      conditionsGenerales: TransparenceCritereScore;
+      planningPrevisionnel: TransparenceCritereScore;
+      referencesTechniques: TransparenceCritereScore;
+      elementsVisuels: TransparenceCritereScore;
+      certificationDevis: TransparenceCritereScore;
+    };
+    pointsForts: string[];
+    pointsFaibles: string[];
+    recommandations: string[];
+  };
+
   recommandations: Recommendation[];
   surcoutsDetectes: number;
   budgetRealEstime: number;
@@ -293,10 +312,60 @@ export interface TorpAnalysisResult {
       montantTotal: number;
       montantHT: number | null;
     };
+    // Données RGE ADEME (vérification externe)
+    rge?: RGEVerificationData;
   };
 
   dateAnalyse: Date;
   dureeAnalyse: number; // en secondes
+}
+
+// Types pour les données RGE ADEME
+export interface RGEVerificationData {
+  estRGE: boolean;
+  scoreRGE: number;
+  nombreQualificationsActives: number;
+  nombreQualificationsTotales: number;
+  domainesActifs: string[];
+  metaDomainesActifs: string[];
+  organismesCertificateurs: string[];
+  qualificationsActives: RGEQualificationData[];
+  prochaineExpiration: {
+    qualification: string;
+    dateFin: string;
+    joursRestants: number;
+  } | null;
+  alertes: RGEAlerte[];
+  lastUpdate: string;
+  source: 'ademe_rge';
+}
+
+export interface RGEQualificationData {
+  nomQualification: string;
+  codeQualification: string;
+  domaine: string;
+  metaDomaine: string;
+  organisme: string;
+  dateFin: string;
+  joursRestants: number;
+}
+
+export interface RGEAlerte {
+  type: 'expiration_proche' | 'qualification_expiree' | 'aucune_qualification';
+  message: string;
+  qualification?: string;
+  dateFin?: string;
+}
+
+// Types pour la transparence documentation
+export interface TransparenceCritereScore {
+  nom: string;
+  score: number;
+  scoreMax: number;
+  pourcentage: number;
+  niveau: 'Complet' | 'Partiel' | 'Absent';
+  elementsPresents: string[];
+  elementsManquants: string[];
 }
 
 export interface Recommendation {

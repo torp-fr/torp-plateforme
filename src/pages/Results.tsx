@@ -14,6 +14,7 @@ import { AnalyseCompletetudeConformite } from '@/components/results/AnalyseCompl
 import { ConseilsPersonnalises } from '@/components/results/ConseilsPersonnalises';
 import { InfosEntreprisePappers } from '@/components/results/InfosEntreprisePappers';
 import { OngletLocalisation } from '@/components/results/OngletLocalisation';
+import { RGEStatusCard } from '@/components/entreprise/RGEStatusCard';
 import { generateAnalysisReportPDF } from '@/utils/pdfGenerator';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
@@ -339,6 +340,8 @@ export default function Results() {
               budgetRealEstime: data.recommendations?.budgetRealEstime || data.amount || data.budget_reel_estime || 0,
               // Adresse du chantier pour le géocodage
               adresseChantier: adresseChantier,
+              // Données RGE ADEME (vérification externe)
+              rge: extractedData?.rge || null,
             }
           }
         };
@@ -632,6 +635,12 @@ export default function Results() {
                   <CarteEntreprise
                     entreprise={rawData.entreprise}
                     scoreEntreprise={rawData.scoreEntreprise}
+                  />
+
+                  {/* Statut RGE ADEME */}
+                  <RGEStatusCard
+                    rgeData={rawData.rge}
+                    showDetails={true}
                   />
 
                   {/* Données enrichies Pappers */}
