@@ -132,7 +132,7 @@ CREATE OR REPLACE VIEW v_companies_rge AS
 SELECT
   c.id,
   c.siret,
-  c.name,
+  COALESCE(c.denomination_usuelle, c.raison_sociale) AS nom_entreprise,
   c.adresse_complete,
   c.code_postal,
   c.commune,
