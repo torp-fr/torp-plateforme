@@ -254,6 +254,25 @@ export interface TorpAnalysisResult {
     pointsForts: string[];
   };
 
+  // Transparence Documentation (100 points)
+  scoreTransparence?: {
+    scoreTotal: number;
+    niveau: 'Excellent' | 'Bon' | 'Acceptable' | 'Insuffisant' | 'Critique';
+    criteres: {
+      mentionsLegales: TransparenceCritereScore;
+      detailPrestations: TransparenceCritereScore;
+      decompositionPrix: TransparenceCritereScore;
+      conditionsGenerales: TransparenceCritereScore;
+      planningPrevisionnel: TransparenceCritereScore;
+      referencesTechniques: TransparenceCritereScore;
+      elementsVisuels: TransparenceCritereScore;
+      certificationDevis: TransparenceCritereScore;
+    };
+    pointsForts: string[];
+    pointsFaibles: string[];
+    recommandations: string[];
+  };
+
   recommandations: Recommendation[];
   surcoutsDetectes: number;
   budgetRealEstime: number;
@@ -336,6 +355,17 @@ export interface RGEAlerte {
   message: string;
   qualification?: string;
   dateFin?: string;
+}
+
+// Types pour la transparence documentation
+export interface TransparenceCritereScore {
+  nom: string;
+  score: number;
+  scoreMax: number;
+  pourcentage: number;
+  niveau: 'Complet' | 'Partiel' | 'Absent';
+  elementsPresents: string[];
+  elementsManquants: string[];
 }
 
 export interface Recommendation {

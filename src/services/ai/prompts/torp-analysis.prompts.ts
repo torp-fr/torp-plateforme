@@ -1185,10 +1185,11 @@ export const buildSynthesisPrompt = (
   scoreDelais: number,
   allAnalyses: string,
   scoreInnovationDurable?: number,
+  scoreTransparence?: number,
   userType: 'B2B' | 'B2C' | 'admin' = 'B2C'
 ): string => {
-  const scoreTotal = scoreEntreprise + scorePrix + scoreCompletude + scoreConformite + scoreDelais + (scoreInnovationDurable || 0);
-  const maxScore = scoreInnovationDurable !== undefined ? 1050 : 1000;
+  const scoreTotal = scoreEntreprise + scorePrix + scoreCompletude + scoreConformite + scoreDelais + (scoreInnovationDurable || 0) + (scoreTransparence || 0);
+  const maxScore = 1000 + (scoreInnovationDurable !== undefined ? 50 : 0) + (scoreTransparence !== undefined ? 100 : 0);
 
   // Adapter le contexte selon le type d'utilisateur
   const userContext = userType === 'B2B'
@@ -1216,6 +1217,7 @@ SCORES OBTENUS:
 - Conformité: ${scoreConformite}/150 (Légalité, réglementation)
 - Délais: ${scoreDelais}/100 (Réalisme planning)
 ${scoreInnovationDurable !== undefined ? `- Innovation/Durable: ${scoreInnovationDurable}/50 (Environnement, technologies innovantes)` : ''}
+${scoreTransparence !== undefined ? `- Transparence: ${scoreTransparence}/100 (Qualité documentation, mentions légales, détails prestations)` : ''}
 - **SCORE GLOBAL: ${scoreTotal}/${maxScore}**
 
 ANALYSES DÉTAILLÉES DE TOUTES LES SECTIONS:
