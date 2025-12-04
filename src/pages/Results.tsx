@@ -15,6 +15,7 @@ import { ConseilsPersonnalises } from '@/components/results/ConseilsPersonnalise
 import { InfosEntreprisePappers } from '@/components/results/InfosEntreprisePappers';
 import { OngletLocalisation } from '@/components/results/OngletLocalisation';
 import { RGEStatusCard } from '@/components/entreprise/RGEStatusCard';
+import { TransparencyCard } from '@/components/devis/TransparencyCard';
 import { generateAnalysisReportPDF } from '@/utils/pdfGenerator';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
@@ -207,10 +208,14 @@ export default function Results() {
         const recommendationsData = parseIfString(data.recommendations);
         const extractedData = parseIfString(data.extracted_data);
         const analysisResultData = parseIfString(data.analysis_result);
+        const scoreInnovationDurableData = parseIfString(data.score_innovation_durable);
+        const scoreTransparenceData = parseIfString(data.score_transparence);
 
         console.log('[Results] Parsed score_entreprise:', scoreEntrepriseData);
         console.log('[Results] Parsed recommendations:', recommendationsData);
         console.log('[Results] Parsed extracted_data:', extractedData);
+        console.log('[Results] Parsed score_transparence:', scoreTransparenceData);
+        console.log('[Results] Parsed score_innovation_durable:', scoreInnovationDurableData);
 
         // Extraire l'adresse du chantier depuis différentes sources possibles
         const adresseChantier =
@@ -342,6 +347,10 @@ export default function Results() {
               adresseChantier: adresseChantier,
               // Données RGE ADEME (vérification externe)
               rge: extractedData?.rge || null,
+              // Score Innovation & Développement Durable
+              scoreInnovationDurable: scoreInnovationDurableData || null,
+              // Score Transparence Documentation
+              scoreTransparence: scoreTransparenceData || null,
             }
           }
         };
@@ -510,6 +519,12 @@ export default function Results() {
                       <span className="text-muted-foreground">Délais</span>
                       <Badge variant="secondary" className={getScoreColor(detailedScores.delais)}>{detailedScores.delais}%</Badge>
                     </div>
+                    {rawData.scoreTransparence && (
+                      <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
+                        <span className="text-muted-foreground">Transparence</span>
+                        <Badge variant="secondary" className={getScoreColor(rawData.scoreTransparence.scoreTotal)}>{rawData.scoreTransparence.scoreTotal}%</Badge>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-3">
@@ -675,11 +690,25 @@ export default function Results() {
                 </TabsContent>
 
                 {/* Onglet Technique */}
-                <TabsContent value="technique">
+                <TabsContent value="technique" className="space-y-6">
                   <AnalyseCompletetudeConformite
                     scoreCompletude={rawData.scoreCompletude}
                     scoreConformite={rawData.scoreConformite}
                   />
+
+                  {/* Transparence Documentation */}
+                  {rawData.scoreTransparence && (
+                    <TransparencyCard
+                      analysis={{
+                        scoreTotal: rawData.scoreTransparence.scoreTotal || 0,
+                        niveau: rawData.scoreTransparence.niveau || 'Insuffisant',
+                        criteres: rawData.scoreTransparence.criteres || {},
+                        pointsForts: rawData.scoreTransparence.pointsForts || [],
+                        pointsFaibles: rawData.scoreTransparence.pointsFaibles || [],
+                        recommandations: rawData.scoreTransparence.recommandations || [],
+                      }}
+                    />
+                  )}
                 </TabsContent>
 
                 {/* Onglet Conseils */}
