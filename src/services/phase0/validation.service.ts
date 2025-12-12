@@ -541,13 +541,10 @@ export class ValidationService {
         // Rendre optionnel pour l'instant
         break;
 
-      case 6: // Validation finale
-        const validation = this.validateProject(project, 'minimal');
-        if (!validation.isValid) {
-          blockers.push(...validation.validations
-            .filter(v => !v.isValid && v.severity === 'error')
-            .map(v => v.message));
-        }
+      case 6: // Validation finale - pas de blocage
+        // Les étapes précédentes ont validé les champs essentiels
+        // L'utilisateur peut terminer même avec des informations partielles
+        // La validation complète se fait dans complete() mais n'est pas bloquante
         break;
     }
 

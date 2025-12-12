@@ -51,6 +51,74 @@ const CATEGORY_LABELS: Record<LotCategory, string> = {
   speciaux: 'Spéciaux',
 };
 
+/**
+ * Tags simplifiés B2C - Mots-clés faciles à comprendre pour les particuliers
+ * Les termes techniques seront utilisés dans les documents DCE/AVP/CCF générés
+ */
+const B2C_SIMPLIFIED_TAGS: Record<LotType, string[]> = {
+  // Gros œuvre
+  terrassement_vrd: ['Terrassement', 'Fondations'],
+  maconnerie: ['Murs', 'Maçonnerie'],
+  beton_arme: ['Béton', 'Structure'],
+  demolition: ['Démolition', 'Dépose'],
+
+  // Enveloppe
+  charpente_bois: ['Charpente', 'Toiture bois'],
+  charpente_metal: ['Charpente métallique'],
+  couverture: ['Toiture', 'Tuiles'],
+  etancheite: ['Étanchéité', 'Toit plat'],
+  bardage: ['Bardage', 'Façade'],
+  ite: ['Isolation extérieure', 'ITE'],
+  ravalement: ['Ravalement', 'Façade'],
+  menuiseries_exterieures: ['Fenêtres', 'Portes extérieures'],
+
+  // Cloisonnement
+  platrerie: ['Cloisons', 'Plafonds'],
+  isolation_interieure: ['Isolation', 'Thermique'],
+  faux_plafonds: ['Plafonds suspendus'],
+
+  // Finitions
+  menuiseries_interieures: ['Portes intérieures', 'Placards'],
+  carrelage: ['Carrelage', 'Sol'],
+  parquet: ['Parquet', 'Sol bois'],
+  revetements_sols: ['Sol souple', 'Moquette'],
+  peinture: ['Peinture', 'Papier peint'],
+  revetements_muraux: ['Revêtements', 'Murs'],
+
+  // Électricité
+  courants_forts: ['Électricité', 'Prises'],
+  courants_faibles: ['Réseau', 'Internet', 'TV'],
+  domotique: ['Domotique', 'Maison connectée'],
+  photovoltaique: ['Panneaux solaires', 'Photovoltaïque'],
+
+  // Plomberie
+  sanitaires: ['Plomberie', 'Salle de bain'],
+  eaux_pluviales: ['Gouttières', 'Évacuation'],
+  assainissement: ['Assainissement', 'Fosse'],
+
+  // CVC
+  chauffage_central: ['Chauffage', 'Radiateurs'],
+  plancher_chauffant: ['Chauffage au sol'],
+  climatisation: ['Climatisation', 'Clim'],
+  pompe_chaleur: ['Pompe à chaleur', 'PAC'],
+  chaudiere: ['Chaudière'],
+
+  // Ventilation
+  vmc_simple_flux: ['Ventilation', 'VMC'],
+  vmc_double_flux: ['VMC double flux', 'Récupération chaleur'],
+
+  // Extérieurs
+  amenagements_exterieurs: ['Jardin', 'Terrasse'],
+  clotures: ['Clôtures', 'Portail'],
+  piscine: ['Piscine'],
+
+  // Spéciaux
+  cuisine_equipee: ['Cuisine équipée'],
+  salle_bain_cle_main: ['Salle de bain clé en main'],
+  ascenseur: ['Ascenseur', 'Monte-charge'],
+  securite_incendie: ['Sécurité', 'Incendie'],
+};
+
 export function StepSummary({
   project,
   answers,
@@ -457,7 +525,7 @@ export function StepSummary({
         </Card>
       </Collapsible>
 
-      {/* Section Lots de travaux identifiés */}
+      {/* Section Lots de travaux identifiés - Affichage B2C simplifié */}
       <Collapsible open={openSections.includes('lots')} onOpenChange={() => toggleSection('lots')}>
         <Card className="border-primary/30">
           <CollapsibleTrigger asChild>
@@ -465,74 +533,79 @@ export function StepSummary({
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-yellow-500" />
-                  Lots de travaux identifiés
+                  Vos travaux en quelques mots
                   <Badge className="ml-2 bg-primary">
-                    {selectedLots.length} lots
+                    {selectedLots.length} postes
                   </Badge>
                 </CardTitle>
                 <ChevronDown className={`w-5 h-5 transition-transform ${openSections.includes('lots') ? 'rotate-180' : ''}`} />
               </div>
               <CardDescription>
-                TORP a pré-analysé votre projet et identifié ces lots de travaux
+                Mots-clés identifiés automatiquement pour votre projet
               </CardDescription>
             </CardHeader>
           </CollapsibleTrigger>
           <CollapsibleContent>
             <CardContent className="pt-0 space-y-4">
-              <Alert className="bg-yellow-50 border-yellow-200">
-                <Sparkles className="h-4 w-4 text-yellow-600" />
-                <AlertDescription className="text-yellow-800">
-                  Ces lots ont été identifiés automatiquement selon votre type de travaux ({workTypeLabels[workType]}).
-                  Vous pouvez les modifier ci-dessous.
+              <Alert className="bg-blue-50 border-blue-200">
+                <Info className="h-4 w-4 text-blue-600" />
+                <AlertDescription className="text-blue-800">
+                  Ces mots-clés décrivent votre projet de façon simple. Le détail technique complet
+                  sera inclus dans les documents générés (CCF, APS) pour les professionnels.
                 </AlertDescription>
               </Alert>
 
-              {/* Lots groupés par catégorie */}
-              <div className="space-y-3">
-                {Object.entries(lotsByCategory).map(([category, lots]) => (
-                  <div key={category} className="border rounded-lg p-3">
-                    <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-                      <Badge variant="secondary">{CATEGORY_LABELS[category as LotCategory]}</Badge>
-                      <span className="text-muted-foreground">({lots.length} lots)</span>
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {lots.map(lot => (
-                        <Badge
-                          key={lot!.type}
-                          variant="outline"
-                          className="cursor-pointer hover:bg-destructive/10 transition-colors"
-                          onClick={() => toggleLot(lot!.type)}
-                        >
-                          {lot!.name}
-                          <Minus className="w-3 h-3 ml-1" />
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Ajouter d'autres lots */}
-              <div className="border-t pt-4">
-                <Label className="text-sm mb-2 block">Ajouter d'autres lots :</Label>
+              {/* Tags simplifiés B2C */}
+              <div className="p-4 bg-muted/20 rounded-lg">
+                <Label className="text-sm font-medium mb-3 block">Travaux prévus :</Label>
                 <div className="flex flex-wrap gap-2">
-                  {suggestedLots.filter(l => !selectedLots.includes(l)).slice(0, 5).map(lotType => {
-                    const lot = LOT_CATALOG.find(l => l.type === lotType);
-                    if (!lot) return null;
+                  {selectedLots.map(lotType => {
+                    const tags = B2C_SIMPLIFIED_TAGS[lotType] || [];
+                    const primaryTag = tags[0] || lotType;
                     return (
                       <Badge
                         key={lotType}
-                        variant="outline"
-                        className="cursor-pointer hover:bg-primary/10 transition-colors"
+                        variant="default"
+                        className="cursor-pointer hover:bg-destructive hover:text-destructive-foreground transition-colors py-1.5 px-3 text-sm"
                         onClick={() => toggleLot(lotType)}
                       >
-                        <Plus className="w-3 h-3 mr-1" />
-                        {lot.name}
+                        {primaryTag}
+                        <Minus className="w-3 h-3 ml-2" />
                       </Badge>
                     );
                   })}
                 </div>
               </div>
+
+              {/* Ajouter d'autres travaux */}
+              <div className="border-t pt-4">
+                <Label className="text-sm font-medium mb-3 block">Ajouter des travaux :</Label>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(B2C_SIMPLIFIED_TAGS)
+                    .filter(([lotType]) => !selectedLots.includes(lotType as LotType))
+                    .slice(0, 12)
+                    .map(([lotType, tags]) => (
+                      <Badge
+                        key={lotType}
+                        variant="outline"
+                        className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
+                        onClick={() => toggleLot(lotType as LotType)}
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        {tags[0]}
+                      </Badge>
+                    ))}
+                </div>
+              </div>
+
+              {/* Info document technique */}
+              <Alert className="bg-gray-50 border-gray-200">
+                <FileText className="h-4 w-4 text-gray-600" />
+                <AlertDescription className="text-gray-700 text-sm">
+                  <strong>Pour les professionnels :</strong> Les lots techniques détaillés seront générés
+                  dans le Cahier des Charges Fonctionnel avec les spécifications DCE complètes.
+                </AlertDescription>
+              </Alert>
             </CardContent>
           </CollapsibleContent>
         </Card>
