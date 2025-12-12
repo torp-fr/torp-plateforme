@@ -9,15 +9,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
-  User, Building2, ArrowRight, CheckCircle2, Sparkles, Clock, FileText, Shield
+  User, Building2, ArrowRight, CheckCircle2, Sparkles, Clock, FileText, Shield, LayoutDashboard
 } from 'lucide-react';
+import { Header } from '@/components/Header';
+import { Footer } from '@/components/Footer';
+import { useApp } from '@/context/AppContext';
 
 export function Phase0Landing() {
   const navigate = useNavigate();
+  const { user } = useApp();
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-      <div className="container max-w-6xl mx-auto px-4 py-12">
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 flex flex-col">
+      <Header />
+
+      <main className="flex-1">
+        <div className="container max-w-6xl mx-auto px-4 py-12">
         {/* En-tête */}
         <div className="text-center mb-12">
           <Badge variant="outline" className="mb-4">
@@ -161,17 +168,48 @@ export function Phase0Landing() {
           </div>
         </div>
 
+        {/* Mes projets (si connecté) */}
+        {user && (
+          <div className="bg-primary/5 rounded-2xl p-8 mb-12">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <LayoutDashboard className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Mes projets en cours</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Retrouvez et continuez vos projets de conception
+                  </p>
+                </div>
+              </div>
+              <Button onClick={() => navigate('/phase0/dashboard')}>
+                Voir mes projets
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* FAQ rapide */}
         <div className="text-center">
           <h2 className="text-xl font-semibold mb-4">Des questions ?</h2>
           <p className="text-muted-foreground mb-4">
             Notre équipe est disponible pour vous accompagner dans votre projet
           </p>
-          <Button variant="outline" asChild>
-            <Link to="/contact">Nous contacter</Link>
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button variant="outline" asChild>
+              <Link to="/pricing">Voir les tarifs</Link>
+            </Button>
+            <Button variant="ghost" asChild>
+              <Link to="/">Retour à l'accueil</Link>
+            </Button>
+          </div>
         </div>
-      </div>
+        </div>
+      </main>
+
+      <Footer />
     </div>
   );
 }
