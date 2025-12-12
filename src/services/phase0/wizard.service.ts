@@ -102,10 +102,147 @@ export const WIZARD_STEPS_B2C = [
 ];
 
 // =============================================================================
+// TYPES EXPORTS
+// =============================================================================
+
+export interface WizardStepConfig {
+  id: string;
+  number: number;
+  name: string;
+  shortName: string;
+  description: string;
+  icon: string;
+  estimatedMinutes: number;
+  isOptional?: boolean;
+}
+
+export interface WizardQuestionConfig {
+  id: string;
+  type: string;
+  label: string;
+  required: boolean;
+}
+
+export interface WizardFieldConfig {
+  id: string;
+  type: string;
+  label: string;
+}
+
+// =============================================================================
 // SERVICE
 // =============================================================================
 
-class WizardService {
+export class WizardService {
+  // Static methods for compatibility with useWizard hook
+
+  /**
+   * Get wizard steps configuration based on mode
+   */
+  static getStepsConfig(mode: WizardMode = 'b2c'): WizardStepConfig[] {
+    if (mode === 'b2b' || mode === 'b2b_professional') {
+      return WIZARD_STEPS_B2C.map(step => ({
+        ...step,
+        isOptional: step.id === 'step_budget', // Budget optional for B2B
+      }));
+    }
+    return WIZARD_STEPS_B2C.map(step => ({ ...step, isOptional: false }));
+  }
+
+  /**
+   * Initialize a new wizard state (static version)
+   */
+  static initializeWizardState(mode: WizardMode, steps: WizardStepConfig[]): WizardState {
+    const stepProgress: StepProgress[] = steps.map((step, index) => ({
+      stepId: step.id,
+      stepNumber: step.number,
+      status: index === 0 ? 'in_progress' : 'not_started',
+      completionPercentage: 0,
+      answeredQuestions: 0,
+      totalQuestions: 0,
+      validationErrors: 0,
+      timeSpent: 0,
+    }));
+
+    return {
+      projectId: '',
+      currentStepIndex: 0,
+      completedSteps: [],
+      answers: {},
+      aiDeductions: [],
+      validationErrors: [],
+      alerts: [],
+      progress: {
+        overallPercentage: 0,
+        stepProgress,
+        estimatedTimeRemaining: steps.reduce((acc, s) => acc + s.estimatedMinutes, 0),
+        lastSaved: new Date().toISOString(),
+        autoSaveEnabled: true,
+      },
+      metadata: {
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: '',
+        wizardMode: mode === 'b2c' ? 'b2c_simple' : 'b2b_professional',
+        version: 1,
+        sessionDuration: 0,
+        abandonedSteps: [],
+      },
+    };
+  }
+
+  /**
+   * Get wizard state for a project (static version)
+   */
+  static async getWizardState(projectId: string): Promise<WizardState | null> {
+    return wizardServiceInstance.getWizardState(projectId);
+  }
+
+  /**
+   * Calculate progress (static version)
+   */
+  static calculateProgress(state: WizardState, steps: WizardStepConfig[]): number {
+    if (!state || !steps.length) return 0;
+    const completedCount = state.completedSteps?.length || 0;
+    return Math.round((completedCount / steps.length) * 100);
+  }
+
+  /**
+   * Complete a step (static version)
+   */
+  static async completeStep(
+    projectId: string,
+    stepId: string,
+    answers: WizardAnswers
+  ): Promise<void> {
+    await wizardServiceInstance.saveAnswers(projectId, stepId,
+      Object.fromEntries(
+        Object.entries(answers).map(([k, v]) => [k, v.value])
+      )
+    );
+    await wizardServiceInstance.completeStep(projectId, stepId);
+  }
+
+  /**
+   * Save a single answer (static version)
+   */
+  static async saveAnswer(
+    projectId: string,
+    questionId: string,
+    value: unknown
+  ): Promise<void> {
+    await wizardServiceInstance.saveAnswer(projectId, 'current', questionId, value as QuestionValue);
+  }
+
+  /**
+   * Save multiple answers (static version)
+   */
+  static async saveAnswers(
+    projectId: string,
+    answers: Record<string, unknown>
+  ): Promise<void> {
+    await wizardServiceInstance.saveAnswers(projectId, 'current', answers as Record<string, QuestionValue>);
+  }
   /**
    * Récupérer l'état du wizard pour un projet
    */
@@ -590,4 +727,8 @@ class WizardService {
   }
 }
 
-export const wizardService = new WizardService();
+// Create instance for static methods to use
+const wizardServiceInstance = new WizardService();
+
+// Export both the instance and a named export
+export const wizardService = wizardServiceInstance;

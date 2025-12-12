@@ -40,7 +40,49 @@ const EXTERNAL_API_ENDPOINTS: Record<ExternalApiId, string> = {
 // SERVICE
 // =============================================================================
 
-class DeductionService {
+// Export types for external use
+export interface GeoData {
+  coordinates: { lat: number; lng: number };
+  department: string;
+  region: string;
+}
+
+export interface CadastreData {
+  references: string[];
+  parcelArea: number;
+}
+
+export interface NaturalRisksData {
+  flood: { level: string; zone: string };
+  earthquake: { level: string; zone: string };
+  clayShrinkage: { level: string };
+}
+
+export interface AidsEligibility {
+  name: string;
+  type: string;
+  estimatedAmount: number;
+  conditions: string[];
+}
+
+export class DeductionService {
+  // Static method for compatibility with useWizard hook
+  static async applyDeductions(project: Phase0Project): Promise<Phase0Project> {
+    if (!project.id) return project;
+
+    try {
+      const results = await deductionServiceInstance.applyDeductions(project.id);
+
+      // Return updated project with deductions applied
+      return {
+        ...project,
+        deductions: results,
+      };
+    } catch (error) {
+      console.error('Error applying deductions:', error);
+      return project;
+    }
+  }
   /**
    * Appliquer les déductions pour un projet
    */
@@ -958,4 +1000,8 @@ class DeductionService {
   }
 }
 
-export const deductionService = new DeductionService();
+// Create instance for static methods to use
+const deductionServiceInstance = new DeductionService();
+
+// Export both the instance and allow class access
+export const deductionService = deductionServiceInstance;
