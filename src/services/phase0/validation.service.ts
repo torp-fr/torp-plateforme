@@ -497,6 +497,8 @@ export class ValidationService {
 
   /**
    * Vérifie si un projet peut passer à l'étape suivante
+   * NOTE: Les cases correspondent à l'index de l'étape actuelle + 1 (1-indexed)
+   * Wizard steps order: Profile(1), Property(2), Works(3), Constraints(4), Budget(5), Summary(6)
    */
   static canProceedToNextStep(
     project: Partial<Phase0Project>,
@@ -504,17 +506,15 @@ export class ValidationService {
   ): { canProceed: boolean; blockers: string[] } {
     const blockers: string[] = [];
     const owner = project.ownerProfile || project.owner;
-    const property = project.property;
 
     switch (currentStep) {
       case 1: // Profil MOA - seulement le type est requis pour avancer
         if (!owner?.identity?.type) {
           blockers.push('Sélectionnez votre profil (particulier, professionnel, etc.)');
         }
-        // Email optionnel pour avancer mais recommandé
         break;
 
-      case 2: // Identification bien
+      case 2: // Identification bien (adresse)
         if (!project.property?.address?.street) {
           blockers.push('L\'adresse du bien est requise');
         }
@@ -526,31 +526,23 @@ export class ValidationService {
         }
         break;
 
-      case 3: // Caractérisation bien
-        if (!project.property?.characteristics?.livingArea) {
-          blockers.push('La surface habitable est requise');
-        }
-        if (!project.property?.construction?.yearBuilt) {
-          blockers.push('L\'année de construction est requise');
-        }
-        break;
-
-      case 4: // Intention travaux
+      case 3: // Intention travaux - seulement workType requis
         if (!project.workProject?.scope?.workType) {
           blockers.push('Le type de travaux est requis');
         }
-        // Les lots sont optionnels - ils sont suggérés automatiquement
-        // L'utilisateur peut continuer même sans sélection de lots
+        // Les lots sont optionnels - suggérés automatiquement
         break;
 
-      case 5: // Contraintes et budget
-        if (!project.workProject?.budget?.totalEnvelope) {
-          blockers.push('L\'enveloppe budgétaire est requise');
-        }
+      case 4: // Contraintes - étape optionnelle
+        // Aucun blocage, étape optionnelle
+        break;
+
+      case 5: // Budget et détails du bien
+        // Rendre optionnel pour l'instant
         break;
 
       case 6: // Validation finale
-        const validation = this.validateProject(project, 'standard');
+        const validation = this.validateProject(project, 'minimal');
         if (!validation.isValid) {
           blockers.push(...validation.validations
             .filter(v => !v.isValid && v.severity === 'error')
