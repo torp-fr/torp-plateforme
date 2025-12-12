@@ -69,23 +69,22 @@ GROUP BY company_id, status;
 COMMENT ON VIEW public.ticket_stats IS 'Statistiques des tickets TORP par entreprise';
 
 -- 1.5 v_avis_agregats_entreprise
+-- Note: La table companies utilise raison_sociale (pas name), score_moyen, torp_badge
 DROP VIEW IF EXISTS public.v_avis_agregats_entreprise CASCADE;
 CREATE VIEW public.v_avis_agregats_entreprise AS
 SELECT
   c.id as company_id,
-  c.name as company_name,
+  c.raison_sociale as company_name,
   c.siret,
   COUNT(d.id) as total_devis,
   AVG(d.score_total) as avg_score,
   AVG((d.score_entreprise->>'scoreTotal')::DECIMAL) as avg_score_entreprise,
   AVG((d.score_prix->>'scoreTotal')::DECIMAL) as avg_score_prix,
-  c.review_count,
-  c.average_rating,
-  c.torp_score,
-  c.torp_grade
+  c.score_moyen as review_score,
+  c.torp_badge
 FROM public.companies c
 LEFT JOIN public.devis d ON d.company_id = c.id
-GROUP BY c.id, c.name, c.siret, c.review_count, c.average_rating, c.torp_score, c.torp_grade;
+GROUP BY c.id, c.raison_sociale, c.siret, c.score_moyen, c.torp_badge;
 
 COMMENT ON VIEW public.v_avis_agregats_entreprise IS 'Agrégat des avis et scores par entreprise';
 
@@ -1272,16 +1271,21 @@ BEGIN
     RETURN 0;
   END IF;
 
-  -- Points par champ renseigné
+  -- Points par champ renseigné (colonnes réelles de la table companies)
   IF company_record.siret IS NOT NULL THEN quality_score := quality_score + 15; END IF;
-  IF company_record.name IS NOT NULL THEN quality_score := quality_score + 10; END IF;
-  IF company_record.address IS NOT NULL THEN quality_score := quality_score + 10; END IF;
-  IF company_record.activity_code IS NOT NULL THEN quality_score := quality_score + 5; END IF;
-  IF company_record.creation_date IS NOT NULL THEN quality_score := quality_score + 5; END IF;
-  IF company_record.verified THEN quality_score := quality_score + 20; END IF;
-  IF company_record.rge_certified THEN quality_score := quality_score + 15; END IF;
-  IF company_record.insurance_decennale THEN quality_score := quality_score + 10; END IF;
-  IF company_record.insurance_rc_pro THEN quality_score := quality_score + 10; END IF;
+  IF company_record.raison_sociale IS NOT NULL THEN quality_score := quality_score + 10; END IF;
+  IF company_record.adresse IS NOT NULL THEN quality_score := quality_score + 10; END IF;
+  IF company_record.code_naf IS NOT NULL THEN quality_score := quality_score + 5; END IF;
+  IF company_record.date_creation IS NOT NULL THEN quality_score := quality_score + 5; END IF;
+  IF company_record.verified IS TRUE THEN quality_score := quality_score + 20; END IF;
+  IF company_record.rge_certified IS TRUE THEN quality_score := quality_score + 15; END IF;
+  -- Les colonnes insurance_decennale et insurance_rc_pro n'existent pas dans la table actuelle
+  -- On utilise les labels_rge comme indicateur de qualité
+  IF company_record.labels_rge IS NOT NULL AND array_length(company_record.labels_rge, 1) > 0 THEN
+    quality_score := quality_score + 10;
+  END IF;
+  IF company_record.telephone IS NOT NULL THEN quality_score := quality_score + 5; END IF;
+  IF company_record.email IS NOT NULL THEN quality_score := quality_score + 5; END IF;
 
   RETURN LEAST(quality_score, 100);
 END;
