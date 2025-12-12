@@ -4,6 +4,9 @@
 -- Exécuter après Phase 4C
 -- =====================================================
 
+-- Note: Les tables rag_chunks et rag_documents n'existent pas.
+-- On utilise knowledge_chunks et knowledge_documents à la place.
+
 -- 4.27 cleanup_empty_chunks
 CREATE OR REPLACE FUNCTION public.cleanup_empty_chunks()
 RETURNS INTEGER
@@ -13,7 +16,7 @@ AS $$
 DECLARE
   deleted_count INTEGER;
 BEGIN
-  DELETE FROM public.rag_chunks
+  DELETE FROM public.knowledge_chunks
   WHERE content IS NULL OR TRIM(content) = '';
 
   GET DIAGNOSTICS deleted_count = ROW_COUNT;
@@ -30,9 +33,9 @@ AS $$
 DECLARE
   deleted_count INTEGER;
 BEGIN
-  DELETE FROM public.rag_chunks c
+  DELETE FROM public.knowledge_chunks c
   WHERE NOT EXISTS (
-    SELECT 1 FROM public.rag_documents d WHERE d.id = c.document_id
+    SELECT 1 FROM public.knowledge_documents d WHERE d.id = c.document_id
   );
 
   GET DIAGNOSTICS deleted_count = ROW_COUNT;
@@ -49,7 +52,7 @@ AS $$
 DECLARE
   deleted_count INTEGER;
 BEGIN
-  DELETE FROM public.rag_chunks
+  DELETE FROM public.knowledge_chunks
   WHERE LENGTH(content) < min_length;
 
   GET DIAGNOSTICS deleted_count = ROW_COUNT;
@@ -66,7 +69,7 @@ AS $$
 DECLARE
   deleted_count INTEGER;
 BEGIN
-  DELETE FROM public.rag_chunks
+  DELETE FROM public.knowledge_chunks
   WHERE embedding IS NULL
   AND created_at < (NOW() - INTERVAL '7 days');
 
@@ -110,10 +113,10 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT
-    (SELECT COUNT(*) FROM public.rag_documents)::BIGINT,
-    (SELECT COUNT(*) FROM public.rag_chunks)::BIGINT,
-    (SELECT COUNT(*) FROM public.rag_chunks WHERE embedding IS NOT NULL)::BIGINT,
-    (SELECT AVG(LENGTH(content))::DECIMAL FROM public.rag_chunks);
+    (SELECT COUNT(*) FROM public.knowledge_documents)::BIGINT,
+    (SELECT COUNT(*) FROM public.knowledge_chunks)::BIGINT,
+    (SELECT COUNT(*) FROM public.knowledge_chunks WHERE embedding IS NOT NULL)::BIGINT,
+    (SELECT AVG(LENGTH(content))::DECIMAL FROM public.knowledge_chunks);
 END;
 $$;
 
@@ -138,12 +141,12 @@ DECLARE
   empty_count BIGINT;
   health_status TEXT;
 BEGIN
-  SELECT COUNT(*) INTO doc_count FROM public.rag_documents;
-  SELECT COUNT(*) INTO chunk_count FROM public.rag_chunks;
-  SELECT COUNT(*) INTO embed_count FROM public.rag_chunks WHERE embedding IS NOT NULL;
-  SELECT COUNT(*) INTO orphan_count FROM public.rag_chunks c
-    WHERE NOT EXISTS (SELECT 1 FROM public.rag_documents d WHERE d.id = c.document_id);
-  SELECT COUNT(*) INTO empty_count FROM public.rag_chunks WHERE content IS NULL OR TRIM(content) = '';
+  SELECT COUNT(*) INTO doc_count FROM public.knowledge_documents;
+  SELECT COUNT(*) INTO chunk_count FROM public.knowledge_chunks;
+  SELECT COUNT(*) INTO embed_count FROM public.knowledge_chunks WHERE embedding IS NOT NULL;
+  SELECT COUNT(*) INTO orphan_count FROM public.knowledge_chunks c
+    WHERE NOT EXISTS (SELECT 1 FROM public.knowledge_documents d WHERE d.id = c.document_id);
+  SELECT COUNT(*) INTO empty_count FROM public.knowledge_chunks WHERE content IS NULL OR TRIM(content) = '';
 
   IF chunk_count = 0 THEN
     health_status := 'empty';
@@ -183,8 +186,8 @@ BEGIN
     d.title,
     COUNT(c.id)::BIGINT,
     COUNT(c.id) FILTER (WHERE c.embedding IS NULL)::BIGINT
-  FROM public.rag_documents d
-  LEFT JOIN public.rag_chunks c ON c.document_id = d.id
+  FROM public.knowledge_documents d
+  LEFT JOIN public.knowledge_chunks c ON c.document_id = d.id
   GROUP BY d.id, d.title
   HAVING COUNT(c.id) FILTER (WHERE c.embedding IS NULL) > 0;
 END;

@@ -115,18 +115,21 @@ GROUP BY kd.doc_type;
 COMMENT ON VIEW public.rag_health_dashboard IS 'Dashboard santé du système RAG';
 
 -- 1.8 v_prix_moyens_region
+-- Note: La table est market_data (pas market_prices)
+-- Colonnes: region (pas region_code), subcategory (pas sub_category)
+-- price_low/price_high/price_avg (pas price_min/price_max/price_mean)
 DROP VIEW IF EXISTS public.v_prix_moyens_region CASCADE;
 CREATE VIEW public.v_prix_moyens_region AS
 SELECT
-  region_code,
+  region,
   category,
-  sub_category,
-  AVG(price_min) as avg_price_min,
-  AVG(price_max) as avg_price_max,
-  AVG(price_mean) as avg_price_mean,
+  subcategory,
+  AVG(price_low) as avg_price_min,
+  AVG(price_high) as avg_price_max,
+  AVG(price_avg) as avg_price_mean,
   COUNT(*) as sample_count
-FROM public.market_prices
-GROUP BY region_code, category, sub_category;
+FROM public.market_data
+GROUP BY region, category, subcategory;
 
 COMMENT ON VIEW public.v_prix_moyens_region IS 'Prix moyens par région et catégorie';
 
