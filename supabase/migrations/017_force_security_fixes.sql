@@ -4,14 +4,12 @@
 -- =====================================================
 
 -- =====================================================
--- SECTION 1: VUES AVEC SECURITY INVOKER EXPLICITE
+-- SECTION 1: VUES - Recréer puis ALTER pour security_invoker
 -- =====================================================
 
 -- 1.1 feedback_summary
 DROP VIEW IF EXISTS public.feedback_summary CASCADE;
-CREATE VIEW public.feedback_summary
-WITH (security_invoker = true)
-AS
+CREATE VIEW public.feedback_summary AS
 SELECT
   feedback_type,
   status,
@@ -19,12 +17,11 @@ SELECT
   MAX(created_at) as last_feedback
 FROM public.user_feedback
 GROUP BY feedback_type, status;
+ALTER VIEW public.feedback_summary SET (security_invoker = on);
 
 -- 1.2 analytics_overview
 DROP VIEW IF EXISTS public.analytics_overview CASCADE;
-CREATE VIEW public.analytics_overview
-WITH (security_invoker = true)
-AS
+CREATE VIEW public.analytics_overview AS
 SELECT
   event_type,
   DATE(created_at) as event_date,
@@ -32,12 +29,11 @@ SELECT
   COUNT(DISTINCT user_id) as unique_users
 FROM public.analytics_events
 GROUP BY event_type, DATE(created_at);
+ALTER VIEW public.analytics_overview SET (security_invoker = on);
 
 -- 1.3 v_prix_moyens_region
 DROP VIEW IF EXISTS public.v_prix_moyens_region CASCADE;
-CREATE VIEW public.v_prix_moyens_region
-WITH (security_invoker = true)
-AS
+CREATE VIEW public.v_prix_moyens_region AS
 SELECT
   region,
   category,
@@ -48,12 +44,11 @@ SELECT
   COUNT(*) as sample_count
 FROM public.market_data
 GROUP BY region, category, subcategory;
+ALTER VIEW public.v_prix_moyens_region SET (security_invoker = on);
 
 -- 1.4 ticket_stats
 DROP VIEW IF EXISTS public.ticket_stats CASCADE;
-CREATE VIEW public.ticket_stats
-WITH (security_invoker = true)
-AS
+CREATE VIEW public.ticket_stats AS
 SELECT
   status,
   grade,
@@ -61,12 +56,11 @@ SELECT
   AVG(EXTRACT(EPOCH FROM (COALESCE(updated_at, NOW()) - date_generation))/3600)::DECIMAL(10,2) as avg_hours_since_generation
 FROM public.torp_tickets
 GROUP BY status, grade;
+ALTER VIEW public.ticket_stats SET (security_invoker = on);
 
 -- 1.5 v_prediction_accuracy
 DROP VIEW IF EXISTS public.v_prediction_accuracy CASCADE;
-CREATE VIEW public.v_prediction_accuracy
-WITH (security_invoker = true)
-AS
+CREATE VIEW public.v_prediction_accuracy AS
 SELECT
   grade,
   COUNT(*) as total_predictions,
@@ -74,12 +68,11 @@ SELECT
 FROM public.devis_analysis_metrics
 WHERE grade IS NOT NULL
 GROUP BY grade;
+ALTER VIEW public.v_prediction_accuracy SET (security_invoker = on);
 
 -- 1.6 torp_score_averages
 DROP VIEW IF EXISTS public.torp_score_averages CASCADE;
-CREATE VIEW public.torp_score_averages
-WITH (security_invoker = true)
-AS
+CREATE VIEW public.torp_score_averages AS
 SELECT
   DATE_TRUNC('month', created_at) as month,
   AVG(torp_score_overall) as avg_score,
@@ -87,12 +80,11 @@ SELECT
 FROM public.devis_analysis_metrics
 GROUP BY DATE_TRUNC('month', created_at)
 ORDER BY month DESC;
+ALTER VIEW public.torp_score_averages SET (security_invoker = on);
 
 -- 1.7 rag_health_dashboard
 DROP VIEW IF EXISTS public.rag_health_dashboard CASCADE;
-CREATE VIEW public.rag_health_dashboard
-WITH (security_invoker = true)
-AS
+CREATE VIEW public.rag_health_dashboard AS
 SELECT
   kd.doc_type as source_type,
   COUNT(DISTINCT kd.id) as document_count,
@@ -103,12 +95,11 @@ SELECT
 FROM public.knowledge_documents kd
 LEFT JOIN public.knowledge_chunks kc ON kc.document_id = kd.id
 GROUP BY kd.doc_type;
+ALTER VIEW public.rag_health_dashboard SET (security_invoker = on);
 
 -- 1.8 v_avis_agregats_entreprise
 DROP VIEW IF EXISTS public.v_avis_agregats_entreprise CASCADE;
-CREATE VIEW public.v_avis_agregats_entreprise
-WITH (security_invoker = true)
-AS
+CREATE VIEW public.v_avis_agregats_entreprise AS
 SELECT
   c.id as company_id,
   c.raison_sociale as company_name,
@@ -123,12 +114,12 @@ FROM public.companies c
 LEFT JOIN public.devis d ON d.company_id = c.id
 LEFT JOIN public.devis_analysis_metrics dam ON dam.devis_id = d.id
 GROUP BY c.id, c.raison_sociale, c.siret;
+ALTER VIEW public.v_avis_agregats_entreprise SET (security_invoker = on);
 
 -- =====================================================
--- SECTION 2: ACTIVER RLS DIRECTEMENT (sans IF EXISTS)
+-- SECTION 2: ACTIVER RLS DIRECTEMENT
 -- =====================================================
 
--- Tables avec RLS désactivé
 ALTER TABLE IF EXISTS public.dpe_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.company_verifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.knowledge_base ENABLE ROW LEVEL SECURITY;
@@ -136,7 +127,7 @@ ALTER TABLE IF EXISTS public.geographic_distances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.market_prices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.technical_norms ENABLE ROW LEVEL SECURITY;
 
--- Policies pour ces tables
+-- Policies
 DROP POLICY IF EXISTS "dpe_records_select_authenticated" ON public.dpe_records;
 CREATE POLICY "dpe_records_select_authenticated" ON public.dpe_records
   FOR SELECT USING (auth.uid() IS NOT NULL);
@@ -162,11 +153,16 @@ CREATE POLICY "technical_norms_select_authenticated" ON public.technical_norms
   FOR SELECT USING (auth.uid() IS NOT NULL);
 
 -- =====================================================
--- SECTION 3: FONCTIONS - DROP TOUTES SIGNATURES PUIS RECREER
+-- SECTION 3: FONCTIONS avec search_path
+-- Note: On drop d'abord TOUTES les signatures possibles
 -- =====================================================
 
--- 3.1 rag_full_cleanup
-DROP FUNCTION IF EXISTS public.rag_full_cleanup CASCADE;
+-- Drop toutes les signatures de rag_full_cleanup
+DROP FUNCTION IF EXISTS public.rag_full_cleanup() CASCADE;
+DROP FUNCTION IF EXISTS public.rag_full_cleanup(INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS public.rag_full_cleanup(INTEGER, INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS public.rag_full_cleanup(INTEGER, INTEGER, INTEGER) CASCADE;
+DROP FUNCTION IF EXISTS public.rag_full_cleanup(INTEGER, INTEGER, INTEGER, INTEGER) CASCADE;
 CREATE FUNCTION public.rag_full_cleanup()
 RETURNS TABLE(empty_deleted INTEGER, orphan_deleted INTEGER, short_deleted INTEGER, no_embedding_deleted INTEGER)
 LANGUAGE plpgsql SET search_path = public AS $$
@@ -179,9 +175,13 @@ BEGIN
 END;
 $$;
 
--- 3.2 hybrid_search_documents
 DROP FUNCTION IF EXISTS public.hybrid_search_documents CASCADE;
-CREATE FUNCTION public.hybrid_search_documents(query_text TEXT, query_embedding vector(1536), match_count INT DEFAULT 10, keyword_weight FLOAT DEFAULT 0.3)
+CREATE FUNCTION public.hybrid_search_documents(
+  query_text TEXT,
+  query_embedding vector(1536),
+  match_count INT DEFAULT 10,
+  keyword_weight FLOAT DEFAULT 0.3
+)
 RETURNS TABLE(id UUID, content TEXT, doc_type TEXT, combined_score FLOAT)
 LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
@@ -196,9 +196,13 @@ BEGIN
 END;
 $$;
 
--- 3.3 dpe_near_location
 DROP FUNCTION IF EXISTS public.dpe_near_location CASCADE;
-CREATE FUNCTION public.dpe_near_location(p_lat FLOAT, p_lon FLOAT, p_radius_meters INT DEFAULT 5000, p_limit INT DEFAULT 50)
+CREATE FUNCTION public.dpe_near_location(
+  p_lat FLOAT,
+  p_lon FLOAT,
+  p_radius_meters INT DEFAULT 5000,
+  p_limit INT DEFAULT 50
+)
 RETURNS TABLE(id UUID, dpe_class TEXT, distance_meters FLOAT)
 LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
@@ -211,7 +215,6 @@ BEGIN
 END;
 $$;
 
--- 3.4 cleanup_empty_chunks
 DROP FUNCTION IF EXISTS public.cleanup_empty_chunks CASCADE;
 CREATE FUNCTION public.cleanup_empty_chunks()
 RETURNS INTEGER LANGUAGE plpgsql SET search_path = public AS $$
@@ -223,9 +226,12 @@ BEGIN
 END;
 $$;
 
--- 3.5 search_knowledge
 DROP FUNCTION IF EXISTS public.search_knowledge CASCADE;
-CREATE FUNCTION public.search_knowledge(query_text TEXT, filter_type TEXT DEFAULT NULL, max_results INT DEFAULT 20)
+CREATE FUNCTION public.search_knowledge(
+  query_text TEXT,
+  filter_type TEXT DEFAULT NULL,
+  max_results INT DEFAULT 20
+)
 RETURNS TABLE(id UUID, content TEXT, source_type TEXT, rank FLOAT)
 LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
@@ -241,9 +247,12 @@ BEGIN
 END;
 $$;
 
--- 3.6 match_documents
 DROP FUNCTION IF EXISTS public.match_documents CASCADE;
-CREATE FUNCTION public.match_documents(query_embedding vector(1536), match_threshold FLOAT DEFAULT 0.7, match_count INT DEFAULT 10)
+CREATE FUNCTION public.match_documents(
+  query_embedding vector(1536),
+  match_threshold FLOAT DEFAULT 0.7,
+  match_count INT DEFAULT 10
+)
 RETURNS TABLE(id UUID, content TEXT, metadata JSONB, similarity FLOAT)
 LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
@@ -257,13 +266,14 @@ BEGIN
 END;
 $$;
 
--- 3.7 get_analytics_stats
 DROP FUNCTION IF EXISTS public.get_analytics_stats CASCADE;
 CREATE FUNCTION public.get_analytics_stats()
 RETURNS TABLE(total_events BIGINT, unique_users BIGINT, events_today BIGINT, top_event_type TEXT)
 LANGUAGE plpgsql SECURITY INVOKER SET search_path = public AS $$
 BEGIN
-  IF NOT public.is_admin() THEN RAISE EXCEPTION 'Access denied: admin only'; END IF;
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Access denied: admin only';
+  END IF;
   RETURN QUERY
   SELECT COUNT(*)::BIGINT, COUNT(DISTINCT user_id)::BIGINT,
     COUNT(*) FILTER (WHERE created_at > CURRENT_DATE)::BIGINT,
@@ -272,7 +282,6 @@ BEGIN
 END;
 $$;
 
--- 3.8 assign_grade
 DROP FUNCTION IF EXISTS public.assign_grade CASCADE;
 CREATE FUNCTION public.assign_grade(score DECIMAL)
 RETURNS TEXT LANGUAGE plpgsql IMMUTABLE SET search_path = public AS $$
@@ -280,11 +289,11 @@ BEGIN
   IF score >= 80 THEN RETURN 'A';
   ELSIF score >= 60 THEN RETURN 'B';
   ELSIF score >= 40 THEN RETURN 'C';
-  ELSE RETURN 'D'; END IF;
+  ELSE RETURN 'D';
+  END IF;
 END;
 $$;
 
--- 3.9 calculate_torp_score
 DROP FUNCTION IF EXISTS public.calculate_torp_score CASCADE;
 CREATE FUNCTION public.calculate_torp_score(p_devis_id UUID)
 RETURNS DECIMAL LANGUAGE plpgsql SET search_path = public AS $$
@@ -296,7 +305,6 @@ BEGIN
 END;
 $$;
 
--- 3.10 cleanup_orphan_chunks
 DROP FUNCTION IF EXISTS public.cleanup_orphan_chunks CASCADE;
 CREATE FUNCTION public.cleanup_orphan_chunks()
 RETURNS INTEGER LANGUAGE plpgsql SET search_path = public AS $$
@@ -309,7 +317,6 @@ BEGIN
 END;
 $$;
 
--- 3.11 cleanup_no_embedding_chunks
 DROP FUNCTION IF EXISTS public.cleanup_no_embedding_chunks CASCADE;
 CREATE FUNCTION public.cleanup_no_embedding_chunks()
 RETURNS INTEGER LANGUAGE plpgsql SET search_path = public AS $$
@@ -321,7 +328,6 @@ BEGIN
 END;
 $$;
 
--- 3.12 should_refresh_company_cache
 DROP FUNCTION IF EXISTS public.should_refresh_company_cache CASCADE;
 CREATE FUNCTION public.should_refresh_company_cache(cache_updated_at TIMESTAMP WITH TIME ZONE)
 RETURNS BOOLEAN LANGUAGE plpgsql IMMUTABLE SET search_path = public AS $$
@@ -330,9 +336,12 @@ BEGIN
 END;
 $$;
 
--- 3.13 match_market_prices
 DROP FUNCTION IF EXISTS public.match_market_prices CASCADE;
-CREATE FUNCTION public.match_market_prices(p_region TEXT DEFAULT NULL, p_category TEXT DEFAULT NULL, p_work_type TEXT DEFAULT NULL)
+CREATE FUNCTION public.match_market_prices(
+  p_region TEXT DEFAULT NULL,
+  p_category TEXT DEFAULT NULL,
+  p_work_type TEXT DEFAULT NULL
+)
 RETURNS TABLE(id UUID, work_type TEXT, price_low DECIMAL, price_high DECIMAL, price_avg DECIMAL, region TEXT)
 LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
@@ -346,7 +355,6 @@ BEGIN
 END;
 $$;
 
--- 3.14 upsert_company_cache
 DROP FUNCTION IF EXISTS public.upsert_company_cache CASCADE;
 CREATE FUNCTION public.upsert_company_cache(p_siret TEXT, p_data JSONB)
 RETURNS VOID LANGUAGE plpgsql SET search_path = public AS $$
@@ -356,9 +364,12 @@ BEGIN
 END;
 $$;
 
--- 3.15 match_knowledge
 DROP FUNCTION IF EXISTS public.match_knowledge CASCADE;
-CREATE FUNCTION public.match_knowledge(query_embedding vector(1536), match_threshold FLOAT DEFAULT 0.7, match_count INT DEFAULT 5)
+CREATE FUNCTION public.match_knowledge(
+  query_embedding vector(1536),
+  match_threshold FLOAT DEFAULT 0.7,
+  match_count INT DEFAULT 5
+)
 RETURNS TABLE(id UUID, content TEXT, source_type TEXT, similarity FLOAT)
 LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
@@ -372,7 +383,6 @@ BEGIN
 END;
 $$;
 
--- 3.16 get_entreprise_cached
 DROP FUNCTION IF EXISTS public.get_entreprise_cached CASCADE;
 CREATE FUNCTION public.get_entreprise_cached(p_siret TEXT)
 RETURNS JSONB LANGUAGE plpgsql SET search_path = public AS $$
@@ -384,7 +394,6 @@ BEGIN
 END;
 $$;
 
--- 3.17 calculate_grade_from_score
 DROP FUNCTION IF EXISTS public.calculate_grade_from_score CASCADE;
 CREATE FUNCTION public.calculate_grade_from_score(score DECIMAL)
 RETURNS TEXT LANGUAGE plpgsql IMMUTABLE SET search_path = public AS $$
@@ -392,13 +401,16 @@ BEGIN
   IF score >= 80 THEN RETURN 'A';
   ELSIF score >= 60 THEN RETURN 'B';
   ELSIF score >= 40 THEN RETURN 'C';
-  ELSE RETURN 'D'; END IF;
+  ELSE RETURN 'D';
+  END IF;
 END;
 $$;
 
--- 3.18 match_technical_norms
 DROP FUNCTION IF EXISTS public.match_technical_norms CASCADE;
-CREATE FUNCTION public.match_technical_norms(p_category TEXT DEFAULT NULL, p_keyword TEXT DEFAULT NULL)
+CREATE FUNCTION public.match_technical_norms(
+  p_category TEXT DEFAULT NULL,
+  p_keyword TEXT DEFAULT NULL
+)
 RETURNS TABLE(id UUID, norm_code TEXT, title TEXT, category TEXT)
 LANGUAGE plpgsql SET search_path = public AS $$
 BEGIN
@@ -411,9 +423,12 @@ BEGIN
 END;
 $$;
 
--- 3.19 process_text_document
 DROP FUNCTION IF EXISTS public.process_text_document CASCADE;
-CREATE FUNCTION public.process_text_document(doc_content TEXT, chunk_size INT DEFAULT 1000, chunk_overlap INT DEFAULT 200)
+CREATE FUNCTION public.process_text_document(
+  doc_content TEXT,
+  chunk_size INT DEFAULT 1000,
+  chunk_overlap INT DEFAULT 200
+)
 RETURNS TABLE(chunk_index INT, chunk_content TEXT)
 LANGUAGE plpgsql IMMUTABLE SET search_path = public AS $$
 DECLARE doc_length INT; current_pos INT := 1; chunk_idx INT := 0;
@@ -427,13 +442,14 @@ BEGIN
 END;
 $$;
 
--- 3.20 get_user_stats
 DROP FUNCTION IF EXISTS public.get_user_stats CASCADE;
 CREATE FUNCTION public.get_user_stats()
 RETURNS TABLE(total_users BIGINT, b2c_users BIGINT, b2b_users BIGINT, new_today BIGINT)
 LANGUAGE plpgsql SECURITY INVOKER SET search_path = public AS $$
 BEGIN
-  IF NOT public.is_admin() THEN RAISE EXCEPTION 'Access denied: admin only'; END IF;
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Access denied: admin only';
+  END IF;
   RETURN QUERY
   SELECT COUNT(*)::BIGINT, COUNT(*) FILTER (WHERE user_type = 'B2C')::BIGINT,
     COUNT(*) FILTER (WHERE user_type = 'B2B')::BIGINT,
@@ -442,7 +458,6 @@ BEGIN
 END;
 $$;
 
--- 3.21 cleanup_short_chunks
 DROP FUNCTION IF EXISTS public.cleanup_short_chunks CASCADE;
 CREATE FUNCTION public.cleanup_short_chunks(min_length INTEGER DEFAULT 50)
 RETURNS INTEGER LANGUAGE plpgsql SET search_path = public AS $$
@@ -454,16 +469,20 @@ BEGIN
 END;
 $$;
 
--- 3.22 calculate_score_localisation
 DROP FUNCTION IF EXISTS public.calculate_score_localisation CASCADE;
 CREATE FUNCTION public.calculate_score_localisation(p_company_id UUID, p_project_id UUID)
 RETURNS DECIMAL LANGUAGE plpgsql SET search_path = public AS $$
-BEGIN RETURN 50; END;
+BEGIN
+  RETURN 50;
+END;
 $$;
 
--- 3.23 track_event
 DROP FUNCTION IF EXISTS public.track_event CASCADE;
-CREATE FUNCTION public.track_event(p_event_type TEXT, p_user_id UUID DEFAULT NULL, p_metadata JSONB DEFAULT NULL)
+CREATE FUNCTION public.track_event(
+  p_event_type TEXT,
+  p_user_id UUID DEFAULT NULL,
+  p_metadata JSONB DEFAULT NULL
+)
 RETURNS UUID LANGUAGE plpgsql SET search_path = public AS $$
 DECLARE event_id UUID;
 BEGIN
