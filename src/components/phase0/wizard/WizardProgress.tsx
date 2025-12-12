@@ -5,11 +5,19 @@
 
 import React from 'react';
 import { cn } from '@/lib/utils';
-import { Check, Circle, Loader2 } from 'lucide-react';
-import { WizardStep } from '@/types/phase0/wizard.types';
+import { Check, Loader2 } from 'lucide-react';
+
+// Interface simplifiée pour la progression
+export interface ProgressStep {
+  id: string;
+  title: string;
+  shortTitle?: string;
+  description?: string;
+  isOptional?: boolean;
+}
 
 export interface WizardProgressProps {
-  steps: WizardStep[];
+  steps: ProgressStep[];
   currentStepId: string;
   completedStepIds: string[];
   onStepClick?: (stepId: string) => void;

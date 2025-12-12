@@ -29,7 +29,7 @@ import { WorkType } from '@/types/phase0/work-project.types';
 import { PropertyType } from '@/types/phase0/property.types';
 import { Phase0ProjectService } from '@/services/phase0/project.service';
 import { EstimationService } from '@/services/phase0/estimation.service';
-import { useAuth } from '@/hooks/useAuth';
+import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 
 // Schéma de validation Zod
@@ -109,7 +109,7 @@ interface ProfessionalFormProps {
 
 export function ProfessionalForm({ onSuccess, className }: ProfessionalFormProps) {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user } = useApp();
   const { toast } = useToast();
 
   const [isSubmitting, setIsSubmitting] = useState(false);

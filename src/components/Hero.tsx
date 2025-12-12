@@ -4,7 +4,7 @@
  */
 
 import { Button } from "@/components/ui/button";
-import { ArrowRight, CheckCircle2, FileSearch, Users, Award } from "lucide-react";
+import { ArrowRight, CheckCircle2, FileSearch, Users, Award, FileText } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import heroImage from "@/assets/hero-image.jpg";
@@ -69,14 +69,29 @@ export const Hero = () => {
             {/* CTA */}
             <div className="flex flex-col sm:flex-row gap-4 pt-2">
               <Button
-                onClick={handleCTA}
+                onClick={() => navigate('/phase0')}
                 size="lg"
                 className="bg-primary hover:bg-primary/90 text-lg h-14 px-8 group"
+              >
+                <FileText className="mr-2 h-5 w-5" />
+                Définir mon projet
+                <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+              </Button>
+              <Button
+                onClick={handleCTA}
+                size="lg"
+                variant="outline"
+                className="text-lg h-14 px-8 group"
               >
                 Analyser un devis
                 <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </div>
+
+            {/* Sub-text */}
+            <p className="text-sm text-muted-foreground">
+              Commencez par définir votre projet pour obtenir des devis adaptés, ou analysez directement vos devis existants.
+            </p>
           </div>
 
           {/* Right Column - Visual */}

@@ -25,14 +25,14 @@ export interface WizardContainerProps extends UseWizardOptions {
   className?: string;
 }
 
-// Map des composants d'étapes
+// Map des composants d'étapes - IDs doivent correspondre à WIZARD_STEPS_B2C
 const STEP_COMPONENTS: Record<string, React.ComponentType<StepComponentProps>> = {
-  'owner-profile': StepOwnerProfile,
-  'property-address': StepPropertyAddress,
-  'property-details': StepPropertyDetails,
-  'work-intent': StepWorkIntent,
-  'constraints': StepConstraints,
-  'summary': StepSummary,
+  'step_profile': StepOwnerProfile,
+  'step_property': StepPropertyAddress,
+  'step_works': StepWorkIntent,
+  'step_constraints': StepConstraints,
+  'step_budget': StepPropertyDetails, // Budget/détails
+  'step_summary': StepSummary,
 };
 
 export interface StepComponentProps {
@@ -49,10 +49,11 @@ export function WizardContainer({ className, ...options }: WizardContainerProps)
   const stepsConfig = useMemo(() => WizardService.getStepsConfig(options.mode || 'b2c'), [options.mode]);
 
   // Récupérer le composant pour l'étape courante
+  const currentStepConfig = stepsConfig[wizard.currentStepIndex];
   const StepComponent = useMemo(() => {
-    if (!wizard.currentStep) return null;
-    return STEP_COMPONENTS[wizard.currentStep.id] || null;
-  }, [wizard.currentStep]);
+    if (!currentStepConfig) return null;
+    return STEP_COMPONENTS[currentStepConfig.id] || null;
+  }, [currentStepConfig]);
 
   // Handlers
   const handleStepClick = useCallback((stepId: string) => {
@@ -114,12 +115,13 @@ export function WizardContainer({ className, ...options }: WizardContainerProps)
       <WizardProgress
         steps={stepsConfig.map(s => ({
           id: s.id,
-          title: s.title,
+          title: s.name,
+          shortTitle: s.shortName,
           description: s.description,
           isOptional: s.isOptional,
         }))}
-        currentStepId={wizard.currentStep?.id || ''}
-        completedStepIds={wizard.state?.completedStepIds || []}
+        currentStepId={wizard.currentStep?.id || stepsConfig[0]?.id || ''}
+        completedStepIds={wizard.state?.completedSteps?.map(n => stepsConfig[n - 1]?.id).filter(Boolean) || []}
         onStepClick={handleStepClick}
         isProcessing={wizard.isSaving}
         className="mb-8"
@@ -129,13 +131,10 @@ export function WizardContainer({ className, ...options }: WizardContainerProps)
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            {wizard.currentStep?.icon && (
-              <span className="text-primary">{wizard.currentStep.icon}</span>
-            )}
-            {wizard.currentStep?.title}
+            {stepsConfig[wizard.currentStepIndex]?.name || 'Étape'}
           </CardTitle>
-          {wizard.currentStep?.description && (
-            <CardDescription>{wizard.currentStep.description}</CardDescription>
+          {stepsConfig[wizard.currentStepIndex]?.description && (
+            <CardDescription>{stepsConfig[wizard.currentStepIndex].description}</CardDescription>
           )}
         </CardHeader>
 
@@ -173,7 +172,7 @@ export function WizardContainer({ className, ...options }: WizardContainerProps)
             <StepComponent {...stepProps} />
           ) : (
             <div className="text-center py-8 text-muted-foreground">
-              Étape non implémentée: {wizard.currentStep?.id}
+              Étape non implémentée: {currentStepConfig?.id || 'inconnue'}
             </div>
           )}
         </CardContent>
@@ -185,7 +184,7 @@ export function WizardContainer({ className, ...options }: WizardContainerProps)
         canGoNext={wizard.canGoNext}
         isFirstStep={wizard.currentStepIndex === 0}
         isLastStep={wizard.currentStepIndex === wizard.totalSteps - 1}
-        isOptionalStep={wizard.currentStep?.isOptional}
+        isOptionalStep={currentStepConfig?.isOptional}
         isLoading={wizard.isLoading}
         isSaving={wizard.isSaving}
         onPrevious={wizard.goPrevious}

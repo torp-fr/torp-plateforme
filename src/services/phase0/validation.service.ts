@@ -274,9 +274,9 @@ export class ValidationService {
       field: 'lots',
       section: 'lots',
       check: (v) => Array.isArray(v) && v.length > 0,
-      message: 'Au moins un lot de travaux doit être sélectionné',
-      severity: 'error',
-      level: 'minimal',
+      message: 'La sélection de lots de travaux est recommandée pour une estimation précise',
+      severity: 'info',
+      level: 'standard',
     },
     {
       field: 'lots',
@@ -503,15 +503,15 @@ export class ValidationService {
     currentStep: number
   ): { canProceed: boolean; blockers: string[] } {
     const blockers: string[] = [];
+    const owner = project.ownerProfile || project.owner;
+    const property = project.property;
 
     switch (currentStep) {
-      case 1: // Profil MOA
-        if (!project.owner?.identity?.type) {
+      case 1: // Profil MOA - seulement le type est requis pour avancer
+        if (!owner?.identity?.type) {
           blockers.push('Sélectionnez votre profil (particulier, professionnel, etc.)');
         }
-        if (!project.owner?.contact?.email) {
-          blockers.push('L\'email est requis');
-        }
+        // Email optionnel pour avancer mais recommandé
         break;
 
       case 2: // Identification bien
@@ -539,9 +539,8 @@ export class ValidationService {
         if (!project.workProject?.scope?.workType) {
           blockers.push('Le type de travaux est requis');
         }
-        if (!project.selectedLots || project.selectedLots.length === 0) {
-          blockers.push('Sélectionnez au moins un lot de travaux');
-        }
+        // Les lots sont optionnels - ils sont suggérés automatiquement
+        // L'utilisateur peut continuer même sans sélection de lots
         break;
 
       case 5: // Contraintes et budget

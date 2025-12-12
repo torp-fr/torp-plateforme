@@ -69,25 +69,48 @@ export const Header = () => {
                 Solutions
                 <ChevronDown className="h-4 w-4" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuItem onClick={() => navigate('/register')}>
+              <DropdownMenuContent align="start" className="w-64">
+                <DropdownMenuItem onClick={() => navigate('/phase0')}>
                   <div>
-                    <div className="font-medium">👤 Particuliers</div>
+                    <div className="font-medium">📝 Définir mon projet</div>
                     <div className="text-xs text-muted-foreground">
-                      Analysez vos devis de travaux
+                      Créez votre cahier des charges en quelques clics
+                    </div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/analyze')}>
+                  <div>
+                    <div className="font-medium">📊 Analyser un devis</div>
+                    <div className="text-xs text-muted-foreground">
+                      Comprenez et validez vos devis de travaux
                     </div>
                   </div>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/register')}>
                   <div>
+                    <div className="font-medium">👤 Particuliers</div>
+                    <div className="text-xs text-muted-foreground">
+                      Accompagnement personnalisé
+                    </div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/pro')}>
+                  <div>
                     <div className="font-medium">🏢 Professionnels BTP</div>
                     <div className="text-xs text-muted-foreground">
-                      Valorisez votre expertise
+                      Espace dédié aux pros
                     </div>
                   </div>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            <Link
+              to="/phase0"
+              className="text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+            >
+              Définir mon projet
+            </Link>
 
             <Link
               to="/pricing"
@@ -178,10 +201,26 @@ export const Header = () => {
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
           <nav className="lg:hidden mt-4 pb-4 space-y-3 border-t pt-4">
+            {/* Phase 0 - Définir mon projet (CTA principal) */}
+            <Link
+              to="/phase0"
+              className="block px-3 py-3 text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              📝 Définir mon projet
+            </Link>
+
             <div className="space-y-2">
               <div className="text-sm font-semibold text-muted-foreground px-2">
                 Solutions
               </div>
+              <Link
+                to="/analyze"
+                className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                📊 Analyser un devis
+              </Link>
               <Link
                 to="/register"
                 className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
@@ -190,7 +229,7 @@ export const Header = () => {
                 👤 Particuliers
               </Link>
               <Link
-                to="/register"
+                to="/pro"
                 className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >

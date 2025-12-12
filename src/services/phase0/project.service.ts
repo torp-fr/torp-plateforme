@@ -73,7 +73,59 @@ interface Phase0ProjectRow {
 // SERVICE
 // =============================================================================
 
-class Phase0ProjectService {
+export class Phase0ProjectService {
+  // Static methods for compatibility with useWizard hook
+
+  /**
+   * Get project by ID (static version)
+   */
+  static async getProjectById(projectId: string): Promise<Phase0Project | null> {
+    return phase0ProjectServiceInstance.getProjectById(projectId);
+  }
+
+  /**
+   * Update project (static version)
+   */
+  static async updateProject(projectId: string, updates: Partial<Phase0Project>): Promise<Phase0Project> {
+    return phase0ProjectServiceInstance.updateProject({
+      projectId,
+      updates: {
+        ownerProfile: updates.ownerProfile,
+        property: updates.property,
+        workProject: updates.workProject,
+        selectedLots: updates.selectedLots,
+        status: updates.status,
+        wizardState: updates.wizardState,
+        deductions: updates.deductions,
+        alerts: updates.alerts,
+        completeness: updates.completeness,
+        validation: updates.validation,
+      },
+    });
+  }
+
+  /**
+   * Create project (static version)
+   */
+  static async createProject(userId: string, data: Partial<Phase0Project>): Promise<Phase0Project> {
+    return phase0ProjectServiceInstance.createProject({
+      userId,
+      wizardMode: data.wizardMode || 'b2c',
+      initialData: {
+        ownerProfile: data.ownerProfile,
+        property: data.property,
+        workProject: data.workProject,
+        selectedLots: data.selectedLots,
+      },
+    });
+  }
+
+  /**
+   * Change project status (static version)
+   */
+  static async changeStatus(projectId: string, status: Phase0Status): Promise<Phase0Project> {
+    return phase0ProjectServiceInstance.changeStatus(projectId, status);
+  }
   /**
    * Créer un nouveau projet Phase 0
    */
@@ -667,4 +719,13 @@ class Phase0ProjectService {
   }
 }
 
-export const phase0ProjectService = new Phase0ProjectService();
+// Create instance for static methods to use
+const phase0ProjectServiceInstance = new Phase0ProjectService();
+
+// Export row types for external use
+export type { Phase0ProjectRow };
+export type Phase0ProjectInsert = Partial<Phase0ProjectRow>;
+export type Phase0ProjectUpdate = Partial<Phase0ProjectRow>;
+
+// Export both the instance and allow class access
+export const phase0ProjectService = phase0ProjectServiceInstance;
