@@ -3,7 +3,7 @@
  * Sélection du type de projet et des lots
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { StepComponentProps } from '../WizardContainer';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Hammer, Wrench, Paintbrush, Zap, Droplet, ThermometerSun,
-  Home, Building, Trees, Shield, Lightbulb, ChevronDown, ChevronUp, Info
+  Home, Building, Trees, Shield, Lightbulb, ChevronDown, ChevronUp, Info,
+  Sparkles, CheckCircle2, Plus, Minus
 } from 'lucide-react';
 import { WorkType } from '@/types/phase0/work-project.types';
 import { LotType, LotCategory, LOT_CATALOG, LotDefinition } from '@/types/phase0/lots.types';
@@ -27,43 +28,57 @@ const WORK_TYPE_OPTIONS: Array<{
   value: WorkType;
   label: string;
   description: string;
+  example: string;
   icon: React.ReactNode;
+  suggestedLots: LotType[];
 }> = [
   {
     value: 'renovation',
     label: 'Rénovation',
     description: 'Rénover ou moderniser un bien existant',
+    example: 'Ex: Refaire la cuisine et la salle de bain, changer les sols et repeindre',
     icon: <Hammer className="w-5 h-5" />,
+    suggestedLots: ['demolition', 'platrerie', 'carrelage', 'peinture', 'courants_forts', 'sanitaires', 'cuisine_equipee', 'salle_bain_cle_main'],
   },
   {
     value: 'refurbishment',
     label: 'Réhabilitation',
-    description: 'Remettre aux normes un bien dégradé',
+    description: 'Remettre aux normes un bien dégradé ou insalubre',
+    example: 'Ex: Remettre aux normes un appartement ancien avec électricité vétuste et problèmes d\'humidité',
     icon: <Wrench className="w-5 h-5" />,
+    suggestedLots: ['demolition', 'maconnerie', 'courants_forts', 'sanitaires', 'isolation_interieure', 'platrerie', 'vmc_simple_flux', 'chauffage_central'],
   },
   {
     value: 'extension',
     label: 'Extension',
     description: 'Agrandir la surface habitable',
+    example: 'Ex: Ajouter une véranda, surélever la toiture, ou créer une annexe',
     icon: <Building className="w-5 h-5" />,
+    suggestedLots: ['terrassement_vrd', 'maconnerie', 'beton_arme', 'charpente_bois', 'couverture', 'menuiseries_exterieures', 'isolation_interieure', 'courants_forts'],
   },
   {
     value: 'improvement',
     label: 'Amélioration',
-    description: 'Améliorer le confort ou la performance',
+    description: 'Améliorer le confort ou la performance énergétique',
+    example: 'Ex: Installer une pompe à chaleur, ajouter une isolation, remplacer les fenêtres',
     icon: <ThermometerSun className="w-5 h-5" />,
+    suggestedLots: ['ite', 'isolation_interieure', 'menuiseries_exterieures', 'chauffage_central', 'vmc_double_flux', 'photovoltaique'],
   },
   {
     value: 'new_construction',
     label: 'Construction neuve',
     description: 'Construire un nouveau bâtiment',
+    example: 'Ex: Construction d\'une maison individuelle ou d\'un garage',
     icon: <Home className="w-5 h-5" />,
+    suggestedLots: ['terrassement_vrd', 'maconnerie', 'beton_arme', 'charpente_bois', 'couverture', 'menuiseries_exterieures', 'isolation_interieure', 'platrerie', 'courants_forts', 'sanitaires', 'chauffage_central', 'vmc_simple_flux'],
   },
   {
     value: 'maintenance',
     label: 'Entretien',
-    description: 'Travaux d\'entretien courant',
+    description: 'Travaux d\'entretien courant et préventif',
+    example: 'Ex: Ravalement de façade, réfection de toiture, remplacement de chaudière',
     icon: <Shield className="w-5 h-5" />,
+    suggestedLots: ['ravalement', 'couverture', 'peinture', 'chauffage_central', 'vmc_simple_flux'],
   },
 ];
 
@@ -97,12 +112,33 @@ export function StepWorkIntent({
   );
 
   const workType = (scope.workType as WorkType) || (answers['workProject.scope.workType'] as WorkType);
+  const [hasAutoSuggested, setHasAutoSuggested] = useState(false);
 
   // Lots sélectionnés
   const selectedLots = useMemo(() => {
     const selected = (answers['selectedLots'] as LotType[]) || [];
     return new Set(selected);
   }, [answers]);
+
+  // Lots suggérés basés sur le type de travaux
+  const suggestedLots = useMemo(() => {
+    if (!workType) return [];
+    const workTypeOption = WORK_TYPE_OPTIONS.find(o => o.value === workType);
+    return workTypeOption?.suggestedLots || [];
+  }, [workType]);
+
+  // Auto-suggérer les lots quand le type de travaux change
+  useEffect(() => {
+    if (workType && !hasAutoSuggested && suggestedLots.length > 0 && selectedLots.size === 0) {
+      onAnswerChange('selectedLots', suggestedLots);
+      setHasAutoSuggested(true);
+    }
+  }, [workType, suggestedLots, hasAutoSuggested, selectedLots.size, onAnswerChange]);
+
+  // Reset auto-suggestion flag when work type changes
+  useEffect(() => {
+    setHasAutoSuggested(false);
+  }, [workType]);
 
   // Grouper les lots par catégorie
   const lotsByCategory = useMemo(() => {
@@ -185,7 +221,7 @@ export function StepWorkIntent({
         <RadioGroup
           value={workType || ''}
           onValueChange={(value) => onAnswerChange('workProject.scope.workType', value)}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"
+          className="grid grid-cols-1 md:grid-cols-2 gap-4"
         >
           {WORK_TYPE_OPTIONS.map((option) => (
             <label
@@ -194,7 +230,7 @@ export function StepWorkIntent({
               className={`
                 flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
                 ${workType === option.value
-                  ? 'border-primary bg-primary/5'
+                  ? 'border-primary bg-primary/5 shadow-sm'
                   : 'border-muted hover:border-primary/50'
                 }
               `}
@@ -204,7 +240,7 @@ export function StepWorkIntent({
                 id={`work-type-${option.value}`}
                 className="mt-0.5"
               />
-              <div>
+              <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <span className={workType === option.value ? 'text-primary' : 'text-muted-foreground'}>
                     {option.icon}
@@ -212,6 +248,9 @@ export function StepWorkIntent({
                   <span className="font-medium">{option.label}</span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">{option.description}</p>
+                <p className="text-xs text-muted-foreground/80 mt-2 italic border-l-2 border-muted pl-2">
+                  {option.example}
+                </p>
               </div>
             </label>
           ))}
@@ -249,22 +288,114 @@ export function StepWorkIntent({
         </CardContent>
       </Card>
 
-      {/* Sélection des lots */}
-      <Card>
+      {/* Lots de travaux identifiés */}
+      <Card className={workType ? 'border-primary/30' : ''}>
         <CardHeader>
-          <CardTitle className="text-lg">Lots de travaux</CardTitle>
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-primary" />
+            <CardTitle className="text-lg">Lots de travaux identifiés</CardTitle>
+          </div>
           <CardDescription>
-            Sélectionnez les types de travaux concernés par votre projet.
-            {selectedLots.size > 0 && (
-              <Badge variant="secondary" className="ml-2">
-                {selectedLots.size} lot(s) sélectionné(s)
-              </Badge>
+            {workType ? (
+              <>
+                Basé sur votre type de projet, nous avons identifié les lots de travaux suivants.
+                <span className="block mt-1 text-sm">
+                  Vous pouvez ajuster cette sélection selon vos besoins.
+                </span>
+              </>
+            ) : (
+              'Sélectionnez un type de projet ci-dessus pour voir les lots suggérés.'
             )}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Liste par catégorie */}
+        <CardContent className="space-y-6">
+          {/* Résumé des lots sélectionnés */}
+          {selectedLots.size > 0 && (
+            <Alert className="bg-primary/5 border-primary/20">
+              <CheckCircle2 className="h-4 w-4 text-primary" />
+              <AlertDescription className="flex items-center justify-between">
+                <span>
+                  <strong>{selectedLots.size} lot(s)</strong> de travaux sélectionné(s)
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onAnswerChange('selectedLots', [])}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  Tout effacer
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Lots suggérés (affichés en premier si workType sélectionné) */}
+          {workType && suggestedLots.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-yellow-500" />
+                  Lots suggérés pour "{WORK_TYPE_OPTIONS.find(o => o.value === workType)?.label}"
+                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const allSuggested = suggestedLots.every(l => selectedLots.has(l));
+                    if (allSuggested) {
+                      const updated = Array.from(selectedLots).filter(l => !suggestedLots.includes(l));
+                      onAnswerChange('selectedLots', updated);
+                    } else {
+                      const updated = [...new Set([...Array.from(selectedLots), ...suggestedLots])];
+                      onAnswerChange('selectedLots', updated);
+                    }
+                  }}
+                >
+                  {suggestedLots.every(l => selectedLots.has(l)) ? 'Désélectionner tous' : 'Sélectionner tous'}
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {suggestedLots.map((lotType) => {
+                  const lot = LOT_CATALOG.find(l => l.type === lotType);
+                  if (!lot) return null;
+                  const isSelected = selectedLots.has(lotType);
+                  return (
+                    <button
+                      key={lotType}
+                      type="button"
+                      onClick={() => toggleLot(lotType)}
+                      className={`
+                        flex items-center gap-2 p-3 rounded-lg border text-left transition-all
+                        ${isSelected
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-muted hover:border-primary/50'
+                        }
+                      `}
+                    >
+                      {isSelected ? (
+                        <Minus className="w-4 h-4 flex-shrink-0" />
+                      ) : (
+                        <Plus className="w-4 h-4 flex-shrink-0" />
+                      )}
+                      <span className="text-sm font-medium truncate">{lot.name}</span>
+                      {lot.rgeEligible && (
+                        <Badge variant="outline" className="text-xs ml-auto flex-shrink-0">RGE</Badge>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Liste complète par catégorie (repliée par défaut) */}
           <div className="space-y-3">
+            <Label className="text-sm font-medium">Tous les lots disponibles</Label>
+            <p className="text-xs text-muted-foreground">
+              Cliquez sur une catégorie pour voir tous les lots disponibles et personnaliser votre sélection.
+            </p>
             {(Object.keys(lotsByCategory) as LotCategory[]).map((category) => {
               const categoryInfo = CATEGORY_INFO[category];
               const lots = lotsByCategory[category];
@@ -277,7 +408,7 @@ export function StepWorkIntent({
                   <button
                     type="button"
                     onClick={() => toggleCategory(category)}
-                    className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
+                    className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       <Badge className={categoryInfo.color}>
@@ -285,7 +416,7 @@ export function StepWorkIntent({
                         <span className="ml-1">{categoryInfo.label}</span>
                       </Badge>
                       {selectedInCategory > 0 && (
-                        <Badge variant="secondary">
+                        <Badge variant="secondary" className="bg-primary/10 text-primary">
                           {selectedInCategory}/{lots.length}
                         </Badge>
                       )}
