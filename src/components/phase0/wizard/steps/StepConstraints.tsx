@@ -1,23 +1,79 @@
 /**
- * Étape 5 - Contraintes et budget
- * Collecte les contraintes temporelles, d'occupation et le budget
+ * Étape 4 - Aspects pratiques
+ * Planning, accès au chantier et budget
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { StepComponentProps } from '../WizardContainer';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Slider } from '@/components/ui/slider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import {
-  Calendar, Clock, Home, Euro, CreditCard, AlertTriangle, Info, Sparkles
+  Calendar, Clock, Home, Euro, CreditCard, AlertTriangle, Info,
+  Sparkles, Zap, CalendarClock, CalendarDays, CalendarRange, HelpCircle,
+  Banknote, PiggyBank, Landmark, Gift
 } from 'lucide-react';
 
+// Niveaux d'urgence du projet
+const URGENCY_LEVELS = [
+  {
+    value: 'emergency',
+    label: 'Intervention urgente',
+    description: 'Sous 24-48h (dégât des eaux, panne critique...)',
+    icon: <Zap className="w-5 h-5 text-red-500" />,
+    badge: 'Urgence',
+    badgeColor: 'bg-red-100 text-red-800',
+  },
+  {
+    value: 'within_month',
+    label: 'Dans le mois',
+    description: 'Démarrage souhaité sous 4 semaines',
+    icon: <CalendarClock className="w-5 h-5 text-orange-500" />,
+    badge: 'Rapide',
+    badgeColor: 'bg-orange-100 text-orange-800',
+  },
+  {
+    value: 'within_quarter',
+    label: 'Dans le trimestre',
+    description: 'Démarrage souhaité sous 3 mois',
+    icon: <CalendarDays className="w-5 h-5 text-yellow-500" />,
+    badge: 'Planifié',
+    badgeColor: 'bg-yellow-100 text-yellow-800',
+  },
+  {
+    value: 'within_year',
+    label: 'Dans l\'année',
+    description: 'Projet à planifier dans les 12 mois',
+    icon: <CalendarRange className="w-5 h-5 text-blue-500" />,
+    badge: 'Flexible',
+    badgeColor: 'bg-blue-100 text-blue-800',
+  },
+  {
+    value: 'planning',
+    label: 'En phase d\'étude',
+    description: 'Je prépare mon projet, pas de date définie',
+    icon: <Calendar className="w-5 h-5 text-gray-500" />,
+    badge: 'Étude',
+    badgeColor: 'bg-gray-100 text-gray-800',
+  },
+];
+
+// Jours de la semaine pour accès chantier
+const WEEKDAYS = [
+  { value: 'monday', label: 'Lun' },
+  { value: 'tuesday', label: 'Mar' },
+  { value: 'wednesday', label: 'Mer' },
+  { value: 'thursday', label: 'Jeu' },
+  { value: 'friday', label: 'Ven' },
+  { value: 'saturday', label: 'Sam' },
+];
+
+// Options d'occupation
 const OCCUPANCY_OPTIONS = [
   { value: 'vacant', label: 'Logement vacant', description: 'Le bien sera vide pendant les travaux' },
   { value: 'occupied_full', label: 'Occupé en permanence', description: 'Vous habiterez sur place' },
@@ -25,28 +81,59 @@ const OCCUPANCY_OPTIONS = [
   { value: 'flexible', label: 'Flexible', description: 'À discuter selon les phases' },
 ];
 
+// Options de financement
 const FUNDING_OPTIONS = [
-  { value: 'personal_funds', label: 'Fonds propres', description: 'Épargne personnelle' },
-  { value: 'bank_loan', label: 'Prêt bancaire', description: 'Crédit immobilier ou travaux' },
-  { value: 'mixed', label: 'Financement mixte', description: 'Apport + crédit' },
-  { value: 'subsidies', label: 'Aides et subventions', description: 'MaPrimeRénov\', CEE...' },
+  {
+    value: 'personal_funds',
+    label: 'Fonds propres',
+    description: 'Épargne personnelle',
+    icon: <PiggyBank className="w-4 h-4" />,
+  },
+  {
+    value: 'bank_loan',
+    label: 'Prêt bancaire',
+    description: 'Crédit immobilier ou travaux',
+    icon: <Landmark className="w-4 h-4" />,
+  },
+  {
+    value: 'mixed',
+    label: 'Financement mixte',
+    description: 'Apport + crédit',
+    icon: <Banknote className="w-4 h-4" />,
+  },
+  {
+    value: 'subsidies',
+    label: 'Avec aides',
+    description: 'MaPrimeRénov\', CEE...',
+    icon: <Gift className="w-4 h-4" />,
+  },
 ];
 
+// Options de niveau de connaissance du budget
+const BUDGET_KNOWLEDGE_OPTIONS = [
+  {
+    value: 'defined',
+    label: 'J\'ai un budget défini',
+    description: 'Je connais mon enveloppe budgétaire',
+  },
+  {
+    value: 'estimate',
+    label: 'J\'ai une estimation',
+    description: 'J\'ai une idée approximative',
+  },
+  {
+    value: 'no_idea',
+    label: 'Je ne sais pas',
+    description: 'J\'attends une estimation',
+  },
+];
+
+// Niveaux de finition
 const FINISH_LEVELS = [
   { value: 'basic', label: 'Basique', description: 'Fonctionnel et économique', multiplier: '0.8x' },
   { value: 'standard', label: 'Standard', description: 'Bon rapport qualité/prix', multiplier: '1x' },
-  { value: 'premium', label: 'Premium', description: 'Matériaux et finitions haut de gamme', multiplier: '1.3x' },
+  { value: 'premium', label: 'Premium', description: 'Matériaux haut de gamme', multiplier: '1.3x' },
   { value: 'luxury', label: 'Luxe', description: 'Excellence et sur-mesure', multiplier: '1.6x' },
-];
-
-const BUDGET_RANGES = [
-  { min: 0, max: 10000, label: 'Moins de 10 000 €' },
-  { min: 10000, max: 25000, label: '10 000 € - 25 000 €' },
-  { min: 25000, max: 50000, label: '25 000 € - 50 000 €' },
-  { min: 50000, max: 100000, label: '50 000 € - 100 000 €' },
-  { min: 100000, max: 200000, label: '100 000 € - 200 000 €' },
-  { min: 200000, max: 500000, label: '200 000 € - 500 000 €' },
-  { min: 500000, max: 1000000, label: 'Plus de 500 000 €' },
 ];
 
 export function StepConstraints({
@@ -81,110 +168,186 @@ export function StepConstraints({
     return current ?? defaultValue;
   };
 
-  // Calculer une date minimale (aujourd'hui + 1 mois)
-  const minStartDate = new Date();
-  minStartDate.setMonth(minStartDate.getMonth() + 1);
-  const minStartDateStr = minStartDate.toISOString().split('T')[0];
+  const budgetKnowledge = getValue('budget.knowledge', '') as string;
 
   return (
     <div className="space-y-8">
-      {/* Contraintes temporelles */}
+      {/* Urgence / Planning */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Calendar className="w-5 h-5 text-primary" />
-            Planning
+            Planning du projet
           </CardTitle>
           <CardDescription>
-            Définissez vos contraintes de dates pour le projet
+            Quel est votre degré d'urgence pour démarrer les travaux ?
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="desiredStartDate">Date de début souhaitée</Label>
-              <Input
-                id="desiredStartDate"
-                type="date"
-                min={minStartDateStr}
-                value={(getValue('constraints.temporal.desiredStartDate') as string) || ''}
-                onChange={(e) => onAnswerChange('workProject.constraints.temporal.desiredStartDate', e.target.value)}
-                disabled={isProcessing}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="deadlineDate">Date limite (si applicable)</Label>
-              <Input
-                id="deadlineDate"
-                type="date"
-                min={minStartDateStr}
-                value={(getValue('constraints.temporal.deadlineDate') as string) || ''}
-                onChange={(e) => onAnswerChange('workProject.constraints.temporal.deadlineDate', e.target.value)}
-                disabled={isProcessing}
-              />
-            </div>
-          </div>
+          <RadioGroup
+            value={(getValue('constraints.temporal.urgencyLevel') as string) || ''}
+            onValueChange={(value) => onAnswerChange('workProject.constraints.temporal.urgencyLevel', value)}
+            className="space-y-3"
+          >
+            {URGENCY_LEVELS.map((level) => (
+              <label
+                key={level.value}
+                htmlFor={`urgency-${level.value}`}
+                className={`
+                  flex items-center gap-4 p-4 rounded-lg border-2 cursor-pointer transition-all
+                  ${getValue('constraints.temporal.urgencyLevel') === level.value
+                    ? 'border-primary bg-primary/5'
+                    : 'border-muted hover:border-primary/50'
+                  }
+                `}
+              >
+                <RadioGroupItem
+                  value={level.value}
+                  id={`urgency-${level.value}`}
+                />
+                <div className="flex-shrink-0">
+                  {level.icon}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{level.label}</span>
+                    <Badge className={level.badgeColor}>{level.badge}</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{level.description}</p>
+                </div>
+              </label>
+            ))}
+          </RadioGroup>
 
-          <div className="space-y-2">
-            <Label htmlFor="maxDuration">Durée maximale souhaitée (mois)</Label>
-            <Select
-              value={(getValue('constraints.temporal.maxDurationMonths') as string) || ''}
-              onValueChange={(value) => onAnswerChange('workProject.constraints.temporal.maxDurationMonths', parseInt(value))}
-              disabled={isProcessing}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Pas de limite" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1">1 mois maximum</SelectItem>
-                <SelectItem value="2">2 mois maximum</SelectItem>
-                <SelectItem value="3">3 mois maximum</SelectItem>
-                <SelectItem value="6">6 mois maximum</SelectItem>
-                <SelectItem value="12">12 mois maximum</SelectItem>
-                <SelectItem value="24">Plus de 12 mois</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {getValue('constraints.temporal.urgencyLevel') === 'emergency' && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Les interventions urgentes peuvent engendrer des surcoûts de 15 à 30%
+                et limiter le choix des entreprises disponibles.
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
 
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="isUrgent"
-              checked={getValue('constraints.temporal.isUrgent', false) as boolean}
-              onCheckedChange={(checked) => onAnswerChange('workProject.constraints.temporal.isUrgent', checked)}
-              disabled={isProcessing}
-            />
-            <Label htmlFor="isUrgent" className="cursor-pointer">
-              Travaux urgents (+ 15% environ)
-            </Label>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Périodes à éviter</Label>
+      {/* Accès au chantier */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Clock className="w-5 h-5 text-primary" />
+            Accès au chantier
+          </CardTitle>
+          <CardDescription>
+            Précisez les disponibilités pour l'accès au bien
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Jours d'accès */}
+          <div className="space-y-3">
+            <Label>Jours d'accès possibles</Label>
             <div className="flex flex-wrap gap-2">
-              {['Vacances scolaires', 'Été (juillet-août)', 'Fin d\'année', 'Fêtes'].map((period) => {
-                const avoidPeriods = (getValue('constraints.temporal.avoidPeriods', []) as string[]) || [];
+              {WEEKDAYS.map((day) => {
+                const accessDays = (getValue('constraints.physical.accessDays', []) as string[]) || [];
+                const isSelected = accessDays.includes(day.value);
                 return (
-                  <label key={period} className="flex items-center gap-2 cursor-pointer">
+                  <button
+                    key={day.value}
+                    type="button"
+                    onClick={() => {
+                      const updated = isSelected
+                        ? accessDays.filter(d => d !== day.value)
+                        : [...accessDays, day.value];
+                      onAnswerChange('workProject.constraints.physical.accessDays', updated);
+                    }}
+                    className={`
+                      px-4 py-2 rounded-lg border-2 font-medium transition-all
+                      ${isSelected
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-muted hover:border-primary/50'
+                      }
+                    `}
+                    disabled={isProcessing}
+                  >
+                    {day.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Horaires d'accès */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="accessTimeStart">Heure de début</Label>
+              <Input
+                id="accessTimeStart"
+                type="time"
+                value={(getValue('constraints.physical.accessTimeStart') as string) || '08:00'}
+                onChange={(e) => onAnswerChange('workProject.constraints.physical.accessTimeStart', e.target.value)}
+                disabled={isProcessing}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="accessTimeEnd">Heure de fin</Label>
+              <Input
+                id="accessTimeEnd"
+                type="time"
+                value={(getValue('constraints.physical.accessTimeEnd') as string) || '18:00'}
+                onChange={(e) => onAnswerChange('workProject.constraints.physical.accessTimeEnd', e.target.value)}
+                disabled={isProcessing}
+              />
+            </div>
+          </div>
+
+          {/* Contraintes spécifiques */}
+          <div className="space-y-3">
+            <Label>Contraintes particulières</Label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {[
+                'Voisinage sensible au bruit',
+                'Accès limité (étage sans ascenseur)',
+                'Stationnement difficile',
+                'Présence d\'animaux',
+                'Télétravail régulier',
+                'Enfants en bas âge',
+              ].map((constraint) => {
+                const constraints = (getValue('constraints.physical.specificConstraints', []) as string[]) || [];
+                return (
+                  <label key={constraint} className="flex items-center gap-2 cursor-pointer">
                     <Checkbox
-                      checked={avoidPeriods.includes(period)}
+                      checked={constraints.includes(constraint)}
                       onCheckedChange={(checked) => {
                         const updated = checked
-                          ? [...avoidPeriods, period]
-                          : avoidPeriods.filter(p => p !== period);
-                        onAnswerChange('workProject.constraints.temporal.avoidPeriods', updated);
+                          ? [...constraints, constraint]
+                          : constraints.filter(c => c !== constraint);
+                        onAnswerChange('workProject.constraints.physical.specificConstraints', updated);
                       }}
                       disabled={isProcessing}
                     />
-                    <span className="text-sm">{period}</span>
+                    <span className="text-sm">{constraint}</span>
                   </label>
                 );
               })}
             </div>
           </div>
+
+          {/* Notes supplémentaires */}
+          <div className="space-y-2">
+            <Label htmlFor="accessNotes">Remarques sur l'accès (optionnel)</Label>
+            <Textarea
+              id="accessNotes"
+              value={(getValue('constraints.physical.notes') as string) || ''}
+              onChange={(e) => onAnswerChange('workProject.constraints.physical.notes', e.target.value)}
+              placeholder="Précisez toute contrainte particulière : code d'accès, gardien, parking..."
+              rows={2}
+              disabled={isProcessing}
+            />
+          </div>
         </CardContent>
       </Card>
 
-      {/* Contraintes d'occupation */}
+      {/* Occupation */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
@@ -225,67 +388,13 @@ export function StepConstraints({
 
           {getValue('constraints.occupancy.duringWorks') === 'occupied_full' && (
             <Alert>
-              <AlertTriangle className="h-4 w-4" />
+              <Info className="h-4 w-4" />
               <AlertDescription>
-                L'occupation pendant les travaux peut rallonger les délais et nécessiter une organisation par phases.
-                Prévoyez des aménagements temporaires si nécessaire.
+                L'occupation pendant les travaux nécessitera une organisation par phases
+                pour préserver votre confort au quotidien.
               </AlertDescription>
             </Alert>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Contraintes d'accès */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Clock className="w-5 h-5 text-primary" />
-            Accès et contraintes
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Contraintes d'accès au chantier</Label>
-            <div className="flex flex-wrap gap-2">
-              {[
-                'Accès difficile (étage sans ascenseur)',
-                'Stationnement limité',
-                'Rue étroite',
-                'Zone piétonne',
-                'Horaires restreints',
-                'Voisinage sensible',
-              ].map((constraint) => {
-                const accessConstraints = (getValue('constraints.physical.accessConstraints', []) as string[]) || [];
-                return (
-                  <label key={constraint} className="flex items-center gap-2 cursor-pointer">
-                    <Checkbox
-                      checked={accessConstraints.includes(constraint)}
-                      onCheckedChange={(checked) => {
-                        const updated = checked
-                          ? [...accessConstraints, constraint]
-                          : accessConstraints.filter(c => c !== constraint);
-                        onAnswerChange('workProject.constraints.physical.accessConstraints', updated);
-                      }}
-                      disabled={isProcessing}
-                    />
-                    <span className="text-sm">{constraint}</span>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="otherConstraints">Autres contraintes ou remarques</Label>
-            <Textarea
-              id="otherConstraints"
-              value={(getValue('constraints.physical.notes') as string) || ''}
-              onChange={(e) => onAnswerChange('workProject.constraints.physical.notes', e.target.value)}
-              placeholder="Décrivez toute contrainte particulière..."
-              rows={3}
-              disabled={isProcessing}
-            />
-          </div>
         </CardContent>
       </Card>
 
@@ -294,162 +403,179 @@ export function StepConstraints({
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Euro className="w-5 h-5 text-primary" />
-            Budget
+            Budget prévisionnel
           </CardTitle>
           <CardDescription>
-            Définissez votre enveloppe budgétaire pour les travaux
+            Avez-vous une idée de votre budget pour ce projet ?
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Fourchette de budget */}
-          <div className="space-y-2">
-            <Label>Enveloppe budgétaire *</Label>
-            <RadioGroup
-              value={`${getValue('budget.totalEnvelope.min', '')}-${getValue('budget.totalEnvelope.max', '')}`}
-              onValueChange={(value) => {
-                const [min, max] = value.split('-').map(Number);
-                onAnswersChange({
-                  'workProject.budget.totalEnvelope.min': min,
-                  'workProject.budget.totalEnvelope.max': max,
-                });
-              }}
-              className="grid grid-cols-1 md:grid-cols-2 gap-2"
-            >
-              {BUDGET_RANGES.map((range) => (
-                <label
-                  key={`${range.min}-${range.max}`}
-                  className={`
-                    flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all
-                    ${getValue('budget.totalEnvelope.min') === range.min &&
-                      getValue('budget.totalEnvelope.max') === range.max
-                      ? 'border-primary bg-primary/5'
-                      : 'border-muted hover:border-primary/50'
-                    }
-                  `}
-                >
-                  <RadioGroupItem value={`${range.min}-${range.max}`} />
-                  <span className="text-sm font-medium">{range.label}</span>
-                </label>
-              ))}
-            </RadioGroup>
-          </div>
-
-          {/* Ou saisie personnalisée */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="budgetMin">Budget minimum (€)</Label>
-              <Input
-                id="budgetMin"
-                type="number"
-                min={0}
-                step={1000}
-                value={(getValue('budget.totalEnvelope.min') as number) || ''}
-                onChange={(e) => onAnswerChange('workProject.budget.totalEnvelope.min', parseInt(e.target.value) || null)}
-                placeholder="50000"
-                disabled={isProcessing}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="budgetMax">Budget maximum (€)</Label>
-              <Input
-                id="budgetMax"
-                type="number"
-                min={0}
-                step={1000}
-                value={(getValue('budget.totalEnvelope.max') as number) || ''}
-                onChange={(e) => onAnswerChange('workProject.budget.totalEnvelope.max', parseInt(e.target.value) || null)}
-                placeholder="80000"
-                disabled={isProcessing}
-              />
-            </div>
-          </div>
-
-          {/* Mode de financement */}
-          <div className="space-y-2">
-            <Label>Mode de financement</Label>
-            <RadioGroup
-              value={(getValue('budget.fundingMode') as string) || ''}
-              onValueChange={(value) => onAnswerChange('workProject.budget.fundingMode', value)}
-              className="grid grid-cols-2 gap-2"
-            >
-              {FUNDING_OPTIONS.map((option) => (
-                <label
-                  key={option.value}
-                  className={`
-                    flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all
-                    ${getValue('budget.fundingMode') === option.value
-                      ? 'border-primary bg-primary/5'
-                      : 'border-muted hover:border-primary/50'
-                    }
-                  `}
-                >
-                  <RadioGroupItem value={option.value} className="mt-0.5" />
-                  <div>
-                    <span className="text-sm font-medium">{option.label}</span>
-                    <p className="text-xs text-muted-foreground">{option.description}</p>
-                  </div>
-                </label>
-              ))}
-            </RadioGroup>
-          </div>
-
-          {/* Intérêt aides */}
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="interestedInAids"
-              checked={getValue('budget.interestedInAids', false) as boolean}
-              onCheckedChange={(checked) => onAnswerChange('workProject.budget.interestedInAids', checked)}
-              disabled={isProcessing}
-            />
-            <Label htmlFor="interestedInAids" className="cursor-pointer">
-              Je souhaite être informé des aides disponibles (MaPrimeRénov', CEE, etc.)
-            </Label>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Niveau de finition */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-primary" />
-            Niveau de finition souhaité
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          {/* Connaissance du budget */}
           <RadioGroup
-            value={(getValue('quality.finishLevel') as string) || ''}
-            onValueChange={(value) => onAnswerChange('workProject.quality.finishLevel', value)}
-            className="grid grid-cols-1 md:grid-cols-2 gap-3"
+            value={budgetKnowledge}
+            onValueChange={(value) => onAnswerChange('workProject.budget.knowledge', value)}
+            className="grid grid-cols-1 md:grid-cols-3 gap-3"
           >
-            {FINISH_LEVELS.map((level) => (
+            {BUDGET_KNOWLEDGE_OPTIONS.map((option) => (
               <label
-                key={level.value}
+                key={option.value}
+                htmlFor={`budget-knowledge-${option.value}`}
                 className={`
-                  flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
-                  ${getValue('quality.finishLevel') === level.value
+                  flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all text-center
+                  ${budgetKnowledge === option.value
                     ? 'border-primary bg-primary/5'
                     : 'border-muted hover:border-primary/50'
                   }
                 `}
               >
-                <RadioGroupItem value={level.value} className="mt-0.5" />
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">{level.label}</span>
-                    <span className="text-xs text-muted-foreground">{level.multiplier}</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{level.description}</p>
+                <RadioGroupItem
+                  value={option.value}
+                  id={`budget-knowledge-${option.value}`}
+                  className="sr-only"
+                />
+                <div className="w-full">
+                  <span className="font-medium">{option.label}</span>
+                  <p className="text-xs text-muted-foreground mt-1">{option.description}</p>
                 </div>
               </label>
             ))}
           </RadioGroup>
 
+          {/* Saisie du budget si connu */}
+          {(budgetKnowledge === 'defined' || budgetKnowledge === 'estimate') && (
+            <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
+              <div className="space-y-2">
+                <Label htmlFor="budgetMin">Budget minimum (€)</Label>
+                <Input
+                  id="budgetMin"
+                  type="number"
+                  min={0}
+                  step={1000}
+                  value={(getValue('budget.totalEnvelope.min') as number) || ''}
+                  onChange={(e) => onAnswerChange('workProject.budget.totalEnvelope.min', parseInt(e.target.value) || null)}
+                  placeholder="50000"
+                  disabled={isProcessing}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="budgetMax">Budget maximum (€)</Label>
+                <Input
+                  id="budgetMax"
+                  type="number"
+                  min={0}
+                  step={1000}
+                  value={(getValue('budget.totalEnvelope.max') as number) || ''}
+                  onChange={(e) => onAnswerChange('workProject.budget.totalEnvelope.max', parseInt(e.target.value) || null)}
+                  placeholder="80000"
+                  disabled={isProcessing}
+                />
+              </div>
+            </div>
+          )}
+
+          {budgetKnowledge === 'no_idea' && (
+            <Alert>
+              <HelpCircle className="h-4 w-4" />
+              <AlertDescription>
+                Pas de souci ! À la fin de cette étape, TORP vous fournira une estimation
+                budgétaire basée sur votre projet. Cela vous permettra de vérifier la
+                cohérence entre vos attentes et la réalité du marché.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Niveau de finition */}
+          <div className="space-y-3">
+            <Label>Niveau de finition souhaité</Label>
+            <RadioGroup
+              value={(getValue('quality.finishLevel') as string) || ''}
+              onValueChange={(value) => onAnswerChange('workProject.quality.finishLevel', value)}
+              className="grid grid-cols-2 md:grid-cols-4 gap-2"
+            >
+              {FINISH_LEVELS.map((level) => (
+                <label
+                  key={level.value}
+                  className={`
+                    flex flex-col items-center gap-1 p-3 rounded-lg border-2 cursor-pointer transition-all text-center
+                    ${getValue('quality.finishLevel') === level.value
+                      ? 'border-primary bg-primary/5'
+                      : 'border-muted hover:border-primary/50'
+                    }
+                  `}
+                >
+                  <RadioGroupItem value={level.value} className="sr-only" />
+                  <span className="font-medium text-sm">{level.label}</span>
+                  <span className="text-xs text-muted-foreground">{level.multiplier}</span>
+                </label>
+              ))}
+            </RadioGroup>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Mode de financement */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <CreditCard className="w-5 h-5 text-primary" />
+            Mode de financement
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <RadioGroup
+            value={(getValue('budget.fundingMode') as string) || ''}
+            onValueChange={(value) => onAnswerChange('workProject.budget.fundingMode', value)}
+            className="grid grid-cols-2 gap-3"
+          >
+            {FUNDING_OPTIONS.map((option) => (
+              <label
+                key={option.value}
+                className={`
+                  flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
+                  ${getValue('budget.fundingMode') === option.value
+                    ? 'border-primary bg-primary/5'
+                    : 'border-muted hover:border-primary/50'
+                  }
+                `}
+              >
+                <RadioGroupItem value={option.value} className="mt-0.5" />
+                <div className="flex items-start gap-2">
+                  <span className="text-muted-foreground mt-0.5">{option.icon}</span>
+                  <div>
+                    <span className="font-medium text-sm">{option.label}</span>
+                    <p className="text-xs text-muted-foreground">{option.description}</p>
+                  </div>
+                </div>
+              </label>
+            ))}
+          </RadioGroup>
+
+          {/* Intérêt aides */}
+          <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+            <div className="flex items-start gap-3">
+              <Checkbox
+                id="interestedInAids"
+                checked={getValue('budget.interestedInAids', false) as boolean}
+                onCheckedChange={(checked) => onAnswerChange('workProject.budget.interestedInAids', checked)}
+                disabled={isProcessing}
+              />
+              <div>
+                <Label htmlFor="interestedInAids" className="cursor-pointer font-medium text-green-800">
+                  Rechercher les aides disponibles
+                </Label>
+                <p className="text-sm text-green-700 mt-1">
+                  TORP analysera votre éligibilité aux aides : MaPrimeRénov', CEE,
+                  Éco-PTZ, aides locales... selon votre projet et votre situation.
+                </p>
+              </div>
+            </div>
+          </div>
+
           <Alert>
-            <Info className="h-4 w-4" />
+            <Sparkles className="h-4 w-4" />
             <AlertDescription>
-              Le niveau de finition impacte directement le budget. Le multiplicateur indiqué est une estimation
-              par rapport au niveau standard.
+              <strong>Bientôt disponible :</strong> Possibilité de soumettre votre projet
+              à nos partenaires bancaires pour une simulation de financement personnalisée.
             </AlertDescription>
           </Alert>
         </CardContent>

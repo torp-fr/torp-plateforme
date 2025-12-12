@@ -358,18 +358,14 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
   const complete = useCallback(async () => {
     if (!state || !project) return;
 
-    // Valider le projet complet
-    const validation = ValidationService.validateProject(project, 'standard');
+    // Valider le projet - mais ne pas bloquer
+    // L'utilisateur a déjà passé les étapes de validation essentielles
+    const validation = ValidationService.validateProject(project, 'minimal');
     if (!validation.isValid) {
-      setStepErrors(validation.validations
-        .filter(v => !v.isValid && v.severity === 'error')
+      // Afficher un avertissement mais ne pas bloquer
+      console.warn('Projet avec informations partielles:', validation.validations
+        .filter(v => !v.isValid)
         .map(v => v.message));
-      toast({
-        title: 'Projet incomplet',
-        description: 'Veuillez compléter les informations requises',
-        variant: 'destructive',
-      });
-      return;
     }
 
     setIsSaving(true);
