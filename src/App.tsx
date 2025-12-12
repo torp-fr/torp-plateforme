@@ -42,6 +42,14 @@ import ProDocuments from "./pages/pro/ProDocuments";
 import ProTickets from "./pages/pro/ProTickets";
 import ProTicketDetail from "./pages/pro/ProTicketDetail";
 import ProSettings from "./pages/pro/ProSettings";
+// Phase 0 Pages
+import {
+  Phase0Landing,
+  Phase0Wizard,
+  Phase0Professional,
+  Phase0Dashboard,
+  Phase0ProjectPage,
+} from "./pages/phase0";
 
 const queryClient = new QueryClient();
 
@@ -90,6 +98,13 @@ const AppContent = () => {
           <Route path="/pro/tickets" element={<ProRoute><ProTickets /></ProRoute>} />
           <Route path="/pro/tickets/:id" element={<ProRoute><ProTicketDetail /></ProRoute>} />
           <Route path="/pro/settings" element={<ProRoute><ProSettings /></ProRoute>} />
+          {/* Routes Phase 0 - Conception et Définition */}
+          <Route path="/phase0" element={<Phase0Landing />} />
+          <Route path="/phase0/wizard" element={<Phase0Wizard />} />
+          <Route path="/phase0/wizard/:projectId" element={<Phase0Wizard />} />
+          <Route path="/phase0/professional" element={<Phase0Professional />} />
+          <Route path="/phase0/dashboard" element={<Phase0Dashboard />} />
+          <Route path="/phase0/project/:projectId" element={<Phase0ProjectPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
 
