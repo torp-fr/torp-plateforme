@@ -492,6 +492,29 @@ export class TenderService {
   }
 
   /**
+   * Enregistre une vue (alias pour incrementViewCount avec fallback)
+   */
+  static async recordView(tenderId: string): Promise<void> {
+    try {
+      await this.incrementViewCount(tenderId);
+    } catch {
+      // Fallback si la fonction RPC n'existe pas - utilise update direct
+      const { data } = await supabase
+        .from('tenders')
+        .select('views_count')
+        .eq('id', tenderId)
+        .single();
+
+      if (data) {
+        await supabase
+          .from('tenders')
+          .update({ views_count: (data.views_count || 0) + 1 })
+          .eq('id', tenderId);
+      }
+    }
+  }
+
+  /**
    * Incrémente le compteur de téléchargements
    */
   static async incrementDownloadCount(tenderId: string): Promise<void> {

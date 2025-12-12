@@ -12,6 +12,7 @@
 import { supabase } from '@/lib/supabase';
 import type {
   Tender,
+  TenderDocument,
   TenderResponse,
   ResponseStatus,
   CreateResponsePayload,
@@ -61,6 +62,32 @@ export class ResponseService {
     }
 
     return this.mapRowToResponse(data);
+  }
+
+  /**
+   * Alias pour create - crée un brouillon de réponse
+   */
+  static async createDraft(payload: CreateResponsePayload): Promise<TenderResponse> {
+    return this.create(payload);
+  }
+
+  /**
+   * Met à jour un brouillon de réponse
+   */
+  static async updateDraft(
+    responseId: string,
+    updates: {
+      dpgfData?: DPGFData;
+      technicalMemo?: TechnicalMemo;
+      proposedDurationDays?: number;
+      proposedStartDate?: Date;
+      projectReferences?: ProjectReference[];
+      totalAmountHT?: number;
+      totalAmountTTC?: number;
+      lotsBreakdown?: ResponseLotBreakdown[];
+    }
+  ): Promise<TenderResponse> {
+    return this.update(responseId, updates);
   }
 
   /**
@@ -208,13 +235,36 @@ export class ResponseService {
   }
 
   /**
-   * Soumet une réponse
+   * Soumet une réponse (surcharge acceptant payload ou juste l'ID)
    */
-  static async submit(responseId: string): Promise<TenderResponse> {
-    // Récupérer la réponse
-    const response = await this.getById(responseId);
+  static async submit(payloadOrId: SubmitResponsePayload | string): Promise<TenderResponse> {
+    // Déterminer si c'est un payload ou juste un ID
+    const isPayload = typeof payloadOrId === 'object';
+    const responseId = isPayload ? payloadOrId.responseId : payloadOrId;
+
+    // Récupérer la réponse existante
+    let response = await this.getById(responseId);
     if (!response) {
       throw new Error('Réponse non trouvée');
+    }
+
+    // Si payload fourni, mettre à jour d'abord
+    if (isPayload) {
+      const payload = payloadOrId as SubmitResponsePayload;
+      await this.update(responseId, {
+        totalAmountHT: payload.totalAmountHT,
+        lotsBreakdown: payload.lotsBreakdown,
+        proposedDurationDays: payload.proposedDurationDays,
+        proposedStartDate: payload.proposedStartDate,
+        technicalMemo: payload.technicalMemo,
+        projectReferences: payload.projectReferences,
+      });
+
+      // Recharger après mise à jour
+      response = await this.getById(responseId);
+      if (!response) {
+        throw new Error('Erreur lors de la mise à jour');
+      }
     }
 
     // Valider que les champs obligatoires sont remplis
@@ -292,8 +342,9 @@ export class ResponseService {
   /**
    * Analyse un DCE reçu et extrait les informations clés
    */
-  static async analyzeDCE(tender: Tender): Promise<{
+  static async analyzeDCE(tender: Tender, _documents?: TenderDocument[]): Promise<{
     summary: string;
+    keyInfo: string[];
     lots: Array<{
       lotNumber: string;
       lotName: string;
@@ -310,6 +361,7 @@ export class ResponseService {
   }> {
     const analysis = {
       summary: '',
+      keyInfo: [] as string[],
       lots: [] as Array<{
         lotNumber: string;
         lotName: string;
@@ -327,6 +379,21 @@ export class ResponseService {
 Localisation : ${tender.workCity} (${tender.workPostalCode})
 Budget estimé : ${tender.estimatedBudgetMin?.toLocaleString('fr-FR')} - ${tender.estimatedBudgetMax?.toLocaleString('fr-FR')} €`;
 
+    // Informations clés
+    analysis.keyInfo.push(`Marché de ${tender.lotsCount} lot(s) situé à ${tender.workCity} (${tender.workPostalCode})`);
+    if (tender.estimatedBudgetMin && tender.estimatedBudgetMax) {
+      analysis.keyInfo.push(`Budget estimé : ${tender.estimatedBudgetMin.toLocaleString('fr-FR')} € - ${tender.estimatedBudgetMax.toLocaleString('fr-FR')} €`);
+    }
+    if (tender.responseDeadline) {
+      analysis.keyInfo.push(`Date limite de réponse : ${new Date(tender.responseDeadline).toLocaleDateString('fr-FR')}`);
+    }
+    if (tender.desiredStartDate) {
+      analysis.keyInfo.push(`Démarrage souhaité : ${new Date(tender.desiredStartDate).toLocaleDateString('fr-FR')}`);
+    }
+    if (tender.estimatedDurationDays) {
+      analysis.keyInfo.push(`Durée estimée : ${Math.ceil(tender.estimatedDurationDays / 7)} semaines`);
+    }
+
     // Lots
     analysis.lots = (tender.selectedLots || []).map(lot => ({
       lotNumber: lot.lotNumber,
@@ -342,8 +409,14 @@ Budget estimé : ${tender.estimatedBudgetMin?.toLocaleString('fr-FR')} - ${tende
     if (tender.requirements?.insuranceDecennaleRequired) {
       analysis.requirements.push('Assurance décennale obligatoire');
     }
+    if (tender.requirements?.insuranceRcProRequired) {
+      analysis.requirements.push('Assurance RC Professionnelle obligatoire');
+    }
     if (tender.requirements?.requiredQualifications?.length) {
       analysis.requirements.push(`Qualifications requises : ${tender.requirements.requiredQualifications.join(', ')}`);
+    }
+    if (tender.requirements?.minYearsExperience) {
+      analysis.requirements.push(`Minimum ${tender.requirements.minYearsExperience} ans d'expérience requis`);
     }
 
     // Dates
