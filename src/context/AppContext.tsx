@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { authService } from '@/services/api/supabase/auth.service';
 import { devisService } from '@/services/api/supabase/devis.service';
+import { Phase0ProjectService, Phase0Summary } from '@/services/phase0';
 
 // User types - Simplifié: Particulier (B2C) et Professionnel (B2B)
 export type UserType = 'B2C' | 'B2B' | 'admin';
@@ -29,17 +30,20 @@ export interface Project {
 interface AppContextType {
   user: User | null;
   userType: UserType;
-  projects: Project[];
+  projects: Project[]; // Analyses de devis
+  phase0Projects: Phase0Summary[]; // Projets Phase 0 (cadrage)
   currentProject: Project | null;
   isAnalyzing: boolean;
   isLoading: boolean; // État de chargement de l'authentification
   setUser: (user: User | null) => void;
   setUserType: (type: UserType) => void;
   setProjects: (projects: Project[]) => void;
+  setPhase0Projects: (projects: Phase0Summary[]) => void;
   setCurrentProject: (project: Project | null) => void;
   setIsAnalyzing: (analyzing: boolean) => void;
   addProject: (project: Project) => void;
   updateProject: (id: string, updates: Partial<Project>) => void;
+  refreshPhase0Projects: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -47,7 +51,8 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [userType, setUserType] = useState<UserType>('B2C');
-  const [projects, setProjects] = useState<Project[]>([]); // Start with empty array - will load from Supabase
+  const [projects, setProjects] = useState<Project[]>([]); // Analyses de devis
+  const [phase0Projects, setPhase0Projects] = useState<Phase0Summary[]>([]); // Projets Phase 0
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isLoading, setIsLoading] = useState(true); // Chargement initial de l'auth
@@ -176,6 +181,50 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     loadUserDevis();
   }, [user?.id]);
 
+  // Fonction pour charger les projets Phase0
+  const loadPhase0Projects = async () => {
+    if (!user?.id) {
+      setPhase0Projects([]);
+      return;
+    }
+
+    try {
+      console.log('[AppContext] Loading Phase0 projects for user:', user.id);
+      const userPhase0Projects = await Phase0ProjectService.getUserProjects(user.id);
+
+      // Transformer en Phase0Summary
+      const summaries: Phase0Summary[] = userPhase0Projects.map(p => ({
+        id: p.id,
+        reference: p.reference,
+        title: p.workProject?.general?.title || 'Projet sans titre',
+        status: p.status,
+        propertyAddress: p.property?.address ?
+          `${p.property.address.postalCode} ${p.property.address.city}` : undefined,
+        selectedLotsCount: p.selectedLots?.length || 0,
+        completeness: p.completeness || 0,
+        estimatedBudget: p.workProject?.budget?.totalEnvelope,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+      }));
+
+      console.log(`[AppContext] Loaded ${summaries.length} Phase0 projects`);
+      setPhase0Projects(summaries);
+    } catch (error) {
+      console.error('[AppContext] Error loading Phase0 projects:', error);
+      setPhase0Projects([]);
+    }
+  };
+
+  // Charger les projets Phase0 quand l'utilisateur change
+  useEffect(() => {
+    loadPhase0Projects();
+  }, [user?.id]);
+
+  // Fonction pour rafraîchir les projets Phase0 (utilisable depuis les composants)
+  const refreshPhase0Projects = async () => {
+    await loadPhase0Projects();
+  };
+
   const addProject = (project: Project) => {
     setProjects(prev => [project, ...prev]);
   };
@@ -192,16 +241,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       user,
       userType,
       projects,
+      phase0Projects,
       currentProject,
       isAnalyzing,
       isLoading,
       setUser,
       setUserType,
       setProjects,
+      setPhase0Projects,
       setCurrentProject,
       setIsAnalyzing,
       addProject,
-      updateProject
+      updateProject,
+      refreshPhase0Projects,
     }}>
       {children}
     </AppContext.Provider>
