@@ -77,14 +77,14 @@ SELECT
   c.siret,
   COUNT(d.id) as total_devis,
   AVG(d.score_total) as avg_score,
-  AVG(d.score_entreprise->>'scoreTotal')::DECIMAL as avg_score_entreprise,
-  AVG(d.score_prix->>'scoreTotal')::DECIMAL as avg_score_prix,
+  AVG((d.score_entreprise->>'scoreTotal')::DECIMAL) as avg_score_entreprise,
+  AVG((d.score_prix->>'scoreTotal')::DECIMAL) as avg_score_prix,
   c.review_count,
   c.average_rating,
   c.torp_score,
   c.torp_grade
 FROM public.companies c
-LEFT JOIN public.devis d ON d.metadata->>'siret' = c.siret
+LEFT JOIN public.devis d ON d.company_id = c.id
 GROUP BY c.id, c.name, c.siret, c.review_count, c.average_rating, c.torp_score, c.torp_grade;
 
 COMMENT ON VIEW public.v_avis_agregats_entreprise IS 'Agrégat des avis et scores par entreprise';
