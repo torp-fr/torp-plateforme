@@ -69,11 +69,15 @@ const WORK_TYPE_OPTIONS: Array<{
 
 const CATEGORY_INFO: Record<LotCategory, { label: string; icon: React.ReactNode; color: string }> = {
   gros_oeuvre: { label: 'Gros œuvre', icon: <Hammer className="w-4 h-4" />, color: 'bg-orange-100 text-orange-800' },
-  second_oeuvre: { label: 'Second œuvre', icon: <Wrench className="w-4 h-4" />, color: 'bg-blue-100 text-blue-800' },
-  technique: { label: 'Lots techniques', icon: <Zap className="w-4 h-4" />, color: 'bg-yellow-100 text-yellow-800' },
+  enveloppe: { label: 'Enveloppe', icon: <Home className="w-4 h-4" />, color: 'bg-amber-100 text-amber-800' },
+  cloisonnement: { label: 'Cloisonnement & Isolation', icon: <Wrench className="w-4 h-4" />, color: 'bg-blue-100 text-blue-800' },
   finitions: { label: 'Finitions', icon: <Paintbrush className="w-4 h-4" />, color: 'bg-purple-100 text-purple-800' },
-  exterieur: { label: 'Extérieur', icon: <Trees className="w-4 h-4" />, color: 'bg-green-100 text-green-800' },
-  specifique: { label: 'Spécifique', icon: <Lightbulb className="w-4 h-4" />, color: 'bg-pink-100 text-pink-800' },
+  electricite: { label: 'Électricité', icon: <Zap className="w-4 h-4" />, color: 'bg-yellow-100 text-yellow-800' },
+  plomberie: { label: 'Plomberie', icon: <Droplet className="w-4 h-4" />, color: 'bg-cyan-100 text-cyan-800' },
+  cvc: { label: 'Chauffage / Ventilation / Clim', icon: <ThermometerSun className="w-4 h-4" />, color: 'bg-red-100 text-red-800' },
+  ventilation: { label: 'Ventilation', icon: <Shield className="w-4 h-4" />, color: 'bg-sky-100 text-sky-800' },
+  exterieurs: { label: 'Extérieurs', icon: <Trees className="w-4 h-4" />, color: 'bg-green-100 text-green-800' },
+  speciaux: { label: 'Lots spéciaux', icon: <Lightbulb className="w-4 h-4" />, color: 'bg-pink-100 text-pink-800' },
 };
 
 export function StepWorkIntent({
@@ -89,7 +93,7 @@ export function StepWorkIntent({
   const general = (workProject.general || {}) as Record<string, unknown>;
 
   const [expandedCategories, setExpandedCategories] = useState<Set<LotCategory>>(
-    new Set(['technique', 'finitions'])
+    new Set(['finitions', 'electricite', 'plomberie'])
   );
 
   const workType = (scope.workType as WorkType) || (answers['workProject.scope.workType'] as WorkType);
@@ -104,15 +108,21 @@ export function StepWorkIntent({
   const lotsByCategory = useMemo(() => {
     const grouped: Record<LotCategory, LotDefinition[]> = {
       gros_oeuvre: [],
-      second_oeuvre: [],
-      technique: [],
+      enveloppe: [],
+      cloisonnement: [],
       finitions: [],
-      exterieur: [],
-      specifique: [],
+      electricite: [],
+      plomberie: [],
+      cvc: [],
+      ventilation: [],
+      exterieurs: [],
+      speciaux: [],
     };
 
     LOT_CATALOG.forEach((lot) => {
-      grouped[lot.category].push(lot);
+      if (grouped[lot.category]) {
+        grouped[lot.category].push(lot);
+      }
     });
 
     return grouped;
