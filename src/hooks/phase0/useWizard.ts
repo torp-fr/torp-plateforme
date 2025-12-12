@@ -76,15 +76,15 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
   const steps = useMemo(() => WizardService.getStepsConfig(mode), [mode]);
 
   // Étape courante
-  const currentStep = useMemo(() => {
-    if (!state) return null;
-    return steps.find(s => s.id === state.currentStepId) || steps[0];
-  }, [state, steps]);
-
   const currentStepIndex = useMemo(() => {
-    if (!currentStep) return 0;
-    return steps.findIndex(s => s.id === currentStep.id);
-  }, [currentStep, steps]);
+    if (!state) return 0;
+    return state.currentStepIndex || 0;
+  }, [state]);
+
+  const currentStep = useMemo(() => {
+    if (!steps.length) return null;
+    return steps[currentStepIndex] || steps[0];
+  }, [steps, currentStepIndex]);
 
   // Initialisation
   useEffect(() => {
@@ -148,8 +148,9 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
 
     // Ne pas autoriser de sauter des étapes non complétées (sauf retour en arrière)
     const targetStep = steps[targetIndex];
+    const completedSteps = state.completedSteps || [];
     const canNavigate = targetIndex <= currentStepIndex ||
-      state.completedStepIds.includes(targetStep.id) ||
+      completedSteps.includes(targetIndex + 1) ||
       targetStep.isOptional;
 
     if (!canNavigate) {
@@ -163,14 +164,14 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
 
     setState(prev => prev ? {
       ...prev,
-      currentStepId: stepId,
+      currentStepIndex: targetIndex,
     } : null);
   }, [state, steps, currentStepIndex, toast]);
 
   const goNext = useCallback(async () => {
     if (!state || !currentStep || currentStepIndex >= steps.length - 1) return;
 
-    // Valider l'étape courante
+    // Valider l'étape courante (optionnelle pour les étapes marquées comme telles)
     const validation = ValidationService.canProceedToNextStep(project || {}, currentStepIndex + 1);
     if (!validation.canProceed && !currentStep.isOptional) {
       setStepErrors(validation.blockers);
@@ -185,23 +186,24 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
     setIsSaving(true);
     try {
       // Appliquer les déductions automatiques
-      if (project) {
+      if (project && project.id) {
         const updatedProject = await DeductionService.applyDeductions(project as Phase0Project);
         setProject(updatedProject);
       }
 
-      // Marquer l'étape comme complétée
-      const newCompletedIds = state.completedStepIds.includes(currentStep.id)
-        ? state.completedStepIds
-        : [...state.completedStepIds, currentStep.id];
+      // Marquer l'étape comme complétée (numéro de l'étape, 1-indexed)
+      const stepNumber = currentStepIndex + 1;
+      const completedSteps = state.completedSteps || [];
+      const newCompletedSteps = completedSteps.includes(stepNumber)
+        ? completedSteps
+        : [...completedSteps, stepNumber];
 
-      const nextStep = steps[currentStepIndex + 1];
+      const nextStepIndex = currentStepIndex + 1;
 
       setState(prev => prev ? {
         ...prev,
-        currentStepId: nextStep.id,
-        completedStepIds: newCompletedIds,
-        lastUpdated: new Date(),
+        currentStepIndex: nextStepIndex,
+        completedSteps: newCompletedSteps,
       } : null);
 
       setStepErrors([]);
@@ -226,15 +228,14 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
   const goPrevious = useCallback(() => {
     if (!state || currentStepIndex <= 0) return;
 
-    const prevStep = steps[currentStepIndex - 1];
     setState(prev => prev ? {
       ...prev,
-      currentStepId: prevStep.id,
+      currentStepIndex: currentStepIndex - 1,
     } : null);
 
     setStepErrors([]);
     setStepWarnings([]);
-  }, [state, currentStepIndex, steps]);
+  }, [state, currentStepIndex]);
 
   const saveAnswer = useCallback(async (questionId: string, value: unknown) => {
     if (!state) return;
@@ -302,9 +303,10 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
 
       switch (section) {
         case 'owner':
+          // Map 'owner' to 'ownerProfile' for Phase0Project compatibility
           return {
             ...prev,
-            owner: setNestedValue(prev.owner || {}, field, value),
+            ownerProfile: setNestedValue(prev.ownerProfile || {}, field, value),
           };
         case 'property':
           return {
@@ -315,6 +317,11 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
           return {
             ...prev,
             workProject: setNestedValue(prev.workProject || {}, field, value),
+          };
+        case 'selectedLots':
+          return {
+            ...prev,
+            selectedLots: value as unknown[],
           };
         default:
           return prev;
@@ -397,8 +404,11 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
   }, [state]);
 
   const isStepCompleted = useCallback((stepId: string): boolean => {
-    return state?.completedStepIds.includes(stepId) || false;
-  }, [state]);
+    if (!state?.completedSteps) return false;
+    const stepIndex = steps.findIndex(s => s.id === stepId);
+    if (stepIndex < 0) return false;
+    return state.completedSteps.includes(stepIndex + 1);
+  }, [state, steps]);
 
   const resetWizard = useCallback(() => {
     setState(WizardService.initializeWizardState(mode, steps));

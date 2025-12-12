@@ -99,7 +99,7 @@ const AppContent = () => {
           <Route path="/pro/tickets/:id" element={<ProRoute><ProTicketDetail /></ProRoute>} />
           <Route path="/pro/settings" element={<ProRoute><ProSettings /></ProRoute>} />
           {/* Routes Phase 0 - Conception et Définition */}
-          <Route path="/phase0" element={<Phase0Landing />} />
+          <Route path="/phase0" element={<Phase0Wizard />} />
           <Route path="/phase0/wizard" element={<Phase0Wizard />} />
           <Route path="/phase0/wizard/:projectId" element={<Phase0Wizard />} />
           <Route path="/phase0/professional" element={<Phase0Professional />} />

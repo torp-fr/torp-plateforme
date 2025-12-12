@@ -503,15 +503,15 @@ export class ValidationService {
     currentStep: number
   ): { canProceed: boolean; blockers: string[] } {
     const blockers: string[] = [];
+    const owner = project.ownerProfile || project.owner;
+    const property = project.property;
 
     switch (currentStep) {
-      case 1: // Profil MOA
-        if (!project.owner?.identity?.type) {
+      case 1: // Profil MOA - seulement le type est requis pour avancer
+        if (!owner?.identity?.type) {
           blockers.push('Sélectionnez votre profil (particulier, professionnel, etc.)');
         }
-        if (!project.owner?.contact?.email) {
-          blockers.push('L\'email est requis');
-        }
+        // Email optionnel pour avancer mais recommandé
         break;
 
       case 2: // Identification bien
