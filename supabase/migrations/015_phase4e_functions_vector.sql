@@ -6,9 +6,10 @@
 
 -- Note: Les tables rag_chunks, rag_documents, market_prices, technical_norms
 -- n'existent pas. On utilise knowledge_documents et knowledge_chunks.
+-- DROP FUNCTION ajoutés pour éviter les erreurs de changement de type
 
 -- 4.37 match_knowledge_chunks
--- Recherche vectorielle dans knowledge_chunks
+DROP FUNCTION IF EXISTS public.match_knowledge_chunks(vector, FLOAT, INT) CASCADE;
 CREATE OR REPLACE FUNCTION public.match_knowledge_chunks(
   query_embedding vector(1536),
   match_threshold FLOAT DEFAULT 0.7,
@@ -41,7 +42,7 @@ END;
 $$;
 
 -- 4.38 hybrid_search_knowledge
--- Recherche hybride (vectorielle + textuelle) dans knowledge_chunks
+DROP FUNCTION IF EXISTS public.hybrid_search_knowledge(TEXT, vector, INT, FLOAT) CASCADE;
 CREATE OR REPLACE FUNCTION public.hybrid_search_knowledge(
   query_text TEXT,
   query_embedding vector(1536),
@@ -77,7 +78,7 @@ END;
 $$;
 
 -- 4.39 match_knowledge
--- Note: Utilise knowledge_chunks et knowledge_documents
+DROP FUNCTION IF EXISTS public.match_knowledge(vector, FLOAT, INT) CASCADE;
 CREATE OR REPLACE FUNCTION public.match_knowledge(
   query_embedding vector(1536),
   match_threshold FLOAT DEFAULT 0.7,
@@ -110,7 +111,7 @@ END;
 $$;
 
 -- 4.40 search_knowledge_text
--- Recherche textuelle dans knowledge_chunks
+DROP FUNCTION IF EXISTS public.search_knowledge_text(TEXT, TEXT) CASCADE;
 CREATE OR REPLACE FUNCTION public.search_knowledge_text(
   query_text TEXT,
   filter_type TEXT DEFAULT NULL
@@ -142,9 +143,7 @@ END;
 $$;
 
 -- 4.41 match_market_data
--- Recherche dans market_data (si embedding existe)
--- Note: market_data n'a pas de colonne embedding par défaut
--- Cette fonction est préparée pour une future extension
+DROP FUNCTION IF EXISTS public.match_market_data(TEXT, TEXT, TEXT) CASCADE;
 CREATE OR REPLACE FUNCTION public.match_market_data(
   p_region TEXT DEFAULT NULL,
   p_category TEXT DEFAULT NULL,

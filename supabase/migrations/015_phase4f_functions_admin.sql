@@ -4,7 +4,10 @@
 -- Exécuter après Phase 4E
 -- =====================================================
 
+-- DROP FUNCTION ajoutés pour éviter les erreurs de changement de type
+
 -- 4.43 get_all_users
+DROP FUNCTION IF EXISTS public.get_all_users() CASCADE;
 CREATE OR REPLACE FUNCTION public.get_all_users()
 RETURNS TABLE(
   id UUID,
@@ -30,6 +33,7 @@ END;
 $$;
 
 -- 4.44 get_all_feedbacks
+DROP FUNCTION IF EXISTS public.get_all_feedbacks() CASCADE;
 CREATE OR REPLACE FUNCTION public.get_all_feedbacks()
 RETURNS TABLE(
   id UUID,
@@ -57,6 +61,7 @@ END;
 $$;
 
 -- 4.45 get_all_analyses
+DROP FUNCTION IF EXISTS public.get_all_analyses() CASCADE;
 CREATE OR REPLACE FUNCTION public.get_all_analyses()
 RETURNS TABLE(
   id UUID,
@@ -82,6 +87,7 @@ END;
 $$;
 
 -- 4.46 get_analytics_stats
+DROP FUNCTION IF EXISTS public.get_analytics_stats() CASCADE;
 CREATE OR REPLACE FUNCTION public.get_analytics_stats()
 RETURNS TABLE(
   total_events BIGINT,
@@ -110,6 +116,7 @@ END;
 $$;
 
 -- 4.47 get_user_stats
+DROP FUNCTION IF EXISTS public.get_user_stats() CASCADE;
 CREATE OR REPLACE FUNCTION public.get_user_stats()
 RETURNS TABLE(
   total_users BIGINT,
@@ -137,7 +144,7 @@ END;
 $$;
 
 -- 4.48 get_knowledge_stats
--- Note: Utilise knowledge_documents (pas knowledge_base)
+DROP FUNCTION IF EXISTS public.get_knowledge_stats() CASCADE;
 CREATE OR REPLACE FUNCTION public.get_knowledge_stats()
 RETURNS TABLE(
   total_entries BIGINT,
@@ -162,6 +169,7 @@ END;
 $$;
 
 -- 4.49 torp_stats
+DROP FUNCTION IF EXISTS public.torp_stats() CASCADE;
 CREATE OR REPLACE FUNCTION public.torp_stats()
 RETURNS TABLE(
   total_analyses BIGINT,
@@ -190,45 +198,7 @@ BEGIN
 END;
 $$;
 
--- 4.50 dpe_near_location (PostGIS)
-CREATE OR REPLACE FUNCTION public.dpe_near_location(
-  lat DECIMAL,
-  lng DECIMAL,
-  radius_km DECIMAL DEFAULT 5
-)
-RETURNS TABLE(
-  id UUID,
-  address TEXT,
-  dpe_class TEXT,
-  ges_class TEXT,
-  distance_km DECIMAL
-)
-LANGUAGE plpgsql
-SET search_path = public
-AS $$
-BEGIN
-  RETURN QUERY
-  SELECT
-    d.id,
-    d.address,
-    d.dpe_class,
-    d.ges_class,
-    (ST_Distance(
-      ST_SetSRID(ST_MakePoint(d.longitude, d.latitude), 4326)::geography,
-      ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography
-    ) / 1000)::DECIMAL AS distance_km
-  FROM public.dpe_records d
-  WHERE d.latitude IS NOT NULL
-  AND d.longitude IS NOT NULL
-  AND ST_DWithin(
-    ST_SetSRID(ST_MakePoint(d.longitude, d.latitude), 4326)::geography,
-    ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography,
-    radius_km * 1000
-  )
-  ORDER BY distance_km
-  LIMIT 50;
-END;
-$$;
+-- Note: dpe_near_location supprimé car la table dpe_records n'existe pas
 
 -- =====================================================
 -- FINALISATION

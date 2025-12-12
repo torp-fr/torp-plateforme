@@ -6,8 +6,10 @@
 
 -- Note: Les tables rag_chunks et rag_documents n'existent pas.
 -- On utilise knowledge_chunks et knowledge_documents à la place.
+-- DROP FUNCTION ajoutés pour éviter les erreurs de changement de type
 
 -- 4.27 cleanup_empty_chunks
+DROP FUNCTION IF EXISTS public.cleanup_empty_chunks() CASCADE;
 CREATE OR REPLACE FUNCTION public.cleanup_empty_chunks()
 RETURNS INTEGER
 LANGUAGE plpgsql
@@ -25,6 +27,7 @@ END;
 $$;
 
 -- 4.28 cleanup_orphan_chunks
+DROP FUNCTION IF EXISTS public.cleanup_orphan_chunks() CASCADE;
 CREATE OR REPLACE FUNCTION public.cleanup_orphan_chunks()
 RETURNS INTEGER
 LANGUAGE plpgsql
@@ -44,6 +47,7 @@ END;
 $$;
 
 -- 4.29 cleanup_short_chunks
+DROP FUNCTION IF EXISTS public.cleanup_short_chunks(INTEGER) CASCADE;
 CREATE OR REPLACE FUNCTION public.cleanup_short_chunks(min_length INTEGER DEFAULT 50)
 RETURNS INTEGER
 LANGUAGE plpgsql
@@ -61,6 +65,7 @@ END;
 $$;
 
 -- 4.30 cleanup_no_embedding_chunks
+DROP FUNCTION IF EXISTS public.cleanup_no_embedding_chunks() CASCADE;
 CREATE OR REPLACE FUNCTION public.cleanup_no_embedding_chunks()
 RETURNS INTEGER
 LANGUAGE plpgsql
@@ -79,6 +84,7 @@ END;
 $$;
 
 -- 4.31 rag_full_cleanup
+DROP FUNCTION IF EXISTS public.rag_full_cleanup() CASCADE;
 CREATE OR REPLACE FUNCTION public.rag_full_cleanup()
 RETURNS TABLE(
   empty_deleted INTEGER,
@@ -100,6 +106,7 @@ END;
 $$;
 
 -- 4.32 rag_document_stats
+DROP FUNCTION IF EXISTS public.rag_document_stats() CASCADE;
 CREATE OR REPLACE FUNCTION public.rag_document_stats()
 RETURNS TABLE(
   total_documents BIGINT,
@@ -121,6 +128,7 @@ END;
 $$;
 
 -- 4.33 rag_health_check
+DROP FUNCTION IF EXISTS public.rag_health_check() CASCADE;
 CREATE OR REPLACE FUNCTION public.rag_health_check()
 RETURNS TABLE(
   status TEXT,
@@ -169,6 +177,7 @@ END;
 $$;
 
 -- 4.34 rag_problematic_documents
+DROP FUNCTION IF EXISTS public.rag_problematic_documents() CASCADE;
 CREATE OR REPLACE FUNCTION public.rag_problematic_documents()
 RETURNS TABLE(
   document_id UUID,
@@ -194,6 +203,7 @@ END;
 $$;
 
 -- 4.35 update_knowledge_timestamp
+DROP FUNCTION IF EXISTS public.update_knowledge_timestamp() CASCADE;
 CREATE OR REPLACE FUNCTION public.update_knowledge_timestamp()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -206,6 +216,7 @@ END;
 $$;
 
 -- 4.36 process_text_document
+DROP FUNCTION IF EXISTS public.process_text_document(TEXT, INT, INT) CASCADE;
 CREATE OR REPLACE FUNCTION public.process_text_document(
   doc_content TEXT,
   chunk_size INT DEFAULT 1000,
