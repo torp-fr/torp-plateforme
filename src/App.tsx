@@ -33,7 +33,7 @@ import AdminAnalytics from "./pages/AdminAnalytics";
 import AdminDiagnostic from "./pages/AdminDiagnostic";
 import Compare from "./pages/Compare";
 // B2B Pro Pages
-import { ProRoute } from "@/components/auth/ProRoute";
+import { ProRoute, ProtectedRoute } from "@/components/auth/ProRoute";
 import ProDashboard from "./pages/pro/ProDashboard";
 import ProOnboarding from "./pages/pro/ProOnboarding";
 import ProAnalyses from "./pages/pro/ProAnalyses";
@@ -98,13 +98,13 @@ const AppContent = () => {
           <Route path="/pro/tickets" element={<ProRoute><ProTickets /></ProRoute>} />
           <Route path="/pro/tickets/:id" element={<ProRoute><ProTicketDetail /></ProRoute>} />
           <Route path="/pro/settings" element={<ProRoute><ProSettings /></ProRoute>} />
-          {/* Routes Phase 0 - Conception et Définition */}
-          <Route path="/phase0" element={<Phase0Wizard />} />
-          <Route path="/phase0/wizard" element={<Phase0Wizard />} />
-          <Route path="/phase0/wizard/:projectId" element={<Phase0Wizard />} />
-          <Route path="/phase0/professional" element={<Phase0Professional />} />
-          <Route path="/phase0/dashboard" element={<Phase0Dashboard />} />
-          <Route path="/phase0/project/:projectId" element={<Phase0ProjectPage />} />
+          {/* Routes Phase 0 - Conception et Définition (protégées) */}
+          <Route path="/phase0" element={<ProtectedRoute><Phase0Wizard /></ProtectedRoute>} />
+          <Route path="/phase0/wizard" element={<ProtectedRoute><Phase0Wizard /></ProtectedRoute>} />
+          <Route path="/phase0/wizard/:projectId" element={<ProtectedRoute><Phase0Wizard /></ProtectedRoute>} />
+          <Route path="/phase0/professional" element={<ProtectedRoute><Phase0Professional /></ProtectedRoute>} />
+          <Route path="/phase0/dashboard" element={<ProtectedRoute><Phase0Dashboard /></ProtectedRoute>} />
+          <Route path="/phase0/project/:projectId" element={<ProtectedRoute><Phase0ProjectPage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
 
