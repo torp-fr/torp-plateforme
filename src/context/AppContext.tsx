@@ -32,6 +32,7 @@ interface AppContextType {
   projects: Project[];
   currentProject: Project | null;
   isAnalyzing: boolean;
+  isLoading: boolean; // État de chargement de l'authentification
   setUser: (user: User | null) => void;
   setUserType: (type: UserType) => void;
   setProjects: (projects: Project[]) => void;
@@ -49,6 +50,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [projects, setProjects] = useState<Project[]>([]); // Start with empty array - will load from Supabase
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Chargement initial de l'auth
 
   // Check for existing session on mount and listen for auth changes
   useEffect(() => {
@@ -71,6 +73,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } catch (error) {
         console.error('⚠️ Erreur lors de la restauration de session:', error);
         // Ne pas crasher, continuer sans session
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
@@ -188,6 +194,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       projects,
       currentProject,
       isAnalyzing,
+      isLoading,
       setUser,
       setUserType,
       setProjects,

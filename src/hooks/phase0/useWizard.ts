@@ -60,7 +60,7 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
   const { projectId, mode = 'b2c', onComplete } = options;
 
   const navigate = useNavigate();
-  const { user } = useApp();
+  const { user, isLoading: isAuthLoading } = useApp();
   const { toast } = useToast();
 
   // États
@@ -86,8 +86,29 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
     return steps[currentStepIndex] || steps[0];
   }, [steps, currentStepIndex]);
 
+  // Vérification précoce de l'authentification
+  useEffect(() => {
+    // Attendre que l'auth soit chargée
+    if (isAuthLoading) return;
+
+    // Si l'utilisateur n'est pas connecté après le chargement de l'auth
+    if (!user) {
+      console.warn('[useWizard] Utilisateur non connecté - redirection vers login');
+      setError('Vous devez être connecté pour accéder au wizard');
+      toast({
+        title: 'Connexion requise',
+        description: 'Veuillez vous connecter pour définir votre projet',
+        variant: 'destructive',
+      });
+      navigate('/login', { state: { from: `/phase0/wizard${projectId ? `/${projectId}` : ''}` } });
+    }
+  }, [isAuthLoading, user, navigate, toast, projectId]);
+
   // Initialisation
   useEffect(() => {
+    // Ne pas initialiser si l'auth est en cours de chargement ou si pas d'utilisateur
+    if (isAuthLoading || !user) return;
+
     const initialize = async () => {
       setIsLoading(true);
       setError(null);
@@ -118,7 +139,7 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
     };
 
     initialize();
-  }, [projectId, mode, steps]);
+  }, [projectId, mode, steps, isAuthLoading, user]);
 
   // Navigation
   const canGoNext = useMemo(() => {
@@ -379,11 +400,21 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
       }
     } catch (err) {
       console.error('Erreur finalisation projet:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
+      const isAuthError = errorMessage.includes('non connecté') || errorMessage.includes('Utilisateur');
+
       toast({
-        title: 'Erreur',
-        description: 'Impossible de finaliser le projet',
+        title: isAuthError ? 'Connexion requise' : 'Erreur',
+        description: isAuthError
+          ? 'Vous devez être connecté pour créer un projet. Veuillez vous connecter puis réessayer.'
+          : `Impossible de finaliser le projet: ${errorMessage}`,
         variant: 'destructive',
       });
+
+      // Rediriger vers login si c'est une erreur d'authentification
+      if (isAuthError) {
+        navigate('/login', { state: { from: `/phase0/wizard` } });
+      }
     } finally {
       setIsSaving(false);
     }
