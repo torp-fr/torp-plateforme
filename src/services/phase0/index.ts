@@ -11,6 +11,10 @@ export type { Phase0ProjectRow, Phase0ProjectInsert, Phase0ProjectUpdate } from 
 export { WizardService } from './wizard.service';
 export type { WizardStepConfig, WizardQuestionConfig, WizardFieldConfig } from './wizard.service';
 
+// Service de pré-remplissage utilisateur/entreprise
+export { userProfileService } from './user-profile.service';
+export type { UserCompanyData, PrefilledOwnerProfile } from './user-profile.service';
+
 // Service de déduction automatique (IA)
 export { DeductionService } from './deduction.service';
 export type { GeoData, CadastreData, NaturalRisksData, AidsEligibility } from './deduction.service';

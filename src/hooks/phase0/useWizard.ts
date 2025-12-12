@@ -11,6 +11,7 @@ import { WizardService } from '@/services/phase0/wizard.service';
 import { Phase0ProjectService } from '@/services/phase0/project.service';
 import { ValidationService } from '@/services/phase0/validation.service';
 import { DeductionService } from '@/services/phase0/deduction.service';
+import { userProfileService } from '@/services/phase0/user-profile.service';
 import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -126,9 +127,60 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
           const wizardState = await WizardService.getWizardState(projectId);
           setState(wizardState || WizardService.initializeWizardState(mode, steps));
         } else {
-          // Nouveau projet
-          setProject({});
-          setState(WizardService.initializeWizardState(mode, steps));
+          // Nouveau projet - Pré-remplir avec les données utilisateur/entreprise
+          console.log('[useWizard] Nouveau projet - chargement des données utilisateur...');
+
+          let initialProject: Partial<Phase0Project> = {};
+          let initialAnswers: Record<string, WizardAnswer> = {};
+
+          // Récupérer les données de l'utilisateur et de son entreprise
+          const userData = await userProfileService.getUserData(user.id);
+
+          if (userData) {
+            console.log('[useWizard] Données utilisateur récupérées:', {
+              type: userData.userType,
+              hasCompany: !!userData.companyName,
+              companyName: userData.companyName,
+            });
+
+            // Générer le projet initial pré-rempli
+            const ownerProfile = userProfileService.generateInitialProject(userData);
+            initialProject = {
+              ownerProfile: ownerProfile as any,
+              wizardMode: userData.userType === 'B2B' ? 'b2b' : 'b2c',
+            };
+
+            // Générer les réponses initiales pour le wizard
+            const answers = userProfileService.generateInitialAnswers(userData);
+            Object.entries(answers).forEach(([questionId, value]) => {
+              initialAnswers[questionId] = {
+                questionId,
+                value,
+                source: 'auto_prefill',
+                timestamp: new Date().toISOString(),
+                confidence: 'high',
+                validated: false,
+                modified: false,
+              };
+            });
+
+            // Toast pour informer l'utilisateur
+            if (userData.userType === 'B2B' && userData.companyName) {
+              toast({
+                title: 'Données pré-remplies',
+                description: `Vos informations d'entreprise (${userData.companyName}) ont été automatiquement chargées.`,
+              });
+            }
+          }
+
+          setProject(initialProject);
+
+          // Initialiser le state avec les réponses pré-remplies
+          const wizardState = WizardService.initializeWizardState(mode, steps);
+          setState({
+            ...wizardState,
+            answers: initialAnswers,
+          });
         }
       } catch (err) {
         console.error('Erreur initialisation wizard:', err);
@@ -139,7 +191,7 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
     };
 
     initialize();
-  }, [projectId, mode, steps, isAuthLoading, user]);
+  }, [projectId, mode, steps, isAuthLoading, user, toast]);
 
   // Navigation
   const canGoNext = useMemo(() => {

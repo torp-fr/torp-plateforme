@@ -402,6 +402,7 @@ export type AnswerSource =
   | 'ai_suggestion_accepted'
   | 'document_extraction'
   | 'api_external'
+  | 'auto_prefill'
   | 'default'
   | 'restored';
 
