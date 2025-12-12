@@ -14,7 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import {
   ArrowLeft, Edit, FileText, Download, RefreshCw, User, Building, MapPin,
   Hammer, Euro, Calendar, Clock, AlertTriangle, Loader2, CheckCircle2,
-  FileCheck, FileOutput, Printer, Share2
+  FileCheck, FileOutput, Printer, Share2, FileSearch, ArrowRight
 } from 'lucide-react';
 import {
   Phase0ProjectService,
@@ -155,6 +155,11 @@ export function Phase0ProjectPage() {
             <Button variant="outline">
               <Share2 className="w-4 h-4 mr-2" />
               Partager
+            </Button>
+            <Button onClick={() => navigate(`/phase0/project/${project.id}/analyze`)}>
+              <FileSearch className="w-4 h-4 mr-2" />
+              Analyser un devis
+              <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           </div>
         </div>

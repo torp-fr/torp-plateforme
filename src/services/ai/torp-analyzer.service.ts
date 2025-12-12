@@ -21,6 +21,13 @@ import { pappersService } from '@/services/api/pappers.service';
 import { innovationDurableScoringService } from '@/services/scoring/innovation-durable.scoring';
 import { transparencyScoringService } from '@/services/scoring/transparency-scoring.service';
 import { rgeAdemeService } from '@/services/api/rge-ademe.service';
+import {
+  Phase0Phase1ConnectionService,
+  Phase0ContextAdapter,
+  type Phase0AnalysisContext,
+  type Phase0EnrichedAnalysis,
+} from '@/services/phase0-phase1';
+import type { Phase0Project } from '@/types/phase0';
 
 // Statut de vérification du SIRET
 export interface SiretVerification {
@@ -222,7 +229,7 @@ export class TorpAnalyzerService {
           scoreTotal: conformiteAnalysis.scoreTotal || 0,
           assurances: conformiteAnalysis.assurances?.conforme ?? false,
           plu: conformiteAnalysis.plu?.conforme ?? false,
-          normes: conformiteAnalysis.normes?.respectees?.length > 0 ?? false,
+          normes: (conformiteAnalysis.normes?.respectees?.length ?? 0) > 0,
           accessibilite: conformiteAnalysis.accessibilite?.conforme ?? false,
           defauts: conformiteAnalysis.defauts || [],
         },
@@ -1027,6 +1034,93 @@ export class TorpAnalyzerService {
     });
 
     return data;
+  }
+
+  /**
+   * Analyze a devis with Phase0 project context for enriched analysis
+   * This provides contextual recommendations based on the project definition
+   */
+  async analyzeDevisWithPhase0Context(
+    devisText: string,
+    phase0Project: Phase0Project,
+    metadata?: {
+      userType?: 'B2B' | 'B2C' | 'admin';
+    }
+  ): Promise<Phase0EnrichedAnalysis> {
+    console.log('[TORP] Starting Phase0-enriched analysis...');
+
+    // Convert Phase0Project to analysis context
+    const phase0Context = Phase0ContextAdapter.toAnalysisContext(phase0Project);
+
+    // Validate context completeness
+    const contextValidation = Phase0ContextAdapter.validateContext(phase0Context);
+    console.log(`[TORP] Phase0 context completeness: ${contextValidation.completeness}%`);
+
+    if (!contextValidation.isValid) {
+      console.warn('[TORP] Phase0 context incomplete:', contextValidation.missingElements);
+    }
+
+    // Use Phase0 context to enrich metadata
+    const enrichedMetadata = {
+      region: phase0Context.location.region || phase0Context.location.department,
+      typeTravaux: phase0Context.workType.main,
+      userType: metadata?.userType || phase0Context.ownerProfile.type,
+    };
+
+    // Run base analysis with enriched metadata
+    const baseAnalysis = await this.analyzeDevis(devisText, enrichedMetadata);
+
+    // Extract devis data for comparison
+    const extractedData = await this.extractDevisData(devisText);
+
+    // Enrich analysis with Phase0 context
+    const enrichedAnalysis = Phase0Phase1ConnectionService.enrichAnalysisWithPhase0Context(
+      baseAnalysis,
+      extractedData,
+      phase0Context
+    );
+
+    console.log(`[TORP] Phase0-enriched analysis complete:`);
+    console.log(`  - Base score: ${enrichedAnalysis.contextualScore.baseScore}`);
+    console.log(`  - Contextual score: ${enrichedAnalysis.contextualScore.finalScore}`);
+    console.log(`  - Confidence: ${enrichedAnalysis.contextualScore.contextConfidence}`);
+    console.log(`  - Budget status: ${enrichedAnalysis.phase0Comparison.budgetComparison.status}`);
+    console.log(`  - Lots coverage: ${enrichedAnalysis.phase0Comparison.lotsComparison.coveragePercent}%`);
+
+    return enrichedAnalysis;
+  }
+
+  /**
+   * Analyze a devis with raw Phase0 context (for external callers)
+   */
+  async analyzeDevisWithContext(
+    devisText: string,
+    phase0Context: Phase0AnalysisContext,
+    metadata?: {
+      userType?: 'B2B' | 'B2C' | 'admin';
+    }
+  ): Promise<Phase0EnrichedAnalysis> {
+    console.log('[TORP] Starting context-enriched analysis...');
+
+    // Use Phase0 context to enrich metadata
+    const enrichedMetadata = {
+      region: phase0Context.location.region || phase0Context.location.department,
+      typeTravaux: phase0Context.workType.main,
+      userType: metadata?.userType || phase0Context.ownerProfile.type,
+    };
+
+    // Run base analysis
+    const baseAnalysis = await this.analyzeDevis(devisText, enrichedMetadata);
+
+    // Extract devis data for comparison
+    const extractedData = await this.extractDevisData(devisText);
+
+    // Enrich analysis with Phase0 context
+    return Phase0Phase1ConnectionService.enrichAnalysisWithPhase0Context(
+      baseAnalysis,
+      extractedData,
+      phase0Context
+    );
   }
 
   /**

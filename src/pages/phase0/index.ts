@@ -8,3 +8,4 @@ export { Phase0Wizard } from './Phase0Wizard';
 export { Phase0Professional } from './Phase0Professional';
 export { Phase0Dashboard } from './Phase0Dashboard';
 export { Phase0ProjectPage } from './Phase0Project';
+export { Phase0AnalyzeDevis } from './Phase0AnalyzeDevis';

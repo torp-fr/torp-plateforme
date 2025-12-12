@@ -58,7 +58,7 @@ export function Phase0Landing() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
           {/* Parcours particulier */}
           <Card className="relative overflow-hidden border-2 hover:border-primary transition-colors cursor-pointer group"
-                onClick={() => navigate('/phase0/wizard')}>
+                onClick={() => navigate('/phase0/new')}>
             <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full" />
             <CardHeader>
               <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">

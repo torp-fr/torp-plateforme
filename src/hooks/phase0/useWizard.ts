@@ -100,7 +100,7 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
         description: 'Veuillez vous connecter pour définir votre projet',
         variant: 'destructive',
       });
-      navigate('/login', { state: { from: `/phase0/wizard${projectId ? `/${projectId}` : ''}` } });
+      navigate('/login', { state: { from: projectId ? `/phase0/wizard/${projectId}` : '/phase0/new' } });
     }
   }, [isAuthLoading, user, navigate, toast, projectId]);
 
@@ -409,7 +409,7 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
 
       // Rediriger vers login si c'est une erreur d'authentification
       if (isAuthError) {
-        navigate('/login', { state: { from: `/phase0/wizard` } });
+        navigate('/login', { state: { from: `/phase0/new` } });
       }
     } finally {
       setIsSaving(false);
