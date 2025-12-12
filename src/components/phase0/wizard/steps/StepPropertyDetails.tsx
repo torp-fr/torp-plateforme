@@ -1,6 +1,7 @@
 /**
- * Étape 3 - Caractéristiques du bien
+ * Étape 5 - Caractéristiques du bien
  * Collecte les détails sur le bien (surface, état, année, etc.)
+ * NOTE: Ces informations seront enrichies automatiquement via APIs (BAN, Cadastre, DPE, Géorisques...)
  */
 
 import React from 'react';
@@ -11,8 +12,11 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Slider } from '@/components/ui/slider';
-import { Ruler, Calendar, Layers, ThermometerSun, Home, AlertTriangle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import {
+  Ruler, Calendar, Layers, ThermometerSun, Home, Info, Sparkles, Database, MapPin
+} from 'lucide-react';
 
 const CONDITION_OPTIONS = [
   { value: 'new', label: 'Neuf', description: 'Construction récente, jamais habitée' },
@@ -67,7 +71,6 @@ export function StepPropertyDetails({
     const answerValue = answers[`property.${path}`];
     if (answerValue !== undefined) return answerValue;
 
-    // Naviguer dans l'objet property
     const parts = path.split('.');
     let current: unknown = property;
     for (const part of parts) {
@@ -82,6 +85,16 @@ export function StepPropertyDetails({
 
   return (
     <div className="space-y-8">
+      {/* Info enrichissement automatique */}
+      <Alert className="bg-blue-50 border-blue-200">
+        <Database className="h-4 w-4 text-blue-600" />
+        <AlertDescription className="text-blue-800">
+          <strong>Enrichissement automatique :</strong> Certaines informations seront complétées
+          automatiquement à partir de l'adresse de votre bien via les bases officielles
+          (Cadastre, BAN, API DPE, Géorisques, PLU...).
+        </AlertDescription>
+      </Alert>
+
       {/* Surfaces */}
       <Card>
         <CardHeader>
@@ -89,11 +102,14 @@ export function StepPropertyDetails({
             <Ruler className="w-5 h-5 text-primary" />
             Surfaces
           </CardTitle>
+          <CardDescription>
+            Ces informations permettent d'estimer précisément le coût des travaux
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="livingArea">Surface habitable (m²) *</Label>
+              <Label htmlFor="livingArea">Surface habitable (m²)</Label>
               <Input
                 id="livingArea"
                 type="number"
@@ -104,6 +120,9 @@ export function StepPropertyDetails({
                 placeholder="85"
                 disabled={isProcessing}
               />
+              <p className="text-xs text-muted-foreground">
+                Surface de plancher, hors annexes
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="totalArea">Surface totale (m²)</Label>
@@ -118,14 +137,14 @@ export function StepPropertyDetails({
                 disabled={isProcessing}
               />
               <p className="text-xs text-muted-foreground">
-                Inclut annexes, garage, etc.
+                Inclut annexes, garage, cave...
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="roomCount">Pièces *</Label>
+              <Label htmlFor="roomCount">Pièces</Label>
               <Input
                 id="roomCount"
                 type="number"
@@ -164,11 +183,11 @@ export function StepPropertyDetails({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="floorCount">Étages</Label>
+              <Label htmlFor="floorCount">Niveaux</Label>
               <Input
                 id="floorCount"
                 type="number"
-                min={0}
+                min={1}
                 max={10}
                 value={getValue('characteristics.floorCount', '') as string}
                 onChange={(e) => onAnswerChange('property.characteristics.floorCount', parseInt(e.target.value) || null)}
@@ -186,12 +205,19 @@ export function StepPropertyDetails({
           <CardTitle className="text-lg flex items-center gap-2">
             <Calendar className="w-5 h-5 text-primary" />
             Construction
+            <Badge variant="outline" className="ml-2 text-xs">
+              <Sparkles className="w-3 h-3 mr-1" />
+              Auto-remplissage
+            </Badge>
           </CardTitle>
+          <CardDescription>
+            Ces informations peuvent être récupérées automatiquement via le cadastre
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="yearBuilt">Année de construction *</Label>
+              <Label htmlFor="yearBuilt">Année de construction</Label>
               <Input
                 id="yearBuilt"
                 type="number"
@@ -269,7 +295,7 @@ export function StepPropertyDetails({
           </RadioGroup>
 
           <div className="space-y-2">
-            <Label htmlFor="lastRenovation">Dernière rénovation</Label>
+            <Label htmlFor="lastRenovation">Dernière rénovation (optionnel)</Label>
             <Input
               id="lastRenovation"
               type="number"
@@ -284,13 +310,20 @@ export function StepPropertyDetails({
         </CardContent>
       </Card>
 
-      {/* Diagnostics énergétiques */}
+      {/* Performance énergétique */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <ThermometerSun className="w-5 h-5 text-primary" />
             Performance énergétique
+            <Badge variant="outline" className="ml-2 text-xs">
+              <Sparkles className="w-3 h-3 mr-1" />
+              API DPE/ADEME
+            </Badge>
           </CardTitle>
+          <CardDescription>
+            Ces informations peuvent être récupérées automatiquement via l'API DPE de l'ADEME
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -361,28 +394,30 @@ export function StepPropertyDetails({
             </Select>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="hasDoubleGlazing"
-              checked={getValue('equipment.windows.doubleGlazing', false) as boolean}
-              onCheckedChange={(checked) => onAnswerChange('property.equipment.windows.doubleGlazing', checked)}
-              disabled={isProcessing}
-            />
-            <Label htmlFor="hasDoubleGlazing" className="cursor-pointer">
-              Double vitrage installé
-            </Label>
-          </div>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="hasDoubleGlazing"
+                checked={getValue('equipment.windows.doubleGlazing', false) as boolean}
+                onCheckedChange={(checked) => onAnswerChange('property.equipment.windows.doubleGlazing', checked)}
+                disabled={isProcessing}
+              />
+              <Label htmlFor="hasDoubleGlazing" className="cursor-pointer">
+                Double vitrage installé
+              </Label>
+            </div>
 
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="hasInsulation"
-              checked={getValue('construction.hasInsulation', false) as boolean}
-              onCheckedChange={(checked) => onAnswerChange('property.construction.hasInsulation', checked)}
-              disabled={isProcessing}
-            />
-            <Label htmlFor="hasInsulation" className="cursor-pointer">
-              Isolation thermique récente
-            </Label>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="hasInsulation"
+                checked={getValue('construction.hasInsulation', false) as boolean}
+                onCheckedChange={(checked) => onAnswerChange('property.construction.hasInsulation', checked)}
+                disabled={isProcessing}
+              />
+              <Label htmlFor="hasInsulation" className="cursor-pointer">
+                Isolation thermique récente
+              </Label>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -450,10 +485,28 @@ export function StepPropertyDetails({
                   Présence d'un ascenseur
                 </Label>
               </div>
+
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  Les travaux en copropriété peuvent nécessiter l'accord du syndic
+                  pour certaines interventions (parties communes, façade...).
+                </AlertDescription>
+              </Alert>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Info APIs */}
+      <Alert>
+        <MapPin className="h-4 w-4" />
+        <AlertDescription>
+          <strong>Sources de données :</strong> BAN (adresse), Cadastre (parcelle, surface),
+          Géorisques (risques naturels), API DPE ADEME (diagnostic énergétique),
+          PLU (urbanisme, secteur ABF).
+        </AlertDescription>
+      </Alert>
     </div>
   );
 }

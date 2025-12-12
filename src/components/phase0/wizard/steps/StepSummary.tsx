@@ -1,9 +1,10 @@
 /**
- * Étape 6 - Récapitulatif et validation
- * Affiche un résumé du projet avant finalisation
+ * Étape 6 - Validation de l'avant-projet
+ * Affiche un récapitulatif complet avant finalisation
+ * Inclut les lots de travaux identifiés automatiquement
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { StepComponentProps } from '../WizardContainer';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,14 +13,43 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   User, Building, MapPin, Hammer, Euro, Calendar, Clock, Home,
-  Check, AlertTriangle, Info, FileText, Edit, ChevronRight
+  Check, AlertTriangle, Info, FileText, Edit, ChevronRight,
+  Sparkles, Map, Shield, Briefcase, Building2, ChevronDown, Plus, Minus
 } from 'lucide-react';
-import { LOT_CATALOG, LotType } from '@/types/phase0/lots.types';
+import { LOT_CATALOG, LotType, LotCategory } from '@/types/phase0/lots.types';
 import { EstimationService } from '@/services/phase0/estimation.service';
 import { ValidationService } from '@/services/phase0/validation.service';
 import { Phase0Project } from '@/types/phase0/project.types';
+import { WorkType } from '@/types/phase0/work-project.types';
+
+// Lots suggérés par type de travaux
+const SUGGESTED_LOTS_BY_WORK_TYPE: Record<WorkType, LotType[]> = {
+  renovation: ['demolition', 'platrerie', 'carrelage', 'peinture', 'courants_forts', 'sanitaires'],
+  refurbishment: ['demolition', 'maconnerie', 'courants_forts', 'sanitaires', 'isolation_interieure', 'platrerie', 'vmc_simple_flux'],
+  extension: ['terrassement_vrd', 'maconnerie', 'beton_arme', 'charpente_bois', 'couverture', 'menuiseries_exterieures', 'isolation_interieure'],
+  improvement: ['ite', 'isolation_interieure', 'menuiseries_exterieures', 'chauffage_central', 'vmc_double_flux'],
+  new_construction: ['terrassement_vrd', 'maconnerie', 'beton_arme', 'charpente_bois', 'couverture', 'menuiseries_exterieures', 'isolation_interieure', 'platrerie', 'courants_forts', 'sanitaires', 'chauffage_central'],
+  maintenance: ['ravalement', 'couverture', 'peinture', 'chauffage_central'],
+  restoration: ['demolition', 'maconnerie', 'charpente_bois', 'couverture', 'menuiseries_exterieures', 'platrerie'],
+  conversion: ['demolition', 'maconnerie', 'platrerie', 'courants_forts', 'sanitaires', 'isolation_interieure'],
+  demolition: ['demolition', 'terrassement_vrd'],
+};
+
+const CATEGORY_LABELS: Record<LotCategory, string> = {
+  gros_oeuvre: 'Gros œuvre',
+  enveloppe: 'Enveloppe',
+  cloisonnement: 'Cloisonnement',
+  finitions: 'Finitions',
+  electricite: 'Électricité',
+  plomberie: 'Plomberie',
+  cvc: 'CVC',
+  ventilation: 'Ventilation',
+  exterieurs: 'Extérieurs',
+  speciaux: 'Spéciaux',
+};
 
 export function StepSummary({
   project,
@@ -28,13 +58,19 @@ export function StepSummary({
   errors,
   isProcessing,
 }: StepComponentProps) {
-  // Extraire les données du projet
-  const owner = (project.owner || {}) as Record<string, unknown>;
+  const [openSections, setOpenSections] = useState<string[]>(['owner', 'property', 'works', 'lots']);
+
+  // Extraire les données du projet (avec support pour ownerProfile)
+  const owner = (project.ownerProfile || project.owner || {}) as Record<string, unknown>;
   const ownerIdentity = (owner.identity || {}) as Record<string, unknown>;
   const ownerContact = (owner.contact || {}) as Record<string, unknown>;
   const property = (project.property || {}) as Record<string, unknown>;
   const propertyAddress = (property.address || {}) as Record<string, unknown>;
   const propertyChars = (property.characteristics || {}) as Record<string, unknown>;
+  const propertyConstruction = (property.construction || {}) as Record<string, unknown>;
+  const propertyCondo = (property.condo || {}) as Record<string, unknown>;
+  const propertyDiagnostics = (property.diagnostics || {}) as Record<string, unknown>;
+  const propertyDpe = (propertyDiagnostics.dpe || {}) as Record<string, unknown>;
   const workProject = (project.workProject || {}) as Record<string, unknown>;
   const workGeneral = (workProject.general || {}) as Record<string, unknown>;
   const workScope = (workProject.scope || {}) as Record<string, unknown>;
@@ -44,11 +80,50 @@ export function StepSummary({
   const budgetEnvelope = (workBudget.totalEnvelope || {}) as Record<string, unknown>;
   const workQuality = (workProject.quality || {}) as Record<string, unknown>;
 
-  // Lots sélectionnés
-  const selectedLots = (answers['selectedLots'] as LotType[]) || [];
+  const workType = (workScope.workType as WorkType) || (answers['workProject.scope.workType'] as WorkType);
+
+  // Lots suggérés automatiquement basés sur le type de travaux
+  const suggestedLots = useMemo(() => {
+    if (!workType) return [];
+    return SUGGESTED_LOTS_BY_WORK_TYPE[workType] || [];
+  }, [workType]);
+
+  // Lots sélectionnés (depuis les réponses ou auto-suggestion)
+  const selectedLots = useMemo(() => {
+    const fromAnswers = (answers['selectedLots'] as LotType[]) || [];
+    if (fromAnswers.length > 0) return fromAnswers;
+    return suggestedLots;
+  }, [answers, suggestedLots]);
+
+  // Détails des lots sélectionnés
   const selectedLotDetails = selectedLots.map(lotType =>
     LOT_CATALOG.find(l => l.type === lotType)
   ).filter(Boolean);
+
+  // Grouper les lots par catégorie
+  const lotsByCategory = useMemo(() => {
+    const grouped: Record<LotCategory, typeof selectedLotDetails> = {} as Record<LotCategory, typeof selectedLotDetails>;
+    selectedLotDetails.forEach(lot => {
+      if (!lot) return;
+      if (!grouped[lot.category]) {
+        grouped[lot.category] = [];
+      }
+      grouped[lot.category].push(lot);
+    });
+    return grouped;
+  }, [selectedLotDetails]);
+
+  // Toggle lot selection
+  const toggleLot = (lotType: LotType) => {
+    const current = [...selectedLots];
+    const index = current.indexOf(lotType);
+    if (index > -1) {
+      current.splice(index, 1);
+    } else {
+      current.push(lotType);
+    }
+    onAnswerChange('selectedLots', current);
+  };
 
   // Estimation
   const estimation = useMemo(() => {
@@ -63,7 +138,7 @@ export function StepSummary({
           projectId: '',
           type,
           number: lot?.number || '',
-          category: lot?.category || 'specifique',
+          category: lot?.category || 'speciaux',
           name: lot?.name || type,
           description: lot?.description || '',
           priority: 'medium' as const,
@@ -79,13 +154,14 @@ export function StepSummary({
 
   // Validation
   const validation = useMemo(() => {
-    return ValidationService.validateProject(project as Partial<Phase0Project>, 'standard');
+    return ValidationService.validateProject(project as Partial<Phase0Project>, 'minimal');
   }, [project]);
 
   // Labels
   const ownerTypeLabels: Record<string, string> = {
     b2c: 'Particulier',
-    b2b: 'Professionnel',
+    b2b: 'Professionnel / Entreprise',
+    b2b_moe: 'Maître d\'œuvre externe',
     b2g: 'Collectivité',
     investor: 'Investisseur',
   };
@@ -115,6 +191,14 @@ export function StepSummary({
     demolition: 'Démolition',
   };
 
+  const urgencyLabels: Record<string, string> = {
+    emergency: 'Urgence (24-48h)',
+    within_month: 'Dans le mois',
+    within_quarter: 'Dans le trimestre',
+    within_year: 'Dans l\'année',
+    planning: 'En phase d\'étude',
+  };
+
   const finishLevelLabels: Record<string, string> = {
     basic: 'Basique',
     standard: 'Standard',
@@ -122,31 +206,38 @@ export function StepSummary({
     luxury: 'Luxe',
   };
 
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return 'Non définie';
-    return new Date(dateStr).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
+  const formatBudget = (value: number) => {
+    return value.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
   };
 
-  const formatBudget = (value: number) => {
-    return value.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+  const toggleSection = (section: string) => {
+    setOpenSections(prev =>
+      prev.includes(section)
+        ? prev.filter(s => s !== section)
+        : [...prev, section]
+    );
   };
 
   return (
     <div className="space-y-6">
+      {/* En-tête validation */}
+      <div className="text-center pb-4">
+        <h2 className="text-2xl font-bold">Validation de votre avant-projet</h2>
+        <p className="text-muted-foreground mt-2">
+          Vérifiez les informations ci-dessous avant de finaliser votre projet
+        </p>
+      </div>
+
       {/* Alertes de validation */}
       {!validation.isValid && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            <strong>Informations manquantes :</strong>
+            <strong>Informations à compléter :</strong>
             <ul className="list-disc list-inside mt-1">
               {validation.validations
                 .filter(v => !v.isValid && v.severity === 'error')
-                .slice(0, 5)
+                .slice(0, 3)
                 .map((v, i) => (
                   <li key={i} className="text-sm">{v.message}</li>
                 ))}
@@ -157,263 +248,340 @@ export function StepSummary({
 
       {/* Complétude */}
       <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">Complétude du projet</CardTitle>
-            <Badge variant={validation.completeness >= 80 ? 'default' : 'secondary'}>
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium">Complétude du projet</span>
+            <Badge variant={validation.completeness >= 60 ? 'default' : 'secondary'}>
               {validation.completeness}%
             </Badge>
           </div>
-        </CardHeader>
-        <CardContent>
           <div className="relative h-2 bg-muted rounded-full overflow-hidden">
             <div
               className="absolute inset-y-0 left-0 bg-primary transition-all"
               style={{ width: `${validation.completeness}%` }}
             />
           </div>
-          <p className="text-sm text-muted-foreground mt-2">
-            {validation.completeness >= 80
-              ? 'Votre projet est suffisamment complet pour être soumis.'
-              : 'Complétez les informations manquantes pour améliorer la qualité des devis.'}
-          </p>
         </CardContent>
       </Card>
 
-      {/* Maître d'ouvrage */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <User className="w-5 h-5 text-primary" />
-              Maître d'ouvrage
-            </CardTitle>
-            <Button variant="ghost" size="sm">
-              <Edit className="w-4 h-4 mr-1" />
-              Modifier
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div>
-              <dt className="text-muted-foreground">Profil</dt>
-              <dd className="font-medium">
-                {ownerTypeLabels[ownerIdentity.type as string] || 'Non défini'}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">
-                {ownerIdentity.type === 'b2c' ? 'Nom' : 'Raison sociale'}
-              </dt>
-              <dd className="font-medium">
-                {ownerIdentity.type === 'b2c'
-                  ? `${ownerIdentity.firstName || ''} ${ownerIdentity.lastName || ''}`.trim() || 'Non renseigné'
-                  : (ownerIdentity.companyName as string) || 'Non renseigné'}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Email</dt>
-              <dd className="font-medium">{(ownerContact.email as string) || 'Non renseigné'}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Téléphone</dt>
-              <dd className="font-medium">{(ownerContact.phone as string) || 'Non renseigné'}</dd>
-            </div>
-          </dl>
-        </CardContent>
-      </Card>
-
-      {/* Bien */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Building className="w-5 h-5 text-primary" />
-              Bien concerné
-            </CardTitle>
-            <Button variant="ghost" size="sm">
-              <Edit className="w-4 h-4 mr-1" />
-              Modifier
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div className="md:col-span-2">
-              <dt className="text-muted-foreground flex items-center gap-1">
-                <MapPin className="w-3 h-3" />
-                Adresse
-              </dt>
-              <dd className="font-medium">
-                {propertyAddress.street ? (
-                  <>
-                    {propertyAddress.street as string}
-                    {propertyAddress.complement && <>, {propertyAddress.complement as string}</>}
-                    <br />
-                    {propertyAddress.postalCode as string} {propertyAddress.city as string}
-                  </>
-                ) : (
-                  'Non renseignée'
+      {/* Section Maître d'ouvrage */}
+      <Collapsible open={openSections.includes('owner')} onOpenChange={() => toggleSection('owner')}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  {ownerIdentity.type === 'b2c' ? (
+                    <User className="w-5 h-5 text-primary" />
+                  ) : (
+                    <Briefcase className="w-5 h-5 text-primary" />
+                  )}
+                  Maître d'ouvrage
+                  <Badge variant="outline" className="ml-2">
+                    {ownerTypeLabels[ownerIdentity.type as string] || 'Non défini'}
+                  </Badge>
+                </CardTitle>
+                <ChevronDown className={`w-5 h-5 transition-transform ${openSections.includes('owner') ? 'rotate-180' : ''}`} />
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0">
+              <dl className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <dt className="text-muted-foreground">
+                    {ownerIdentity.type === 'b2c' ? 'Nom complet' : 'Raison sociale'}
+                  </dt>
+                  <dd className="font-medium">
+                    {ownerIdentity.type === 'b2c'
+                      ? `${ownerIdentity.firstName || ''} ${ownerIdentity.lastName || ''}`.trim() || 'Non renseigné'
+                      : (ownerIdentity.companyName as string) || 'Non renseigné'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Email</dt>
+                  <dd className="font-medium">{(ownerContact.email as string) || 'Non renseigné'}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Téléphone</dt>
+                  <dd className="font-medium">{(ownerContact.phone as string) || 'Non renseigné'}</dd>
+                </div>
+                {ownerIdentity.type !== 'b2c' && (
+                  <div>
+                    <dt className="text-muted-foreground">SIRET</dt>
+                    <dd className="font-medium">{(ownerIdentity.siret as string) || 'Non renseigné'}</dd>
+                  </div>
                 )}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Type de bien</dt>
-              <dd className="font-medium">
-                {propertyTypeLabels[propertyChars.type as string] || 'Non défini'}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Surface habitable</dt>
-              <dd className="font-medium">
-                {propertyChars.livingArea ? `${propertyChars.livingArea} m²` : 'Non renseignée'}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Nombre de pièces</dt>
-              <dd className="font-medium">
-                {propertyChars.roomCount || 'Non renseigné'}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Année de construction</dt>
-              <dd className="font-medium">
-                {(property.construction as Record<string, unknown>)?.yearBuilt || 'Non renseignée'}
-              </dd>
-            </div>
-          </dl>
-        </CardContent>
-      </Card>
+              </dl>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
-      {/* Projet */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Hammer className="w-5 h-5 text-primary" />
-              Projet de travaux
-            </CardTitle>
-            <Button variant="ghost" size="sm">
-              <Edit className="w-4 h-4 mr-1" />
-              Modifier
-            </Button>
-          </div>
+      {/* Section Bien concerné */}
+      <Collapsible open={openSections.includes('property')} onOpenChange={() => toggleSection('property')}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Building className="w-5 h-5 text-primary" />
+                  Bien concerné
+                  <Badge variant="outline" className="ml-2">
+                    {propertyTypeLabels[propertyChars.type as string] || 'Non défini'}
+                  </Badge>
+                </CardTitle>
+                <ChevronDown className={`w-5 h-5 transition-transform ${openSections.includes('property') ? 'rotate-180' : ''}`} />
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0 space-y-4">
+              {/* Adresse et localisation */}
+              <div className="p-4 bg-muted/30 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <MapPin className="w-5 h-5 text-muted-foreground mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-medium">
+                      {propertyAddress.street ? (
+                        <>
+                          {propertyAddress.street as string}
+                          {propertyAddress.complement && <span>, {propertyAddress.complement as string}</span>}
+                        </>
+                      ) : (
+                        'Adresse non renseignée'
+                      )}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {propertyAddress.postalCode as string} {propertyAddress.city as string}
+                    </p>
+                  </div>
+                  <Button variant="ghost" size="sm">
+                    <Map className="w-4 h-4 mr-1" />
+                    Carte
+                  </Button>
+                </div>
+              </div>
+
+              {/* Informations cadastrales et réglementaires */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div className="p-3 bg-muted/20 rounded-lg">
+                  <dt className="text-muted-foreground text-xs">Surface habitable</dt>
+                  <dd className="font-semibold">
+                    {propertyChars.livingArea ? `${propertyChars.livingArea} m²` : '-'}
+                  </dd>
+                </div>
+                <div className="p-3 bg-muted/20 rounded-lg">
+                  <dt className="text-muted-foreground text-xs">Année construction</dt>
+                  <dd className="font-semibold">
+                    {propertyConstruction.yearBuilt || '-'}
+                  </dd>
+                </div>
+                <div className="p-3 bg-muted/20 rounded-lg">
+                  <dt className="text-muted-foreground text-xs">DPE</dt>
+                  <dd className="font-semibold">
+                    {propertyDpe.rating ? (
+                      <Badge className={`
+                        ${propertyDpe.rating === 'A' || propertyDpe.rating === 'B' ? 'bg-green-500' :
+                          propertyDpe.rating === 'C' || propertyDpe.rating === 'D' ? 'bg-yellow-500' :
+                          'bg-red-500'
+                        }
+                      `}>
+                        {propertyDpe.rating as string}
+                      </Badge>
+                    ) : '-'}
+                  </dd>
+                </div>
+                <div className="p-3 bg-muted/20 rounded-lg">
+                  <dt className="text-muted-foreground text-xs">Copropriété</dt>
+                  <dd className="font-semibold">
+                    {propertyCondo.isInCondo ? `Oui (étage ${propertyCondo.floorNumber || '?'})` : 'Non'}
+                  </dd>
+                </div>
+              </div>
+
+              {/* Alertes réglementaires (placeholder pour futures APIs) */}
+              <Alert>
+                <Shield className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Informations réglementaires :</strong> Les données cadastrales, secteur ABF,
+                  et risques seront récupérées automatiquement via les APIs officielles.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* Section Projet de travaux */}
+      <Collapsible open={openSections.includes('works')} onOpenChange={() => toggleSection('works')}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Hammer className="w-5 h-5 text-primary" />
+                  Projet de travaux
+                  <Badge variant="outline" className="ml-2">
+                    {workTypeLabels[workType] || 'Non défini'}
+                  </Badge>
+                </CardTitle>
+                <ChevronDown className={`w-5 h-5 transition-transform ${openSections.includes('works') ? 'rotate-180' : ''}`} />
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0 space-y-4">
+              <dl className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                {workGeneral.title && (
+                  <div className="md:col-span-2">
+                    <dt className="text-muted-foreground">Titre du projet</dt>
+                    <dd className="font-medium">{workGeneral.title as string}</dd>
+                  </div>
+                )}
+                <div>
+                  <dt className="text-muted-foreground">Niveau de finition</dt>
+                  <dd className="font-medium">
+                    {finishLevelLabels[workQuality.finishLevel as string] || 'Standard'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Planning</dt>
+                  <dd className="font-medium">
+                    {urgencyLabels[workTemporal.urgencyLevel as string] || 'Non défini'}
+                  </dd>
+                </div>
+              </dl>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* Section Lots de travaux identifiés */}
+      <Collapsible open={openSections.includes('lots')} onOpenChange={() => toggleSection('lots')}>
+        <Card className="border-primary/30">
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-yellow-500" />
+                  Lots de travaux identifiés
+                  <Badge className="ml-2 bg-primary">
+                    {selectedLots.length} lots
+                  </Badge>
+                </CardTitle>
+                <ChevronDown className={`w-5 h-5 transition-transform ${openSections.includes('lots') ? 'rotate-180' : ''}`} />
+              </div>
+              <CardDescription>
+                TORP a pré-analysé votre projet et identifié ces lots de travaux
+              </CardDescription>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0 space-y-4">
+              <Alert className="bg-yellow-50 border-yellow-200">
+                <Sparkles className="h-4 w-4 text-yellow-600" />
+                <AlertDescription className="text-yellow-800">
+                  Ces lots ont été identifiés automatiquement selon votre type de travaux ({workTypeLabels[workType]}).
+                  Vous pouvez les modifier ci-dessous.
+                </AlertDescription>
+              </Alert>
+
+              {/* Lots groupés par catégorie */}
+              <div className="space-y-3">
+                {Object.entries(lotsByCategory).map(([category, lots]) => (
+                  <div key={category} className="border rounded-lg p-3">
+                    <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
+                      <Badge variant="secondary">{CATEGORY_LABELS[category as LotCategory]}</Badge>
+                      <span className="text-muted-foreground">({lots.length} lots)</span>
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {lots.map(lot => (
+                        <Badge
+                          key={lot!.type}
+                          variant="outline"
+                          className="cursor-pointer hover:bg-destructive/10 transition-colors"
+                          onClick={() => toggleLot(lot!.type)}
+                        >
+                          {lot!.name}
+                          <Minus className="w-3 h-3 ml-1" />
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Ajouter d'autres lots */}
+              <div className="border-t pt-4">
+                <Label className="text-sm mb-2 block">Ajouter d'autres lots :</Label>
+                <div className="flex flex-wrap gap-2">
+                  {suggestedLots.filter(l => !selectedLots.includes(l)).slice(0, 5).map(lotType => {
+                    const lot = LOT_CATALOG.find(l => l.type === lotType);
+                    if (!lot) return null;
+                    return (
+                      <Badge
+                        key={lotType}
+                        variant="outline"
+                        className="cursor-pointer hover:bg-primary/10 transition-colors"
+                        onClick={() => toggleLot(lotType)}
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        {lot.name}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* Estimation financière */}
+      <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Euro className="w-5 h-5 text-primary" />
+            Estimation budgétaire
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <dl className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div className="md:col-span-2">
-              <dt className="text-muted-foreground">Titre</dt>
-              <dd className="font-medium">
-                {(workGeneral.title as string) || 'Non défini'}
-              </dd>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <dt className="text-muted-foreground">Type de travaux</dt>
-              <dd className="font-medium">
-                {workTypeLabels[workScope.workType as string] || 'Non défini'}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Niveau de finition</dt>
-              <dd className="font-medium">
-                {finishLevelLabels[workQuality.finishLevel as string] || 'Standard'}
-              </dd>
-            </div>
-          </dl>
-
-          {/* Lots sélectionnés */}
-          <Separator />
-          <div>
-            <h4 className="font-medium mb-2">
-              Lots de travaux ({selectedLots.length})
-            </h4>
-            <div className="flex flex-wrap gap-2">
-              {selectedLotDetails.map((lot) => (
-                <Badge key={lot!.type} variant="outline">
-                  {lot!.number}. {lot!.name}
-                </Badge>
-              ))}
-              {selectedLots.length === 0 && (
-                <span className="text-sm text-muted-foreground">Aucun lot sélectionné</span>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Budget et planning */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Euro className="w-5 h-5 text-primary" />
-              Budget et planning
-            </CardTitle>
-            <Button variant="ghost" size="sm">
-              <Edit className="w-4 h-4 mr-1" />
-              Modifier
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <dl className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div>
-              <dt className="text-muted-foreground">Enveloppe budgétaire</dt>
-              <dd className="font-medium">
+              <p className="text-sm text-muted-foreground mb-1">Votre budget indiqué</p>
+              <p className="text-xl font-bold">
                 {budgetEnvelope.min || budgetEnvelope.max ? (
                   <>
                     {formatBudget(budgetEnvelope.min as number || 0)} - {formatBudget(budgetEnvelope.max as number || 0)}
                   </>
                 ) : (
-                  'Non définie'
+                  <span className="text-muted-foreground">Non défini</span>
                 )}
-              </dd>
+              </p>
             </div>
             <div>
-              <dt className="text-muted-foreground">Estimation TORP</dt>
-              <dd className="font-medium text-primary">
+              <p className="text-sm text-muted-foreground mb-1">Estimation TORP</p>
+              <p className="text-xl font-bold text-primary">
                 {formatBudget(estimation.budget.total.min)} - {formatBudget(estimation.budget.total.max)}
-              </dd>
+              </p>
             </div>
-            <div>
-              <dt className="text-muted-foreground flex items-center gap-1">
-                <Calendar className="w-3 h-3" />
-                Date de début souhaitée
-              </dt>
-              <dd className="font-medium">
-                {formatDate(workTemporal.desiredStartDate as string)}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                Durée estimée
-              </dt>
-              <dd className="font-medium">
-                {estimation.duration.totalWeeks.min} - {estimation.duration.totalWeeks.max} semaines
-              </dd>
-            </div>
-          </dl>
+          </div>
 
-          {/* Facteurs d'estimation */}
-          {estimation.factors.length > 0 && (
-            <>
-              <Separator />
-              <div>
-                <h4 className="text-sm font-medium mb-2">Facteurs pris en compte</h4>
-                <ul className="space-y-1">
-                  {estimation.factors.map((factor, i) => (
-                    <li key={i} className="text-sm flex items-center gap-2">
-                      <span className={factor.impact === 'increase' ? 'text-red-500' : 'text-green-500'}>
-                        {factor.impact === 'increase' ? '+' : '-'}{Math.abs(factor.percentage)}%
-                      </span>
-                      <span className="text-muted-foreground">{factor.name}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </>
+          <div className="flex items-center gap-2 text-sm">
+            <Clock className="w-4 h-4 text-muted-foreground" />
+            <span>Durée estimée : {estimation.duration.totalWeeks.min} - {estimation.duration.totalWeeks.max} semaines</span>
+          </div>
+
+          {/* Cohérence budget */}
+          {budgetEnvelope.max && (budgetEnvelope.max as number) < estimation.budget.total.min && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Votre budget semble inférieur à l'estimation. Nous vous conseillons de revoir
+                le périmètre des travaux ou d'ajuster votre enveloppe budgétaire.
+              </AlertDescription>
+            </Alert>
           )}
         </CardContent>
       </Card>
@@ -430,11 +598,11 @@ export function StepSummary({
             />
             <div>
               <Label htmlFor="acceptTerms" className="cursor-pointer">
-                J'accepte les conditions générales d'utilisation et la politique de confidentialité
+                J'accepte les conditions générales d'utilisation et la politique de confidentialité *
               </Label>
               <p className="text-sm text-muted-foreground mt-1">
-                En validant, vous autorisez TORP à traiter vos données pour vous mettre en relation
-                avec des professionnels du bâtiment qualifiés.
+                En validant, vous autorisez TORP à traiter vos données pour générer votre avant-projet
+                et vous mettre en relation avec des professionnels qualifiés.
               </p>
             </div>
           </div>
@@ -455,13 +623,18 @@ export function StepSummary({
         </CardContent>
       </Card>
 
-      {/* Info documents */}
-      <Alert>
-        <FileText className="h-4 w-4" />
-        <AlertDescription>
-          <strong>Documents générés :</strong> Après validation, TORP générera automatiquement
-          votre Cahier des Charges Fonctionnel (CCF) et votre Avant-Projet Sommaire (APS)
-          pour faciliter vos échanges avec les professionnels.
+      {/* Info documents générés */}
+      <Alert className="bg-green-50 border-green-200">
+        <FileText className="h-4 w-4 text-green-600" />
+        <AlertDescription className="text-green-800">
+          <strong>Documents générés après validation :</strong>
+          <ul className="list-disc list-inside mt-2 space-y-1">
+            <li><strong>CCF</strong> - Cahier des Charges Fonctionnel détaillé</li>
+            <li><strong>APS</strong> - Avant-Projet Sommaire avec estimations</li>
+          </ul>
+          <p className="mt-2 text-sm">
+            Ces documents faciliteront vos échanges avec les professionnels et la comparaison des devis.
+          </p>
         </AlertDescription>
       </Alert>
     </div>
