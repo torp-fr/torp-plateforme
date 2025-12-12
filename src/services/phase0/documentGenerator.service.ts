@@ -11,6 +11,7 @@ import { SelectedLot, LOT_CATALOG, LotType } from '@/types/phase0/lots.types';
 import { DocumentReference } from '@/types/phase0/common.types';
 import { supabase } from '@/lib/supabase';
 import { EstimationService, ProjectEstimation } from './estimation.service';
+import { KnowledgeService, DTU_CATALOG, type CCTPEnrichmentContext } from '@/services/rag';
 
 // Types de documents
 export type DocumentType = 'ccf' | 'aps' | 'cctp';
@@ -123,7 +124,8 @@ export class DocumentGeneratorService {
         title = `APS - ${project.workProject?.general?.title || 'Projet'}`;
         break;
       case 'cctp':
-        content = this.generateCCTP(project);
+        // Utiliser la génération enrichie avec RAG pour le CCTP
+        content = await this.generateCCTPEnriched(project);
         title = `CCTP - ${project.workProject?.general?.title || 'Projet'}`;
         break;
     }
@@ -347,7 +349,7 @@ export class DocumentGeneratorService {
   }
 
   /**
-   * Génère le Cahier des Clauses Techniques Particulières
+   * Génère le Cahier des Clauses Techniques Particulières (version basique)
    */
   static generateCCTP(project: Phase0Project): DocumentContent {
     const sections: DocumentSection[] = [];
@@ -407,6 +409,455 @@ export class DocumentGeneratorService {
     });
 
     return { sections };
+  }
+
+  /**
+   * Génère le CCTP enrichi avec les références DTU via RAG
+   * Utilise la base de connaissances pour des prescriptions précises
+   */
+  static async generateCCTPEnriched(project: Phase0Project): Promise<DocumentContent> {
+    const sections: DocumentSection[] = [];
+
+    // Extraire les catégories de lots pour la recherche RAG
+    const lotCategories = project.selectedLots?.map(l => l.category || l.type) || [];
+    const workDescription = project.workProject?.general?.description || '';
+
+    // Récupérer le contexte enrichi depuis la base de connaissances
+    let ragContext: CCTPEnrichmentContext | null = null;
+    try {
+      console.log('[CCTP] Fetching RAG context for categories:', lotCategories);
+      ragContext = await KnowledgeService.enrichCCTPContext(lotCategories, workDescription);
+      console.log('[CCTP] RAG context fetched:', {
+        dtu: ragContext.dtu.length,
+        normes: ragContext.normes.length,
+        guides: ragContext.guides.length,
+        applicableDTU: ragContext.applicableDTU.length
+      });
+    } catch (error) {
+      console.warn('[CCTP] RAG enrichment failed, using fallback:', error);
+    }
+
+    // 1. Dispositions Générales (enrichies avec références DTU)
+    sections.push({
+      id: 'general',
+      title: '1. Dispositions Générales',
+      level: 1,
+      content: this.generateEnrichedGeneralDispositions(project, ragContext),
+    });
+
+    // 2. Description du Site
+    sections.push({
+      id: 'site',
+      title: '2. Description du Site',
+      level: 1,
+      content: this.generateSiteDescriptionSection(project.property),
+    });
+
+    // 3. Références Normatives (nouvelle section avec DTU)
+    sections.push({
+      id: 'normes',
+      title: '3. Références Normatives',
+      level: 1,
+      content: this.generateNormativeReferencesSection(ragContext),
+    });
+
+    // 4. Prescriptions Techniques Communes (enrichies)
+    sections.push({
+      id: 'prescriptions',
+      title: '4. Prescriptions Techniques Communes',
+      level: 1,
+      content: this.generateEnrichedCommonPrescriptions(project, ragContext),
+    });
+
+    // 5. Prescriptions par Lots (enrichies avec RAG)
+    const lotSubsections: DocumentSection[] = [];
+    for (let index = 0; index < (project.selectedLots?.length || 0); index++) {
+      const lot = project.selectedLots![index];
+      const lotPrescription = ragContext?.prescriptions?.find(
+        p => p.lotCategory.toLowerCase() === (lot.category || lot.type).toLowerCase()
+      );
+
+      lotSubsections.push({
+        id: `cctp-lot-${lot.type}`,
+        title: `5.${index + 1} Lot ${lot.number || index + 1} - ${lot.name || lot.type}`,
+        level: 2,
+        content: await this.generateEnrichedLotCCTP(lot, lotPrescription, ragContext),
+      });
+    }
+
+    sections.push({
+      id: 'lots',
+      title: '5. Prescriptions par Lots',
+      level: 1,
+      content: '',
+      subsections: lotSubsections,
+    });
+
+    // 6. Conditions d'Exécution
+    sections.push({
+      id: 'execution',
+      title: '6. Conditions d\'Exécution',
+      level: 1,
+      content: this.generateExecutionConditionsSection(project),
+    });
+
+    // 7. Contrôles et Essais
+    sections.push({
+      id: 'controls',
+      title: '7. Contrôles et Essais',
+      level: 1,
+      content: this.generateControlsSection(ragContext),
+    });
+
+    // 8. Réception des Travaux
+    sections.push({
+      id: 'reception',
+      title: '8. Réception des Travaux',
+      level: 1,
+      content: this.generateReceptionSection(),
+    });
+
+    return { sections };
+  }
+
+  /**
+   * Génère les dispositions générales enrichies
+   */
+  private static generateEnrichedGeneralDispositions(
+    project: Phase0Project,
+    ragContext: CCTPEnrichmentContext | null
+  ): string {
+    const lines: string[] = [];
+
+    lines.push('1.1 OBJET DU MARCHÉ');
+    lines.push('');
+    lines.push(`Le présent Cahier des Clauses Techniques Particulières (CCTP) a pour objet de définir les spécifications techniques des travaux de ${project.workProject?.general?.title || 'rénovation'}.`);
+    lines.push('');
+
+    lines.push('1.2 CONNAISSANCE DES LIEUX');
+    lines.push('');
+    lines.push('L\'entrepreneur est réputé avoir pris connaissance du site et de ses accès, des locaux et de leur état actuel, des contraintes liées à l\'occupation des locaux ou du voisinage.');
+    lines.push('');
+
+    lines.push('1.3 DOCUMENTS DE RÉFÉRENCE');
+    lines.push('');
+    lines.push('Les travaux seront exécutés conformément aux prescriptions des documents techniques suivants:');
+    lines.push('  • Documents Techniques Unifiés (DTU) du CSTB');
+    lines.push('  • Normes NF et européennes en vigueur');
+    lines.push('  • Avis Techniques et Documents Techniques d\'Application');
+    lines.push('  • Règles professionnelles des métiers concernés');
+    lines.push('  • Code de la Construction et de l\'Habitation');
+    lines.push('');
+
+    // Ajouter les DTU spécifiques si disponibles
+    if (ragContext?.applicableDTU?.length) {
+      lines.push('DTU spécifiquement applicables à ce projet:');
+      ragContext.applicableDTU.slice(0, 10).forEach(dtu => {
+        lines.push(`  • ${dtu.code} - ${dtu.title}`);
+      });
+      lines.push('');
+    }
+
+    lines.push('1.4 QUALITÉ DES MATÉRIAUX');
+    lines.push('');
+    lines.push('Tous les matériaux, produits et composants mis en œuvre devront:');
+    lines.push('  • Être neufs et de première qualité');
+    lines.push('  • Porter le marquage CE lorsque réglementairement exigé');
+    lines.push('  • Bénéficier d\'un Avis Technique ou Document Technique d\'Application favorable');
+    lines.push('  • Être conformes aux normes NF ou équivalentes');
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Génère la section des références normatives
+   */
+  private static generateNormativeReferencesSection(ragContext: CCTPEnrichmentContext | null): string {
+    const lines: string[] = [];
+
+    lines.push('3.1 DOCUMENTS TECHNIQUES UNIFIÉS (DTU)');
+    lines.push('');
+
+    if (ragContext?.applicableDTU?.length) {
+      // Grouper par catégorie
+      const byCategory: Record<string, typeof ragContext.applicableDTU> = {};
+      ragContext.applicableDTU.forEach(dtu => {
+        const cat = dtu.category || 'general';
+        if (!byCategory[cat]) byCategory[cat] = [];
+        byCategory[cat].push(dtu);
+      });
+
+      Object.entries(byCategory).forEach(([category, dtus]) => {
+        lines.push(`${category.toUpperCase()}:`);
+        dtus.forEach(dtu => {
+          lines.push(`  • ${dtu.code}: ${dtu.title}`);
+        });
+        lines.push('');
+      });
+    } else {
+      lines.push('Les DTU applicables seront déterminés en fonction de la nature exacte des travaux.');
+      lines.push('');
+    }
+
+    lines.push('3.2 NORMES ET RÉGLEMENTATIONS');
+    lines.push('');
+    lines.push('Réglementations thermiques:');
+    lines.push('  • RE2020 pour les constructions neuves et extensions');
+    lines.push('  • RT existant pour les rénovations');
+    lines.push('');
+
+    if (ragContext?.normes?.length) {
+      lines.push('Normes spécifiques identifiées:');
+      ragContext.normes.slice(0, 5).forEach(norme => {
+        lines.push(`  • ${norme.codeReference || norme.title}: ${norme.content.substring(0, 100)}...`);
+      });
+      lines.push('');
+    }
+
+    lines.push('3.3 AVIS TECHNIQUES ET DTAp');
+    lines.push('');
+    lines.push('Pour les produits et systèmes non traditionnels, l\'entreprise devra fournir:');
+    lines.push('  • L\'Avis Technique ou Document Technique d\'Application en cours de validité');
+    lines.push('  • La notice de mise en œuvre du fabricant');
+    lines.push('  • Les fiches de données de sécurité (FDS) des produits');
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Génère les prescriptions communes enrichies
+   */
+  private static generateEnrichedCommonPrescriptions(
+    project: Phase0Project,
+    ragContext: CCTPEnrichmentContext | null
+  ): string {
+    const lines: string[] = [];
+
+    lines.push('4.1 PRESCRIPTIONS GÉNÉRALES');
+    lines.push('');
+    lines.push('Qualité d\'exécution:');
+    lines.push('Les travaux seront exécutés suivant les règles de l\'art et conformément aux documents normatifs listés au chapitre 3.');
+    lines.push('');
+
+    lines.push('Protection des ouvrages:');
+    lines.push('L\'entreprise assurera la protection des ouvrages existants et des ouvrages en cours de réalisation contre les dégradations, salissures et intempéries.');
+    lines.push('');
+
+    lines.push('4.2 COORDINATION');
+    lines.push('');
+    lines.push('Chaque entreprise devra:');
+    lines.push('  • Se coordonner avec les autres corps d\'état');
+    lines.push('  • Participer aux réunions de chantier');
+    lines.push('  • Respecter le planning général d\'exécution');
+    lines.push('  • Signaler toute difficulté ou incompatibilité détectée');
+    lines.push('');
+
+    lines.push('4.3 HYGIÈNE ET SÉCURITÉ');
+    lines.push('');
+    lines.push('L\'entreprise devra:');
+    lines.push('  • Respecter les dispositions du Code du travail');
+    lines.push('  • Appliquer les mesures du plan de prévention');
+    lines.push('  • Assurer la propreté du chantier');
+    lines.push('  • Évacuer régulièrement les déchets');
+    lines.push('');
+
+    // Contraintes spécifiques de copropriété
+    if (project.property?.condo?.isInCondo) {
+      lines.push('4.4 CONTRAINTES DE COPROPRIÉTÉ');
+      lines.push('');
+      lines.push('L\'entreprise devra respecter:');
+      lines.push('  • Les horaires autorisés par le règlement de copropriété');
+      lines.push('  • Les modalités d\'accès aux parties communes');
+      lines.push('  • La protection des zones de circulation');
+      lines.push('  • Les conditions de stockage des matériaux');
+    }
+
+    // Ajouter les guides et bonnes pratiques si disponibles
+    if (ragContext?.guides?.length) {
+      lines.push('');
+      lines.push('4.5 BONNES PRATIQUES');
+      lines.push('');
+      ragContext.guides.slice(0, 3).forEach(guide => {
+        if (guide.content.length > 50) {
+          lines.push(`${guide.title}:`);
+          lines.push(`  ${guide.content.substring(0, 200)}...`);
+          lines.push('');
+        }
+      });
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Génère les prescriptions d'un lot enrichies avec RAG
+   */
+  private static async generateEnrichedLotCCTP(
+    lot: SelectedLot,
+    prescription: CCTPEnrichmentContext['prescriptions'][0] | undefined,
+    ragContext: CCTPEnrichmentContext | null
+  ): Promise<string> {
+    const lines: string[] = [];
+    const catalogLot = LOT_CATALOG.find(l => l.type === lot.type);
+    const lotCategory = lot.category || lot.type;
+
+    // Récupérer les DTU du catalogue local
+    const localDTU = DTU_CATALOG[lotCategory.toLowerCase()] || [];
+
+    // OBJET
+    lines.push('OBJET:');
+    lines.push(lot.description || catalogLot?.description || `Travaux de ${lot.name || lot.type}`);
+    lines.push('');
+
+    // CONSISTANCE DES TRAVAUX
+    lines.push('CONSISTANCE DES TRAVAUX:');
+    if (lot.selectedPrestations?.length) {
+      lot.selectedPrestations.forEach(p => lines.push(`  • ${p}`));
+    } else if (catalogLot?.commonPrestations?.length) {
+      catalogLot.commonPrestations.forEach(p => lines.push(`  • ${p}`));
+    } else {
+      lines.push('  • Se référer au descriptif général du projet');
+    }
+    lines.push('');
+
+    // NORMES ET DTU DE RÉFÉRENCE (enrichi)
+    lines.push('NORMES ET DTU DE RÉFÉRENCE:');
+
+    // DTU du catalogue local
+    if (localDTU.length > 0) {
+      localDTU.forEach(dtu => {
+        lines.push(`  • ${dtu.code} - ${dtu.title}`);
+      });
+    }
+
+    // DTU du catalogue du lot
+    if (catalogLot?.dtuReferences?.length) {
+      catalogLot.dtuReferences.forEach(dtu => {
+        if (!localDTU.some(d => dtu.includes(d.code))) {
+          lines.push(`  • ${dtu}`);
+        }
+      });
+    }
+
+    // DTU additionnels depuis RAG
+    if (prescription?.dtuReferences?.length) {
+      prescription.dtuReferences.forEach(dtu => {
+        if (!lines.some(l => l.includes(dtu))) {
+          lines.push(`  • ${dtu}`);
+        }
+      });
+    }
+    lines.push('');
+
+    // PRESCRIPTIONS TECHNIQUES (depuis RAG si disponible)
+    if (prescription?.requirements?.length) {
+      lines.push('PRESCRIPTIONS TECHNIQUES:');
+      prescription.requirements.slice(0, 5).forEach((req, i) => {
+        lines.push(`  ${i + 1}. ${req.substring(0, 200)}${req.length > 200 ? '...' : ''}`);
+      });
+      lines.push('');
+    }
+
+    // MATÉRIAUX ET PRODUITS
+    lines.push('MATÉRIAUX ET PRODUITS:');
+    if (prescription?.materials?.length) {
+      prescription.materials.slice(0, 3).forEach(mat => {
+        lines.push(`  • ${mat.substring(0, 150)}`);
+      });
+    } else {
+      lines.push('  • Matériaux conformes aux normes NF ou équivalentes');
+      lines.push('  • Marquage CE obligatoire');
+      lines.push('  • Fiches techniques à fournir avant mise en œuvre');
+    }
+    lines.push('');
+
+    // MODE D'EXÉCUTION
+    lines.push('MODE D\'EXÉCUTION:');
+    if (prescription?.execution?.length) {
+      prescription.execution.slice(0, 4).forEach(exec => {
+        lines.push(`  • ${exec.substring(0, 150)}`);
+      });
+    } else {
+      lines.push('  • Mise en œuvre selon les prescriptions du fabricant');
+      lines.push('  • Respect des DTU mentionnés ci-dessus');
+      lines.push('  • Conditions atmosphériques à respecter');
+    }
+    lines.push('');
+
+    // CONTRÔLES
+    if (prescription?.controls?.length) {
+      lines.push('CONTRÔLES:');
+      prescription.controls.slice(0, 3).forEach(ctrl => {
+        lines.push(`  • ${ctrl.substring(0, 150)}`);
+      });
+      lines.push('');
+    }
+
+    // DIAGNOSTICS REQUIS
+    if (catalogLot?.requiredDiagnostics?.length) {
+      lines.push('DIAGNOSTICS PRÉALABLES:');
+      catalogLot.requiredDiagnostics.forEach(d => lines.push(`  • ${d}`));
+      lines.push('');
+    }
+
+    // QUALIFICATION RGE
+    if (catalogLot?.rgeEligible || lot.isRGEEligible) {
+      lines.push('QUALIFICATION REQUISE:');
+      lines.push('Ce lot est éligible aux aides à la rénovation énergétique.');
+      lines.push('L\'entreprise devra être titulaire de la qualification RGE correspondante.');
+      lines.push('Certificat RGE à fournir avant démarrage des travaux.');
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Génère la section des contrôles et essais
+   */
+  private static generateControlsSection(ragContext: CCTPEnrichmentContext | null): string {
+    const lines: string[] = [];
+
+    lines.push('7.1 AUTOCONTRÔLE');
+    lines.push('');
+    lines.push('Chaque entreprise devra mettre en place un système d\'autocontrôle comprenant:');
+    lines.push('  • Vérification de la conformité des matériaux à réception');
+    lines.push('  • Contrôle des conditions de mise en œuvre');
+    lines.push('  • Vérification de la qualité des travaux réalisés');
+    lines.push('  • Documentation des contrôles effectués');
+    lines.push('');
+
+    lines.push('7.2 ESSAIS ET VÉRIFICATIONS');
+    lines.push('');
+    lines.push('Les essais suivants pourront être demandés selon les lots:');
+    lines.push('');
+    lines.push('Électricité:');
+    lines.push('  • Mesure de continuité de terre');
+    lines.push('  • Mesure d\'isolement');
+    lines.push('  • Vérification des protections différentielles');
+    lines.push('');
+    lines.push('Plomberie:');
+    lines.push('  • Épreuve d\'étanchéité des réseaux');
+    lines.push('  • Contrôle des débits et pressions');
+    lines.push('');
+    lines.push('Isolation:');
+    lines.push('  • Test d\'infiltrométrie (si applicable)');
+    lines.push('  • Vérification thermographique (si demandé)');
+    lines.push('');
+    lines.push('Ventilation:');
+    lines.push('  • Mesure des débits d\'air');
+    lines.push('  • Équilibrage des réseaux');
+    lines.push('');
+
+    lines.push('7.3 DOCUMENTS À FOURNIR');
+    lines.push('');
+    lines.push('Avant réception, l\'entreprise fournira:');
+    lines.push('  • Procès-verbaux d\'essais');
+    lines.push('  • Fiches d\'autocontrôle');
+    lines.push('  • Notices d\'entretien et de maintenance');
+    lines.push('  • Certificats de garantie des équipements');
+    lines.push('  • Plans de récolement si modifications');
+
+    return lines.join('\n');
   }
 
   /**

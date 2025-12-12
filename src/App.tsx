@@ -16,6 +16,7 @@ import Analyze from "./pages/Analyze";
 import Results from "./pages/Results";
 import ResultsInteractive from "./pages/ResultsInteractive";
 import DashboardPage from "./pages/DashboardPage";
+import UnifiedDashboard from "./pages/UnifiedDashboard";
 import Pricing from "./pages/Pricing";
 import Demo from "./pages/Demo";
 import ProjectTracking from "./pages/ProjectTracking";
@@ -25,7 +26,7 @@ import ProjectDashboard from "./pages/ProjectDashboard";
 import ImprovedB2BDashboard from "@/pages/ImprovedB2BDashboard";
 import B2CDashboard from "./pages/B2CDashboard";
 import NotFound from "./pages/NotFound";
-import DiscoveryFlow from "./pages/DiscoveryFlow";
+// Note: DiscoveryFlow obsolète, remplacé par Phase0Wizard
 import TorpCompleteFlow from "./pages/TorpCompleteFlow";
 import AlgorithmicSegments from "./pages/AlgorithmicSegments";
 import KnowledgeBase from "./pages/KnowledgeBase";
@@ -49,6 +50,7 @@ import {
   Phase0Professional,
   Phase0Dashboard,
   Phase0ProjectPage,
+  Phase0AnalyzeDevis,
 } from "./pages/phase0";
 
 const queryClient = new QueryClient();
@@ -72,7 +74,8 @@ const AppContent = () => {
           <Route path="/analyze" element={<Analyze />} />
           <Route path="/results" element={<Results />} />
           <Route path="/results-interactive" element={<ResultsInteractive />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/dashboard" element={<ProtectedRoute><UnifiedDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard-legacy" element={<DashboardPage />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/demo" element={<Demo />} />
           <Route path="/project-tracking" element={<ProjectTracking />} />
@@ -84,8 +87,6 @@ const AppContent = () => {
           <Route path="/improved-b2b-dashboard" element={<ImprovedB2BDashboard />} />
           <Route path="/b2c-dashboard" element={<B2CDashboard />} />
           <Route path="/compare" element={<Compare />} />
-          {/* Route désactivée - wizard obsolète */}
-          {/* <Route path="/discovery" element={<DiscoveryFlow />} /> */}
           <Route path="/torp-complete" element={<TorpCompleteFlow />} />
           <Route path="/segments" element={<AlgorithmicSegments />} />
           <Route path="/knowledge-base" element={<KnowledgeBase />} />
@@ -99,12 +100,13 @@ const AppContent = () => {
           <Route path="/pro/tickets/:id" element={<ProRoute><ProTicketDetail /></ProRoute>} />
           <Route path="/pro/settings" element={<ProRoute><ProSettings /></ProRoute>} />
           {/* Routes Phase 0 - Conception et Définition (protégées) */}
-          <Route path="/phase0" element={<ProtectedRoute><Phase0Wizard /></ProtectedRoute>} />
-          <Route path="/phase0/wizard" element={<ProtectedRoute><Phase0Wizard /></ProtectedRoute>} />
+          <Route path="/phase0" element={<ProtectedRoute><Phase0Dashboard /></ProtectedRoute>} />
+          <Route path="/phase0/dashboard" element={<ProtectedRoute><Phase0Dashboard /></ProtectedRoute>} />
+          <Route path="/phase0/new" element={<ProtectedRoute><Phase0Wizard /></ProtectedRoute>} />
           <Route path="/phase0/wizard/:projectId" element={<ProtectedRoute><Phase0Wizard /></ProtectedRoute>} />
           <Route path="/phase0/professional" element={<ProtectedRoute><Phase0Professional /></ProtectedRoute>} />
-          <Route path="/phase0/dashboard" element={<ProtectedRoute><Phase0Dashboard /></ProtectedRoute>} />
           <Route path="/phase0/project/:projectId" element={<ProtectedRoute><Phase0ProjectPage /></ProtectedRoute>} />
+          <Route path="/phase0/project/:projectId/analyze" element={<ProtectedRoute><Phase0AnalyzeDevis /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
 
