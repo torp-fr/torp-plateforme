@@ -213,18 +213,8 @@ BEGIN
 END
 $$;
 
--- 2.7 spatial_ref_sys (table PostGIS système)
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'spatial_ref_sys' AND table_schema = 'public') THEN
-    ALTER TABLE public.spatial_ref_sys ENABLE ROW LEVEL SECURITY;
-
-    DROP POLICY IF EXISTS "spatial_ref_sys_select_all" ON public.spatial_ref_sys;
-    CREATE POLICY "spatial_ref_sys_select_all" ON public.spatial_ref_sys
-      FOR SELECT USING (true);  -- Table de référence publique
-  END IF;
-END
-$$;
+-- 2.7 spatial_ref_sys - TABLE SYSTEME POSTGIS (ne pas modifier)
+-- Cette table appartient à PostGIS, on ne peut pas activer RLS dessus
 
 -- 2.8 company_id (ajouter policy manquante)
 DO $$
