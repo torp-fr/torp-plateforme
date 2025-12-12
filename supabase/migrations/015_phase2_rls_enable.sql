@@ -139,6 +139,7 @@ END
 $$;
 
 -- 2.6 torp_tickets - tickets support
+-- Note: torp_tickets n'a pas de user_id, on utilise company_id via companies
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'torp_tickets' AND table_schema = 'public') THEN
@@ -149,17 +150,21 @@ BEGIN
     DROP POLICY IF EXISTS "torp_tickets_update_own" ON public.torp_tickets;
     DROP POLICY IF EXISTS "torp_tickets_select_admin" ON public.torp_tickets;
 
+    -- Accès via company_id -> companies.user_id
     CREATE POLICY "torp_tickets_select_own" ON public.torp_tickets
       FOR SELECT USING (
-        auth.uid() = user_id OR
         EXISTS (SELECT 1 FROM public.companies c WHERE c.id = torp_tickets.company_id AND c.user_id = auth.uid())
       );
 
     CREATE POLICY "torp_tickets_insert_own" ON public.torp_tickets
-      FOR INSERT WITH CHECK (auth.uid() = user_id);
+      FOR INSERT WITH CHECK (
+        EXISTS (SELECT 1 FROM public.companies c WHERE c.id = company_id AND c.user_id = auth.uid())
+      );
 
     CREATE POLICY "torp_tickets_update_own" ON public.torp_tickets
-      FOR UPDATE USING (auth.uid() = user_id);
+      FOR UPDATE USING (
+        EXISTS (SELECT 1 FROM public.companies c WHERE c.id = torp_tickets.company_id AND c.user_id = auth.uid())
+      );
 
     CREATE POLICY "torp_tickets_select_admin" ON public.torp_tickets
       FOR SELECT USING (

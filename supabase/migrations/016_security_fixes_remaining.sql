@@ -50,17 +50,18 @@ GROUP BY region, category, subcategory;
 COMMENT ON VIEW public.v_prix_moyens_region IS 'Prix moyens par région et catégorie';
 
 -- 1.4 ticket_stats
+-- Note: torp_tickets n'a pas de colonne 'priority', on utilise 'grade' à la place
 DROP VIEW IF EXISTS public.ticket_stats CASCADE;
 CREATE VIEW public.ticket_stats AS
 SELECT
   status,
-  priority,
+  grade,
   COUNT(*) as ticket_count,
-  AVG(EXTRACT(EPOCH FROM (COALESCE(updated_at, NOW()) - created_at))/3600)::DECIMAL(10,2) as avg_resolution_hours
+  AVG(EXTRACT(EPOCH FROM (COALESCE(updated_at, NOW()) - date_generation))/3600)::DECIMAL(10,2) as avg_hours_since_generation
 FROM public.torp_tickets
-GROUP BY status, priority;
+GROUP BY status, grade;
 
-COMMENT ON VIEW public.ticket_stats IS 'Statistiques des tickets';
+COMMENT ON VIEW public.ticket_stats IS 'Statistiques des tickets par statut et grade';
 
 -- 1.5 v_prediction_accuracy
 DROP VIEW IF EXISTS public.v_prediction_accuracy CASCADE;
