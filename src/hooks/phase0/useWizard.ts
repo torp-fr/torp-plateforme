@@ -137,18 +137,30 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
           const userData = await userProfileService.getUserData(user.id);
 
           if (userData) {
+            const isB2B = userData.userType === 'B2B' && !!userData.companyName;
+
             console.log('[useWizard] Données utilisateur récupérées:', {
               type: userData.userType,
-              hasCompany: !!userData.companyName,
+              isB2B,
               companyName: userData.companyName,
+              previousProjects: userData.previousProjectsCount,
             });
 
             // Générer le projet initial pré-rempli
             const ownerProfile = userProfileService.generateInitialProject(userData);
             initialProject = {
               ownerProfile: ownerProfile as any,
-              wizardMode: userData.userType === 'B2B' ? 'b2b' : 'b2c',
+              wizardMode: isB2B ? 'b2b' : 'b2c',
             };
+
+            // Pour les B2B, ajouter le contexte prestataire
+            if (isB2B) {
+              const b2bContext = userProfileService.generateB2BProjectContext(userData);
+              initialProject = {
+                ...initialProject,
+                ...b2bContext,
+              };
+            }
 
             // Générer les réponses initiales pour le wizard
             const answers = userProfileService.generateInitialAnswers(userData);
@@ -165,10 +177,15 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
             });
 
             // Toast pour informer l'utilisateur
-            if (userData.userType === 'B2B' && userData.companyName) {
+            if (isB2B) {
+              toast({
+                title: 'Mode Professionnel',
+                description: `${userData.companyName} - Créez un projet pour votre client`,
+              });
+            } else if (userData.previousProjectsCount && userData.previousProjectsCount > 0) {
               toast({
                 title: 'Données pré-remplies',
-                description: `Vos informations d'entreprise (${userData.companyName}) ont été automatiquement chargées.`,
+                description: 'Vos informations ont été automatiquement chargées',
               });
             }
           }

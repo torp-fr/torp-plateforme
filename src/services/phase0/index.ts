@@ -13,7 +13,7 @@ export type { WizardStepConfig, WizardQuestionConfig, WizardFieldConfig } from '
 
 // Service de pré-remplissage utilisateur/entreprise
 export { userProfileService } from './user-profile.service';
-export type { UserCompanyData, PrefilledOwnerProfile } from './user-profile.service';
+export type { UserCompanyData, PrefilledOwnerProfile, B2BProviderContext } from './user-profile.service';
 
 // Service de déduction automatique (IA)
 export { DeductionService } from './deduction.service';
