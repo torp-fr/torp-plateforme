@@ -41,26 +41,33 @@ CREATE POLICY "company_verifications_insert_admin" ON public.company_verificatio
     EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND user_type = 'admin')
   );
 
--- 2.3 knowledge_base - base de connaissances RAG (lecture publique authentifiée)
-ALTER TABLE public.knowledge_base ENABLE ROW LEVEL SECURITY;
+-- 2.3 knowledge_documents - documents RAG (RLS déjà activé dans migration 002)
+-- Note: knowledge_documents et knowledge_chunks ont déjà RLS via migration 002
+-- On ajoute juste des policies admin si elles n'existent pas
 
-CREATE POLICY "knowledge_base_select_authenticated" ON public.knowledge_base
-  FOR SELECT USING (auth.uid() IS NOT NULL);
+DO $$
+BEGIN
+  -- Policy admin pour knowledge_documents
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'knowledge_documents' AND policyname = 'knowledge_documents_admin_all'
+  ) THEN
+    CREATE POLICY "knowledge_documents_admin_all" ON public.knowledge_documents
+      FOR ALL USING (
+        EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND user_type = 'admin')
+      );
+  END IF;
 
-CREATE POLICY "knowledge_base_insert_admin" ON public.knowledge_base
-  FOR INSERT WITH CHECK (
-    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND user_type = 'admin')
-  );
-
-CREATE POLICY "knowledge_base_update_admin" ON public.knowledge_base
-  FOR UPDATE USING (
-    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND user_type = 'admin')
-  );
-
-CREATE POLICY "knowledge_base_delete_admin" ON public.knowledge_base
-  FOR DELETE USING (
-    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND user_type = 'admin')
-  );
+  -- Policy admin pour knowledge_chunks
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'knowledge_chunks' AND policyname = 'knowledge_chunks_admin_all'
+  ) THEN
+    CREATE POLICY "knowledge_chunks_admin_all" ON public.knowledge_chunks
+      FOR ALL USING (
+        EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND user_type = 'admin')
+      );
+  END IF;
+END
+$$;
 
 -- 2.4 geographic_distances - distances géographiques (lecture publique)
 ALTER TABLE public.geographic_distances ENABLE ROW LEVEL SECURITY;

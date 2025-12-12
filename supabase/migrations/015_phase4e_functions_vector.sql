@@ -68,6 +68,7 @@ END;
 $$;
 
 -- 4.39 match_knowledge
+-- Note: Utilise knowledge_chunks et knowledge_documents (pas knowledge_base)
 CREATE OR REPLACE FUNCTION public.match_knowledge(
   query_embedding vector(1536),
   match_threshold FLOAT DEFAULT 0.7,
@@ -85,20 +86,24 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT
-    k.id,
-    k.content,
-    k.source_type,
-    1 - (k.embedding <=> query_embedding) AS similarity
-  FROM public.knowledge_base k
-  WHERE k.embedding IS NOT NULL
-  AND 1 - (k.embedding <=> query_embedding) > match_threshold
-  ORDER BY k.embedding <=> query_embedding
+    kc.id,
+    kc.content,
+    kd.doc_type as source_type,
+    1 - (kc.embedding <=> query_embedding) AS similarity
+  FROM public.knowledge_chunks kc
+  JOIN public.knowledge_documents kd ON kd.id = kc.document_id
+  WHERE kc.embedding IS NOT NULL
+  AND kd.status = 'indexed'
+  AND 1 - (kc.embedding <=> query_embedding) > match_threshold
+  ORDER BY kc.embedding <=> query_embedding
   LIMIT match_count;
 END;
 $$;
 
--- 4.40 search_knowledge
-CREATE OR REPLACE FUNCTION public.search_knowledge(
+-- 4.40 search_knowledge_text
+-- Note: La fonction search_knowledge existe déjà dans migration 002
+-- On crée une variante pour recherche textuelle
+CREATE OR REPLACE FUNCTION public.search_knowledge_text(
   query_text TEXT,
   filter_type TEXT DEFAULT NULL
 )
@@ -114,13 +119,15 @@ AS $$
 BEGIN
   RETURN QUERY
   SELECT
-    k.id,
-    k.content,
-    k.source_type,
-    ts_rank(to_tsvector('french', k.content), plainto_tsquery('french', query_text)) AS rank
-  FROM public.knowledge_base k
-  WHERE to_tsvector('french', k.content) @@ plainto_tsquery('french', query_text)
-  AND (filter_type IS NULL OR k.source_type = filter_type)
+    kc.id,
+    kc.content,
+    kd.doc_type as source_type,
+    ts_rank(to_tsvector('french', kc.content), plainto_tsquery('french', query_text)) AS rank
+  FROM public.knowledge_chunks kc
+  JOIN public.knowledge_documents kd ON kd.id = kc.document_id
+  WHERE kd.status = 'indexed'
+  AND to_tsvector('french', kc.content) @@ plainto_tsquery('french', query_text)
+  AND (filter_type IS NULL OR kd.doc_type = filter_type)
   ORDER BY rank DESC
   LIMIT 20;
 END;

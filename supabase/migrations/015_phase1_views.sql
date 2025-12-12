@@ -97,15 +97,20 @@ GROUP BY DATE_TRUNC('day', created_at);
 COMMENT ON VIEW public.v_prediction_accuracy IS 'Précision des prédictions par jour';
 
 -- 1.7 rag_health_dashboard
+-- Note: Utilise knowledge_documents et knowledge_chunks (pas knowledge_base)
 DROP VIEW IF EXISTS public.rag_health_dashboard CASCADE;
 CREATE VIEW public.rag_health_dashboard AS
 SELECT
-  source_type,
-  COUNT(*) as document_count,
-  SUM(COALESCE((metadata->>'chunk_count')::INT, 0)) as total_chunks,
-  AVG(CASE WHEN embedding IS NOT NULL THEN 1 ELSE 0 END) as embedding_coverage
-FROM public.knowledge_base
-GROUP BY source_type;
+  kd.doc_type as source_type,
+  COUNT(DISTINCT kd.id) as document_count,
+  SUM(kd.chunks_count) as total_chunks,
+  CASE
+    WHEN COUNT(kc.id) = 0 THEN 0
+    ELSE AVG(CASE WHEN kc.embedding IS NOT NULL THEN 1 ELSE 0 END)
+  END as embedding_coverage
+FROM public.knowledge_documents kd
+LEFT JOIN public.knowledge_chunks kc ON kc.document_id = kd.id
+GROUP BY kd.doc_type;
 
 COMMENT ON VIEW public.rag_health_dashboard IS 'Dashboard santé du système RAG';
 

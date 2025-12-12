@@ -137,6 +137,7 @@ END;
 $$;
 
 -- 4.48 get_knowledge_stats
+-- Note: Utilise knowledge_documents (pas knowledge_base)
 CREATE OR REPLACE FUNCTION public.get_knowledge_stats()
 RETURNS TABLE(
   total_entries BIGINT,
@@ -150,11 +151,12 @@ BEGIN
   RETURN QUERY
   SELECT
     COUNT(*)::BIGINT,
-    jsonb_object_agg(COALESCE(source_type, 'unknown'), cnt)
+    jsonb_object_agg(COALESCE(doc_type, 'unknown'), cnt)
   FROM (
-    SELECT source_type, COUNT(*) as cnt
-    FROM public.knowledge_base
-    GROUP BY source_type
+    SELECT doc_type, COUNT(*) as cnt
+    FROM public.knowledge_documents
+    WHERE status = 'indexed'
+    GROUP BY doc_type
   ) sub;
 END;
 $$;
