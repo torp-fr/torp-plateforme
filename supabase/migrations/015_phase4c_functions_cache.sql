@@ -4,7 +4,11 @@
 -- Exécuter après Phase 4B
 -- =====================================================
 
+-- Note: On utilise DROP FUNCTION IF EXISTS avant CREATE OR REPLACE
+-- pour éviter les erreurs de changement de type de retour
+
 -- 4.18 update_company_cache_updated_at
+DROP FUNCTION IF EXISTS public.update_company_cache_updated_at() CASCADE;
 CREATE OR REPLACE FUNCTION public.update_company_cache_updated_at()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -17,6 +21,7 @@ END;
 $$;
 
 -- 4.19 should_refresh_company_cache
+DROP FUNCTION IF EXISTS public.should_refresh_company_cache(TIMESTAMP WITH TIME ZONE) CASCADE;
 CREATE OR REPLACE FUNCTION public.should_refresh_company_cache(cache_updated_at TIMESTAMP WITH TIME ZONE)
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -30,6 +35,7 @@ END;
 $$;
 
 -- 4.20 clean_expired_company_cache
+DROP FUNCTION IF EXISTS public.clean_expired_company_cache() CASCADE;
 CREATE OR REPLACE FUNCTION public.clean_expired_company_cache()
 RETURNS INTEGER
 LANGUAGE plpgsql
@@ -47,6 +53,7 @@ END;
 $$;
 
 -- 4.21 clean_expired_entreprises_cache
+DROP FUNCTION IF EXISTS public.clean_expired_entreprises_cache() CASCADE;
 CREATE OR REPLACE FUNCTION public.clean_expired_entreprises_cache()
 RETURNS INTEGER
 LANGUAGE plpgsql
@@ -64,6 +71,7 @@ END;
 $$;
 
 -- 4.22 get_cached_company_data
+DROP FUNCTION IF EXISTS public.get_cached_company_data(TEXT) CASCADE;
 CREATE OR REPLACE FUNCTION public.get_cached_company_data(p_siret TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -82,6 +90,7 @@ END;
 $$;
 
 -- 4.23 upsert_company_cache
+DROP FUNCTION IF EXISTS public.upsert_company_cache(TEXT, JSONB) CASCADE;
 CREATE OR REPLACE FUNCTION public.upsert_company_cache(
   p_siret TEXT,
   p_data JSONB
@@ -100,6 +109,7 @@ END;
 $$;
 
 -- 4.24 increment_company_cache_fetch_count
+DROP FUNCTION IF EXISTS public.increment_company_cache_fetch_count(TEXT) CASCADE;
 CREATE OR REPLACE FUNCTION public.increment_company_cache_fetch_count(p_siret TEXT)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -113,6 +123,7 @@ END;
 $$;
 
 -- 4.25 get_entreprise_cached
+DROP FUNCTION IF EXISTS public.get_entreprise_cached(TEXT) CASCADE;
 CREATE OR REPLACE FUNCTION public.get_entreprise_cached(p_siret TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -131,6 +142,7 @@ END;
 $$;
 
 -- 4.26 calculate_company_data_quality (colonnes corrigées)
+DROP FUNCTION IF EXISTS public.calculate_company_data_quality(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION public.calculate_company_data_quality(company_id UUID)
 RETURNS DECIMAL
 LANGUAGE plpgsql
