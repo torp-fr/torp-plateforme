@@ -11,7 +11,7 @@ import { WizardService } from '@/services/phase0/wizard.service';
 import { Phase0ProjectService } from '@/services/phase0/project.service';
 import { ValidationService } from '@/services/phase0/validation.service';
 import { DeductionService } from '@/services/phase0/deduction.service';
-import { useAuth } from '@/hooks/useAuth';
+import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 
 export interface UseWizardOptions {
@@ -60,7 +60,7 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
   const { projectId, mode = 'b2c', onComplete } = options;
 
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user } = useApp();
   const { toast } = useToast();
 
   // États

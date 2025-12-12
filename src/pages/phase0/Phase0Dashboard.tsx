@@ -23,12 +23,12 @@ import {
   MapPin, Calendar, Euro, Loader2, FolderOpen, AlertTriangle
 } from 'lucide-react';
 import { Phase0ProjectService, Phase0Summary, Phase0Status, PHASE0_STATUS_CONFIG } from '@/services/phase0';
-import { useAuth } from '@/hooks/useAuth';
+import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 
 export function Phase0Dashboard() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user } = useApp();
   const { toast } = useToast();
 
   const [projects, setProjects] = useState<Phase0Summary[]>([]);
