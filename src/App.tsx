@@ -52,6 +52,10 @@ import {
   Phase0ProjectPage,
   Phase0AnalyzeDevis,
 } from "./pages/phase0";
+// Tender Pages (Appels d'Offres)
+import { TendersPage, TenderDetailPage } from "./pages/tenders";
+// B2B Enterprise Pages (Consultation AO)
+import { B2BTendersPage, B2BTenderViewPage, B2BResponseFormPage } from "./pages/b2b";
 
 const queryClient = new QueryClient();
 
@@ -107,6 +111,13 @@ const AppContent = () => {
           <Route path="/phase0/professional" element={<ProtectedRoute><Phase0Professional /></ProtectedRoute>} />
           <Route path="/phase0/project/:projectId" element={<ProtectedRoute><Phase0ProjectPage /></ProtectedRoute>} />
           <Route path="/phase0/project/:projectId/analyze" element={<ProtectedRoute><Phase0AnalyzeDevis /></ProtectedRoute>} />
+          {/* Routes Appels d'Offres (MOA) */}
+          <Route path="/tenders" element={<ProtectedRoute><TendersPage /></ProtectedRoute>} />
+          <Route path="/tenders/:tenderId" element={<ProtectedRoute><TenderDetailPage /></ProtectedRoute>} />
+          {/* Routes B2B Enterprise (Consultation AO) */}
+          <Route path="/b2b/ao" element={<ProRoute><B2BTendersPage /></ProRoute>} />
+          <Route path="/b2b/ao/:tenderId" element={<ProRoute><B2BTenderViewPage /></ProRoute>} />
+          <Route path="/b2b/ao/:tenderId/response/:responseId" element={<ProRoute><B2BResponseFormPage /></ProRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
 

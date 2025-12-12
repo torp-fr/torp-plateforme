@@ -14,7 +14,8 @@ import { Separator } from '@/components/ui/separator';
 import {
   ArrowLeft, Edit, FileText, Download, RefreshCw, User, Building, MapPin,
   Hammer, Euro, Calendar, Clock, AlertTriangle, Loader2, CheckCircle2,
-  FileCheck, FileOutput, Printer, Share2, FileSearch, ArrowRight
+  FileCheck, FileOutput, Printer, Share2, FileSearch, ArrowRight, Send,
+  Briefcase, FileSpreadsheet, Eye, ExternalLink
 } from 'lucide-react';
 import {
   Phase0ProjectService,
@@ -26,6 +27,10 @@ import {
   ProjectEstimation,
   LOT_CATALOG,
 } from '@/services/phase0';
+import { TenderService } from '@/services/tender/tender.service';
+import { DCEGeneratorService } from '@/services/tender/dce-generator.service';
+import type { Tender, TenderDocument as TenderDoc } from '@/types/tender';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 
 export function Phase0ProjectPage() {
@@ -36,8 +41,11 @@ export function Phase0ProjectPage() {
   const [project, setProject] = useState<Phase0Project | null>(null);
   const [documents, setDocuments] = useState<GeneratedDocument[]>([]);
   const [estimation, setEstimation] = useState<ProjectEstimation | null>(null);
+  const [tender, setTender] = useState<Tender | null>(null);
+  const [tenderDocuments, setTenderDocuments] = useState<TenderDoc[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isGeneratingDoc, setIsGeneratingDoc] = useState(false);
+  const [isGeneratingAO, setIsGeneratingAO] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Charger le projet
@@ -65,6 +73,30 @@ export function Phase0ProjectPage() {
         // Calculer l'estimation
         const est = EstimationService.estimateProject(projectData);
         setEstimation(est);
+
+        // Charger l'AO existant si le projet en a un
+        if (projectData.status === 'in_consultation' || projectData.status === 'validated') {
+          try {
+            const tenders = await TenderService.listByUser(projectData.userId);
+            const projectTender = tenders.find(t => t.id && projectData.id);
+            // Charger le tender complet si trouvé via le project
+            const { data: tenderData } = await supabase
+              .from('tenders')
+              .select('*')
+              .eq('phase0_project_id', projectData.id)
+              .single();
+
+            if (tenderData) {
+              const fullTender = await TenderService.getById(tenderData.id);
+              if (fullTender) {
+                setTender(fullTender);
+                setTenderDocuments(fullTender.dceDocuments || []);
+              }
+            }
+          } catch (tenderErr) {
+            console.log('Pas d\'AO existant pour ce projet');
+          }
+        }
       } catch (err) {
         console.error('Erreur chargement projet:', err);
         setError('Impossible de charger le projet');
@@ -110,6 +142,48 @@ export function Phase0ProjectPage() {
     a.click();
     URL.revokeObjectURL(url);
   }, []);
+
+  // Générer un appel d'offres depuis le projet Phase 0
+  const generateAO = useCallback(async () => {
+    if (!project) return;
+
+    setIsGeneratingAO(true);
+    try {
+      // 1. Créer l'AO depuis le projet Phase 0
+      const newTender = await TenderService.createFromPhase0(project);
+
+      // 2. Générer le DCE complet
+      const dceResult = await DCEGeneratorService.generateDCE(newTender, project);
+
+      if (dceResult.errors.length > 0) {
+        toast({
+          title: 'Appel d\'offres créé avec avertissements',
+          description: `${dceResult.documents.length} documents générés. ${dceResult.errors.length} erreur(s)`,
+        });
+      } else {
+        toast({
+          title: 'Appel d\'offres créé',
+          description: `DCE complet généré avec ${dceResult.documents.length} documents (RC, CCTP, DPGF, Planning, AE)`,
+        });
+      }
+
+      setTender(dceResult.tender);
+      setTenderDocuments(dceResult.documents);
+
+      // Mettre à jour le projet local
+      setProject(prev => prev ? { ...prev, status: 'in_consultation' } : null);
+
+    } catch (err) {
+      console.error('Erreur génération AO:', err);
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de générer l\'appel d\'offres',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGeneratingAO(false);
+    }
+  }, [project, toast]);
 
   if (isLoading) {
     return (
@@ -200,6 +274,11 @@ export function Phase0ProjectPage() {
             <TabsTrigger value="summary">Résumé</TabsTrigger>
             <TabsTrigger value="estimation">Estimation</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
+            <TabsTrigger value="tender" className="flex items-center gap-2">
+              <Briefcase className="w-4 h-4" />
+              Appel d'Offres
+              {tender && <Badge variant="secondary" className="ml-1 text-xs">{tender.status}</Badge>}
+            </TabsTrigger>
           </TabsList>
 
           {/* Onglet Résumé */}
@@ -524,6 +603,228 @@ export function Phase0ProjectPage() {
                   </p>
                 </CardContent>
               </Card>
+            )}
+          </TabsContent>
+
+          {/* Onglet Appel d'Offres */}
+          <TabsContent value="tender" className="space-y-6">
+            {!tender ? (
+              /* Pas encore d'AO - Proposer de le générer */
+              <Card className="border-2 border-dashed border-primary/30">
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <Send className="w-8 h-8 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">Créer un appel d'offres</h3>
+                  <p className="text-muted-foreground text-center max-w-md mb-6">
+                    Transformez votre projet en appel d'offres professionnel. Le DCE complet sera généré automatiquement
+                    (RC, CCTP, DPGF, Planning, Acte d'Engagement).
+                  </p>
+
+                  <div className="flex flex-col items-center gap-4">
+                    <Button
+                      size="lg"
+                      onClick={generateAO}
+                      disabled={isGeneratingAO || !project?.selectedLots?.length}
+                      className="px-8"
+                    >
+                      {isGeneratingAO ? (
+                        <>
+                          <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                          Génération en cours...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-5 h-5 mr-2" />
+                          Générer l'Appel d'Offres
+                        </>
+                      )}
+                    </Button>
+
+                    {!project?.selectedLots?.length && (
+                      <Alert variant="destructive" className="max-w-md">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          Vous devez sélectionner au moins un lot de travaux pour créer un appel d'offres.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+
+                  <Separator className="my-6 w-full max-w-md" />
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center text-sm">
+                    <div>
+                      <FileText className="w-6 h-6 mx-auto mb-2 text-muted-foreground" />
+                      <p className="font-medium">Documents générés</p>
+                      <p className="text-muted-foreground">RC, CCTP, DPGF, AE</p>
+                    </div>
+                    <div>
+                      <Briefcase className="w-6 h-6 mx-auto mb-2 text-muted-foreground" />
+                      <p className="font-medium">Diffusion</p>
+                      <p className="text-muted-foreground">Privé ou public</p>
+                    </div>
+                    <div>
+                      <CheckCircle2 className="w-6 h-6 mx-auto mb-2 text-muted-foreground" />
+                      <p className="font-medium">Réponses</p>
+                      <p className="text-muted-foreground">Scoring TORP</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              /* AO existant - Afficher les détails */
+              <>
+                {/* En-tête de l'AO */}
+                <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge variant="outline" className="font-mono">
+                            {tender.reference}
+                          </Badge>
+                          <Badge variant={
+                            tender.status === 'published' ? 'default' :
+                            tender.status === 'draft' || tender.status === 'ready' ? 'secondary' :
+                            tender.status === 'attributed' ? 'default' : 'outline'
+                          }>
+                            {tender.status === 'draft' && 'Brouillon'}
+                            {tender.status === 'ready' && 'Prêt à publier'}
+                            {tender.status === 'published' && 'Publié'}
+                            {tender.status === 'closed' && 'Fermé'}
+                            {tender.status === 'evaluation' && 'En évaluation'}
+                            {tender.status === 'attributed' && 'Attribué'}
+                            {tender.status === 'cancelled' && 'Annulé'}
+                          </Badge>
+                        </div>
+                        <CardTitle className="text-xl">{tender.title}</CardTitle>
+                        <CardDescription className="mt-1">
+                          {tender.lotsCount} lot(s) • Créé le {tender.createdAt.toLocaleDateString('fr-FR')}
+                        </CardDescription>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="outline" onClick={() => navigate(`/tenders/${tender.id}`)}>
+                          <Eye className="w-4 h-4 mr-2" />
+                          Voir détails
+                        </Button>
+                        <Button onClick={() => navigate(`/tenders/${tender.id}`)}>
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          Gérer l'AO
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                </Card>
+
+                {/* Statistiques */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="text-sm text-muted-foreground mb-1">Entreprises invitées</div>
+                      <div className="text-2xl font-bold">{tender.invitedCount}</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="text-sm text-muted-foreground mb-1">Vues</div>
+                      <div className="text-2xl font-bold">{tender.viewsCount}</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="text-sm text-muted-foreground mb-1">Téléchargements</div>
+                      <div className="text-2xl font-bold">{tender.downloadsCount}</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="text-sm text-muted-foreground mb-1">Réponses</div>
+                      <div className="text-2xl font-bold text-primary">{tender.responsesCount}</div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Documents DCE générés */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileSpreadsheet className="w-5 h-5" />
+                      Dossier de Consultation (DCE)
+                    </CardTitle>
+                    <CardDescription>
+                      Documents générés automatiquement depuis votre projet
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {tenderDocuments.length > 0 ? (
+                      <div className="space-y-3">
+                        {tenderDocuments.map((doc) => (
+                          <div
+                            key={doc.id}
+                            className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <FileText className="w-5 h-5 text-primary" />
+                              </div>
+                              <div>
+                                <div className="font-medium">{doc.name}</div>
+                                <div className="text-sm text-muted-foreground">
+                                  {doc.documentType.toUpperCase()} • Version {doc.version}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline">
+                                {doc.isAutoGenerated ? 'Auto-généré' : 'Manuel'}
+                              </Badge>
+                              <Button variant="ghost" size="icon">
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon">
+                                <Download className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                        <p>Documents DCE en cours de génération...</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Actions */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Actions</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-3">
+                      {tender.status === 'ready' && (
+                        <Button onClick={() => navigate(`/tenders/${tender.id}`)}>
+                          <Send className="w-4 h-4 mr-2" />
+                          Publier l'appel d'offres
+                        </Button>
+                      )}
+                      {tender.status === 'published' && (
+                        <Button variant="outline" onClick={() => navigate(`/tenders/${tender.id}/responses`)}>
+                          <Eye className="w-4 h-4 mr-2" />
+                          Voir les réponses ({tender.responsesCount})
+                        </Button>
+                      )}
+                      <Button variant="outline" onClick={() => navigate(`/tenders/${tender.id}`)}>
+                        <Edit className="w-4 h-4 mr-2" />
+                        Modifier l'AO
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
             )}
           </TabsContent>
         </Tabs>
