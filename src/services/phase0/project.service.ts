@@ -156,6 +156,9 @@ export class Phase0ProjectService {
   async createProject(payload: CreateProjectPayload): Promise<Phase0Project> {
     const { userId, wizardMode, initialData } = payload;
 
+    // Générer un numéro de référence unique
+    const referenceNumber = this.generateReferenceNumber(wizardMode);
+
     const defaultOwnerProfile: Partial<MasterOwnerProfile> = {
       identity: { type: 'B2C' } as MasterOwnerProfile['identity'],
       contact: { email: '', preferredContact: 'email' },
@@ -217,6 +220,7 @@ export class Phase0ProjectService {
       .insert({
         user_id: userId,
         name: initialData?.workProject?.general?.name || 'Nouveau projet',
+        reference_number: referenceNumber,
         wizard_mode: wizardMode,
         owner_profile: initialData?.ownerProfile || defaultOwnerProfile,
         property: initialData?.property || defaultProperty,
@@ -581,6 +585,20 @@ export class Phase0ProjectService {
   // =============================================================================
   // PRIVATE METHODS
   // =============================================================================
+
+  /**
+   * Génère un numéro de référence unique pour un projet
+   * Format: TORP-{MODE}-{DATE}-{RANDOM}
+   * Exemple: TORP-B2C-20241213-A7X9
+   */
+  private generateReferenceNumber(mode: WizardMode): string {
+    const modePrefix = mode.toUpperCase().replace('_', '');
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+    const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const timestamp = now.getTime().toString(36).slice(-4).toUpperCase();
+    return `TORP-${modePrefix}-${dateStr}-${randomStr}${timestamp}`;
+  }
 
   private mapRowToProject(row: Phase0ProjectRow): Phase0Project {
     return {
