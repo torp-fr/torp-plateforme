@@ -122,7 +122,7 @@ interface DashboardStats {
 
 export default function UnifiedDashboard() {
   const navigate = useNavigate();
-  const { user, userType, projects, phase0Projects, refreshPhase0Projects } = useApp();
+  const { user, userType, projects, setProjects, phase0Projects, refreshPhase0Projects } = useApp();
 
   // Rediriger les utilisateurs B2B vers l'espace Pro dédié
   useEffect(() => {
