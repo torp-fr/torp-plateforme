@@ -35,7 +35,7 @@ export interface AuthResponse {
 type DbUser = Database['public']['Tables']['users']['Row'];
 
 /**
- * Convert Supabase user to app User format
+ * Convert Supabase user to app User format with all profile fields
  */
 function mapDbUserToAppUser(dbUser: DbUser): User {
   return {
@@ -43,11 +43,37 @@ function mapDbUserToAppUser(dbUser: DbUser): User {
     email: dbUser.email,
     name: dbUser.name || undefined,
     type: dbUser.user_type,
-    company: dbUser.company || undefined,
     phone: dbUser.phone || undefined,
-    avatarUrl: dbUser.avatar_url || undefined,
-    subscriptionPlan: dbUser.subscription_plan || undefined,
-    subscriptionStatus: dbUser.subscription_status || undefined,
+    city: (dbUser as Record<string, unknown>).city as string || undefined,
+    postal_code: (dbUser as Record<string, unknown>).postal_code as string || undefined,
+    // B2C
+    company: dbUser.company || undefined,
+    property_type: (dbUser as Record<string, unknown>).property_type as string || undefined,
+    property_surface: (dbUser as Record<string, unknown>).property_surface as number || undefined,
+    property_year: (dbUser as Record<string, unknown>).property_year as number || undefined,
+    property_rooms: (dbUser as Record<string, unknown>).property_rooms as number || undefined,
+    property_address: (dbUser as Record<string, unknown>).property_address as string || undefined,
+    property_energy_class: (dbUser as Record<string, unknown>).property_energy_class as string || undefined,
+    is_owner: (dbUser as Record<string, unknown>).is_owner as boolean ?? undefined,
+    // B2B
+    company_siret: (dbUser as Record<string, unknown>).company_siret as string || undefined,
+    company_activity: (dbUser as Record<string, unknown>).company_activity as string || undefined,
+    company_size: (dbUser as Record<string, unknown>).company_size as string || undefined,
+    company_role: (dbUser as Record<string, unknown>).company_role as string || undefined,
+    company_address: (dbUser as Record<string, unknown>).company_address as string || undefined,
+    company_code_ape: (dbUser as Record<string, unknown>).company_code_ape as string || undefined,
+    company_rcs: (dbUser as Record<string, unknown>).company_rcs as string || undefined,
+    // B2G
+    entity_name: (dbUser as Record<string, unknown>).entity_name as string || undefined,
+    entity_type: (dbUser as Record<string, unknown>).entity_type as string || undefined,
+    entity_address: (dbUser as Record<string, unknown>).entity_address as string || undefined,
+    siret: (dbUser as Record<string, unknown>).siret as string || undefined,
+    entity_function: (dbUser as Record<string, unknown>).entity_function as string || undefined,
+    entity_code_insee: (dbUser as Record<string, unknown>).entity_code_insee as string || undefined,
+    entity_code_ape: (dbUser as Record<string, unknown>).entity_code_ape as string || undefined,
+    entity_strate: (dbUser as Record<string, unknown>).entity_strate as string || undefined,
+    entity_service_name: (dbUser as Record<string, unknown>).entity_service_name as string || undefined,
+    entity_service_email: (dbUser as Record<string, unknown>).entity_service_email as string || undefined,
   };
 }
 
@@ -75,10 +101,10 @@ export class SupabaseAuthService {
       throw new Error('Authentication failed');
     }
 
-    // Fetch user profile from users table
+    // Fetch user profile from users table (all columns for profile pre-fill)
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('id, email, name, user_type, company, phone, avatar_url, subscription_plan, subscription_status')
+      .select('*')
       .eq('id', authData.user.id)
       .single();
 
@@ -220,10 +246,10 @@ export class SupabaseAuthService {
 
       console.log('[getCurrentUser] Auth user found:', authUser.email);
 
-      // Fetch user profile
+      // Fetch user profile (all columns for profile pre-fill)
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('id, email, name, user_type, company, phone, avatar_url, subscription_plan, subscription_status')
+        .select('*')
         .eq('id', authUser.id)
         .single();
 
@@ -349,7 +375,7 @@ export class SupabaseAuthService {
         try {
           const { data, error } = await supabase
             .from('users')
-            .select('id, email, name, user_type, company, phone, avatar_url, subscription_plan, subscription_status')
+            .select('*')
             .eq('id', session.user.id)
             .single();
 

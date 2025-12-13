@@ -56,22 +56,34 @@ interface ExtendedUserProfile {
   bio: string;
   notification_email: boolean;
   notification_sms: boolean;
-  // B2C
+  // B2C - Bien immobilier
   property_type: 'house' | 'apartment' | 'building' | 'other' | null;
   property_surface: number | null;
   property_year: number | null;
+  property_rooms: number | null;
+  property_address: string;
+  property_energy_class: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | null;
   is_owner: boolean;
-  // B2B
+  // B2B - Entreprise
   company: string;
   company_siret: string;
   company_activity: string;
   company_size: '1-10' | '11-50' | '51-200' | '200+' | null;
   company_role: string;
-  // B2G
+  company_address: string;
+  company_code_ape: string;
+  company_rcs: string;
+  // B2G - Collectivité
   entity_name: string;
   entity_type: 'commune' | 'departement' | 'region' | 'epci' | 'other' | null;
   siret: string;
   entity_function: string;
+  entity_address: string;
+  entity_code_insee: string;
+  entity_code_ape: string;
+  entity_strate: 'moins_1000' | '1000_3500' | '3500_10000' | '10000_20000' | '20000_50000' | '50000_100000' | 'plus_100000' | null;
+  entity_service_name: string;
+  entity_service_email: string;
   // Meta
   profile_completion_percentage: number;
 }
@@ -98,6 +110,26 @@ const ENTITY_TYPES = [
   { value: 'other', label: 'Autre établissement public' },
 ];
 
+const ENTITY_STRATES = [
+  { value: 'moins_1000', label: 'Moins de 1 000 hab.' },
+  { value: '1000_3500', label: '1 000 à 3 500 hab.' },
+  { value: '3500_10000', label: '3 500 à 10 000 hab.' },
+  { value: '10000_20000', label: '10 000 à 20 000 hab.' },
+  { value: '20000_50000', label: '20 000 à 50 000 hab.' },
+  { value: '50000_100000', label: '50 000 à 100 000 hab.' },
+  { value: 'plus_100000', label: 'Plus de 100 000 hab.' },
+];
+
+const ENERGY_CLASSES = [
+  { value: 'A', label: 'A - Excellent' },
+  { value: 'B', label: 'B - Très bon' },
+  { value: 'C', label: 'C - Bon' },
+  { value: 'D', label: 'D - Moyen' },
+  { value: 'E', label: 'E - Passable' },
+  { value: 'F', label: 'F - Mauvais' },
+  { value: 'G', label: 'G - Très mauvais' },
+];
+
 export default function Profile() {
   const { user, setUser, logout, userType } = useApp();
   const navigate = useNavigate();
@@ -117,19 +149,34 @@ export default function Profile() {
     bio: '',
     notification_email: true,
     notification_sms: false,
+    // B2C
     property_type: null,
     property_surface: null,
     property_year: null,
+    property_rooms: null,
+    property_address: '',
+    property_energy_class: null,
     is_owner: true,
+    // B2B
     company: '',
     company_siret: '',
     company_activity: '',
     company_size: null,
     company_role: '',
+    company_address: '',
+    company_code_ape: '',
+    company_rcs: '',
+    // B2G
     entity_name: '',
     entity_type: null,
     siret: '',
     entity_function: '',
+    entity_address: '',
+    entity_code_insee: '',
+    entity_code_ape: '',
+    entity_strate: null,
+    entity_service_name: '',
+    entity_service_email: '',
     profile_completion_percentage: 0,
   });
 
@@ -179,19 +226,34 @@ export default function Profile() {
             bio: data.bio || '',
             notification_email: data.notification_email ?? true,
             notification_sms: data.notification_sms ?? false,
+            // B2C
             property_type: data.property_type || null,
             property_surface: data.property_surface || null,
             property_year: data.property_year || null,
+            property_rooms: data.property_rooms || null,
+            property_address: data.property_address || '',
+            property_energy_class: data.property_energy_class || null,
             is_owner: data.is_owner ?? true,
+            // B2B
             company: data.company || '',
             company_siret: data.company_siret || '',
             company_activity: data.company_activity || '',
             company_size: data.company_size || null,
             company_role: data.company_role || '',
+            company_address: data.company_address || '',
+            company_code_ape: data.company_code_ape || '',
+            company_rcs: data.company_rcs || '',
+            // B2G
             entity_name: data.entity_name || '',
             entity_type: data.entity_type || null,
             siret: data.siret || '',
             entity_function: data.entity_function || '',
+            entity_address: data.entity_address || '',
+            entity_code_insee: data.entity_code_insee || '',
+            entity_code_ape: data.entity_code_ape || '',
+            entity_strate: data.entity_strate || null,
+            entity_service_name: data.entity_service_name || '',
+            entity_service_email: data.entity_service_email || '',
             profile_completion_percentage: data.profile_completion_percentage || 0,
           });
         }
@@ -227,6 +289,9 @@ export default function Profile() {
         updates.property_type = formData.property_type;
         updates.property_surface = formData.property_surface;
         updates.property_year = formData.property_year;
+        updates.property_rooms = formData.property_rooms;
+        updates.property_address = formData.property_address;
+        updates.property_energy_class = formData.property_energy_class;
         updates.is_owner = formData.is_owner;
       }
 
@@ -237,6 +302,9 @@ export default function Profile() {
         updates.company_activity = formData.company_activity;
         updates.company_size = formData.company_size;
         updates.company_role = formData.company_role;
+        updates.company_address = formData.company_address;
+        updates.company_code_ape = formData.company_code_ape;
+        updates.company_rcs = formData.company_rcs;
       }
 
       // Champs B2G
@@ -245,6 +313,12 @@ export default function Profile() {
         updates.entity_type = formData.entity_type;
         updates.siret = formData.siret;
         updates.entity_function = formData.entity_function;
+        updates.entity_address = formData.entity_address;
+        updates.entity_code_insee = formData.entity_code_insee;
+        updates.entity_code_ape = formData.entity_code_ape;
+        updates.entity_strate = formData.entity_strate;
+        updates.entity_service_name = formData.entity_service_name;
+        updates.entity_service_email = formData.entity_service_email;
       }
 
       const { data, error } = await supabase
@@ -574,59 +648,97 @@ export default function Profile() {
               <CardContent className="space-y-6">
                 {/* B2C Fields */}
                 {userType === 'B2C' && (
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="property_type">Type de bien *</Label>
-                      <Select
-                        value={formData.property_type || ''}
-                        onValueChange={(value) => setFormData({ ...formData, property_type: value as ExtendedUserProfile['property_type'] })}
-                        disabled={!isEditing}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PROPERTY_TYPES.map((type) => (
-                            <SelectItem key={type.value} value={type.value}>
-                              {type.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="property_surface">Surface (m²) *</Label>
-                      <Input
-                        id="property_surface"
-                        type="number"
-                        value={formData.property_surface || ''}
-                        onChange={(e) => setFormData({ ...formData, property_surface: parseInt(e.target.value) || null })}
-                        placeholder="120"
-                        disabled={!isEditing}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="property_year">Année de construction</Label>
-                      <Input
-                        id="property_year"
-                        type="number"
-                        value={formData.property_year || ''}
-                        onChange={(e) => setFormData({ ...formData, property_year: parseInt(e.target.value) || null })}
-                        placeholder="1985"
-                        disabled={!isEditing}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Statut</Label>
-                      <div className="flex items-center space-x-2 pt-2">
-                        <Switch
-                          checked={formData.is_owner}
-                          onCheckedChange={(checked) => setFormData({ ...formData, is_owner: checked })}
+                  <div className="space-y-4">
+                    <div className="grid md:grid-cols-3 gap-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Type de bien *</Label>
+                        <Select
+                          value={formData.property_type || ''}
+                          onValueChange={(value) => setFormData({ ...formData, property_type: value as ExtendedUserProfile['property_type'] })}
                           disabled={!isEditing}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Sélectionner..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PROPERTY_TYPES.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Surface (m²) *</Label>
+                        <Input
+                          type="number"
+                          value={formData.property_surface || ''}
+                          onChange={(e) => setFormData({ ...formData, property_surface: parseInt(e.target.value) || null })}
+                          placeholder="120"
+                          disabled={!isEditing}
+                          className="h-9"
                         />
-                        <Label className="font-normal">
-                          {formData.is_owner ? 'Propriétaire' : 'Locataire'}
-                        </Label>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Nombre de pièces</Label>
+                        <Input
+                          type="number"
+                          value={formData.property_rooms || ''}
+                          onChange={(e) => setFormData({ ...formData, property_rooms: parseInt(e.target.value) || null })}
+                          placeholder="5"
+                          disabled={!isEditing}
+                          className="h-9"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">Adresse du bien</Label>
+                      <Input
+                        value={formData.property_address}
+                        onChange={(e) => setFormData({ ...formData, property_address: e.target.value })}
+                        placeholder="12 Rue de la Paix, 75001 Paris"
+                        disabled={!isEditing}
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="grid md:grid-cols-3 gap-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Année construction</Label>
+                        <Input
+                          type="number"
+                          value={formData.property_year || ''}
+                          onChange={(e) => setFormData({ ...formData, property_year: parseInt(e.target.value) || null })}
+                          placeholder="1985"
+                          disabled={!isEditing}
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">DPE</Label>
+                        <Select
+                          value={formData.property_energy_class || ''}
+                          onValueChange={(value) => setFormData({ ...formData, property_energy_class: value as ExtendedUserProfile['property_energy_class'] })}
+                          disabled={!isEditing}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Classe..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ENERGY_CLASSES.map((ec) => (
+                              <SelectItem key={ec.value} value={ec.value}>{ec.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Statut</Label>
+                        <div className="flex items-center space-x-2 h-9 pt-1">
+                          <Switch
+                            checked={formData.is_owner}
+                            onCheckedChange={(checked) => setFormData({ ...formData, is_owner: checked })}
+                            disabled={!isEditing}
+                          />
+                          <span className="text-sm">{formData.is_owner ? 'Propriétaire' : 'Locataire'}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -634,64 +746,96 @@ export default function Profile() {
 
                 {/* B2B Fields */}
                 {userType === 'B2B' && (
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="company">Nom de l'entreprise *</Label>
+                  <div className="space-y-4">
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Nom de l'entreprise *</Label>
+                        <Input
+                          value={formData.company}
+                          onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                          placeholder="Ma Société SAS"
+                          disabled={!isEditing}
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Votre fonction *</Label>
+                        <Input
+                          value={formData.company_role}
+                          onChange={(e) => setFormData({ ...formData, company_role: e.target.value })}
+                          placeholder="Gérant, Directeur technique..."
+                          disabled={!isEditing}
+                          className="h-9"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">Adresse du siège</Label>
                       <Input
-                        id="company"
-                        value={formData.company}
-                        onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                        placeholder="Ma Société SAS"
+                        value={formData.company_address}
+                        onChange={(e) => setFormData({ ...formData, company_address: e.target.value })}
+                        placeholder="10 Avenue des Champs-Élysées, 75008 Paris"
                         disabled={!isEditing}
+                        className="h-9"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="company_siret">SIRET *</Label>
-                      <Input
-                        id="company_siret"
-                        value={formData.company_siret}
-                        onChange={(e) => setFormData({ ...formData, company_siret: e.target.value })}
-                        placeholder="123 456 789 00012"
-                        disabled={!isEditing}
-                      />
+                    <div className="grid md:grid-cols-4 gap-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">SIRET *</Label>
+                        <Input
+                          value={formData.company_siret}
+                          onChange={(e) => setFormData({ ...formData, company_siret: e.target.value })}
+                          placeholder="123 456 789 00012"
+                          disabled={!isEditing}
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Code APE</Label>
+                        <Input
+                          value={formData.company_code_ape}
+                          onChange={(e) => setFormData({ ...formData, company_code_ape: e.target.value })}
+                          placeholder="4399C"
+                          disabled={!isEditing}
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">RCS</Label>
+                        <Input
+                          value={formData.company_rcs}
+                          onChange={(e) => setFormData({ ...formData, company_rcs: e.target.value })}
+                          placeholder="Paris B 123 456 789"
+                          disabled={!isEditing}
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Effectif</Label>
+                        <Select
+                          value={formData.company_size || ''}
+                          onValueChange={(value) => setFormData({ ...formData, company_size: value as ExtendedUserProfile['company_size'] })}
+                          disabled={!isEditing}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Taille..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {COMPANY_SIZES.map((size) => (
+                              <SelectItem key={size.value} value={size.value}>{size.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="company_activity">Activité principale</Label>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">Activité principale</Label>
                       <Input
-                        id="company_activity"
                         value={formData.company_activity}
                         onChange={(e) => setFormData({ ...formData, company_activity: e.target.value })}
-                        placeholder="Construction, Rénovation..."
+                        placeholder="Construction, Rénovation, Maîtrise d'œuvre..."
                         disabled={!isEditing}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="company_size">Taille de l'entreprise</Label>
-                      <Select
-                        value={formData.company_size || ''}
-                        onValueChange={(value) => setFormData({ ...formData, company_size: value as ExtendedUserProfile['company_size'] })}
-                        disabled={!isEditing}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {COMPANY_SIZES.map((size) => (
-                            <SelectItem key={size.value} value={size.value}>
-                              {size.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <Label htmlFor="company_role">Votre fonction *</Label>
-                      <Input
-                        id="company_role"
-                        value={formData.company_role}
-                        onChange={(e) => setFormData({ ...formData, company_role: e.target.value })}
-                        placeholder="Gérant, Directeur technique..."
-                        disabled={!isEditing}
+                        className="h-9"
                       />
                     </div>
                   </div>
@@ -699,54 +843,128 @@ export default function Profile() {
 
                 {/* B2G Fields */}
                 {userType === 'B2G' && (
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="entity_name">Nom de la collectivité *</Label>
+                  <div className="space-y-4">
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Nom de la collectivité *</Label>
+                        <Input
+                          value={formData.entity_name}
+                          onChange={(e) => setFormData({ ...formData, entity_name: e.target.value })}
+                          placeholder="Ville de Lyon"
+                          disabled={!isEditing}
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Type d'entité *</Label>
+                        <Select
+                          value={formData.entity_type || ''}
+                          onValueChange={(value) => setFormData({ ...formData, entity_type: value as ExtendedUserProfile['entity_type'] })}
+                          disabled={!isEditing}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Sélectionner..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ENTITY_TYPES.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">Adresse du siège</Label>
                       <Input
-                        id="entity_name"
-                        value={formData.entity_name}
-                        onChange={(e) => setFormData({ ...formData, entity_name: e.target.value })}
-                        placeholder="Mairie de Paris"
+                        value={formData.entity_address}
+                        onChange={(e) => setFormData({ ...formData, entity_address: e.target.value })}
+                        placeholder="1 Place de la Mairie, 69001 Lyon"
                         disabled={!isEditing}
+                        className="h-9"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="entity_type">Type d'entité *</Label>
-                      <Select
-                        value={formData.entity_type || ''}
-                        onValueChange={(value) => setFormData({ ...formData, entity_type: value as ExtendedUserProfile['entity_type'] })}
-                        disabled={!isEditing}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ENTITY_TYPES.map((type) => (
-                            <SelectItem key={type.value} value={type.value}>
-                              {type.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="grid md:grid-cols-4 gap-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">SIRET</Label>
+                        <Input
+                          value={formData.siret}
+                          onChange={(e) => setFormData({ ...formData, siret: e.target.value })}
+                          placeholder="213 750 000 00012"
+                          disabled={!isEditing}
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Code INSEE</Label>
+                        <Input
+                          value={formData.entity_code_insee}
+                          onChange={(e) => setFormData({ ...formData, entity_code_insee: e.target.value })}
+                          placeholder="69123"
+                          disabled={!isEditing}
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Code APE</Label>
+                        <Input
+                          value={formData.entity_code_ape}
+                          onChange={(e) => setFormData({ ...formData, entity_code_ape: e.target.value })}
+                          placeholder="84.11Z"
+                          disabled={!isEditing}
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Strate démographique</Label>
+                        <Select
+                          value={formData.entity_strate || ''}
+                          onValueChange={(value) => setFormData({ ...formData, entity_strate: value as ExtendedUserProfile['entity_strate'] })}
+                          disabled={!isEditing}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Population..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ENTITY_STRATES.map((s) => (
+                              <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="siret">SIRET</Label>
-                      <Input
-                        id="siret"
-                        value={formData.siret}
-                        onChange={(e) => setFormData({ ...formData, siret: e.target.value })}
-                        placeholder="213 750 000 00012"
-                        disabled={!isEditing}
-                      />
+                    <Separator />
+                    <p className="text-sm font-medium">Votre contact</p>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Votre fonction *</Label>
+                        <Input
+                          value={formData.entity_function}
+                          onChange={(e) => setFormData({ ...formData, entity_function: e.target.value })}
+                          placeholder="Directeur des services techniques"
+                          disabled={!isEditing}
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-sm">Service</Label>
+                        <Input
+                          value={formData.entity_service_name}
+                          onChange={(e) => setFormData({ ...formData, entity_service_name: e.target.value })}
+                          placeholder="Direction des Services Techniques"
+                          disabled={!isEditing}
+                          className="h-9"
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="entity_function">Votre fonction *</Label>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">Email du service</Label>
                       <Input
-                        id="entity_function"
-                        value={formData.entity_function}
-                        onChange={(e) => setFormData({ ...formData, entity_function: e.target.value })}
-                        placeholder="Directeur des services techniques"
+                        type="email"
+                        value={formData.entity_service_email}
+                        onChange={(e) => setFormData({ ...formData, entity_service_email: e.target.value })}
+                        placeholder="services-techniques@mairie.fr"
                         disabled={!isEditing}
+                        className="h-9"
                       />
                     </div>
                   </div>

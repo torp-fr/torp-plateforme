@@ -11,7 +11,37 @@ export interface User {
   email: string;
   name: string;
   type: UserType;
-  company?: string;
+  phone?: string;
+  city?: string;
+  postal_code?: string;
+  // B2C
+  company?: string; // Legacy, also used for B2B
+  property_type?: string;
+  property_surface?: number;
+  property_year?: number;
+  property_rooms?: number;
+  property_address?: string;
+  property_energy_class?: string;
+  is_owner?: boolean;
+  // B2B
+  company_siret?: string;
+  company_activity?: string;
+  company_size?: string;
+  company_role?: string;
+  company_address?: string;
+  company_code_ape?: string;
+  company_rcs?: string;
+  // B2G
+  entity_name?: string;
+  entity_type?: string;
+  entity_address?: string;
+  siret?: string;
+  entity_function?: string;
+  entity_code_insee?: string;
+  entity_code_ape?: string;
+  entity_strate?: string;
+  entity_service_name?: string;
+  entity_service_email?: string;
 }
 
 export interface Project {
