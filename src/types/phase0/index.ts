@@ -1486,3 +1486,57 @@ export type {
   LoanOffer,
   ComparisonCriterion,
 } from './budget.types';
+
+// =============================================================================
+// TYPES PIÈCES ET TRAVAUX PAR ZONE (Module Travaux par Pièce)
+// =============================================================================
+export type {
+  // Définition pièce avec travaux
+  RoomWorkDefinition,
+  RoomInfo,
+
+  // Travaux par pièce
+  RoomWork,
+  RoomWorkCategory,
+  RoomWorkType,
+  WorkSpecifications,
+  MaterialPreference,
+  FinishLevel,
+  WorkPriority,
+  RoomWorkStatus,
+  WorkEstimate,
+
+  // Photos
+  RoomPhoto,
+  RoomPhotoType,
+  PhotoViewAngle,
+  PhotoPosition,
+  PhotoAnnotation,
+  PhotoQuality,
+
+  // Notes
+  RoomNote,
+  RoomNoteType,
+  NoteImportance,
+
+  // État
+  RoomState,
+  RoomIssue,
+  IssueType,
+  IssueSeverity,
+
+  // Estimation par pièce
+  RoomEstimate,
+  RoomCostBreakdown,
+
+  // Configuration
+  RoomTypeConfig,
+} from './rooms.types';
+
+export {
+  ROOM_TYPE_CONFIGS,
+  ROOM_WORK_CATEGORY_LABELS,
+  ROOM_WORK_TYPE_LABELS,
+  FINISH_LEVEL_LABELS,
+  WORK_PRIORITY_LABELS,
+} from './rooms.types';
