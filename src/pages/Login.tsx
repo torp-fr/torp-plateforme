@@ -47,8 +47,8 @@ export default function Login() {
 
       console.log('[Login] Redirection vers dashboard...');
 
-      // Vérifier si l'utilisateur est admin
-      if (response.user.type === 'admin') {
+      // Vérifier si l'utilisateur est admin/super_admin
+      if (response.user.type === 'admin' || response.user.type === 'super_admin') {
         console.log('[Login] Admin détecté, redirection vers /admin/analytics');
         navigate('/admin/analytics');
       } else {

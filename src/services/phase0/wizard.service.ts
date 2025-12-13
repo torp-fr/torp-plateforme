@@ -374,22 +374,51 @@ export class WizardService {
    * Récupérer l'état du wizard pour un projet
    */
   async getWizardState(projectId: string): Promise<WizardState | null> {
-    const { data, error } = await supabase
-      .from('phase0_wizard_progress')
-      .select('*')
-      .eq('project_id', projectId)
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('phase0_wizard_progress')
+        .select('*')
+        .eq('project_id', projectId)
+        .single();
 
-    if (error) {
-      if (error.code === 'PGRST116') {
-        // Créer un nouvel état wizard
-        return this.initializeWizardState(projectId);
+      if (error) {
+        // PGRST116 = No rows returned - créer un nouvel état
+        if (error.code === 'PGRST116') {
+          return this.initializeWizardState(projectId);
+        }
+        // Erreur de schéma - retourner un état par défaut en mémoire
+        if (error.message?.includes('schema cache') || error.code === '42P01' || error.code === '406') {
+          console.warn('Table phase0_wizard_progress non disponible, utilisation état mémoire:', error.message);
+          return this.createMemoryState(projectId);
+        }
+        console.error('Error fetching wizard state:', error);
+        throw new Error(`Erreur lors de la récupération du wizard: ${error.message}`);
       }
-      console.error('Error fetching wizard state:', error);
-      throw new Error(`Erreur lors de la récupération du wizard: ${error.message}`);
-    }
 
-    return this.mapRowToState(data, projectId);
+      return this.mapRowToState(data, projectId);
+    } catch (err) {
+      // En cas d'erreur inattendue, retourner un état par défaut
+      console.warn('Fallback to memory state due to error:', err);
+      return this.createMemoryState(projectId);
+    }
+  }
+
+  /**
+   * Créer un état wizard en mémoire (fallback)
+   */
+  private createMemoryState(projectId: string): WizardState {
+    return {
+      projectId,
+      currentStepIndex: 0,
+      completedSteps: [],
+      answers: {},
+      metadata: {},
+      validationErrors: [],
+      deductionsPending: [],
+      startedAt: new Date().toISOString(),
+      lastUpdatedAt: new Date().toISOString(),
+      totalTimeSpent: 0,
+    };
   }
 
   /**
@@ -409,18 +438,28 @@ export class WizardService {
       total_time_spent: 0,
     };
 
-    const { data, error } = await supabase
-      .from('phase0_wizard_progress')
-      .upsert(initialState, { onConflict: 'project_id' })
-      .select()
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('phase0_wizard_progress')
+        .upsert(initialState, { onConflict: 'project_id' })
+        .select()
+        .single();
 
-    if (error) {
-      console.error('Error initializing wizard state:', error);
-      throw new Error(`Erreur lors de l'initialisation du wizard: ${error.message}`);
+      if (error) {
+        // Si erreur de schéma ou table, utiliser état mémoire
+        if (error.message?.includes('schema cache') || error.code === '42P01' || error.code === '400') {
+          console.warn('Cannot initialize wizard in DB, using memory state:', error.message);
+          return this.createMemoryState(projectId);
+        }
+        console.error('Error initializing wizard state:', error);
+        throw new Error(`Erreur lors de l'initialisation du wizard: ${error.message}`);
+      }
+
+      return this.mapRowToState(data, projectId);
+    } catch (err) {
+      console.warn('Fallback to memory state on initialize:', err);
+      return this.createMemoryState(projectId);
     }
-
-    return this.mapRowToState(data, projectId);
   }
 
   /**

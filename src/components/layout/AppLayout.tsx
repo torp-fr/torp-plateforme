@@ -117,6 +117,15 @@ const USER_TYPE_CONFIG = {
     newProjectLabel: 'Administration',
     dashboardLink: '/admin-dashboard',
   },
+  super_admin: {
+    label: 'Super Admin',
+    badge: 'SUPER',
+    badgeColor: 'bg-red-100 text-red-700',
+    navItems: B2B_NAV_ITEMS, // Super admins can access all features
+    newProjectLink: '/admin/analytics',
+    newProjectLabel: 'Administration',
+    dashboardLink: '/admin/analytics',
+  },
 };
 
 export function AppLayout({ children }: AppLayoutProps) {

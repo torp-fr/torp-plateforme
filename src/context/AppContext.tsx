@@ -3,8 +3,8 @@ import { authService } from '@/services/api/supabase/auth.service';
 import { devisService } from '@/services/api/supabase/devis.service';
 import { Phase0ProjectService, Phase0Summary } from '@/services/phase0';
 
-// User types - Particulier (B2C), Professionnel (B2B), Secteur Public (B2G)
-export type UserType = 'B2C' | 'B2B' | 'B2G' | 'admin';
+// User types - Particulier (B2C), Professionnel (B2B), Secteur Public (B2G), Admin
+export type UserType = 'B2C' | 'B2B' | 'B2G' | 'admin' | 'super_admin';
 
 export interface User {
   id: string;
