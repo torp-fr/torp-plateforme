@@ -498,15 +498,44 @@ export class ValidationService {
   /**
    * Vérifie si un projet peut passer à l'étape suivante
    * NOTE: Les cases correspondent à l'index de l'étape actuelle + 1 (1-indexed)
-   * Wizard steps order: Profile(1), Property(2), Works(3), Constraints(4), Budget(5), Summary(6)
+   *
+   * B2C Wizard steps order: Profile(1), Property(2), Works(3), Constraints(4), Budget(5), Summary(6)
+   * B2B Wizard steps order: Client(1), Site(2), Works(3), Constraints(4), Budget(5), Summary(6)
    */
   static canProceedToNextStep(
     project: Partial<Phase0Project>,
-    currentStep: number
+    currentStep: number,
+    mode: 'b2c' | 'b2b' | 'b2b_professional' = 'b2c'
   ): { canProceed: boolean; blockers: string[] } {
     const blockers: string[] = [];
-    const owner = project.ownerProfile || project.owner;
+    const isB2B = mode === 'b2b' || mode === 'b2b_professional';
 
+    // Accès aux données selon le mode
+    const owner = project.ownerProfile || project.owner;
+    const client = project.client as Record<string, unknown> | undefined;
+    const clientIdentity = client?.identity as Record<string, unknown> | undefined;
+    const clientContext = client?.context as Record<string, unknown> | undefined;
+    const clientSite = client?.site as Record<string, unknown> | undefined;
+    const siteAddress = clientSite?.address as Record<string, unknown> | undefined;
+
+    // B2B Mode: Navigation libre pour faciliter l'utilisation
+    // La validation complète se fait à la finalisation du projet
+    if (isB2B) {
+      switch (currentStep) {
+        case 1: // Client & Projet - type de client requis
+          if (!clientIdentity?.clientType) {
+            blockers.push('Sélectionnez le type de client');
+          }
+          break;
+        // Étapes 2-6: Navigation libre, pas de blocage
+        // Cela permet aux pros de remplir les infos dans l'ordre qu'ils souhaitent
+        default:
+          break;
+      }
+      return { canProceed: blockers.length === 0, blockers };
+    }
+
+    // B2C Mode: Validation stricte par étape
     switch (currentStep) {
       case 1: // Profil MOA - seulement le type est requis pour avancer
         if (!owner?.identity?.type) {

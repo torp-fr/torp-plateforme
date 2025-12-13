@@ -3,7 +3,7 @@
  * Simplified navigation with clear user journey
  */
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import { Menu, X, ChevronDown } from "lucide-react";
@@ -20,10 +20,15 @@ import { useToast } from "@/hooks/use-toast";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 export const Header = () => {
-  const { user, setUser } = useApp();
+  const { user, setUser, userType } = useApp();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { toast } = useToast();
+
+  // Détermine les liens dashboard selon le type d'utilisateur
+  const isB2B = userType === 'B2B';
+  const dashboardLink = isB2B ? '/pro' : '/dashboard';
+  const dashboardLabel = isB2B ? 'Mes Projets' : 'Mes Analyses';
 
   const handleLogout = async () => {
     try {
@@ -122,17 +127,19 @@ export const Header = () => {
             {user && (
               <>
                 <Link
-                  to="/dashboard"
+                  to={dashboardLink}
                   className="text-sm font-medium text-foreground hover:text-primary transition-colors"
                 >
-                  Mes Analyses
+                  {dashboardLabel}
                 </Link>
-                <Link
-                  to="/compare"
-                  className="text-sm font-medium text-foreground hover:text-primary transition-colors"
-                >
-                  Comparer
-                </Link>
+                {!isB2B && (
+                  <Link
+                    to="/compare"
+                    className="text-sm font-medium text-foreground hover:text-primary transition-colors"
+                  >
+                    Comparer
+                  </Link>
+                )}
               </>
             )}
           </nav>
@@ -150,12 +157,14 @@ export const Header = () => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem onClick={() => navigate('/dashboard')}>
-                      📊 Dashboard
+                    <DropdownMenuItem onClick={() => navigate(dashboardLink)}>
+                      📊 {isB2B ? 'Espace Pro' : 'Dashboard'}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/compare')}>
-                      ⚖️ Comparer devis
-                    </DropdownMenuItem>
+                    {!isB2B && (
+                      <DropdownMenuItem onClick={() => navigate('/compare')}>
+                        ⚖️ Comparer devis
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem onClick={() => navigate('/profile')}>
                       👤 Mon Profil
                     </DropdownMenuItem>
@@ -248,19 +257,21 @@ export const Header = () => {
             {user && (
               <>
                 <Link
-                  to="/dashboard"
+                  to={dashboardLink}
                   className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  Mes Analyses
+                  {dashboardLabel}
                 </Link>
-                <Link
-                  to="/compare"
-                  className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Comparer devis
-                </Link>
+                {!isB2B && (
+                  <Link
+                    to="/compare"
+                    className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Comparer devis
+                  </Link>
+                )}
               </>
             )}
 
@@ -270,9 +281,9 @@ export const Header = () => {
                   <div className="px-2 py-2 text-sm font-medium text-muted-foreground border-b mb-2">
                     {user.name || user.email}
                   </div>
-                  <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
+                  <Link to={dashboardLink} onClick={() => setMobileMenuOpen(false)}>
                     <Button variant="outline" size="sm" className="w-full justify-start">
-                      📊 Dashboard
+                      📊 {isB2B ? 'Espace Pro' : 'Dashboard'}
                     </Button>
                   </Link>
                   <Link to="/profile" onClick={() => setMobileMenuOpen(false)}>

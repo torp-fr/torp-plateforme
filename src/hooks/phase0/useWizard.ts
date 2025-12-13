@@ -146,10 +146,10 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
     if (!currentStep) return false;
     if (currentStep.isOptional) return true;
 
-    // Vérifier que les champs requis sont remplis
-    const validation = ValidationService.canProceedToNextStep(project || {}, currentStepIndex + 1);
+    // Vérifier que les champs requis sont remplis (passer le mode pour validation B2B)
+    const validation = ValidationService.canProceedToNextStep(project || {}, currentStepIndex + 1, mode);
     return validation.canProceed;
-  }, [currentStep, project, currentStepIndex]);
+  }, [currentStep, project, currentStepIndex, mode]);
 
   const canGoPrevious = useMemo(() => {
     return currentStepIndex > 0;
@@ -193,7 +193,7 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
     if (!state || !currentStep || currentStepIndex >= steps.length - 1) return;
 
     // Valider l'étape courante (optionnelle pour les étapes marquées comme telles)
-    const validation = ValidationService.canProceedToNextStep(project || {}, currentStepIndex + 1);
+    const validation = ValidationService.canProceedToNextStep(project || {}, currentStepIndex + 1, mode);
     if (!validation.canProceed && !currentStep.isOptional) {
       setStepErrors(validation.blockers);
       toast({
@@ -244,7 +244,7 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
     } finally {
       setIsSaving(false);
     }
-  }, [state, currentStep, currentStepIndex, steps, project, projectId, toast]);
+  }, [state, currentStep, currentStepIndex, steps, project, projectId, mode, toast]);
 
   const goPrevious = useCallback(() => {
     if (!state || currentStepIndex <= 0) return;
@@ -425,11 +425,11 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
   const validateCurrentStep = useCallback((): boolean => {
     if (!currentStep || !project) return false;
 
-    const validation = ValidationService.canProceedToNextStep(project, currentStepIndex + 1);
+    const validation = ValidationService.canProceedToNextStep(project, currentStepIndex + 1, mode);
     setStepErrors(validation.blockers);
 
     return validation.canProceed;
-  }, [currentStep, project, currentStepIndex]);
+  }, [currentStep, project, currentStepIndex, mode]);
 
   const getAnswer = useCallback((questionId: string): unknown => {
     if (!state?.answers[questionId]) return undefined;

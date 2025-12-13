@@ -16,7 +16,8 @@ import {
   Menu,
   X,
   ChevronDown,
-  Ticket,
+  Briefcase,
+  FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
@@ -40,10 +41,10 @@ interface ProLayoutProps {
 
 const NAV_ITEMS = [
   { href: '/pro', icon: LayoutDashboard, label: 'Tableau de bord', exact: true },
-  { href: '/pro/analyses', icon: FileSearch, label: 'Mes analyses' },
-  { href: '/pro/analyses/new', icon: PlusCircle, label: 'Nouvelle analyse' },
-  { href: '/pro/documents', icon: FolderOpen, label: 'Mes documents' },
-  { href: '/pro/tickets', icon: Ticket, label: 'Mes tickets' },
+  { href: '/pro/projects', icon: Briefcase, label: 'Mes projets' },
+  { href: '/pro/documents', icon: FileText, label: 'Documents' },
+  { href: '/b2b/ao', icon: FolderOpen, label: 'Appels d\'offres' },
+  { href: '/pro/analyses', icon: FileSearch, label: 'Analyses devis' },
   { href: '/pro/settings', icon: Settings, label: 'Paramètres' },
 ];
 
@@ -165,9 +166,9 @@ export function ProLayout({ children }: ProLayoutProps) {
 
           {/* CTA */}
           <div className="p-4 border-t mt-4">
-            <Button className="w-full" onClick={() => navigate('/pro/analyses/new')}>
+            <Button className="w-full" onClick={() => navigate('/pro/projects/new')}>
               <PlusCircle className="h-4 w-4 mr-2" />
-              Analyser un devis
+              Nouveau projet
             </Button>
           </div>
         </aside>
