@@ -3,7 +3,7 @@
  * Permet de définir les travaux pièce par pièce avec photos et notes
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { StepComponentProps } from '../WizardContainer';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
+import { PricingEstimationService, ProjectEstimation } from '@/services/phase0/pricing-estimation.service';
 import {
   Select,
   SelectContent,
@@ -65,6 +66,11 @@ import {
   Copy,
   Edit,
   Image,
+  TrendingUp,
+  TrendingDown,
+  Calculator,
+  Info,
+  BarChart3,
 } from 'lucide-react';
 import {
   RoomType,
@@ -504,6 +510,13 @@ export function StepRoomDetails({
     setExpandedRooms(prev => [...prev, newRoom.id]);
   };
 
+  // Récupérer le code postal depuis le projet
+  const postalCode = useMemo(() => {
+    const property = project.property as Record<string, unknown> | undefined;
+    const address = property?.address as Record<string, unknown> | undefined;
+    return (address?.postalCode as string) || (answers['property.address.postalCode'] as string);
+  }, [project.property, answers]);
+
   // Calculer les statistiques
   const stats = useMemo(() => {
     const totalWorks = rooms.reduce((sum, r) => sum + r.works.length, 0);
@@ -512,6 +525,18 @@ export function StepRoomDetails({
 
     return { totalWorks, roomsWithWorks, totalSurface };
   }, [rooms]);
+
+  // Calculer l'estimation tarifaire
+  const estimation = useMemo((): ProjectEstimation | null => {
+    if (rooms.length === 0 || stats.totalWorks === 0) return null;
+
+    return PricingEstimationService.estimateProjectCost(roomDetailsData, {
+      postalCode,
+      complexity: 'standard',
+      finishLevel: 'standard',
+      contingencyPercentage: 10,
+    });
+  }, [roomDetailsData, rooms, stats.totalWorks, postalCode]);
 
   return (
     <div className="space-y-8">
@@ -525,28 +550,163 @@ export function StepRoomDetails({
         </p>
       </div>
 
-      {/* Statistiques */}
+      {/* Statistiques et Estimation */}
       {rooms.length > 0 && (
-        <Card>
-          <CardContent className="py-4">
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div>
-                <div className="text-2xl font-bold text-primary">{rooms.length}</div>
-                <div className="text-sm text-muted-foreground">Pièce(s)</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-primary">{stats.totalWorks}</div>
-                <div className="text-sm text-muted-foreground">Travaux</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-primary">
-                  {stats.totalSurface > 0 ? `${stats.totalSurface} m²` : '-'}
+        <div className="space-y-4">
+          {/* Stats rapides */}
+          <Card>
+            <CardContent className="py-4">
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <div className="text-2xl font-bold text-primary">{rooms.length}</div>
+                  <div className="text-sm text-muted-foreground">Pièce(s)</div>
                 </div>
-                <div className="text-sm text-muted-foreground">Surface</div>
+                <div>
+                  <div className="text-2xl font-bold text-primary">{stats.totalWorks}</div>
+                  <div className="text-sm text-muted-foreground">Travaux</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-primary">
+                    {stats.totalSurface > 0 ? `${stats.totalSurface} m²` : '-'}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Surface</div>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          {/* Estimation tarifaire */}
+          {estimation && stats.totalWorks > 0 && (
+            <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Calculator className="w-5 h-5 text-green-600" />
+                  Estimation budgétaire
+                </CardTitle>
+                <CardDescription>
+                  Basée sur les prix du marché {postalCode ? `(${postalCode})` : ''}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Fourchette de prix */}
+                <div className="text-center py-4 bg-white/50 dark:bg-black/20 rounded-lg">
+                  <div className="text-sm text-muted-foreground mb-1">Estimation totale</div>
+                  <div className="text-3xl font-bold text-green-700 dark:text-green-400">
+                    {PricingEstimationService.formatPriceRange(
+                      estimation.total.min,
+                      estimation.total.max
+                    )}
+                  </div>
+                  {estimation.pricePerSqm && stats.totalSurface > 0 && (
+                    <div className="text-sm text-muted-foreground mt-1">
+                      soit {PricingEstimationService.formatPriceRange(
+                        estimation.pricePerSqm.min,
+                        estimation.pricePerSqm.max
+                      )} / m²
+                    </div>
+                  )}
+                </div>
+
+                {/* Benchmark marché */}
+                {estimation.benchmarkComparison && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4 text-muted-foreground" />
+                        Position marché
+                      </span>
+                      <Badge
+                        variant={
+                          estimation.benchmarkComparison.marketPosition === 'below'
+                            ? 'secondary'
+                            : estimation.benchmarkComparison.marketPosition === 'above'
+                            ? 'default'
+                            : 'outline'
+                        }
+                        className="flex items-center gap-1"
+                      >
+                        {estimation.benchmarkComparison.marketPosition === 'below' && (
+                          <TrendingDown className="w-3 h-3" />
+                        )}
+                        {estimation.benchmarkComparison.marketPosition === 'above' && (
+                          <TrendingUp className="w-3 h-3" />
+                        )}
+                        {estimation.benchmarkComparison.marketPosition === 'below'
+                          ? 'Sous la moyenne'
+                          : estimation.benchmarkComparison.marketPosition === 'above'
+                          ? 'Au-dessus de la moyenne'
+                          : 'Dans la moyenne'}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Moyenne régionale</span>
+                        <span className="font-medium">
+                          {PricingEstimationService.formatPrice(estimation.benchmarkComparison.regionalAverage)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Moyenne nationale</span>
+                        <span className="font-medium">
+                          {PricingEstimationService.formatPrice(estimation.benchmarkComparison.nationalAverage)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground border-l-2 border-green-300 pl-3">
+                      {estimation.benchmarkComparison.message}
+                    </p>
+                  </div>
+                )}
+
+                {/* Détail par pièce */}
+                {estimation.rooms.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t">
+                    <div className="text-sm font-medium">Détail par pièce</div>
+                    {estimation.rooms.map((room) => (
+                      <div key={room.roomId} className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          {room.roomName}
+                          {room.surface && <span className="ml-1">({room.surface} m²)</span>}
+                        </span>
+                        <span className="font-medium">
+                          {PricingEstimationService.formatPriceRange(
+                            room.totalEstimate.min,
+                            room.totalEstimate.max
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between text-sm pt-2 border-t">
+                      <span className="text-muted-foreground">Provision imprévus ({estimation.contingency.percentage}%)</span>
+                      <span className="font-medium">
+                        {PricingEstimationService.formatPriceRange(
+                          estimation.contingency.min,
+                          estimation.contingency.max
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Niveau de confiance */}
+                <div className="flex items-center justify-between text-xs pt-2 border-t">
+                  <span className="flex items-center gap-1 text-muted-foreground">
+                    <Info className="w-3 h-3" />
+                    Niveau de confiance: {
+                      estimation.confidence === 'high' ? 'Élevé' :
+                      estimation.confidence === 'medium' ? 'Moyen' : 'Indicatif'
+                    }
+                  </span>
+                  <span className="text-muted-foreground">
+                    Valide jusqu'au {new Date(estimation.validUntil).toLocaleDateString('fr-FR')}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
 
       {/* Liste des pièces */}
