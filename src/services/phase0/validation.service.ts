@@ -505,10 +505,11 @@ export class ValidationService {
   static canProceedToNextStep(
     project: Partial<Phase0Project>,
     currentStep: number,
-    mode: 'b2c' | 'b2b' | 'b2b_professional' = 'b2c'
+    mode: 'b2c' | 'b2b' | 'b2b_professional' | 'b2g' | 'b2g_public' = 'b2c'
   ): { canProceed: boolean; blockers: string[] } {
     const blockers: string[] = [];
     const isB2B = mode === 'b2b' || mode === 'b2b_professional';
+    const isB2G = mode === 'b2g' || mode === 'b2g_public';
 
     // Accès aux données selon le mode
     const owner = project.ownerProfile || project.owner;
@@ -517,6 +518,15 @@ export class ValidationService {
     const clientContext = client?.context as Record<string, unknown> | undefined;
     const clientSite = client?.site as Record<string, unknown> | undefined;
     const siteAddress = clientSite?.address as Record<string, unknown> | undefined;
+
+    // B2G Mode: Navigation souple pour les collectivités
+    // La validation complète se fait à la génération du DCE
+    if (isB2G) {
+      // Toutes les étapes sont navigables sans blocage strict
+      // Les collectivités peuvent remplir les informations dans l'ordre souhaité
+      // La validation finale se fait lors de la génération du DCE
+      return { canProceed: true, blockers: [] };
+    }
 
     // B2B Mode: Navigation libre pour faciliter l'utilisation
     // La validation complète se fait à la finalisation du projet

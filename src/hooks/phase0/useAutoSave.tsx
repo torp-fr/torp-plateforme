@@ -3,7 +3,7 @@
  * Sauvegarde automatique avec debounce et gestion des conflits
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Phase0ProjectService } from '@/services/phase0/project.service';
 import { WizardService } from '@/services/phase0/wizard.service';
 import type { Phase0Project } from '@/types/phase0/project.types';

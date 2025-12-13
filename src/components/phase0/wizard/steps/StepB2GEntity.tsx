@@ -1,34 +1,30 @@
 /**
  * Étape B2G 1 - Entité publique
  * Identification de la collectivité ou établissement public
+ * Note: Le type d'entité est déjà connu via le profil utilisateur (inscription)
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StepComponentProps } from '../WizardContainer';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import {
-  Building2, User, Phone, Mail, MapPin, Info, Landmark, FileText
+  Building2, User, Phone, Mail, MapPin, Info, Landmark, FileText, CheckCircle
 } from 'lucide-react';
+import { useApp } from '@/context/AppContext';
 
-const ENTITY_TYPES = [
-  { value: 'commune', label: 'Commune', description: 'Mairie, services municipaux' },
-  { value: 'epci', label: 'EPCI', description: 'Communauté de communes, agglomération, métropole' },
-  { value: 'departement', label: 'Département', description: 'Conseil départemental' },
-  { value: 'region', label: 'Région', description: 'Conseil régional' },
-  { value: 'etat', label: 'État', description: 'Services déconcentrés, préfecture' },
-  { value: 'etablissement_public', label: 'Établissement public', description: 'EPA, EPIC, EPSCP...' },
-  { value: 'hopital', label: 'Établissement de santé', description: 'Hôpital, EHPAD public' },
-  { value: 'education', label: 'Éducation', description: 'Collège, lycée, université publique' },
-  { value: 'bailleur_social', label: 'Bailleur social', description: 'OPH, ESH, SEM' },
-  { value: 'association', label: 'Association loi 1901', description: 'Association reconnue d\'utilité publique' },
-  { value: 'autre', label: 'Autre', description: 'Autre type d\'entité publique' },
-];
+// Labels pour affichage du type d'entité (lecture seule, vient du profil)
+const ENTITY_TYPE_LABELS: Record<string, string> = {
+  commune: 'Commune',
+  epci: 'EPCI / Intercommunalité',
+  departement: 'Département',
+  region: 'Région',
+  other: 'Autre établissement public',
+};
 
 const STRATES_POPULATION = [
   { value: 'moins_1000', label: 'Moins de 1 000 habitants' },
@@ -47,9 +43,43 @@ export function StepB2GEntity({
   errors,
   isProcessing,
 }: StepComponentProps) {
+  const { user } = useApp();
   const client = (project.client || {}) as Record<string, unknown>;
   const entity = (client.entity || {}) as Record<string, unknown>;
   const contact = (client.contact || {}) as Record<string, unknown>;
+
+  // Récupérer les infos du profil utilisateur (inscription B2G)
+  const userMetadata = (user as Record<string, unknown> | null);
+  const profileEntityType = userMetadata?.entityType as string || '';
+  const profileEntityName = userMetadata?.company as string || '';
+  const profileSiret = userMetadata?.siret as string || '';
+  const profileContactName = user?.name || '';
+  const profileContactEmail = user?.email || '';
+
+  // Pré-remplir les données depuis le profil à la première ouverture
+  useEffect(() => {
+    if (profileEntityType && !answers['client.entity.type']) {
+      onAnswerChange('client.entity.type', profileEntityType);
+    }
+    if (profileEntityName && !answers['client.entity.name']) {
+      onAnswerChange('client.entity.name', profileEntityName);
+    }
+    if (profileSiret && !answers['client.entity.siret']) {
+      onAnswerChange('client.entity.siret', profileSiret);
+    }
+    if (profileContactName && !answers['client.contact.lastName']) {
+      const names = profileContactName.split(' ');
+      if (names.length > 1) {
+        onAnswerChange('client.contact.firstName', names[0]);
+        onAnswerChange('client.contact.lastName', names.slice(1).join(' '));
+      } else {
+        onAnswerChange('client.contact.lastName', profileContactName);
+      }
+    }
+    if (profileContactEmail && !answers['client.contact.email']) {
+      onAnswerChange('client.contact.email', profileContactEmail);
+    }
+  }, []);
 
   const getValue = (path: string, defaultValue: unknown = '') => {
     const answerValue = answers[`client.${path}`];
@@ -67,61 +97,45 @@ export function StepB2GEntity({
     return current ?? defaultValue;
   };
 
+  // Afficher le type d'entité depuis le profil ou les réponses
+  const displayEntityType = (getValue('entity.type', profileEntityType) as string) || profileEntityType;
+
   return (
     <div className="space-y-8">
-      {/* Information */}
-      <Alert className="bg-blue-50 border-blue-200">
-        <Landmark className="h-4 w-4 text-blue-600" />
-        <AlertDescription className="text-blue-800">
-          <strong>Marché public :</strong> Ces informations permettent d'identifier le pouvoir
-          adjudicateur et d'adapter les documents aux exigences des marchés publics (Code de
-          la commande publique).
+      {/* Information sur les données pré-remplies */}
+      <Alert className="bg-green-50 border-green-200">
+        <CheckCircle className="h-4 w-4 text-green-600" />
+        <AlertDescription className="text-green-800">
+          <strong>Données pré-remplies :</strong> Vos informations de collectivité ont été
+          récupérées depuis votre profil. Vous pouvez les compléter ou les modifier ci-dessous.
         </AlertDescription>
       </Alert>
 
-      {/* Type d'entité */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-primary" />
-            Type d'entité publique
-          </CardTitle>
-          <CardDescription>
-            Sélectionnez le type d'entité qui correspond à votre organisation
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <RadioGroup
-            value={getValue('entity.type', '') as string}
-            onValueChange={(value) => onAnswerChange('client.entity.type', value)}
-            className="grid grid-cols-1 md:grid-cols-2 gap-3"
-          >
-            {ENTITY_TYPES.map((type) => (
-              <label
-                key={type.value}
-                htmlFor={`entity-${type.value}`}
-                className={`
-                  flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
-                  ${getValue('entity.type') === type.value
-                    ? 'border-primary bg-primary/5'
-                    : 'border-muted hover:border-primary/50'
-                  }
-                `}
-              >
-                <RadioGroupItem
-                  value={type.value}
-                  id={`entity-${type.value}`}
-                  className="mt-0.5"
-                />
-                <div>
-                  <span className="font-medium">{type.label}</span>
-                  <p className="text-sm text-muted-foreground">{type.description}</p>
-                </div>
-              </label>
-            ))}
-          </RadioGroup>
-        </CardContent>
-      </Card>
+      {/* Type d'entité (lecture seule - depuis profil) */}
+      {displayEntityType && (
+        <Card className="bg-muted/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-primary" />
+              Type de collectivité
+              <Badge variant="secondary" className="ml-2">Depuis votre profil</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-3 p-4 bg-white rounded-lg border">
+              <Landmark className="w-6 h-6 text-purple-600" />
+              <div>
+                <p className="font-semibold text-lg">
+                  {ENTITY_TYPE_LABELS[displayEntityType] || displayEntityType}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Modifiable dans les paramètres de votre compte
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Identification */}
       <Card>

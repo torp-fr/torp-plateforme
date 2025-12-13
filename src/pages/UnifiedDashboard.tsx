@@ -136,11 +136,11 @@ export default function UnifiedDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [activeTab, setActiveTab] = useState('projects');
 
-  // Déterminer le segment utilisateur
+  // Déterminer le segment utilisateur basé sur le profil
   const segment: UserSegment = useMemo(() => {
     if (userType === 'admin') return 'admin';
+    if (userType === 'B2G') return 'B2G';
     if (userType === 'B2B') return 'B2B';
-    // TODO: Détecter B2G basé sur le profil utilisateur
     return 'B2C';
   }, [userType]);
 
