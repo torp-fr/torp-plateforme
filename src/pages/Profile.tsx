@@ -345,11 +345,8 @@ export default function Profile() {
     }
   };
 
-  if (!user) {
-    return null;
-  }
-
-  if (isFetching) {
+  // Afficher le chargement pendant que l'utilisateur est récupéré ou le profil est chargé
+  if (isFetching || !user) {
     return (
       <AppLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
