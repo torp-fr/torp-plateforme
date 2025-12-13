@@ -27,7 +27,9 @@ import {
   EstimationService,
   ProjectEstimation,
   LOT_CATALOG,
+  PDFExportService,
 } from '@/services/phase0';
+import { DocumentViewer } from '@/components/phase0';
 import { TenderService } from '@/services/tender/tender.service';
 import { DCEGeneratorService } from '@/services/tender/dce-generator.service';
 import type { Tender, TenderDocument as TenderDoc } from '@/types/tender';
@@ -132,7 +134,7 @@ export function Phase0ProjectPage() {
     }
   }, [project, toast]);
 
-  // Exporter un document
+  // Exporter un document (legacy - maintenant géré par DocumentViewer)
   const exportDocument = useCallback((doc: GeneratedDocument) => {
     const text = DocumentGeneratorService.exportToText(doc);
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
@@ -143,6 +145,17 @@ export function Phase0ProjectPage() {
     a.click();
     URL.revokeObjectURL(url);
   }, []);
+
+  // Rafraîchir la liste des documents
+  const refreshDocuments = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const projectDocs = await DocumentGeneratorService.getProjectDocuments(projectId);
+      setDocuments(projectDocs);
+    } catch (err) {
+      console.error('Erreur rafraîchissement documents:', err);
+    }
+  }, [projectId]);
 
   // Générer un appel d'offres depuis le projet Phase 0
   const generateAO = useCallback(async () => {
@@ -575,55 +588,14 @@ export function Phase0ProjectPage() {
               </CardContent>
             </Card>
 
-            {/* Liste des documents */}
-            {documents.length > 0 ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Documents générés</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {documents.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="flex items-center justify-between p-4 border rounded-lg"
-                      >
-                        <div className="flex items-center gap-3">
-                          <FileText className="w-8 h-8 text-primary" />
-                          <div>
-                            <div className="font-medium">{doc.title}</div>
-                            <div className="text-sm text-muted-foreground">
-                              Version {doc.metadata.version} • {new Date(doc.generatedAt).toLocaleDateString('fr-FR')}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={doc.status === 'final' ? 'default' : 'secondary'}>
-                            {doc.status === 'final' ? 'Finalisé' : 'Brouillon'}
-                          </Badge>
-                          <Button variant="ghost" size="icon" onClick={() => exportDocument(doc)}>
-                            <Download className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon">
-                            <Printer className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <FileText className="w-12 h-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Aucun document</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Générez vos premiers documents pour votre projet
-                  </p>
-                </CardContent>
-              </Card>
-            )}
+            {/* Visualiseur de documents avec UX adaptée au profil */}
+            <DocumentViewer
+              documents={documents}
+              projectTitle={project.workProject?.general?.title || 'Projet'}
+              projectReference={project.reference}
+              onRefresh={refreshDocuments}
+              isLoading={isGeneratingDoc}
+            />
           </TabsContent>
 
           {/* Onglet Appel d'Offres */}
