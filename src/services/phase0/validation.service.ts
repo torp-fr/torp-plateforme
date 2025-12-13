@@ -550,10 +550,9 @@ export class ValidationService {
 
     // B2C Mode: Validation stricte par étape (6 étapes)
     switch (currentStep) {
-      case 1: // Profil MOA - seulement le type est requis pour avancer
-        if (!owner?.identity?.type) {
-          blockers.push('Sélectionnez votre profil (particulier, professionnel, etc.)');
-        }
+      case 1: // Profil MOA - pré-rempli depuis profil utilisateur, navigation libre
+        // Le type est pré-rempli automatiquement depuis le profil utilisateur
+        // On ne bloque pas la navigation pour cette étape
         break;
 
       case 2: // Identification bien (adresse)

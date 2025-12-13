@@ -3,7 +3,7 @@
  * Planning, accès au chantier et budget
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 import { StepComponentProps } from '../WizardContainer';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -171,30 +171,27 @@ export function StepConstraints({
   const budgetKnowledge = getValue('budget.knowledge', '') as string;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       {/* Urgence / Planning */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-primary" />
+        <CardHeader className="py-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-primary" />
             Planning du projet
           </CardTitle>
-          <CardDescription>
-            Quel est votre degré d'urgence pour démarrer les travaux ?
-          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 pt-0">
           <RadioGroup
             value={(getValue('constraints.temporal.urgencyLevel') as string) || ''}
             onValueChange={(value) => onAnswerChange('workProject.constraints.temporal.urgencyLevel', value)}
-            className="space-y-3"
+            className="grid grid-cols-2 md:grid-cols-3 gap-2"
           >
             {URGENCY_LEVELS.map((level) => (
               <label
                 key={level.value}
                 htmlFor={`urgency-${level.value}`}
                 className={`
-                  flex items-center gap-4 p-4 rounded-lg border-2 cursor-pointer transition-all
+                  flex flex-col items-center gap-1 p-3 rounded-lg border-2 cursor-pointer transition-all text-center
                   ${getValue('constraints.temporal.urgencyLevel') === level.value
                     ? 'border-primary bg-primary/5'
                     : 'border-muted hover:border-primary/50'
@@ -204,27 +201,21 @@ export function StepConstraints({
                 <RadioGroupItem
                   value={level.value}
                   id={`urgency-${level.value}`}
+                  className="sr-only"
                 />
-                <div className="flex-shrink-0">
-                  {level.icon}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{level.label}</span>
-                    <Badge className={level.badgeColor}>{level.badge}</Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{level.description}</p>
-                </div>
+                <span className="flex-shrink-0">
+                  {React.cloneElement(level.icon, { className: 'w-4 h-4' })}
+                </span>
+                <span className="text-xs font-medium">{level.label}</span>
               </label>
             ))}
           </RadioGroup>
 
           {getValue('constraints.temporal.urgencyLevel') === 'emergency' && (
-            <Alert variant="destructive">
+            <Alert variant="destructive" className="py-2">
               <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                Les interventions urgentes peuvent engendrer des surcoûts de 15 à 30%
-                et limiter le choix des entreprises disponibles.
+              <AlertDescription className="text-sm">
+                Surcoûts possibles de 15 à 30% pour les interventions urgentes.
               </AlertDescription>
             </Alert>
           )}
@@ -233,20 +224,17 @@ export function StepConstraints({
 
       {/* Accès au chantier */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Clock className="w-5 h-5 text-primary" />
+        <CardHeader className="py-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Clock className="w-4 h-4 text-primary" />
             Accès au chantier
           </CardTitle>
-          <CardDescription>
-            Précisez les disponibilités pour l'accès au bien
-          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-3 pt-0">
           {/* Jours d'accès */}
-          <div className="space-y-3">
-            <Label>Jours d'accès possibles</Label>
-            <div className="flex flex-wrap gap-2">
+          <div className="space-y-2">
+            <Label className="text-xs">Jours d'accès possibles</Label>
+            <div className="flex flex-wrap gap-1.5">
               {WEEKDAYS.map((day) => {
                 const accessDays = (getValue('constraints.physical.accessDays', []) as string[]) || [];
                 const isSelected = accessDays.includes(day.value);
@@ -261,7 +249,7 @@ export function StepConstraints({
                       onAnswerChange('workProject.constraints.physical.accessDays', updated);
                     }}
                     className={`
-                      px-4 py-2 rounded-lg border-2 font-medium transition-all
+                      px-3 py-1.5 rounded border-2 text-xs font-medium transition-all
                       ${isSelected
                         ? 'border-primary bg-primary text-primary-foreground'
                         : 'border-muted hover:border-primary/50'
@@ -276,97 +264,83 @@ export function StepConstraints({
             </div>
           </div>
 
-          {/* Horaires d'accès */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="accessTimeStart">Heure de début</Label>
+          {/* Horaires d'accès + Contraintes inline */}
+          <div className="grid grid-cols-4 gap-2">
+            <div className="space-y-1">
+              <Label htmlFor="accessTimeStart" className="text-xs">Début</Label>
               <Input
                 id="accessTimeStart"
                 type="time"
                 value={(getValue('constraints.physical.accessTimeStart') as string) || '08:00'}
                 onChange={(e) => onAnswerChange('workProject.constraints.physical.accessTimeStart', e.target.value)}
                 disabled={isProcessing}
+                className="h-9"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="accessTimeEnd">Heure de fin</Label>
+            <div className="space-y-1">
+              <Label htmlFor="accessTimeEnd" className="text-xs">Fin</Label>
               <Input
                 id="accessTimeEnd"
                 type="time"
                 value={(getValue('constraints.physical.accessTimeEnd') as string) || '18:00'}
                 onChange={(e) => onAnswerChange('workProject.constraints.physical.accessTimeEnd', e.target.value)}
                 disabled={isProcessing}
+                className="h-9"
               />
             </div>
-          </div>
-
-          {/* Contraintes spécifiques */}
-          <div className="space-y-3">
-            <Label>Contraintes particulières</Label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {[
-                'Voisinage sensible au bruit',
-                'Accès limité (étage sans ascenseur)',
-                'Stationnement difficile',
-                'Présence d\'animaux',
-                'Télétravail régulier',
-                'Enfants en bas âge',
-              ].map((constraint) => {
-                const constraints = (getValue('constraints.physical.specificConstraints', []) as string[]) || [];
-                return (
-                  <label key={constraint} className="flex items-center gap-2 cursor-pointer">
-                    <Checkbox
-                      checked={constraints.includes(constraint)}
-                      onCheckedChange={(checked) => {
-                        const updated = checked
-                          ? [...constraints, constraint]
-                          : constraints.filter(c => c !== constraint);
-                        onAnswerChange('workProject.constraints.physical.specificConstraints', updated);
-                      }}
-                      disabled={isProcessing}
-                    />
-                    <span className="text-sm">{constraint}</span>
-                  </label>
-                );
-              })}
+            <div className="col-span-2 space-y-1">
+              <Label className="text-xs">Contraintes</Label>
+              <div className="grid grid-cols-2 gap-1">
+                {[
+                  { key: 'Voisinage sensible au bruit', label: 'Bruit sensible' },
+                  { key: 'Stationnement difficile', label: 'Parking difficile' },
+                  { key: 'Télétravail régulier', label: 'Télétravail' },
+                  { key: 'Présence d\'animaux', label: 'Animaux' },
+                ].map(({ key, label }) => {
+                  const constraints = (getValue('constraints.physical.specificConstraints', []) as string[]) || [];
+                  return (
+                    <label key={key} className="flex items-center gap-1 cursor-pointer">
+                      <Checkbox
+                        checked={constraints.includes(key)}
+                        onCheckedChange={(checked) => {
+                          const updated = checked
+                            ? [...constraints, key]
+                            : constraints.filter(c => c !== key);
+                          onAnswerChange('workProject.constraints.physical.specificConstraints', updated);
+                        }}
+                        disabled={isProcessing}
+                        className="h-3 w-3"
+                      />
+                      <span className="text-xs">{label}</span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-
-          {/* Notes supplémentaires */}
-          <div className="space-y-2">
-            <Label htmlFor="accessNotes">Remarques sur l'accès (optionnel)</Label>
-            <Textarea
-              id="accessNotes"
-              value={(getValue('constraints.physical.notes') as string) || ''}
-              onChange={(e) => onAnswerChange('workProject.constraints.physical.notes', e.target.value)}
-              placeholder="Précisez toute contrainte particulière : code d'accès, gardien, parking..."
-              rows={2}
-              disabled={isProcessing}
-            />
           </div>
         </CardContent>
       </Card>
 
       {/* Occupation */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Home className="w-5 h-5 text-primary" />
+        <CardHeader className="py-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Home className="w-4 h-4 text-primary" />
             Occupation du bien
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 pt-0">
           <RadioGroup
             value={(getValue('constraints.occupancy.duringWorks') as string) || ''}
             onValueChange={(value) => onAnswerChange('workProject.constraints.occupancy.duringWorks', value)}
-            className="grid grid-cols-1 md:grid-cols-2 gap-3"
+            className="grid grid-cols-2 md:grid-cols-4 gap-2"
           >
             {OCCUPANCY_OPTIONS.map((option) => (
               <label
                 key={option.value}
                 htmlFor={`occupancy-${option.value}`}
                 className={`
-                  flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
+                  flex flex-col items-center gap-1 p-2 rounded-lg border-2 cursor-pointer transition-all text-center
                   ${getValue('constraints.occupancy.duringWorks') === option.value
                     ? 'border-primary bg-primary/5'
                     : 'border-muted hover:border-primary/50'
@@ -376,52 +350,36 @@ export function StepConstraints({
                 <RadioGroupItem
                   value={option.value}
                   id={`occupancy-${option.value}`}
-                  className="mt-0.5"
+                  className="sr-only"
                 />
-                <div>
-                  <span className="font-medium">{option.label}</span>
-                  <p className="text-sm text-muted-foreground">{option.description}</p>
-                </div>
+                <span className="text-xs font-medium">{option.label}</span>
               </label>
             ))}
           </RadioGroup>
-
-          {getValue('constraints.occupancy.duringWorks') === 'occupied_full' && (
-            <Alert>
-              <Info className="h-4 w-4" />
-              <AlertDescription>
-                L'occupation pendant les travaux nécessitera une organisation par phases
-                pour préserver votre confort au quotidien.
-              </AlertDescription>
-            </Alert>
-          )}
         </CardContent>
       </Card>
 
       {/* Budget */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Euro className="w-5 h-5 text-primary" />
+        <CardHeader className="py-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Euro className="w-4 h-4 text-primary" />
             Budget prévisionnel
           </CardTitle>
-          <CardDescription>
-            Avez-vous une idée de votre budget pour ce projet ?
-          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-3 pt-0">
           {/* Connaissance du budget */}
           <RadioGroup
             value={budgetKnowledge}
             onValueChange={(value) => onAnswerChange('workProject.budget.knowledge', value)}
-            className="grid grid-cols-1 md:grid-cols-3 gap-3"
+            className="grid grid-cols-3 gap-2"
           >
             {BUDGET_KNOWLEDGE_OPTIONS.map((option) => (
               <label
                 key={option.value}
                 htmlFor={`budget-knowledge-${option.value}`}
                 className={`
-                  flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all text-center
+                  flex flex-col items-center gap-1 p-2 rounded-lg border-2 cursor-pointer transition-all text-center
                   ${budgetKnowledge === option.value
                     ? 'border-primary bg-primary/5'
                     : 'border-muted hover:border-primary/50'
@@ -433,19 +391,16 @@ export function StepConstraints({
                   id={`budget-knowledge-${option.value}`}
                   className="sr-only"
                 />
-                <div className="w-full">
-                  <span className="font-medium">{option.label}</span>
-                  <p className="text-xs text-muted-foreground mt-1">{option.description}</p>
-                </div>
+                <span className="text-xs font-medium">{option.label}</span>
               </label>
             ))}
           </RadioGroup>
 
           {/* Saisie du budget si connu */}
           {(budgetKnowledge === 'defined' || budgetKnowledge === 'estimate') && (
-            <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
-              <div className="space-y-2">
-                <Label htmlFor="budgetMin">Budget minimum (€)</Label>
+            <div className="grid grid-cols-2 gap-3 p-3 bg-muted/30 rounded-lg">
+              <div className="space-y-1">
+                <Label htmlFor="budgetMin" className="text-xs">Budget minimum (€)</Label>
                 <Input
                   id="budgetMin"
                   type="number"
@@ -455,10 +410,11 @@ export function StepConstraints({
                   onChange={(e) => onAnswerChange('workProject.budget.totalEnvelope.min', parseInt(e.target.value) || null)}
                   placeholder="50000"
                   disabled={isProcessing}
+                  className="h-9"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="budgetMax">Budget maximum (€)</Label>
+              <div className="space-y-1">
+                <Label htmlFor="budgetMax" className="text-xs">Budget maximum (€)</Label>
                 <Input
                   id="budgetMax"
                   type="number"
@@ -468,35 +424,25 @@ export function StepConstraints({
                   onChange={(e) => onAnswerChange('workProject.budget.totalEnvelope.max', parseInt(e.target.value) || null)}
                   placeholder="80000"
                   disabled={isProcessing}
+                  className="h-9"
                 />
               </div>
             </div>
           )}
 
-          {budgetKnowledge === 'no_idea' && (
-            <Alert>
-              <HelpCircle className="h-4 w-4" />
-              <AlertDescription>
-                Pas de souci ! À la fin de cette étape, TORP vous fournira une estimation
-                budgétaire basée sur votre projet. Cela vous permettra de vérifier la
-                cohérence entre vos attentes et la réalité du marché.
-              </AlertDescription>
-            </Alert>
-          )}
-
           {/* Niveau de finition */}
-          <div className="space-y-3">
-            <Label>Niveau de finition souhaité</Label>
+          <div className="space-y-2">
+            <Label className="text-xs">Niveau de finition souhaité</Label>
             <RadioGroup
               value={(getValue('quality.finishLevel') as string) || ''}
               onValueChange={(value) => onAnswerChange('workProject.quality.finishLevel', value)}
-              className="grid grid-cols-2 md:grid-cols-4 gap-2"
+              className="grid grid-cols-4 gap-2"
             >
               {FINISH_LEVELS.map((level) => (
                 <label
                   key={level.value}
                   className={`
-                    flex flex-col items-center gap-1 p-3 rounded-lg border-2 cursor-pointer transition-all text-center
+                    flex flex-col items-center gap-0.5 p-2 rounded-lg border-2 cursor-pointer transition-all text-center
                     ${getValue('quality.finishLevel') === level.value
                       ? 'border-primary bg-primary/5'
                       : 'border-muted hover:border-primary/50'
@@ -504,7 +450,7 @@ export function StepConstraints({
                   `}
                 >
                   <RadioGroupItem value={level.value} className="sr-only" />
-                  <span className="font-medium text-sm">{level.label}</span>
+                  <span className="text-xs font-medium">{level.label}</span>
                   <span className="text-xs text-muted-foreground">{level.multiplier}</span>
                 </label>
               ))}
@@ -515,69 +461,50 @@ export function StepConstraints({
 
       {/* Mode de financement */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <CreditCard className="w-5 h-5 text-primary" />
-            Mode de financement
+        <CardHeader className="py-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-primary" />
+            Financement
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 pt-0">
           <RadioGroup
             value={(getValue('budget.fundingMode') as string) || ''}
             onValueChange={(value) => onAnswerChange('workProject.budget.fundingMode', value)}
-            className="grid grid-cols-2 gap-3"
+            className="grid grid-cols-4 gap-2"
           >
             {FUNDING_OPTIONS.map((option) => (
               <label
                 key={option.value}
                 className={`
-                  flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all
+                  flex flex-col items-center gap-1 p-2 rounded-lg border-2 cursor-pointer transition-all text-center
                   ${getValue('budget.fundingMode') === option.value
                     ? 'border-primary bg-primary/5'
                     : 'border-muted hover:border-primary/50'
                   }
                 `}
               >
-                <RadioGroupItem value={option.value} className="mt-0.5" />
-                <div className="flex items-start gap-2">
-                  <span className="text-muted-foreground mt-0.5">{option.icon}</span>
-                  <div>
-                    <span className="font-medium text-sm">{option.label}</span>
-                    <p className="text-xs text-muted-foreground">{option.description}</p>
-                  </div>
-                </div>
+                <RadioGroupItem value={option.value} className="sr-only" />
+                <span className="text-muted-foreground">{option.icon}</span>
+                <span className="text-xs font-medium">{option.label}</span>
               </label>
             ))}
           </RadioGroup>
 
           {/* Intérêt aides */}
-          <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-            <div className="flex items-start gap-3">
+          <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+            <div className="flex items-center gap-3">
               <Checkbox
                 id="interestedInAids"
                 checked={getValue('budget.interestedInAids', false) as boolean}
                 onCheckedChange={(checked) => onAnswerChange('workProject.budget.interestedInAids', checked)}
                 disabled={isProcessing}
               />
-              <div>
-                <Label htmlFor="interestedInAids" className="cursor-pointer font-medium text-green-800">
-                  Rechercher les aides disponibles
-                </Label>
-                <p className="text-sm text-green-700 mt-1">
-                  TORP analysera votre éligibilité aux aides : MaPrimeRénov', CEE,
-                  Éco-PTZ, aides locales... selon votre projet et votre situation.
-                </p>
-              </div>
+              <Label htmlFor="interestedInAids" className="cursor-pointer text-xs text-green-800">
+                Rechercher les aides disponibles (MaPrimeRénov', CEE, Éco-PTZ...)
+              </Label>
             </div>
           </div>
-
-          <Alert>
-            <Sparkles className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Bientôt disponible :</strong> Possibilité de soumettre votre projet
-              à nos partenaires bancaires pour une simulation de financement personnalisée.
-            </AlertDescription>
-          </Alert>
         </CardContent>
       </Card>
     </div>

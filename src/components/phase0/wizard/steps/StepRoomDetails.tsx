@@ -721,20 +721,17 @@ export function StepRoomDetails({
   }, [roomDetailsData, rooms, stats.totalWorks, postalCode]);
 
   return (
-    <div className="space-y-8">
-      {/* Section 1: Type de projet */}
+    <div className="space-y-4">
+      {/* Section 1: Type de projet - Compact */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Hammer className="w-5 h-5 text-primary" />
+        <CardHeader className="py-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Hammer className="w-4 h-4 text-primary" />
             Type de projet
           </CardTitle>
-          <CardDescription>
-            Sélectionnez le type de travaux qui correspond le mieux à votre projet
-          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <CardContent className="pt-0">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
             {WORK_TYPE_OPTIONS.map((option) => {
               const isSelected = workType === option.value;
               return (
@@ -744,52 +741,48 @@ export function StepRoomDetails({
                   onClick={() => onAnswerChange('workProject.scope.workType', option.value)}
                   disabled={isProcessing}
                   className={`
-                    flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center
+                    flex flex-col items-center gap-1 p-2 rounded-lg border-2 transition-all text-center
                     ${isSelected
-                      ? 'border-primary bg-primary/10 text-primary shadow-sm'
-                      : 'border-muted hover:border-primary/50 hover:bg-muted/50'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-muted hover:border-primary/50'
                     }
                   `}
                 >
-                  <span className={isSelected ? 'text-primary' : 'text-muted-foreground'}>
-                    {option.icon}
+                  <span className={`${isSelected ? 'text-primary' : 'text-muted-foreground'}`}>
+                    {React.cloneElement(option.icon as React.ReactElement, { className: 'w-5 h-5' })}
                   </span>
-                  <div>
-                    <div className="font-medium text-sm">{option.label}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">{option.description}</div>
-                  </div>
-                  {isSelected && (
-                    <CheckCircle2 className="w-4 h-4 text-primary" />
-                  )}
+                  <span className="text-xs font-medium">{option.label}</span>
                 </button>
               );
             })}
           </div>
 
-          {/* Titre et description du projet */}
+          {/* Titre et description du projet - Compact */}
           {workType && (
-            <div className="mt-6 space-y-4 pt-4 border-t">
-              <div className="space-y-2">
-                <Label htmlFor="projectTitle">Titre du projet (optionnel)</Label>
-                <Input
-                  id="projectTitle"
-                  value={projectTitle}
-                  onChange={(e) => onAnswerChange('workProject.general.title', e.target.value)}
-                  placeholder="Ex: Rénovation complète appartement 3 pièces"
-                  disabled={isProcessing}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="projectDescription">Description (optionnel)</Label>
-                <Textarea
-                  id="projectDescription"
-                  value={projectDescription}
-                  onChange={(e) => onAnswerChange('workProject.general.description', e.target.value)}
-                  placeholder="Décrivez votre projet en quelques lignes : vos objectifs, ce que vous souhaitez améliorer..."
-                  rows={3}
-                  disabled={isProcessing}
-                />
+            <div className="mt-4 space-y-3 pt-3 border-t">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="projectTitle" className="text-xs">Titre du projet (optionnel)</Label>
+                  <Input
+                    id="projectTitle"
+                    value={projectTitle}
+                    onChange={(e) => onAnswerChange('workProject.general.title', e.target.value)}
+                    placeholder="Ex: Rénovation appartement"
+                    disabled={isProcessing}
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="projectDescription" className="text-xs">Description (optionnel)</Label>
+                  <Input
+                    id="projectDescription"
+                    value={projectDescription}
+                    onChange={(e) => onAnswerChange('workProject.general.description', e.target.value)}
+                    placeholder="Ex: Remplacement 3 fenêtres vétustes"
+                    disabled={isProcessing}
+                    className="h-9"
+                  />
+                </div>
               </div>
             </div>
           )}
