@@ -156,8 +156,8 @@ export class Phase0ProjectService {
   async createProject(payload: CreateProjectPayload): Promise<Phase0Project> {
     const { userId, wizardMode, initialData } = payload;
 
-    // Générer un numéro de référence unique
-    const referenceNumber = this.generateReferenceNumber(wizardMode);
+    // Générer un numéro de référence unique (numéro client + ID projet)
+    const referenceNumber = this.generateReferenceNumber(userId);
 
     const defaultOwnerProfile: Partial<MasterOwnerProfile> = {
       identity: { type: 'B2C' } as MasterOwnerProfile['identity'],
@@ -588,16 +588,22 @@ export class Phase0ProjectService {
 
   /**
    * Génère un numéro de référence unique pour un projet
-   * Format: TORP-{MODE}-{DATE}-{RANDOM}
-   * Exemple: TORP-B2C-20241213-A7X9
+   * Format: {NUMERO_CLIENT}-{ID_PROJET}
+   * Exemple: A7F2BC-X9K4P2
+   *
+   * - Le numéro client est dérivé de l'ID utilisateur (6 premiers caractères de l'UUID)
+   * - L'ID projet est une partie aléatoire unique (6 caractères)
    */
-  private generateReferenceNumber(mode: WizardMode): string {
-    const modePrefix = mode.toUpperCase().replace('_', '');
-    const now = new Date();
-    const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-    const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
-    const timestamp = now.getTime().toString(36).slice(-4).toUpperCase();
-    return `TORP-${modePrefix}-${dateStr}-${randomStr}${timestamp}`;
+  private generateReferenceNumber(userId: string): string {
+    // Numéro client: 6 premiers caractères de l'UUID utilisateur (sans tirets)
+    const clientNumber = userId.replace(/-/g, '').substring(0, 6).toUpperCase();
+
+    // ID projet: combinaison aléatoire + timestamp pour garantir l'unicité
+    const randomPart = Math.random().toString(36).substring(2, 5).toUpperCase();
+    const timestampPart = Date.now().toString(36).slice(-3).toUpperCase();
+    const projectId = `${randomPart}${timestampPart}`;
+
+    return `${clientNumber}-${projectId}`;
   }
 
   private mapRowToProject(row: Phase0ProjectRow): Phase0Project {
