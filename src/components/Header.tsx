@@ -27,8 +27,16 @@ export const Header = () => {
 
   // Détermine les liens dashboard selon le type d'utilisateur
   const isB2B = userType === 'B2B';
+  const isB2G = userType === 'B2G';
+  const isPro = isB2B || isB2G; // Pro = B2B ou B2G (pas de comparaison de devis)
+
+  // Dashboard et labels adaptés au segment
   const dashboardLink = isB2B ? '/pro' : '/dashboard';
-  const dashboardLabel = isB2B ? 'Mes Projets' : 'Mes Analyses';
+  const dashboardLabel = isB2G
+    ? 'Mes Marchés'
+    : isB2B
+      ? 'Mes Projets'
+      : 'Mes Analyses';
 
   const handleLogout = async () => {
     try {
@@ -132,7 +140,7 @@ export const Header = () => {
                 >
                   {dashboardLabel}
                 </Link>
-                {!isB2B && (
+                {!isPro && (
                   <Link
                     to="/compare"
                     className="text-sm font-medium text-foreground hover:text-primary transition-colors"
@@ -158,9 +166,9 @@ export const Header = () => {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem onClick={() => navigate(dashboardLink)}>
-                      📊 {isB2B ? 'Espace Pro' : 'Dashboard'}
+                      📊 {isB2G ? 'Espace Collectivité' : isB2B ? 'Espace Pro' : 'Dashboard'}
                     </DropdownMenuItem>
-                    {!isB2B && (
+                    {!isPro && (
                       <DropdownMenuItem onClick={() => navigate('/compare')}>
                         ⚖️ Comparer devis
                       </DropdownMenuItem>
@@ -263,7 +271,7 @@ export const Header = () => {
                 >
                   {dashboardLabel}
                 </Link>
-                {!isB2B && (
+                {!isPro && (
                   <Link
                     to="/compare"
                     className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
@@ -283,7 +291,7 @@ export const Header = () => {
                   </div>
                   <Link to={dashboardLink} onClick={() => setMobileMenuOpen(false)}>
                     <Button variant="outline" size="sm" className="w-full justify-start">
-                      📊 {isB2B ? 'Espace Pro' : 'Dashboard'}
+                      📊 {isB2G ? 'Espace Collectivité' : isB2B ? 'Espace Pro' : 'Dashboard'}
                     </Button>
                   </Link>
                   <Link to="/profile" onClick={() => setMobileMenuOpen(false)}>

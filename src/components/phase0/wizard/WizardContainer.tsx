@@ -57,13 +57,14 @@ const STEP_COMPONENTS_B2B: Record<string, React.ComponentType<StepComponentProps
 };
 
 // Map des composants d'étapes B2G (secteur public - marchés publics)
+// IDs doivent correspondre à WIZARD_STEPS_B2G dans wizard.service.ts
 const STEP_COMPONENTS_B2G: Record<string, React.ComponentType<StepComponentProps>> = {
   'step_entity': StepB2GEntity,                   // 1. Entité publique (collectivité, SIRET)
-  'step_marche': StepB2GMarche,                   // 2. Caractéristiques marché (procédure, seuils)
-  'step_site': StepB2BSiteProject,                // 3. Site (réutilise B2B)
-  'step_operation': StepB2BWorksPlanning,         // 4. Opération (réutilise B2B)
-  'step_budget': StepB2BBudgetValidation,         // 5. Budget (réutilise B2B)
-  'step_dce': StepSummary,                        // 6. DCE (résumé adapté - à personnaliser)
+  'step_site_patrimoine': StepB2BSiteProject,     // 2. Site & Patrimoine (réutilise composant B2B)
+  'step_operation': StepB2BWorksPlanning,         // 3. Opération (réutilise composant B2B)
+  'step_marche': StepB2GMarche,                   // 4. Marché public (procédure, allotissement)
+  'step_budget_planning': StepB2BBudgetValidation, // 5. Budget & Planning (réutilise composant B2B)
+  'step_validation_dce': StepSummary,             // 6. Validation & DCE (résumé adapté)
 };
 
 export interface StepComponentProps {
