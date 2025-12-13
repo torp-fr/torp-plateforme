@@ -604,5 +604,5 @@ COMMENT ON TABLE phase1_consultations IS 'Sessions de consultation avec les entr
 COMMENT ON TABLE phase1_offres IS 'Offres reçues des entreprises';
 COMMENT ON TABLE phase1_contrats IS 'Contrats de travaux générés';
 COMMENT ON TABLE phase1_formalites IS 'Formalités administratives avant démarrage chantier';
-COMMENT ON TABLE phase1_prises_references IS 'Prises de références auprès d\'anciens clients';
+COMMENT ON TABLE phase1_prises_references IS 'Prises de références auprès d''anciens clients';
 COMMENT ON TABLE phase1_negociations IS 'Négociations contractuelles';
