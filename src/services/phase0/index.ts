@@ -126,3 +126,94 @@ export type {
 export { LOT_CATALOG } from '@/types/phase0/lots.types';
 export { B2C_WIZARD_STEPS } from '@/types/phase0/wizard.types';
 export { PHASE0_STATUS_CONFIG } from '@/types/phase0/project.types';
+
+// =============================================================================
+// NOUVEAUX SERVICES PHASE 0 - MODULES 0.3 à 0.6
+// =============================================================================
+
+// Service de diagnostic (Module 0.3)
+export { DiagnosticService } from './diagnostic.service';
+export type {
+  DiagnosticAnalysisResult,
+  DiagnosticRequirement,
+  DiagnosticImpact,
+} from './diagnostic.service';
+
+// Service de faisabilité (Module 0.4)
+export { FeasibilityService } from './feasibility.service';
+export type {
+  FeasibilityAnalysisInput,
+  PermitDetermination,
+  DTUAnalysis,
+  FeasibilityScore,
+} from './feasibility.service';
+
+// Service CCTP (Module 0.5)
+export { CCTPService } from './cctp.service';
+export type {
+  CCTPGenerationInput,
+  CCTPLotGeneration,
+  DPGFGenerationResult,
+} from './cctp.service';
+
+// Service Budget et Financement (Module 0.6)
+export { BudgetService } from './budget.service';
+export type {
+  BudgetAnalysisInput,
+  AidesCalculationInput,
+  FinancingScenario,
+} from './budget.service';
+
+// Re-export des types Phase 0 nouveaux modules
+export type {
+  // Types Diagnostic
+  DiagnosticReport,
+  DiagnosticUrgency,
+  MandatoryDiagnosticsBundle,
+  TechnicalDiagnosticsBundle,
+  BuildingPathology,
+  RiskMatrixEntry,
+  DiagnosticRecommendation,
+  ProjectImpactAssessment,
+} from '@/types/phase0/diagnostic.types';
+
+export type {
+  // Types Faisabilité
+  FeasibilityReport,
+  FeasibilityStatus,
+  PLUAnalysis,
+  UrbanPermitsAnalysis,
+  HeritageAnalysis,
+  CondoConstraintsAnalysis,
+  TechnicalStandardsAnalysis,
+  FeasibilityIssue,
+  FeasibilityRecommendation,
+} from '@/types/phase0/feasibility.types';
+
+export type {
+  // Types CCTP
+  CCTPDocument,
+  CCTPStatus,
+  CCTPLot,
+  DPGF,
+  WorksPlanning,
+  MaterialSpecification,
+  TechnicalPrescription,
+  QualityRequirement,
+} from '@/types/phase0/cctp.types';
+
+export type {
+  // Types Budget
+  BudgetPlan,
+  BudgetStatus,
+  CostEstimation,
+  FinancingPlan,
+  FinancingSource,
+  AidesAnalysis,
+  AideEligibility,
+  MaPrimeRenovAnalysis,
+  EcoPTZAnalysis,
+  CEEAnalysis,
+  ROIAnalysis,
+  CashFlowProjection,
+} from '@/types/phase0/budget.types';

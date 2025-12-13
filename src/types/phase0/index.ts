@@ -764,3 +764,725 @@ export type {
   IdentifiedRisk,
   SuggestedDocument,
 } from './client.types';
+
+// =============================================================================
+// TYPES DIAGNOSTICS DÉTAILLÉS (Module 0.3)
+// =============================================================================
+export type {
+  // Rapport consolidé
+  DiagnosticReport,
+  DiagnosticUrgency,
+
+  // Diagnostics obligatoires
+  MandatoryDiagnosticsBundle,
+  DPEDiagnosticDetailed,
+  DiagnosticianInfo,
+  EnergyConsumptionBreakdown,
+  BuildingEnvelopeAssessment,
+  InsulationAssessment,
+  ThermalBridgeAssessment,
+  ThermalBridgeType,
+  AirTightnessAssessment,
+  EquipmentEnergyAssessment,
+  HeatingEquipmentAssessment,
+  HeatingRegulationType,
+  HotWaterEquipmentAssessment,
+  VentilationEquipmentAssessment,
+  CoolingEquipmentAssessment,
+  RenewableEnergyDetail,
+  DPEWorkRecommendation,
+  DPEWorkCategory,
+  DPEImprovementScenario,
+
+  // Amiante
+  AsbestosDiagnosticDetailed,
+  AsbestosDiagnosticType,
+  MPCAEntry,
+  AsbestosMaterialType,
+  AsbestosMaterialCondition,
+  AsbestosAction,
+  AsbestosZone,
+  AsbestosWorksClassification,
+  AsbestosRecommendation,
+
+  // Plomb
+  LeadDiagnosticDetailed,
+  LeadDiagnosticUnit,
+  LeadElement,
+  LeadCondition,
+  LeadDegradedSurface,
+  LeadDegradationFactor,
+  LeadRecommendation,
+  LeadTreatmentTechnique,
+
+  // Électricité
+  ElectricityDiagnosticDetailed,
+  ElectricalInstallationDetails,
+  GroundingType,
+  ElectricalAnomalyDetailed,
+  ElectricalAnomalyCategory,
+  ElectricalAnomalySeverity,
+  ElectricalDangerType,
+  ElectricalCheckpoint,
+  ElectricalRecommendation,
+
+  // Gaz
+  GasDiagnosticDetailed,
+  GasInstallationDetails,
+  GasType,
+  GasPipeMaterial,
+  GasAnomalyDetailed,
+  GasAnomalySeverity,
+  GasDangerType,
+  GasCheckpoint,
+  GasRecommendation,
+
+  // Termites
+  TermiteDiagnosticDetailed,
+  XylophageType,
+  TermiteAffectedArea,
+  WoodConditionEntry,
+  TermiteTreatmentType,
+
+  // ERP
+  ERPDiagnosticDetailed,
+  NaturalRiskDetailed,
+  TechnologicalRiskDetailed,
+  MiningRiskDetailed,
+  MiningRiskType,
+  RadonRiskDetailed,
+  RadonZoneLevel,
+  SoilPollutionDetailed,
+  PreviousSinister,
+  PreventionPlan,
+  PreventionPlanType,
+  ERPBuildingConstraint,
+
+  // Carrez
+  CarrezDiagnosticDetailed,
+  CarrezRoomSurface,
+  CarrezExclusion,
+  CarrezExclusionReason,
+
+  // Assainissement
+  SepticTankDiagnosticDetailed,
+  SepticInstallationType,
+  SepticComplianceLevel,
+  SepticCheckpoint,
+  SepticIssue,
+
+  // Diagnostics techniques
+  TechnicalDiagnosticsBundle,
+  SoilStudyDetailed,
+  SoilStudyLevel,
+  SeismicZone,
+  ClayZone,
+  SoilLayer,
+  SoilCharacteristics,
+  SettlementRisk,
+  WaterTableDetails,
+  FoundationRecommendation,
+  FoundationAlternative,
+  GeotechnicalRisk,
+  GeotechnicalRiskType,
+
+  // Structurel
+  StructuralStudyDetailed,
+  StructuralIntegrity,
+  FoundationAnalysis,
+  SettlementAssessment,
+  WallAnalysis,
+  CrackAssessment,
+  CrackType,
+  FloorAnalysis,
+  RoofFrameworkAnalysis,
+  DeformationAssessment,
+  TimberCondition,
+  StructuralPathology,
+  StructuralPathologyType,
+  LoadCapacityDetails,
+  StructuralRecommendation,
+  ReinforcementWork,
+  ReinforcementMethod,
+
+  // Humidité
+  MoistureStudyDetailed,
+  MoistureLevel,
+  MoistureMeasurement,
+  MoistureSource,
+  MoistureSourceType,
+  MoistureAffectedZone,
+  MoistureDamage,
+  MoistureDamageType,
+  MoistureTreatment,
+  MoistureTreatmentMethod,
+
+  // Thermique
+  ThermalStudyDetailed,
+  ThermographyResults,
+  ThermographyConditions,
+  ThermographyImage,
+  ThermographyFinding,
+  ThermographyFindingType,
+  AirTightnessTest,
+  LeakageLocation,
+  HeatLossAnalysis,
+  HeatLossComponent,
+  HeatLossZone,
+  ThermalBridgeDetailed,
+  ThermalImprovementScenario,
+  ThermalWork,
+
+  // Acoustique
+  AcousticStudyDetailed,
+  AcousticMeasurement,
+  AcousticMeasurementType,
+  AirborneInsulationAssessment,
+  ImpactInsulationAssessment,
+  EquipmentNoiseAssessment,
+  AcousticRecommendation,
+
+  // Accessibilité
+  AccessibilityAuditDetailed,
+  AccessibilityBuildingType,
+  ERPCategory,
+  AccessibilityComplianceLevel,
+  AccessibilityZoneAnalysis,
+  AccessibilityItem,
+  AccessibilityNonCompliance,
+  AccessibilityDerogation,
+  DerogationReason,
+  AccessibilityAction,
+
+  // Photos
+  PhotographicSurvey,
+  ExteriorPhotoSurvey,
+  FacadePhoto,
+  InteriorPhotoSurvey,
+  RoomPhotoSet,
+  TechnicalPhotoSurvey,
+  DefectPhotoSurvey,
+  PhotoEntry,
+  DefectPhoto,
+  PhotoAIAnalysisResult,
+
+  // Pathologies
+  BuildingPathology,
+  PathologyType,
+  PathologyCategory,
+  RiskMatrixEntry,
+
+  // Recommandations
+  DiagnosticRecommendation,
+  ProjectImpactType,
+  ProjectImpactAssessment,
+  BlockingItem,
+  MandatoryAddition,
+  BudgetImpact,
+  BudgetImpactItem,
+  ScheduleImpact,
+  ScheduleImpactItem,
+  ScopeModification,
+} from './diagnostic.types';
+
+// =============================================================================
+// TYPES FAISABILITÉ (Module 0.4)
+// =============================================================================
+export type {
+  // Rapport global
+  FeasibilityReport,
+  FeasibilityStatus,
+
+  // Analyse réglementaire
+  RegulatoryAnalysis,
+  UrbanPlanningAnalysis,
+  UrbanPlanningDocument,
+  UrbanPlanningDocumentType,
+  PLUZone,
+  PLUZoneType,
+  PLURules as FeasibilityPLURules,
+  OccupationRule,
+  AccessRule,
+  NetworkRule,
+  RainwaterManagementRule,
+  SetbackRule as FeasibilitySetbackRule,
+  SetbackException,
+  GroundCoverageRule,
+  HeightRule,
+  HeightCalculationMethod,
+  HeightException,
+  AestheticRules,
+  RoofTypeRule,
+  RoofSlopeRule,
+  MaterialRule,
+  ColorRule,
+  ColorSpec,
+  ShutterTypeRule,
+  FenceHeightRule,
+  SolarPanelRule,
+  ACUnitRule,
+  AntennaRule,
+  ParkingRules,
+  ParkingRequirement,
+  BicycleParkingRequirement,
+  GreenSpaceRules,
+  TreeRequirement,
+  DensityBonus,
+  DensityBonusType,
+  PLUComplianceAnalysis,
+  ComplianceStatus,
+  PLUComplianceItem,
+  ProjectModification,
+  PLUDerogation,
+  DerogationType,
+
+  // Autorisations
+  UrbanPermitsAnalysis,
+  UrbanPermitType,
+  PermitDetermination,
+  PermitCriterion,
+  PermitExemption,
+  PermitProcedure,
+  ConsultationRequired,
+  ConsultingAuthority as FeasibilityConsultingAuthority,
+  PublicInquiryInfo,
+  PermitDocument,
+  DocumentFormat as FeasibilityDocumentFormat,
+  PermitTimeline,
+  UrbanTaxes,
+  TaxeAmenagement,
+  TaxExemption,
+  TaxReduction,
+  PaymentSchedule as TaxPaymentSchedule,
+  RedevanceArcheologie,
+  ParticipationVRD,
+
+  // Patrimoine
+  HeritageConstraintsAnalysis,
+  HeritageProtectionType,
+  HeritageConstraint as FeasibilityHeritageConstraint,
+  HeritageConstraintType as FeasibilityHeritageConstraintType,
+  ABFConsultation,
+  ABFConsultationType,
+  ABFContactInfo,
+  AllowedIntervention,
+  ForbiddenIntervention,
+
+  // Servitudes
+  EasementsAnalysis,
+  Easement,
+  EasementType,
+  EasementImpact,
+
+  // Environnement
+  EnvironmentalConstraintsAnalysis,
+  NaturalZoneConstraint,
+  NaturalZoneType,
+  WaterConstraint,
+  WaterConstraintType,
+  BiodiversityConstraint,
+  EnvironmentalAuthorization,
+
+  // Analyse technique
+  TechnicalAnalysis,
+  StructuralFeasibility,
+  StructuralCapacityAssessment,
+  FoundationRequirements,
+  StructuralModificationFeasibility,
+  NetworkConnectionsAnalysis,
+  NetworkConnectionStatus,
+  SiteAccessAnalysis,
+  VehicleAccessAssessment,
+  MaterialDeliveryAssessment,
+  EquipmentAccessAssessment,
+  StorageAreaAssessment,
+  TechnicalConstraint,
+  TechnicalConstraintType,
+
+  // Copropriété
+  CondoConstraintsAnalysis,
+  CondoType,
+  CondoRulesAnalysis,
+  CondoRestriction,
+  CondoRestrictionType,
+  CommonPartAffected,
+  CommonPartType,
+  VoteMajority,
+  CondoApproval,
+  CondoTimeline,
+  CondoRisk,
+
+  // Voisinage
+  NeighborhoodConstraints as FeasibilityNeighborhoodConstraints,
+  PartyWallConstraint,
+  PartyWallStatus,
+  ViewRightConstraint,
+  ViewRightType,
+  NeighborEasement,
+  PlantationDistance,
+  NeighborAuthorization,
+
+  // Accessibilité PMR/ERP
+  AccessibilityRequirements as FeasibilityAccessibilityRequirements,
+  AccessibilityClassification,
+  AccessibilityRegulation,
+  AccessibilityRequirement as FeasibilityAccessibilityRequirement,
+  AccessibilityCategory,
+  AccessibilityComplianceStatus,
+  AccessibilityWork,
+  AccessibilityDerogation as FeasibilityAccessibilityDerogation,
+  CommissionConsultation,
+
+  // Normes techniques
+  TechnicalStandardsAnalysis,
+  ThermalRegulationAnalysis,
+  ThermalRegulationType,
+  ThermalRequirement as FeasibilityThermalRequirement,
+  ThermalIndicator,
+  ThermalAttestation,
+  ThermalAttestationType,
+  ElectricalStandardsAnalysis,
+  ElectricalNormRequirement,
+  ElectricalNormCategory,
+  GasStandardsAnalysis,
+  GasNormRequirement,
+  SanitationStandardsAnalysis,
+  SanitationRequirement,
+  FireSecurityAnalysis,
+  FireSecurityBuildingType,
+  FireSecurityRequirement,
+  FireSecurityCategory,
+  ApplicableDTU as FeasibilityApplicableDTU,
+
+  // Check-list
+  RegulatoryChecklistItem,
+  ChecklistCategory,
+  ChecklistItemStatus,
+  RequiredAuthorization,
+  AuthorizationType,
+  AuthorizationStatus,
+
+  // Risques
+  FeasibilityRisk,
+  RiskCategory,
+  FeasibilityRecommendation,
+
+  // Dossier administratif
+  AdministrativeDocumentPreparation,
+  CERFAFormPreparation,
+  DocumentPreparationStatus,
+  PrefilledField,
+  MissingField as AdminMissingField,
+  RegulatoryPlanPreparation,
+  RegulatoryPlanType,
+  DescriptiveNoticePreparation,
+  NoticeSection,
+  OtherDocumentPreparation,
+} from './feasibility.types';
+
+// =============================================================================
+// TYPES CCTP (Module 0.5)
+// =============================================================================
+export type {
+  // Document principal
+  CCTPDocument,
+  CCTPMetadata,
+  CCTPStatus,
+  CCTPFormat,
+
+  // Article 1 - Objet
+  MarketObject,
+  ClientInfo,
+  MarketType,
+
+  // Article 2 - Description
+  GeneralDescription,
+  ProjectContext,
+  OccupancyDuringWorks,
+  WorksNature,
+  ProjectType as CCTPProjectType,
+  WorkCategory as CCTPWorkCategory,
+  AllotmentType,
+  LotSummary,
+  GeneralConstraints,
+  WorkingHours,
+  SiteAccessConstraints,
+  ProtectionRequirements,
+  ProtectionDetail,
+  WasteManagementRequirements,
+  WasteCategory,
+  WasteType,
+  SecurityRequirements,
+  EnvironmentalRequirements,
+
+  // Article 3 - Lots
+  CCTPLot,
+  LotScope,
+  WorkItem,
+  ExcludedWork,
+  WorkLocation,
+  QuantityItem,
+  QuantityUnit,
+
+  // Spécifications matériaux
+  MaterialSpecification,
+  MaterialCategory as CCTPMaterialCategory,
+  MaterialStandard,
+  TechnicalCharacteristic,
+  MaterialDimensions,
+  DimensionSpec,
+  MaterialFinish,
+  CertificationType,
+  MaterialCertification,
+  EquivalencePolicy,
+  ReferenceBrand,
+  MaterialPrice,
+
+  // Mode opératoire
+  OperatingProcedure,
+  OperatingPhase,
+  OperatingStep,
+  WeatherConditions,
+  ResourceRequirement,
+  QualityCheckpoint as CCTPQualityCheckpoint,
+
+  // Normes
+  ApplicableStandard,
+  StandardType,
+
+  // Contrôles
+  QualityControlRequirements,
+  HoldPoint,
+  RequiredTest,
+  TestFrequency,
+  AcceptanceCriterion,
+  ToleranceSpec,
+  ReceptionProcedure,
+  ReceptionStage,
+  ReservationHandling,
+
+  // Garanties
+  WarrantyRequirement,
+  WarrantyType,
+
+  // Interfaces
+  LotInterface,
+
+  // Article 4 - Documents entreprise
+  ContractorDocumentRequirements,
+  BeforeStartDocuments,
+  DuringWorksDocuments,
+  CompletionDocuments,
+  ContractorDocument,
+
+  // Article 5 - Délais
+  SchedulingRequirements,
+  ProvisionalDates,
+  Milestone,
+  ExecutionDuration,
+  ProjectPhase as CCTPProjectPhase,
+  PenaltyClause,
+  PenaltyType,
+  ExtensionCondition,
+  ExtensionCause,
+
+  // Article 6 - Finances
+  FinancialConditions,
+  ContractAmount,
+  PaymentTerms,
+  PaymentMilestone as CCTPPaymentMilestone,
+  AdvancePayment,
+  PriceRevision,
+  PriceIndex,
+  RetentionGuarantee,
+
+  // Article 7 - Clauses
+  SpecialClauses,
+  InsuranceRequirements,
+  InsuranceRequirement as CCTPInsuranceRequirement,
+  SubcontractingRules,
+  IntellectualPropertyClause,
+  ConfidentialityClause,
+  DisputeResolutionClause,
+  EnvironmentalClause,
+  SocialClause,
+
+  // Annexes
+  CCTPAppendix,
+  AppendixType,
+
+  // Génération
+  CCTPGenerationInfo,
+  HighlightedSection,
+  CCTPWarning,
+
+  // Bibliothèque
+  MaterialLibrary,
+  MaterialLibraryCategory,
+  MaterialLibrarySubcategory,
+  MaterialLibraryItem,
+
+  // DPGF
+  DPGF,
+  DPGFHeader,
+  DPGFLot,
+  DPGFItem,
+  DPGFTotals,
+  DPGFMetadata,
+
+  // Planning
+  WorksPlanning,
+  PlanningParameters,
+  PlanningPhase,
+  CriticalPathItem,
+  PlanningMilestone,
+  ResourcePlanning,
+  LaborResource,
+  EquipmentResource,
+  MaterialDelivery,
+} from './cctp.types';
+
+// =============================================================================
+// TYPES BUDGET ET FINANCEMENT (Module 0.6)
+// =============================================================================
+export type {
+  // Plan budgétaire
+  BudgetPlan,
+  BudgetSummary,
+  BudgetStatus,
+
+  // Estimation coûts
+  DetailedCostEstimation,
+  DirectCosts,
+  LotCost,
+  WorksCostCategory,
+  CostBreakdown,
+  CostItem,
+  CostEstimationMethod,
+  EstimationMethod,
+
+  // Coûts indirects
+  IndirectCosts,
+  DesignCosts,
+  DesignCostItem,
+  DesignServiceType,
+  DesignFeeBasis,
+  AdministrativeCosts,
+  AdministrativeCostItem,
+  AdministrativeServiceType,
+  InspectionCosts,
+  InspectionCostItem,
+  InspectionType,
+  InsuranceCosts,
+  InsuranceCostItem,
+  InsuranceType,
+  InsuranceBasis,
+  ConnectionCosts,
+  ConnectionCostItem,
+  ConnectionType,
+  TaxCosts,
+  TaxCostItem,
+  TaxType,
+  TaxCalculationDetail,
+  TaxExemptionDetail,
+  TaxReductionDetail,
+  MiscellaneousCosts,
+  MiscellaneousCostItem,
+  MiscellaneousCostType,
+
+  // Aléas
+  ContingencyProvision,
+  ContingencyRationale,
+  ContingencyRiskLevel,
+  ContingencyFactor,
+  ContingencyBreakdown,
+
+  // TVA
+  VATCalculation,
+  VATDetail,
+  VATRate,
+
+  // Financement
+  FinancingPlan,
+  FinancingSource,
+  FinancingType,
+  FinancingStatus,
+  FinancingDetails,
+  PersonalFundsDetails,
+  LoanDetails,
+  AidDetails,
+  DisbursementTiming,
+  TaxBenefitDetails,
+  TaxMechanism,
+  FinancingSummary,
+  FinancingFeasibility,
+  FinancingWarning,
+  FinancingRecommendation,
+
+  // Aides
+  AidesAnalysis,
+  EligibilityProfile,
+  IncomeCategory,
+  EligibleAide,
+  AideType as BudgetAideType,
+  EligibilityCondition,
+  ApplicationProcedure,
+  ApplicationStep,
+  AideTiming,
+  IneligibleAide,
+  AideOptimization,
+
+  // MaPrimeRénov'
+  MaPrimeRenovAnalysis,
+  MaPrimeRenovParcours,
+  MaPrimeRenovDetails,
+  MaPrimeRenovGeste,
+  MaPrimeRenovWorkType,
+  MaPrimeRenovAccompagne,
+  MaPrimeRenovBonus,
+  MaPrimeRenovBonusType,
+
+  // Éco-PTZ
+  EcoPTZAnalysis,
+  EcoPTZVersion,
+  EcoPTZWorkCategory,
+
+  // CEE
+  CEEAnalysis,
+  CEEOperation,
+  CEEOperator,
+
+  // Aides locales
+  LocalAidesAnalysis,
+  LocalAide,
+
+  // Trésorerie
+  CashFlowPlan,
+  CashFlowParameters,
+  ExpenditureItem,
+  ExpenditureCategory,
+  PaymentType,
+  IncomeItem,
+  MonthlyFlow,
+  TreasuryNeeds,
+  CashFlowOptimization,
+
+  // Optimisations
+  BudgetOptimization,
+  OptimizationType,
+  FinancialRisk,
+  FinancialRiskType,
+
+  // ROI
+  ROIAnalysis,
+  ROIProjectType,
+  ROIGain,
+  ROIGainType,
+  PropertyValueIncrease,
+  YearlyProjection,
+
+  // Comparateur
+  LoanComparator,
+  LoanOffer,
+  ComparisonCriterion,
+} from './budget.types';
