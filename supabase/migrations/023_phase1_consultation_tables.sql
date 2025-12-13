@@ -172,8 +172,8 @@ CREATE TABLE phase1_entreprises (
   -- Assurances
   assurances JSONB DEFAULT '[]',
 
-  -- Références
-  references JSONB DEFAULT '[]',
+  -- Références de chantiers passés
+  references_chantiers JSONB DEFAULT '[]',
 
   -- Capacités
   capacites JSONB DEFAULT '{}',
