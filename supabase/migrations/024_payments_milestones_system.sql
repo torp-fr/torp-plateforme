@@ -1,0 +1,834 @@
+-- =====================================================
+-- Migration 024: Système de Paiements Jalonnés
+-- Gestion des paiements, jalons, validation chantier et litiges
+-- =====================================================
+
+-- ===================
+-- TYPES ÉNUMÉRÉS
+-- ===================
+
+-- Statut des paiements
+CREATE TYPE payment_status AS ENUM (
+  'pending',           -- En attente de validation
+  'awaiting_payment',  -- Validé, en attente de paiement client
+  'processing',        -- Paiement en cours de traitement
+  'held',              -- Bloqué en séquestre
+  'released',          -- Libéré vers l'entreprise
+  'refunded',          -- Remboursé au client
+  'disputed',          -- En litige
+  'cancelled'          -- Annulé
+);
+
+-- Type de paiement
+CREATE TYPE payment_type AS ENUM (
+  'deposit',           -- Acompte à la signature
+  'milestone',         -- Paiement jalon
+  'final',             -- Solde final
+  'retention',         -- Retenue de garantie
+  'penalty',           -- Pénalité de retard
+  'adjustment'         -- Ajustement/avenant
+);
+
+-- Statut des jalons
+CREATE TYPE milestone_status AS ENUM (
+  'pending',           -- En attente
+  'in_progress',       -- En cours
+  'submitted',         -- Soumis pour validation
+  'validated',         -- Validé par le client
+  'rejected',          -- Rejeté
+  'completed'          -- Complété et payé
+);
+
+-- Statut des litiges
+CREATE TYPE dispute_status AS ENUM (
+  'opened',            -- Ouvert
+  'under_review',      -- En cours d'examen TORP
+  'mediation',         -- En médiation
+  'resolved_client',   -- Résolu en faveur du client
+  'resolved_enterprise', -- Résolu en faveur de l'entreprise
+  'escalated',         -- Escaladé (juridique)
+  'closed'             -- Fermé
+);
+
+-- Raison du litige
+CREATE TYPE dispute_reason AS ENUM (
+  'non_conformity',    -- Non-conformité des travaux
+  'delay',             -- Retard
+  'quality',           -- Qualité insuffisante
+  'incomplete',        -- Travaux incomplets
+  'price_dispute',     -- Contestation de prix
+  'communication',     -- Problème de communication
+  'damage',            -- Dommages causés
+  'abandonment',       -- Abandon de chantier
+  'other'              -- Autre
+);
+
+-- Niveau de risque fraude
+CREATE TYPE fraud_risk_level AS ENUM (
+  'low',
+  'medium',
+  'high',
+  'critical'
+);
+
+-- ===================
+-- TABLE: Projets Contrats
+-- ===================
+
+CREATE TABLE IF NOT EXISTS project_contracts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Références
+  project_id UUID NOT NULL REFERENCES phase0_projects(id) ON DELETE CASCADE,
+  proposition_id UUID, -- Référence à la proposition commerciale acceptée
+  entreprise_id UUID NOT NULL REFERENCES auth.users(id),
+  client_id UUID NOT NULL REFERENCES auth.users(id),
+
+  -- Informations contrat
+  reference VARCHAR(50) NOT NULL UNIQUE,
+  titre VARCHAR(255) NOT NULL,
+  description TEXT,
+
+  -- Montants
+  montant_total_ht DECIMAL(12,2) NOT NULL,
+  montant_total_ttc DECIMAL(12,2) NOT NULL,
+  taux_tva DECIMAL(5,2) DEFAULT 20.00,
+
+  -- Dates
+  date_signature TIMESTAMPTZ,
+  date_debut_prevue DATE,
+  date_fin_prevue DATE,
+  date_debut_effective DATE,
+  date_fin_effective DATE,
+
+  -- Retenue de garantie
+  retenue_garantie_pct DECIMAL(5,2) DEFAULT 5.00,
+  retenue_garantie_duree_mois INTEGER DEFAULT 12,
+
+  -- Pénalités de retard
+  penalite_retard_jour DECIMAL(10,2) DEFAULT 0,
+  penalite_plafond_pct DECIMAL(5,2) DEFAULT 5.00,
+
+  -- Statut
+  status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft', 'pending_signature', 'active', 'completed', 'terminated', 'disputed')),
+
+  -- Documents
+  documents JSONB DEFAULT '[]',
+
+  -- Métadonnées
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  created_by UUID REFERENCES auth.users(id),
+
+  CONSTRAINT valid_montants CHECK (montant_total_ht > 0 AND montant_total_ttc >= montant_total_ht)
+);
+
+-- Index
+CREATE INDEX idx_contracts_project ON project_contracts(project_id);
+CREATE INDEX idx_contracts_entreprise ON project_contracts(entreprise_id);
+CREATE INDEX idx_contracts_client ON project_contracts(client_id);
+CREATE INDEX idx_contracts_status ON project_contracts(status);
+
+-- ===================
+-- TABLE: Jalons de paiement
+-- ===================
+
+CREATE TABLE IF NOT EXISTS payment_milestones (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Références
+  contract_id UUID NOT NULL REFERENCES project_contracts(id) ON DELETE CASCADE,
+
+  -- Identification
+  numero INTEGER NOT NULL,
+  designation VARCHAR(255) NOT NULL,
+  description TEXT,
+
+  -- Montants
+  montant_ht DECIMAL(12,2) NOT NULL,
+  montant_ttc DECIMAL(12,2) NOT NULL,
+  pourcentage_contrat DECIMAL(5,2),
+
+  -- Dates
+  date_prevue DATE,
+  date_soumission TIMESTAMPTZ,
+  date_validation TIMESTAMPTZ,
+  date_paiement TIMESTAMPTZ,
+
+  -- Conditions de déclenchement
+  conditions_declenchement TEXT[],
+  livrables_attendus TEXT[],
+
+  -- Validation
+  status milestone_status DEFAULT 'pending',
+  validated_by UUID REFERENCES auth.users(id),
+  rejection_reason TEXT,
+
+  -- Preuves fournies par l'entreprise
+  preuves JSONB DEFAULT '[]', -- photos, documents, bons de commande
+  compte_rendu TEXT,
+
+  -- Anti-arnaque: vérifications automatiques
+  verification_auto JSONB DEFAULT '{}',
+  fraud_check_result JSONB,
+  fraud_risk_level fraud_risk_level DEFAULT 'low',
+
+  -- Métadonnées
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  CONSTRAINT unique_milestone_numero UNIQUE (contract_id, numero),
+  CONSTRAINT valid_milestone_montant CHECK (montant_ht > 0)
+);
+
+-- Index
+CREATE INDEX idx_milestones_contract ON payment_milestones(contract_id);
+CREATE INDEX idx_milestones_status ON payment_milestones(status);
+CREATE INDEX idx_milestones_date_prevue ON payment_milestones(date_prevue);
+
+-- ===================
+-- TABLE: Paiements
+-- ===================
+
+CREATE TABLE IF NOT EXISTS payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Références
+  contract_id UUID NOT NULL REFERENCES project_contracts(id) ON DELETE CASCADE,
+  milestone_id UUID REFERENCES payment_milestones(id),
+
+  -- Identification
+  reference VARCHAR(50) NOT NULL UNIQUE,
+  payment_type payment_type NOT NULL,
+
+  -- Montants
+  montant_ht DECIMAL(12,2) NOT NULL,
+  montant_tva DECIMAL(12,2) NOT NULL,
+  montant_ttc DECIMAL(12,2) NOT NULL,
+
+  -- Stripe/Provider
+  stripe_payment_intent_id VARCHAR(255),
+  stripe_charge_id VARCHAR(255),
+  stripe_transfer_id VARCHAR(255),
+  provider_data JSONB DEFAULT '{}',
+
+  -- Comptes
+  payer_id UUID NOT NULL REFERENCES auth.users(id), -- Client
+  payee_id UUID NOT NULL REFERENCES auth.users(id), -- Entreprise
+
+  -- Séquestre
+  held_until TIMESTAMPTZ, -- Date de libération prévue
+  escrow_released_at TIMESTAMPTZ,
+  escrow_released_by UUID REFERENCES auth.users(id),
+
+  -- Statut
+  status payment_status DEFAULT 'pending',
+  status_history JSONB DEFAULT '[]',
+
+  -- Dates
+  due_date DATE,
+  paid_at TIMESTAMPTZ,
+  released_at TIMESTAMPTZ,
+
+  -- Vérifications anti-fraude
+  fraud_checks JSONB DEFAULT '{}',
+  fraud_score INTEGER DEFAULT 0, -- 0-100
+  fraud_alerts TEXT[],
+  requires_manual_review BOOLEAN DEFAULT FALSE,
+  reviewed_by UUID REFERENCES auth.users(id),
+  reviewed_at TIMESTAMPTZ,
+  review_notes TEXT,
+
+  -- Métadonnées
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  CONSTRAINT valid_payment_montant CHECK (montant_ttc > 0)
+);
+
+-- Index
+CREATE INDEX idx_payments_contract ON payments(contract_id);
+CREATE INDEX idx_payments_milestone ON payments(milestone_id);
+CREATE INDEX idx_payments_payer ON payments(payer_id);
+CREATE INDEX idx_payments_payee ON payments(payee_id);
+CREATE INDEX idx_payments_status ON payments(status);
+CREATE INDEX idx_payments_stripe ON payments(stripe_payment_intent_id);
+CREATE INDEX idx_payments_fraud_score ON payments(fraud_score) WHERE fraud_score > 50;
+
+-- ===================
+-- TABLE: Litiges
+-- ===================
+
+CREATE TABLE IF NOT EXISTS disputes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Références
+  contract_id UUID NOT NULL REFERENCES project_contracts(id) ON DELETE CASCADE,
+  payment_id UUID REFERENCES payments(id),
+  milestone_id UUID REFERENCES payment_milestones(id),
+
+  -- Identification
+  reference VARCHAR(50) NOT NULL UNIQUE,
+
+  -- Parties
+  opened_by UUID NOT NULL REFERENCES auth.users(id),
+  against UUID NOT NULL REFERENCES auth.users(id),
+
+  -- Détails
+  reason dispute_reason NOT NULL,
+  titre VARCHAR(255) NOT NULL,
+  description TEXT NOT NULL,
+  montant_conteste DECIMAL(12,2),
+
+  -- Preuves
+  preuves_demandeur JSONB DEFAULT '[]',
+  preuves_defendeur JSONB DEFAULT '[]',
+
+  -- Traitement
+  status dispute_status DEFAULT 'opened',
+  assigned_to UUID REFERENCES auth.users(id), -- Médiateur TORP
+
+  -- Résolution
+  resolution_type VARCHAR(50),
+  resolution_description TEXT,
+  resolution_montant DECIMAL(12,2),
+  resolved_at TIMESTAMPTZ,
+  resolved_by UUID REFERENCES auth.users(id),
+
+  -- Timeline
+  deadline_reponse TIMESTAMPTZ,
+  deadline_resolution TIMESTAMPTZ,
+
+  -- Historique
+  historique JSONB DEFAULT '[]',
+
+  -- Métadonnées
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index
+CREATE INDEX idx_disputes_contract ON disputes(contract_id);
+CREATE INDEX idx_disputes_status ON disputes(status);
+CREATE INDEX idx_disputes_opened_by ON disputes(opened_by);
+CREATE INDEX idx_disputes_assigned ON disputes(assigned_to);
+
+-- ===================
+-- TABLE: Règles Anti-Fraude
+-- ===================
+
+CREATE TABLE IF NOT EXISTS fraud_rules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Identification
+  code VARCHAR(50) NOT NULL UNIQUE,
+  nom VARCHAR(255) NOT NULL,
+  description TEXT,
+
+  -- Configuration
+  actif BOOLEAN DEFAULT TRUE,
+  severite fraud_risk_level NOT NULL,
+  score_impact INTEGER NOT NULL, -- Points ajoutés au score de fraude
+
+  -- Règle
+  type_regle VARCHAR(50) NOT NULL, -- 'threshold', 'pattern', 'timing', 'behavior'
+  conditions JSONB NOT NULL, -- Conditions de déclenchement
+
+  -- Actions
+  action_auto VARCHAR(50), -- 'block', 'hold', 'flag', 'notify'
+  notification_admin BOOLEAN DEFAULT FALSE,
+
+  -- Métadonnées
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Insérer les règles anti-fraude par défaut
+INSERT INTO fraud_rules (code, nom, description, severite, score_impact, type_regle, conditions, action_auto, notification_admin) VALUES
+-- Règles sur les acomptes
+('ACOMPTE_EXCESSIF', 'Acompte excessif', 'Acompte supérieur à 30% du montant total', 'high', 40, 'threshold',
+ '{"field": "deposit_percentage", "operator": ">", "value": 30}', 'flag', TRUE),
+
+('ACOMPTE_TRES_ELEVE', 'Acompte très élevé', 'Acompte supérieur à 50% du montant total', 'critical', 80, 'threshold',
+ '{"field": "deposit_percentage", "operator": ">", "value": 50}', 'block', TRUE),
+
+-- Règles sur les délais
+('PAIEMENT_PREMATURE', 'Demande de paiement prématurée', 'Demande de paiement avant la date prévue du jalon', 'medium', 25, 'timing',
+ '{"type": "milestone_payment_before_date", "days_before": 7}', 'flag', FALSE),
+
+('PAIEMENTS_RAPIDES', 'Paiements trop rapides', 'Plus de 2 demandes de paiement en moins de 7 jours', 'high', 35, 'pattern',
+ '{"type": "payment_frequency", "max_count": 2, "days": 7}', 'hold', TRUE),
+
+-- Règles sur les montants
+('MONTANT_INCOHERENT', 'Montant incohérent', 'Montant du jalon différent de plus de 20% du prévu', 'medium', 30, 'threshold',
+ '{"field": "amount_variance", "operator": ">", "value": 20}', 'flag', TRUE),
+
+('DEPASSEMENT_CONTRAT', 'Dépassement du contrat', 'Total des paiements dépasse le montant contractuel', 'critical', 100, 'threshold',
+ '{"field": "total_vs_contract", "operator": ">", "value": 100}', 'block', TRUE),
+
+-- Règles sur les preuves
+('PREUVES_INSUFFISANTES', 'Preuves insuffisantes', 'Moins de 3 photos/documents pour un jalon > 5000€', 'medium', 20, 'threshold',
+ '{"type": "proof_count", "min_proofs": 3, "amount_threshold": 5000}', 'flag', FALSE),
+
+('PHOTOS_METADATA_MANQUANTES', 'Métadonnées photos absentes', 'Photos sans géolocalisation ou date EXIF', 'low', 10, 'pattern',
+ '{"type": "photo_metadata", "required": ["geolocation", "date"]}', NULL, FALSE),
+
+-- Règles comportementales
+('NOUVELLE_ENTREPRISE', 'Nouvelle entreprise', 'Entreprise inscrite depuis moins de 30 jours', 'medium', 25, 'behavior',
+ '{"type": "account_age", "days": 30}', 'flag', TRUE),
+
+('PREMIER_PROJET', 'Premier projet de l''entreprise', 'Aucun projet complété précédemment', 'low', 15, 'behavior',
+ '{"type": "completed_projects", "count": 0}', NULL, FALSE),
+
+('LITIGE_RECENT', 'Litige récent', 'Litige dans les 90 derniers jours', 'high', 45, 'behavior',
+ '{"type": "recent_dispute", "days": 90}', 'flag', TRUE);
+
+-- ===================
+-- TABLE: Vérifications Anti-Fraude (Log)
+-- ===================
+
+CREATE TABLE IF NOT EXISTS fraud_checks_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Références
+  payment_id UUID REFERENCES payments(id),
+  milestone_id UUID REFERENCES payment_milestones(id),
+  contract_id UUID REFERENCES project_contracts(id),
+
+  -- Résultat
+  total_score INTEGER NOT NULL,
+  risk_level fraud_risk_level NOT NULL,
+  rules_triggered TEXT[],
+  details JSONB NOT NULL,
+
+  -- Actions
+  action_taken VARCHAR(50),
+  blocked BOOLEAN DEFAULT FALSE,
+  requires_review BOOLEAN DEFAULT FALSE,
+
+  -- Métadonnées
+  checked_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index
+CREATE INDEX idx_fraud_log_payment ON fraud_checks_log(payment_id);
+CREATE INDEX idx_fraud_log_contract ON fraud_checks_log(contract_id);
+CREATE INDEX idx_fraud_log_risk ON fraud_checks_log(risk_level);
+
+-- ===================
+-- TABLE: Comptes entreprises (pour paiements)
+-- ===================
+
+CREATE TABLE IF NOT EXISTS enterprise_payment_accounts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Propriétaire
+  user_id UUID NOT NULL REFERENCES auth.users(id) UNIQUE,
+
+  -- Stripe Connect
+  stripe_account_id VARCHAR(255),
+  stripe_account_status VARCHAR(50), -- 'pending', 'active', 'restricted', 'disabled'
+  stripe_onboarding_complete BOOLEAN DEFAULT FALSE,
+  stripe_charges_enabled BOOLEAN DEFAULT FALSE,
+  stripe_payouts_enabled BOOLEAN DEFAULT FALSE,
+
+  -- Informations bancaires (hashées/partielles)
+  iban_last4 VARCHAR(4),
+  bank_name VARCHAR(255),
+
+  -- Vérification
+  identity_verified BOOLEAN DEFAULT FALSE,
+  business_verified BOOLEAN DEFAULT FALSE,
+
+  -- Limites
+  payout_limit_daily DECIMAL(12,2) DEFAULT 10000.00,
+  payout_limit_monthly DECIMAL(12,2) DEFAULT 50000.00,
+
+  -- Statistiques
+  total_received DECIMAL(12,2) DEFAULT 0,
+  total_pending DECIMAL(12,2) DEFAULT 0,
+  total_disputes DECIMAL(12,2) DEFAULT 0,
+
+  -- Métadonnées
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index
+CREATE INDEX idx_enterprise_accounts_stripe ON enterprise_payment_accounts(stripe_account_id);
+CREATE INDEX idx_enterprise_accounts_status ON enterprise_payment_accounts(stripe_account_status);
+
+-- ===================
+-- TABLE: Transmissions (pour TransmissionService)
+-- ===================
+
+CREATE TABLE IF NOT EXISTS transmissions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Références
+  proposition_id UUID NOT NULL,
+  entreprise_id UUID NOT NULL REFERENCES auth.users(id),
+
+  -- Client
+  client JSONB NOT NULL,
+
+  -- Canaux
+  canaux JSONB DEFAULT '[]',
+
+  -- Message
+  message JSONB NOT NULL,
+
+  -- Lien d'accès
+  lien_acces JSONB NOT NULL,
+
+  -- Tracking
+  tracking JSONB DEFAULT '{}',
+
+  -- Relances
+  relances JSONB DEFAULT '[]',
+
+  -- Statut
+  status VARCHAR(50) DEFAULT 'envoye',
+
+  -- Métadonnées
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index
+CREATE INDEX idx_transmissions_proposition ON transmissions(proposition_id);
+CREATE INDEX idx_transmissions_entreprise ON transmissions(entreprise_id);
+CREATE INDEX idx_transmissions_status ON transmissions(status);
+
+-- ===================
+-- TABLE: Liens d'accès
+-- ===================
+
+CREATE TABLE IF NOT EXISTS liens_acces (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Références
+  proposition_id UUID NOT NULL,
+
+  -- Code
+  code_acces VARCHAR(20) NOT NULL UNIQUE,
+
+  -- Expiration
+  expiration TIMESTAMPTZ NOT NULL,
+
+  -- Consultations
+  consultations INTEGER DEFAULT 0,
+  derniere_consultation TIMESTAMPTZ,
+
+  -- Métadonnées
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index
+CREATE INDEX idx_liens_code ON liens_acces(code_acces);
+CREATE INDEX idx_liens_proposition ON liens_acces(proposition_id);
+
+-- ===================
+-- FONCTIONS
+-- ===================
+
+-- Fonction pour calculer le score de fraude d'un paiement
+CREATE OR REPLACE FUNCTION calculate_fraud_score(
+  p_payment_id UUID,
+  p_contract_id UUID,
+  p_entreprise_id UUID,
+  p_montant DECIMAL,
+  p_type payment_type
+) RETURNS TABLE (
+  total_score INTEGER,
+  risk_level fraud_risk_level,
+  rules_triggered TEXT[],
+  details JSONB,
+  should_block BOOLEAN
+) AS $$
+DECLARE
+  v_score INTEGER := 0;
+  v_rules TEXT[] := '{}';
+  v_details JSONB := '{}';
+  v_contract project_contracts;
+  v_total_paid DECIMAL;
+  v_deposit_pct DECIMAL;
+  v_account_age INTEGER;
+  v_completed_projects INTEGER;
+  v_recent_disputes INTEGER;
+  v_recent_payments INTEGER;
+  v_rule fraud_rules;
+BEGIN
+  -- Récupérer le contrat
+  SELECT * INTO v_contract FROM project_contracts WHERE id = p_contract_id;
+
+  -- Calculer le total déjà payé
+  SELECT COALESCE(SUM(montant_ttc), 0) INTO v_total_paid
+  FROM payments
+  WHERE contract_id = p_contract_id AND status IN ('released', 'held', 'processing');
+
+  -- Vérifier chaque règle active
+  FOR v_rule IN SELECT * FROM fraud_rules WHERE actif = TRUE LOOP
+    CASE v_rule.type_regle
+      WHEN 'threshold' THEN
+        -- Règles de seuil
+        IF v_rule.code = 'ACOMPTE_EXCESSIF' AND p_type = 'deposit' THEN
+          v_deposit_pct := (p_montant / v_contract.montant_total_ttc) * 100;
+          IF v_deposit_pct > 30 THEN
+            v_score := v_score + v_rule.score_impact;
+            v_rules := array_append(v_rules, v_rule.code);
+          END IF;
+        END IF;
+
+        IF v_rule.code = 'ACOMPTE_TRES_ELEVE' AND p_type = 'deposit' THEN
+          v_deposit_pct := (p_montant / v_contract.montant_total_ttc) * 100;
+          IF v_deposit_pct > 50 THEN
+            v_score := v_score + v_rule.score_impact;
+            v_rules := array_append(v_rules, v_rule.code);
+          END IF;
+        END IF;
+
+        IF v_rule.code = 'DEPASSEMENT_CONTRAT' THEN
+          IF (v_total_paid + p_montant) > v_contract.montant_total_ttc * 1.05 THEN
+            v_score := v_score + v_rule.score_impact;
+            v_rules := array_append(v_rules, v_rule.code);
+          END IF;
+        END IF;
+
+      WHEN 'pattern' THEN
+        -- Règles de pattern
+        IF v_rule.code = 'PAIEMENTS_RAPIDES' THEN
+          SELECT COUNT(*) INTO v_recent_payments
+          FROM payments
+          WHERE contract_id = p_contract_id
+            AND created_at > NOW() - INTERVAL '7 days';
+          IF v_recent_payments >= 2 THEN
+            v_score := v_score + v_rule.score_impact;
+            v_rules := array_append(v_rules, v_rule.code);
+          END IF;
+        END IF;
+
+      WHEN 'behavior' THEN
+        -- Règles comportementales
+        IF v_rule.code = 'NOUVELLE_ENTREPRISE' THEN
+          SELECT EXTRACT(DAY FROM NOW() - created_at)::INTEGER INTO v_account_age
+          FROM auth.users WHERE id = p_entreprise_id;
+          IF v_account_age < 30 THEN
+            v_score := v_score + v_rule.score_impact;
+            v_rules := array_append(v_rules, v_rule.code);
+          END IF;
+        END IF;
+
+        IF v_rule.code = 'LITIGE_RECENT' THEN
+          SELECT COUNT(*) INTO v_recent_disputes
+          FROM disputes
+          WHERE against = p_entreprise_id
+            AND created_at > NOW() - INTERVAL '90 days';
+          IF v_recent_disputes > 0 THEN
+            v_score := v_score + v_rule.score_impact;
+            v_rules := array_append(v_rules, v_rule.code);
+          END IF;
+        END IF;
+
+    END CASE;
+  END LOOP;
+
+  -- Déterminer le niveau de risque
+  IF v_score >= 80 THEN
+    risk_level := 'critical';
+  ELSIF v_score >= 50 THEN
+    risk_level := 'high';
+  ELSIF v_score >= 25 THEN
+    risk_level := 'medium';
+  ELSE
+    risk_level := 'low';
+  END IF;
+
+  -- Construire les détails
+  v_details := jsonb_build_object(
+    'score', v_score,
+    'total_paid', v_total_paid,
+    'contract_total', v_contract.montant_total_ttc,
+    'payment_amount', p_montant,
+    'payment_type', p_type
+  );
+
+  total_score := v_score;
+  rules_triggered := v_rules;
+  details := v_details;
+  should_block := v_score >= 80;
+
+  RETURN NEXT;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Fonction pour générer une référence unique
+CREATE OR REPLACE FUNCTION generate_payment_reference(prefix VARCHAR DEFAULT 'PAY')
+RETURNS VARCHAR AS $$
+DECLARE
+  v_date VARCHAR;
+  v_random VARCHAR;
+  v_ref VARCHAR;
+BEGIN
+  v_date := TO_CHAR(NOW(), 'YYYYMMDD');
+  v_random := UPPER(SUBSTRING(MD5(RANDOM()::TEXT) FROM 1 FOR 6));
+  v_ref := prefix || '-' || v_date || '-' || v_random;
+  RETURN v_ref;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger pour mettre à jour updated_at
+CREATE OR REPLACE FUNCTION update_payment_tables_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_contracts_timestamp
+  BEFORE UPDATE ON project_contracts
+  FOR EACH ROW EXECUTE FUNCTION update_payment_tables_timestamp();
+
+CREATE TRIGGER update_milestones_timestamp
+  BEFORE UPDATE ON payment_milestones
+  FOR EACH ROW EXECUTE FUNCTION update_payment_tables_timestamp();
+
+CREATE TRIGGER update_payments_timestamp
+  BEFORE UPDATE ON payments
+  FOR EACH ROW EXECUTE FUNCTION update_payment_tables_timestamp();
+
+CREATE TRIGGER update_disputes_timestamp
+  BEFORE UPDATE ON disputes
+  FOR EACH ROW EXECUTE FUNCTION update_payment_tables_timestamp();
+
+-- ===================
+-- ROW LEVEL SECURITY
+-- ===================
+
+-- Activer RLS
+ALTER TABLE project_contracts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_milestones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE disputes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fraud_checks_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE enterprise_payment_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE transmissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE liens_acces ENABLE ROW LEVEL SECURITY;
+
+-- Policies pour project_contracts
+CREATE POLICY "contracts_select_own" ON project_contracts
+  FOR SELECT USING (
+    auth.uid() = client_id OR
+    auth.uid() = entreprise_id OR
+    EXISTS (SELECT 1 FROM auth.users WHERE id = auth.uid() AND raw_user_meta_data->>'user_type' IN ('admin', 'super_admin'))
+  );
+
+CREATE POLICY "contracts_insert_entreprise" ON project_contracts
+  FOR INSERT WITH CHECK (auth.uid() = entreprise_id);
+
+CREATE POLICY "contracts_update_parties" ON project_contracts
+  FOR UPDATE USING (auth.uid() = client_id OR auth.uid() = entreprise_id);
+
+-- Policies pour payment_milestones
+CREATE POLICY "milestones_select_contract_parties" ON payment_milestones
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM project_contracts
+      WHERE id = payment_milestones.contract_id
+        AND (client_id = auth.uid() OR entreprise_id = auth.uid())
+    ) OR
+    EXISTS (SELECT 1 FROM auth.users WHERE id = auth.uid() AND raw_user_meta_data->>'user_type' IN ('admin', 'super_admin'))
+  );
+
+CREATE POLICY "milestones_insert_entreprise" ON payment_milestones
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM project_contracts
+      WHERE id = payment_milestones.contract_id AND entreprise_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "milestones_update_parties" ON payment_milestones
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM project_contracts
+      WHERE id = payment_milestones.contract_id
+        AND (client_id = auth.uid() OR entreprise_id = auth.uid())
+    )
+  );
+
+-- Policies pour payments
+CREATE POLICY "payments_select_own" ON payments
+  FOR SELECT USING (
+    payer_id = auth.uid() OR
+    payee_id = auth.uid() OR
+    EXISTS (SELECT 1 FROM auth.users WHERE id = auth.uid() AND raw_user_meta_data->>'user_type' IN ('admin', 'super_admin'))
+  );
+
+CREATE POLICY "payments_insert_system" ON payments
+  FOR INSERT WITH CHECK (TRUE); -- Géré par le service
+
+-- Policies pour disputes
+CREATE POLICY "disputes_select_parties" ON disputes
+  FOR SELECT USING (
+    opened_by = auth.uid() OR
+    against = auth.uid() OR
+    assigned_to = auth.uid() OR
+    EXISTS (SELECT 1 FROM auth.users WHERE id = auth.uid() AND raw_user_meta_data->>'user_type' IN ('admin', 'super_admin'))
+  );
+
+CREATE POLICY "disputes_insert_auth" ON disputes
+  FOR INSERT WITH CHECK (opened_by = auth.uid());
+
+CREATE POLICY "disputes_update_parties" ON disputes
+  FOR UPDATE USING (
+    opened_by = auth.uid() OR
+    against = auth.uid() OR
+    assigned_to = auth.uid()
+  );
+
+-- Policies pour enterprise_payment_accounts
+CREATE POLICY "payment_accounts_select_own" ON enterprise_payment_accounts
+  FOR SELECT USING (user_id = auth.uid());
+
+CREATE POLICY "payment_accounts_insert_own" ON enterprise_payment_accounts
+  FOR INSERT WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY "payment_accounts_update_own" ON enterprise_payment_accounts
+  FOR UPDATE USING (user_id = auth.uid());
+
+-- Policies pour transmissions
+CREATE POLICY "transmissions_select_own" ON transmissions
+  FOR SELECT USING (entreprise_id = auth.uid());
+
+CREATE POLICY "transmissions_insert_own" ON transmissions
+  FOR INSERT WITH CHECK (entreprise_id = auth.uid());
+
+CREATE POLICY "transmissions_update_own" ON transmissions
+  FOR UPDATE USING (entreprise_id = auth.uid());
+
+-- Policies pour liens_acces (lecture publique pour consultation)
+CREATE POLICY "liens_select_all" ON liens_acces
+  FOR SELECT USING (TRUE);
+
+-- Policies pour fraud_checks_log (admin only)
+CREATE POLICY "fraud_log_admin_only" ON fraud_checks_log
+  FOR ALL USING (
+    EXISTS (SELECT 1 FROM auth.users WHERE id = auth.uid() AND raw_user_meta_data->>'user_type' IN ('admin', 'super_admin'))
+  );
+
+-- ===================
+-- COMMENTAIRES
+-- ===================
+
+COMMENT ON TABLE project_contracts IS 'Contrats de projet liant client et entreprise';
+COMMENT ON TABLE payment_milestones IS 'Jalons de paiement avec validation et preuves';
+COMMENT ON TABLE payments IS 'Paiements avec séquestre et vérification anti-fraude';
+COMMENT ON TABLE disputes IS 'Litiges entre parties avec médiation TORP';
+COMMENT ON TABLE fraud_rules IS 'Règles configurables de détection de fraude';
+COMMENT ON TABLE fraud_checks_log IS 'Historique des vérifications anti-fraude';
+COMMENT ON TABLE enterprise_payment_accounts IS 'Comptes Stripe Connect des entreprises';
+
+COMMENT ON FUNCTION calculate_fraud_score IS 'Calcule le score de fraude pour un paiement selon les règles actives';
+COMMENT ON FUNCTION generate_payment_reference IS 'Génère une référence unique pour les paiements';
