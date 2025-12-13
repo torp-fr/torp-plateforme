@@ -556,20 +556,22 @@ export class ValidationService {
         break;
 
       case 2: // Identification bien (adresse)
-        if (!project.property?.address?.street) {
+        // Structure correcte: property.identification.address (voir property.types.ts)
+        if (!project.property?.identification?.address?.streetName) {
           blockers.push('L\'adresse du bien est requise');
         }
-        if (!project.property?.address?.postalCode) {
+        if (!project.property?.identification?.address?.postalCode) {
           blockers.push('Le code postal est requis');
         }
-        if (!project.property?.characteristics?.type) {
+        if (!project.property?.identification?.type) {
           blockers.push('Le type de bien est requis');
         }
         break;
 
       case 3: // Vos travaux - type de travaux et détails pièces combinés
         // Le type de travaux est requis pour passer à l'étape suivante
-        if (!project.workProject?.scope?.workType) {
+        // Structure correcte: workProject.general.projectType (voir work-project.types.ts)
+        if (!project.workProject?.general?.projectType) {
           blockers.push('Sélectionnez le type de projet (rénovation, extension, etc.)');
         }
         // Les détails par pièce sont optionnels mais recommandés

@@ -630,8 +630,8 @@ export function StepRoomDetails({
   const scope = (workProject.scope || {}) as Record<string, unknown>;
   const general = (workProject.general || {}) as Record<string, unknown>;
 
-  // Type de travaux sélectionné
-  const workType = (scope.workType as WorkType) || (answers['workProject.scope.workType'] as WorkType);
+  // Type de travaux sélectionné (chemin correct: workProject.general.projectType)
+  const workType = (general.projectType as WorkType) || (answers['workProject.general.projectType'] as WorkType);
   const projectTitle = (general.title as string) || (answers['workProject.general.title'] as string) || '';
   const projectDescription = (general.description as string) || (answers['workProject.general.description'] as string) || '';
 
@@ -692,11 +692,12 @@ export function StepRoomDetails({
     setExpandedRooms(prev => [...prev, newRoom.id]);
   };
 
-  // Récupérer le code postal depuis le projet
+  // Récupérer le code postal depuis le projet (chemin correct: property.identification.address)
   const postalCode = useMemo(() => {
     const property = project.property as Record<string, unknown> | undefined;
-    const address = property?.address as Record<string, unknown> | undefined;
-    return (address?.postalCode as string) || (answers['property.address.postalCode'] as string);
+    const identification = property?.identification as Record<string, unknown> | undefined;
+    const address = identification?.address as Record<string, unknown> | undefined;
+    return (address?.postalCode as string) || (answers['property.identification.address.postalCode'] as string);
   }, [project.property, answers]);
 
   // Calculer les statistiques
@@ -738,7 +739,7 @@ export function StepRoomDetails({
                 <button
                   key={option.value}
                   type="button"
-                  onClick={() => onAnswerChange('workProject.scope.workType', option.value)}
+                  onClick={() => onAnswerChange('workProject.general.projectType', option.value)}
                   disabled={isProcessing}
                   className={`
                     flex flex-col items-center gap-1 p-2 rounded-lg border-2 transition-all text-center

@@ -51,8 +51,8 @@ export function StepPropertyAddress({
   isProcessing,
 }: StepComponentProps) {
   const property = (project.property || {}) as Record<string, unknown>;
-  const address = (property.address || {}) as Record<string, unknown>;
-  const characteristics = (property.characteristics || {}) as Record<string, unknown>;
+  const identification = (property.identification || {}) as Record<string, unknown>;
+  const address = (identification.address || {}) as Record<string, unknown>;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -95,23 +95,25 @@ export function StepPropertyAddress({
 
   // Sélection d'une suggestion
   const selectAddress = useCallback((suggestion: AddressSuggestion) => {
+    // Utiliser les chemins corrects selon property.types.ts: property.identification.address
     onAnswersChange({
-      'property.address.street': suggestion.street,
-      'property.address.postalCode': suggestion.postalCode,
-      'property.address.city': suggestion.city,
-      'property.address.coordinates': suggestion.coordinates,
+      'property.identification.address.streetName': suggestion.street,
+      'property.identification.address.postalCode': suggestion.postalCode,
+      'property.identification.address.city': suggestion.city,
+      'property.identification.address.coordinates': suggestion.coordinates,
     });
     setAddressValidated(true);
     setSuggestions([]);
     setSearchQuery('');
   }, [onAnswersChange]);
 
-  const propertyType = (characteristics.type as PropertyType) ||
-    (answers['property.characteristics.type'] as PropertyType);
+  // Chemins corrects selon property.types.ts: property.identification.type et property.identification.address
+  const propertyType = (identification.type as PropertyType) ||
+    (answers['property.identification.type'] as PropertyType);
 
-  const currentStreet = (address.street as string) || (answers['property.address.street'] as string) || '';
-  const currentPostalCode = (address.postalCode as string) || (answers['property.address.postalCode'] as string) || '';
-  const currentCity = (address.city as string) || (answers['property.address.city'] as string) || '';
+  const currentStreet = (address.streetName as string) || (answers['property.identification.address.streetName'] as string) || '';
+  const currentPostalCode = (address.postalCode as string) || (answers['property.identification.address.postalCode'] as string) || '';
+  const currentCity = (address.city as string) || (answers['property.identification.address.city'] as string) || '';
 
   return (
     <div className="space-y-8">
@@ -120,7 +122,7 @@ export function StepPropertyAddress({
         <Label className="text-base font-medium">Type de bien *</Label>
         <RadioGroup
           value={propertyType || ''}
-          onValueChange={(value) => onAnswerChange('property.characteristics.type', value)}
+          onValueChange={(value) => onAnswerChange('property.identification.type', value)}
           className="grid grid-cols-2 md:grid-cols-5 gap-3"
         >
           {PROPERTY_TYPE_OPTIONS.map((option) => (
@@ -228,7 +230,7 @@ export function StepPropertyAddress({
                   id="street"
                   value={currentStreet}
                   onChange={(e) => {
-                    onAnswerChange('property.address.street', e.target.value);
+                    onAnswerChange('property.identification.address.streetName', e.target.value);
                     setAddressValidated(false);
                   }}
                   placeholder="15 rue de la Paix"
@@ -240,8 +242,8 @@ export function StepPropertyAddress({
                 <Label htmlFor="complement">Complément d'adresse</Label>
                 <Input
                   id="complement"
-                  value={(address.complement as string) || (answers['property.address.complement'] as string) || ''}
-                  onChange={(e) => onAnswerChange('property.address.complement', e.target.value)}
+                  value={(address.complement as string) || (answers['property.identification.address.complement'] as string) || ''}
+                  onChange={(e) => onAnswerChange('property.identification.address.complement', e.target.value)}
                   placeholder="Bâtiment A, Appartement 12..."
                   disabled={isProcessing}
                 />
@@ -254,7 +256,7 @@ export function StepPropertyAddress({
                     id="postalCode"
                     value={currentPostalCode}
                     onChange={(e) => {
-                      onAnswerChange('property.address.postalCode', e.target.value);
+                      onAnswerChange('property.identification.address.postalCode', e.target.value);
                       setAddressValidated(false);
                     }}
                     placeholder="75001"
@@ -268,7 +270,7 @@ export function StepPropertyAddress({
                     id="city"
                     value={currentCity}
                     onChange={(e) => {
-                      onAnswerChange('property.address.city', e.target.value);
+                      onAnswerChange('property.identification.address.city', e.target.value);
                       setAddressValidated(false);
                     }}
                     placeholder="Paris"
