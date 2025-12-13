@@ -1,7 +1,32 @@
 -- =====================================================
 -- Migration 026: Interopérabilité et Permissions Multi-Profil
 -- Gestion des acteurs projet, notifications cross-profile, documents partagés
+-- VERSION CLEAN: Drop et recréation complète
 -- =====================================================
+
+-- ===================
+-- NETTOYAGE PRÉALABLE
+-- ===================
+
+-- Supprimer les tables existantes
+DROP TABLE IF EXISTS audit_events CASCADE;
+DROP TABLE IF EXISTS shared_documents CASCADE;
+DROP TABLE IF EXISTS actor_notifications CASCADE;
+DROP TABLE IF EXISTS project_invitations CASCADE;
+DROP TABLE IF EXISTS project_actors CASCADE;
+
+-- Supprimer les types existants
+DROP TYPE IF EXISTS user_role CASCADE;
+DROP TYPE IF EXISTS actor_status CASCADE;
+DROP TYPE IF EXISTS notification_priority CASCADE;
+DROP TYPE IF EXISTS document_status CASCADE;
+
+-- Supprimer les fonctions existantes
+DROP FUNCTION IF EXISTS update_interop_timestamp CASCADE;
+DROP FUNCTION IF EXISTS update_actor_activity CASCADE;
+DROP FUNCTION IF EXISTS get_user_project_permissions CASCADE;
+DROP FUNCTION IF EXISTS user_has_role_on_project CASCADE;
+DROP FUNCTION IF EXISTS get_unread_notification_count CASCADE;
 
 -- ===================
 -- TYPES ÉNUMÉRÉS
