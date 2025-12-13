@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApp, UserType } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
-import { Building, Users, ArrowLeft } from 'lucide-react';
+import { Building, Users, ArrowLeft, Landmark } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import torpLogo from '@/assets/torp-logo-red.png';
 import { authService } from '@/services/api';
@@ -90,14 +90,21 @@ export default function Login() {
 
           <CardContent>
             <Tabs defaultValue={userType} onValueChange={(value) => setUserType(value as UserType)}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="B2C" className="flex items-center gap-2">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="B2C" className="flex items-center gap-1 text-xs sm:text-sm">
                   <Users className="w-4 h-4" />
-                  Particulier
+                  <span className="hidden sm:inline">Particulier</span>
+                  <span className="sm:hidden">Partic.</span>
                 </TabsTrigger>
-                <TabsTrigger value="B2B" className="flex items-center gap-2">
+                <TabsTrigger value="B2B" className="flex items-center gap-1 text-xs sm:text-sm">
                   <Building className="w-4 h-4" />
-                  Professionnel
+                  <span className="hidden sm:inline">Professionnel</span>
+                  <span className="sm:hidden">Pro</span>
+                </TabsTrigger>
+                <TabsTrigger value="B2G" className="flex items-center gap-1 text-xs sm:text-sm">
+                  <Landmark className="w-4 h-4" />
+                  <span className="hidden sm:inline">Collectivité</span>
+                  <span className="sm:hidden">Public</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -173,6 +180,48 @@ export default function Login() {
                     disabled={isLoading}
                   >
                     {isLoading ? 'Connexion...' : 'Accéder à mon espace professionnel'}
+                  </Button>
+
+                  <div className="text-center">
+                    <Link to="/forgot-password">
+                      <Button variant="link" className="text-sm text-muted-foreground">
+                        Mot de passe oublié ?
+                      </Button>
+                    </Link>
+                  </div>
+                </form>
+              </TabsContent>
+
+              <TabsContent value="B2G" className="space-y-4 mt-6">
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email-b2g">Email professionnel</Label>
+                    <Input
+                      id="email-b2g"
+                      type="email"
+                      placeholder="contact@mairie.fr"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password-b2g">Mot de passe</Label>
+                    <Input
+                      id="password-b2g"
+                      type="password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full bg-purple-600 hover:bg-purple-700"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? 'Connexion...' : 'Accéder à mon espace collectivité'}
                   </Button>
 
                   <div className="text-center">
