@@ -1,18 +1,19 @@
 /**
  * Conteneur principal du wizard Phase 0
  * Orchestre les étapes, la navigation et l'affichage
- * Supporte les modes B2C (particuliers) et B2B (professionnels)
+ * Supporte les modes B2C (particuliers), B2B (professionnels) et B2G (secteur public)
  */
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle, Info, Loader2 } from 'lucide-react';
-import { useWizard, UseWizardOptions } from '@/hooks/phase0/useWizard';
+import { useWizard, UseWizardOptions, useAutoSave, AutoSaveIndicator } from '@/hooks/phase0';
 import { WizardProgress } from './WizardProgress';
 import { WizardNavigation } from './WizardNavigation';
 import { WizardService } from '@/services/phase0/wizard.service';
+import { Phase0ProjectService } from '@/services/phase0';
 
 // Import des composants d'étapes B2C
 import { StepOwnerProfile } from './steps/StepOwnerProfile';
@@ -29,6 +30,9 @@ import {
   StepB2BWorksPlanning,
   StepB2BBudgetValidation,
 } from './steps/b2b';
+
+// Import des composants d'étapes B2G (secteur public)
+import { StepB2GEntity, StepB2GMarche } from './steps';
 
 export interface WizardContainerProps extends UseWizardOptions {
   className?: string;
@@ -52,6 +56,16 @@ const STEP_COMPONENTS_B2B: Record<string, React.ComponentType<StepComponentProps
   'step_budget_validation': StepB2BBudgetValidation, // 4. Budget & Validation (récap, docs)
 };
 
+// Map des composants d'étapes B2G (secteur public - marchés publics)
+const STEP_COMPONENTS_B2G: Record<string, React.ComponentType<StepComponentProps>> = {
+  'step_entity': StepB2GEntity,                   // 1. Entité publique (collectivité, SIRET)
+  'step_marche': StepB2GMarche,                   // 2. Caractéristiques marché (procédure, seuils)
+  'step_site': StepB2BSiteProject,                // 3. Site (réutilise B2B)
+  'step_operation': StepB2BWorksPlanning,         // 4. Opération (réutilise B2B)
+  'step_budget': StepB2BBudgetValidation,         // 5. Budget (réutilise B2B)
+  'step_dce': StepSummary,                        // 6. DCE (résumé adapté - à personnaliser)
+};
+
 export interface StepComponentProps {
   project: Record<string, unknown>;
   answers: Record<string, unknown>;
@@ -65,16 +79,40 @@ export function WizardContainer({ className, ...options }: WizardContainerProps)
   const wizard = useWizard(options);
   const mode = options.mode || 'b2c';
   const isB2B = WizardService.isB2BMode(mode);
+  const isB2G = WizardService.isB2GMode(mode);
   const stepsConfig = useMemo(() => WizardService.getStepsConfig(mode), [mode]);
+
+  // Préparer les données du projet pour l'auto-save
+  const projectDataForSave = useMemo(() => {
+    if (!wizard.project) return null;
+    return {
+      ...wizard.project,
+      wizardState: wizard.state,
+    } as Partial<import('@/types/phase0/project.types').Phase0Project>;
+  }, [wizard.project, wizard.state]);
+
+  // Auto-save hook pour sauvegarder automatiquement les réponses
+  const autoSave = useAutoSave(projectDataForSave, {
+    projectId: options.projectId,
+    enabled: !!options.projectId && !wizard.isLoading,
+    debounceMs: 2000,
+  });
 
   // Récupérer le composant pour l'étape courante selon le mode
   const currentStepConfig = stepsConfig[wizard.currentStepIndex];
   const StepComponent = useMemo(() => {
     if (!currentStepConfig) return null;
     // Sélectionner le bon map de composants selon le mode
-    const componentsMap = isB2B ? STEP_COMPONENTS_B2B : STEP_COMPONENTS_B2C;
+    let componentsMap: Record<string, React.ComponentType<StepComponentProps>>;
+    if (isB2G) {
+      componentsMap = STEP_COMPONENTS_B2G;
+    } else if (isB2B) {
+      componentsMap = STEP_COMPONENTS_B2B;
+    } else {
+      componentsMap = STEP_COMPONENTS_B2C;
+    }
     return componentsMap[currentStepConfig.id] || null;
-  }, [currentStepConfig, isB2B]);
+  }, [currentStepConfig, isB2B, isB2G]);
 
   // Handlers
   const handleStepClick = useCallback((stepId: string) => {
@@ -216,10 +254,18 @@ export function WizardContainer({ className, ...options }: WizardContainerProps)
         className="mt-6"
       />
 
-      {/* Info progression */}
-      <div className="mt-4 text-center text-sm text-muted-foreground">
-        Étape {wizard.currentStepIndex + 1} sur {wizard.totalSteps} •
-        Progression: {wizard.progress}%
+      {/* Info progression et Auto-save */}
+      <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
+        <span>
+          Étape {wizard.currentStepIndex + 1} sur {wizard.totalSteps} •
+          Progression: {wizard.progress}%
+        </span>
+        <AutoSaveIndicator
+          isSaving={autoSave.isSaving}
+          lastSaved={autoSave.lastSaved}
+          hasUnsavedChanges={autoSave.hasUnsavedChanges}
+          error={autoSave.error}
+        />
       </div>
     </div>
   );

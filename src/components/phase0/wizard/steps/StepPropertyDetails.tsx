@@ -15,8 +15,15 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import {
-  Ruler, Calendar, Layers, ThermometerSun, Home, Info, Sparkles, Database, MapPin
+  Ruler, Calendar, Layers, ThermometerSun, Home, Info, Sparkles, Database, MapPin,
+  Camera, Upload, Image as ImageIcon, X, Plus
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 const CONDITION_OPTIONS = [
   { value: 'new', label: 'Neuf', description: 'Construction récente, jamais habitée' },
@@ -496,6 +503,66 @@ export function StepPropertyDetails({
             </div>
           )}
         </CardContent>
+      </Card>
+
+      {/* Photos du bien (optionnel) */}
+      <Card>
+        <Collapsible>
+          <CardHeader className="pb-3">
+            <CollapsibleTrigger asChild>
+              <div className="flex items-center justify-between cursor-pointer hover:bg-muted/50 -mx-4 px-4 py-2 rounded-lg transition-colors">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Camera className="w-5 h-5 text-primary" />
+                  Photos du bien
+                  <Badge variant="outline" className="ml-2 text-xs">Optionnel</Badge>
+                </CardTitle>
+                <Button variant="ghost" size="sm">
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+            </CollapsibleTrigger>
+            <CardDescription>
+              Ajoutez des photos pour faciliter l'analyse de votre projet
+            </CardDescription>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="space-y-4">
+              <div className="border-2 border-dashed border-muted rounded-lg p-8 text-center">
+                <div className="flex flex-col items-center gap-4">
+                  <div className="p-4 bg-muted/50 rounded-full">
+                    <ImageIcon className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="font-medium">Glissez vos photos ici</p>
+                    <p className="text-sm text-muted-foreground">
+                      ou cliquez pour sélectionner des fichiers
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      JPG, PNG ou WebP • Max 10 Mo par photo
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" disabled={isProcessing}>
+                      <Upload className="w-4 h-4 mr-2" />
+                      Parcourir
+                    </Button>
+                    <Button variant="outline" size="sm" disabled={isProcessing}>
+                      <Camera className="w-4 h-4 mr-2" />
+                      Prendre une photo
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  Les photos aident à mieux comprendre l'état actuel du bien et à identifier
+                  les travaux nécessaires. Vous pourrez en ajouter plus tard.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
       </Card>
 
       {/* Info APIs */}
