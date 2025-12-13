@@ -132,6 +132,24 @@ export class Phase0ProjectService {
   static async changeStatus(projectId: string, status: Phase0Status): Promise<Phase0Project> {
     return phase0ProjectServiceInstance.changeStatus(projectId, status);
   }
+
+  /**
+   * Get user projects (static version)
+   */
+  static async getUserProjects(
+    userId: string,
+    filter?: Phase0ProjectFilter
+  ): Promise<Phase0ProjectList> {
+    return phase0ProjectServiceInstance.getUserProjects(userId, filter);
+  }
+
+  /**
+   * Delete project (static version)
+   */
+  static async deleteProject(projectId: string): Promise<void> {
+    return phase0ProjectServiceInstance.deleteProject(projectId);
+  }
+
   /**
    * Créer un nouveau projet Phase 0
    */
