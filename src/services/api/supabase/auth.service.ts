@@ -20,6 +20,10 @@ export interface RegisterData {
   type: UserType;
   company?: string;
   phone?: string;
+  // B2G specific fields
+  entityName?: string;
+  siret?: string;
+  entityType?: 'commune' | 'departement' | 'region' | 'epci' | 'other';
 }
 
 export interface AuthResponse {
@@ -124,6 +128,10 @@ export class SupabaseAuthService {
           user_type: data.type,
           company: data.company,
           phone: data.phone,
+          // B2G specific metadata
+          entity_name: data.entityName,
+          siret: data.siret,
+          entity_type: data.entityType,
         },
       },
     });
