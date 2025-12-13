@@ -4,72 +4,51 @@
 -- =====================================================
 
 -- ===================
--- TYPES ÉNUMÉRÉS
+-- TYPES ÉNUMÉRÉS (avec gestion IF NOT EXISTS)
 -- ===================
 
--- Statut des paiements
-CREATE TYPE payment_status AS ENUM (
-  'pending',           -- En attente de validation
-  'awaiting_payment',  -- Validé, en attente de paiement client
-  'processing',        -- Paiement en cours de traitement
-  'held',              -- Bloqué en séquestre
-  'released',          -- Libéré vers l'entreprise
-  'refunded',          -- Remboursé au client
-  'disputed',          -- En litige
-  'cancelled'          -- Annulé
-);
+DO $$ BEGIN
+  CREATE TYPE payment_status AS ENUM (
+    'pending', 'awaiting_payment', 'processing', 'held',
+    'released', 'refunded', 'disputed', 'cancelled'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
--- Type de paiement
-CREATE TYPE payment_type AS ENUM (
-  'deposit',           -- Acompte à la signature
-  'milestone',         -- Paiement jalon
-  'final',             -- Solde final
-  'retention',         -- Retenue de garantie
-  'penalty',           -- Pénalité de retard
-  'adjustment'         -- Ajustement/avenant
-);
+DO $$ BEGIN
+  CREATE TYPE payment_type AS ENUM (
+    'deposit', 'milestone', 'final', 'retention', 'penalty', 'adjustment'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
--- Statut des jalons
-CREATE TYPE milestone_status AS ENUM (
-  'pending',           -- En attente
-  'in_progress',       -- En cours
-  'submitted',         -- Soumis pour validation
-  'validated',         -- Validé par le client
-  'rejected',          -- Rejeté
-  'completed'          -- Complété et payé
-);
+DO $$ BEGIN
+  CREATE TYPE milestone_status AS ENUM (
+    'pending', 'in_progress', 'submitted', 'validated', 'rejected', 'completed'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
--- Statut des litiges
-CREATE TYPE dispute_status AS ENUM (
-  'opened',            -- Ouvert
-  'under_review',      -- En cours d'examen TORP
-  'mediation',         -- En médiation
-  'resolved_client',   -- Résolu en faveur du client
-  'resolved_enterprise', -- Résolu en faveur de l'entreprise
-  'escalated',         -- Escaladé (juridique)
-  'closed'             -- Fermé
-);
+DO $$ BEGIN
+  CREATE TYPE dispute_status AS ENUM (
+    'opened', 'under_review', 'mediation', 'resolved_client',
+    'resolved_enterprise', 'escalated', 'closed'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
--- Raison du litige
-CREATE TYPE dispute_reason AS ENUM (
-  'non_conformity',    -- Non-conformité des travaux
-  'delay',             -- Retard
-  'quality',           -- Qualité insuffisante
-  'incomplete',        -- Travaux incomplets
-  'price_dispute',     -- Contestation de prix
-  'communication',     -- Problème de communication
-  'damage',            -- Dommages causés
-  'abandonment',       -- Abandon de chantier
-  'other'              -- Autre
-);
+DO $$ BEGIN
+  CREATE TYPE dispute_reason AS ENUM (
+    'non_conformity', 'delay', 'quality', 'incomplete', 'price_dispute',
+    'communication', 'damage', 'abandonment', 'other'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
--- Niveau de risque fraude
-CREATE TYPE fraud_risk_level AS ENUM (
-  'low',
-  'medium',
-  'high',
-  'critical'
-);
+DO $$ BEGIN
+  CREATE TYPE fraud_risk_level AS ENUM ('low', 'medium', 'high', 'critical');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ===================
 -- TABLE: Projets Contrats
