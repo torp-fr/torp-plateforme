@@ -404,6 +404,18 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
     }
 
     setIsSaving(true);
+
+    // Timeout de sécurité pour éviter les chargements infinis (30 secondes)
+    const timeoutId = setTimeout(() => {
+      console.error('Timeout: La création du projet prend trop de temps');
+      setIsSaving(false);
+      toast({
+        title: 'Délai dépassé',
+        description: 'La création du projet prend plus de temps que prévu. Veuillez réessayer.',
+        variant: 'destructive',
+      });
+    }, 30000);
+
     try {
       let finalProject: Phase0Project;
 
@@ -419,6 +431,8 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
         finalProject = await Phase0ProjectService.createProject(user.id, project);
       }
 
+      clearTimeout(timeoutId);
+
       toast({
         title: 'Projet créé avec succès',
         description: finalProject.id ? `Projet enregistré` : 'Projet enregistré',
@@ -430,6 +444,7 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
         navigate(`/phase0/project/${finalProject.id}`);
       }
     } catch (err) {
+      clearTimeout(timeoutId);
       console.error('Erreur finalisation projet:', err);
       const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
       const isAuthError = errorMessage.includes('non connecté') || errorMessage.includes('Utilisateur');

@@ -15,12 +15,11 @@ import { WizardNavigation } from './WizardNavigation';
 import { WizardService } from '@/services/phase0/wizard.service';
 import { Phase0ProjectService } from '@/services/phase0';
 
-// Import des composants d'étapes B2C
+// Import des composants d'étapes B2C (6 étapes - StepWorkIntent fusionné dans StepRoomDetails)
 import { StepOwnerProfile } from './steps/StepOwnerProfile';
 import { StepPropertyAddress } from './steps/StepPropertyAddress';
 import { StepPropertyDetails } from './steps/StepPropertyDetails';
 import { StepRoomDetails } from './steps/StepRoomDetails';
-import { StepWorkIntent } from './steps/StepWorkIntent';
 import { StepConstraints } from './steps/StepConstraints';
 import { StepSummary } from './steps/StepSummary';
 
@@ -39,12 +38,11 @@ export interface WizardContainerProps extends UseWizardOptions {
   className?: string;
 }
 
-// Map des composants d'étapes B2C - IDs correspondent à WIZARD_STEPS_B2C
+// Map des composants d'étapes B2C - IDs correspondent à WIZARD_STEPS_B2C (6 étapes)
 const STEP_COMPONENTS_B2C: Record<string, React.ComponentType<StepComponentProps>> = {
   'step_profile': StepOwnerProfile,
   'step_property': StepPropertyAddress,
-  'step_room_details': StepRoomDetails,
-  'step_works': StepWorkIntent,
+  'step_room_details': StepRoomDetails, // Inclut désormais le type de travaux et les détails par pièce
   'step_constraints': StepConstraints,
   'step_budget': StepPropertyDetails,
   'step_summary': StepSummary,

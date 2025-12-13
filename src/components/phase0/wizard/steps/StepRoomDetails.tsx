@@ -1,6 +1,6 @@
 /**
- * Étape 2.5 - Détails des pièces et travaux
- * Permet de définir les travaux pièce par pièce avec photos et notes
+ * Étape 3 - Type de travaux et détails par pièce (fusionnée)
+ * Permet de définir le type de projet et les travaux pièce par pièce
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { PricingEstimationService, ProjectEstimation } from '@/services/phase0/pricing-estimation.service';
 import {
   Select,
@@ -61,6 +62,7 @@ import {
   Wrench,
   Lightbulb,
   Thermometer,
+  ThermometerSun,
   Euro,
   AlertCircle,
   CheckCircle2,
@@ -101,6 +103,7 @@ import {
   Car,
   Flower2,
   Sun,
+  Shield,
 } from 'lucide-react';
 import {
   RoomType,
@@ -113,6 +116,55 @@ import {
   createWorkItem,
   RoomDetailsData,
 } from '@/types/phase0/room-details.types';
+import { WorkType } from '@/types/phase0/work-project.types';
+
+// =============================================================================
+// WORK TYPE OPTIONS (fusionné depuis StepWorkIntent)
+// =============================================================================
+
+const WORK_TYPE_OPTIONS: Array<{
+  value: WorkType;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+}> = [
+  {
+    value: 'renovation',
+    label: 'Rénovation',
+    description: 'Rénover ou moderniser un bien existant',
+    icon: <Hammer className="w-6 h-6" />,
+  },
+  {
+    value: 'refurbishment',
+    label: 'Réhabilitation',
+    description: 'Remettre aux normes un bien dégradé',
+    icon: <Wrench className="w-6 h-6" />,
+  },
+  {
+    value: 'extension',
+    label: 'Extension',
+    description: 'Agrandir la surface habitable',
+    icon: <Building2 className="w-6 h-6" />,
+  },
+  {
+    value: 'improvement',
+    label: 'Amélioration',
+    description: 'Améliorer le confort ou l\'énergie',
+    icon: <ThermometerSun className="w-6 h-6" />,
+  },
+  {
+    value: 'new_construction',
+    label: 'Construction neuve',
+    description: 'Construire un nouveau bâtiment',
+    icon: <Home className="w-6 h-6" />,
+  },
+  {
+    value: 'maintenance',
+    label: 'Entretien',
+    description: 'Travaux d\'entretien courant',
+    icon: <Shield className="w-6 h-6" />,
+  },
+];
 
 // =============================================================================
 // ICONS MAPPING
@@ -573,7 +625,17 @@ export function StepRoomDetails({
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [expandedRooms, setExpandedRooms] = useState<string[]>([]);
 
-  // Récupérer les données existantes
+  // Récupérer les données du projet de travaux
+  const workProject = (project.workProject || {}) as Record<string, unknown>;
+  const scope = (workProject.scope || {}) as Record<string, unknown>;
+  const general = (workProject.general || {}) as Record<string, unknown>;
+
+  // Type de travaux sélectionné
+  const workType = (scope.workType as WorkType) || (answers['workProject.scope.workType'] as WorkType);
+  const projectTitle = (general.title as string) || (answers['workProject.general.title'] as string) || '';
+  const projectDescription = (general.description as string) || (answers['workProject.general.description'] as string) || '';
+
+  // Récupérer les données existantes des pièces
   const roomDetailsData: RoomDetailsData = useMemo(() => {
     const existing = (project.roomDetails || answers['roomDetails']) as RoomDetailsData | undefined;
     return existing || { rooms: [] };
@@ -660,18 +722,83 @@ export function StepRoomDetails({
 
   return (
     <div className="space-y-8">
-      {/* Introduction */}
-      <div className="text-center max-w-2xl mx-auto">
-        <Home className="w-12 h-12 text-primary mx-auto mb-4" />
-        <h2 className="text-2xl font-bold mb-2">Détaillez vos travaux par pièce</h2>
-        <p className="text-muted-foreground">
-          Plus vous êtes précis, plus les devis des artisans seront pertinents.
-          Ajoutez les pièces concernées par des travaux et sélectionnez les interventions souhaitées.
-        </p>
-      </div>
+      {/* Section 1: Type de projet */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Hammer className="w-5 h-5 text-primary" />
+            Type de projet
+          </CardTitle>
+          <CardDescription>
+            Sélectionnez le type de travaux qui correspond le mieux à votre projet
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {WORK_TYPE_OPTIONS.map((option) => {
+              const isSelected = workType === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => onAnswerChange('workProject.scope.workType', option.value)}
+                  disabled={isProcessing}
+                  className={`
+                    flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center
+                    ${isSelected
+                      ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                      : 'border-muted hover:border-primary/50 hover:bg-muted/50'
+                    }
+                  `}
+                >
+                  <span className={isSelected ? 'text-primary' : 'text-muted-foreground'}>
+                    {option.icon}
+                  </span>
+                  <div>
+                    <div className="font-medium text-sm">{option.label}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{option.description}</div>
+                  </div>
+                  {isSelected && (
+                    <CheckCircle2 className="w-4 h-4 text-primary" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
 
+          {/* Titre et description du projet */}
+          {workType && (
+            <div className="mt-6 space-y-4 pt-4 border-t">
+              <div className="space-y-2">
+                <Label htmlFor="projectTitle">Titre du projet (optionnel)</Label>
+                <Input
+                  id="projectTitle"
+                  value={projectTitle}
+                  onChange={(e) => onAnswerChange('workProject.general.title', e.target.value)}
+                  placeholder="Ex: Rénovation complète appartement 3 pièces"
+                  disabled={isProcessing}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="projectDescription">Description (optionnel)</Label>
+                <Textarea
+                  id="projectDescription"
+                  value={projectDescription}
+                  onChange={(e) => onAnswerChange('workProject.general.description', e.target.value)}
+                  placeholder="Décrivez votre projet en quelques lignes : vos objectifs, ce que vous souhaitez améliorer..."
+                  rows={3}
+                  disabled={isProcessing}
+                />
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Section 2: Détails par pièce - visible uniquement après sélection du type */}
       {/* Statistiques et Estimation */}
-      {rooms.length > 0 && (
+      {workType && rooms.length > 0 && (
         <div className="space-y-4">
           {/* Stats rapides */}
           <Card>
@@ -830,7 +957,7 @@ export function StepRoomDetails({
       )}
 
       {/* Liste des pièces */}
-      {rooms.length > 0 ? (
+      {workType && rooms.length > 0 ? (
         <Accordion
           type="multiple"
           value={expandedRooms}
@@ -848,12 +975,15 @@ export function StepRoomDetails({
             />
           ))}
         </Accordion>
-      ) : (
+      ) : workType && rooms.length === 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Sélectionnez les pièces concernées</CardTitle>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Home className="w-5 h-5 text-primary" />
+              Détails par pièce (recommandé)
+            </CardTitle>
             <CardDescription>
-              Cliquez sur les pièces où vous souhaitez réaliser des travaux
+              Cliquez sur les pièces concernées par des travaux. Plus vous êtes précis, meilleurs seront les devis.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -873,10 +1003,10 @@ export function StepRoomDetails({
             </div>
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
       {/* Bouton ajouter */}
-      {rooms.length > 0 && (
+      {workType && rooms.length > 0 && (
         <div className="flex justify-center">
           <Button
             variant="outline"
@@ -890,41 +1020,45 @@ export function StepRoomDetails({
       )}
 
       {/* Notes globales */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <StickyNote className="w-5 h-5" />
-            Notes générales sur le projet
-          </CardTitle>
-          <CardDescription>
-            Informations complémentaires pour les artisans (accès au chantier, contraintes particulières...)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Textarea
-            value={roomDetailsData.globalNotes || ''}
-            onChange={(e) => updateRoomDetails({
-              ...roomDetailsData,
-              globalNotes: e.target.value,
-            })}
-            placeholder="Ex: Parking difficile, immeuble avec gardien, travaux uniquement le week-end..."
-            rows={4}
-            disabled={isProcessing}
-          />
-        </CardContent>
-      </Card>
+      {workType && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <StickyNote className="w-5 h-5" />
+              Notes générales sur le projet
+            </CardTitle>
+            <CardDescription>
+              Informations complémentaires pour les artisans (accès au chantier, contraintes particulières...)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              value={roomDetailsData.globalNotes || ''}
+              onChange={(e) => updateRoomDetails({
+                ...roomDetailsData,
+                globalNotes: e.target.value,
+              })}
+              placeholder="Ex: Parking difficile, immeuble avec gardien, travaux uniquement le week-end..."
+              rows={4}
+              disabled={isProcessing}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Information */}
-      <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
-        <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
-        <div className="text-sm">
-          <p className="font-medium text-blue-700 dark:text-blue-300">Conseil</p>
-          <p className="text-blue-600 dark:text-blue-400">
-            Ces informations détaillées permettront à TORP d'analyser vos devis en contexte
-            et de détecter les anomalies ou oublis potentiels.
-          </p>
+      {workType && (
+        <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
+          <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-medium text-blue-700 dark:text-blue-300">Conseil</p>
+            <p className="text-blue-600 dark:text-blue-400">
+              Ces informations détaillées permettront à TORP d'analyser vos devis en contexte
+              et de détecter les anomalies ou oublis potentiels.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Dialog ajouter pièce */}
       <AddRoomDialog

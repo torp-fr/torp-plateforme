@@ -501,9 +501,9 @@ export class ValidationService {
    * Vérifie si un projet peut passer à l'étape suivante
    * NOTE: Les cases correspondent à l'index de l'étape actuelle + 1 (1-indexed)
    *
-   * B2C Wizard steps order (7 étapes):
-   *   Profile(1), Property(2), RoomDetails(3), Works(4), Constraints(5), Budget(6), Summary(7)
-   * B2B Wizard steps order: Client(1), Site(2), Works(3), Constraints(4), Budget(5), Summary(6)
+   * B2C Wizard steps order (6 étapes):
+   *   Profile(1), Property(2), RoomDetails+Works(3), Constraints(4), Budget(5), Summary(6)
+   * B2B Wizard steps order: Client(1), Site(2), Works(3), Budget(4)
    */
   static canProceedToNextStep(
     project: Partial<Phase0Project>,
@@ -540,7 +540,7 @@ export class ValidationService {
             blockers.push('Sélectionnez le type de client');
           }
           break;
-        // Étapes 2-6: Navigation libre, pas de blocage
+        // Étapes 2-4: Navigation libre, pas de blocage
         // Cela permet aux pros de remplir les infos dans l'ordre qu'ils souhaitent
         default:
           break;
@@ -548,7 +548,7 @@ export class ValidationService {
       return { canProceed: blockers.length === 0, blockers };
     }
 
-    // B2C Mode: Validation stricte par étape (7 étapes)
+    // B2C Mode: Validation stricte par étape (6 étapes)
     switch (currentStep) {
       case 1: // Profil MOA - seulement le type est requis pour avancer
         if (!owner?.identity?.type) {
@@ -568,26 +568,23 @@ export class ValidationService {
         }
         break;
 
-      case 3: // Détails pièces - étape optionnelle
-        // Pas de blocage, l'utilisateur peut ajouter des pièces ou passer
-        break;
-
-      case 4: // Intention travaux - seulement workType requis
+      case 3: // Vos travaux - type de travaux et détails pièces combinés
+        // Le type de travaux est requis pour passer à l'étape suivante
         if (!project.workProject?.scope?.workType) {
-          blockers.push('Le type de travaux est requis');
+          blockers.push('Sélectionnez le type de projet (rénovation, extension, etc.)');
         }
-        // Les lots sont optionnels - suggérés automatiquement
+        // Les détails par pièce sont optionnels mais recommandés
         break;
 
-      case 5: // Contraintes - étape optionnelle
+      case 4: // Contraintes - étape optionnelle
         // Aucun blocage, étape optionnelle
         break;
 
-      case 6: // Budget et détails du bien
+      case 5: // Budget et détails du bien
         // Rendre optionnel pour l'instant
         break;
 
-      case 7: // Validation finale - pas de blocage
+      case 6: // Validation finale - pas de blocage
         // Les étapes précédentes ont validé les champs essentiels
         // L'utilisateur peut terminer même avec des informations partielles
         // La validation complète se fait dans complete() mais n'est pas bloquante

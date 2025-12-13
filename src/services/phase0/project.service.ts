@@ -233,14 +233,21 @@ export class Phase0ProjectService {
       throw new Error(`Erreur lors de la création du projet: ${error.message}`);
     }
 
-    // Créer l'entrée wizard progress
-    await supabase.from('phase0_wizard_progress').insert({
-      project_id: data.id,
-      current_step: 1,
-      total_steps: 6,
-      step_data: {},
-      step_completion: {},
-    });
+    // Créer l'entrée wizard progress (non-bloquant en cas d'erreur)
+    try {
+      const { error: wizardError } = await supabase.from('phase0_wizard_progress').insert({
+        project_id: data.id,
+        current_step: 1,
+        total_steps: 6, // B2C: 6 étapes (Profile, Property, Works+Rooms, Constraints, Budget, Summary)
+        step_data: {},
+        step_completion: {},
+      });
+      if (wizardError) {
+        console.warn('Wizard progress not created (non-blocking):', wizardError.message);
+      }
+    } catch (wpErr) {
+      console.warn('Wizard progress insert failed (non-blocking):', wpErr);
+    }
 
     return this.mapRowToProject(data);
   }

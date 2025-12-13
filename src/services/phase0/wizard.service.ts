@@ -67,25 +67,15 @@ export const WIZARD_STEPS_B2C = [
   {
     id: 'step_room_details',
     number: 3,
-    name: 'Détails par pièce',
-    shortName: 'Pièces',
-    description: 'Détaillez les travaux pièce par pièce avec photos',
-    icon: 'layout',
-    estimatedMinutes: 10,
-    isOptional: true, // Optionnel mais recommandé pour une meilleure analyse
-  },
-  {
-    id: 'step_works',
-    number: 4,
-    name: 'Type de travaux',
+    name: 'Vos travaux',
     shortName: 'Travaux',
-    description: 'Nature globale du projet',
+    description: 'Type de projet et détail par pièce',
     icon: 'hammer',
-    estimatedMinutes: 5,
+    estimatedMinutes: 10,
   },
   {
     id: 'step_constraints',
-    number: 5,
+    number: 4,
     name: 'Aspects pratiques',
     shortName: 'Contraintes',
     description: 'Contraintes et conditions du chantier',
@@ -95,7 +85,7 @@ export const WIZARD_STEPS_B2C = [
   },
   {
     id: 'step_budget',
-    number: 6,
+    number: 5,
     name: 'Financement',
     shortName: 'Budget',
     description: 'Budget et modalités de financement',
@@ -104,7 +94,7 @@ export const WIZARD_STEPS_B2C = [
   },
   {
     id: 'step_summary',
-    number: 7,
+    number: 6,
     name: 'Validation',
     shortName: 'Récap',
     description: 'Récapitulatif et génération du cahier des charges',

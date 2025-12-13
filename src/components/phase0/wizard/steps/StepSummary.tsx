@@ -1,7 +1,8 @@
 /**
- * Étape 6 - Validation de l'avant-projet
+ * Étape 6 (finale) - Validation de l'avant-projet
  * Affiche un récapitulatif complet avant finalisation
  * Inclut les lots de travaux identifiés automatiquement
+ * Note: Wizard B2C = 6 étapes (Profile, Property, Works+Rooms, Constraints, Budget, Summary)
  */
 
 import React, { useMemo, useState } from 'react';
