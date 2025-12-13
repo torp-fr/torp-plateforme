@@ -116,7 +116,7 @@ export class Phase0ProjectService {
   static async createProject(userId: string, data: Partial<Phase0Project>): Promise<Phase0Project> {
     return phase0ProjectServiceInstance.createProject({
       userId,
-      wizardMode: data.wizardMode || 'b2c',
+      wizardMode: data.wizardMode || 'b2c_simple',
       initialData: {
         ownerProfile: data.ownerProfile,
         property: data.property,

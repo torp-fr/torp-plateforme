@@ -244,23 +244,24 @@ export class WizardService {
 
   /**
    * Get wizard steps configuration based on mode
+   * Valid modes: 'b2c_simple', 'b2c_detailed', 'b2b_professional', 'b2g_public'
    */
-  static getStepsConfig(mode: WizardMode = 'b2c'): WizardStepConfig[] {
+  static getStepsConfig(mode: WizardMode = 'b2c_simple'): WizardStepConfig[] {
     // Mode B2B professionnel : utilise les steps B2B adaptés
-    if (mode === 'b2b' || mode === 'b2b_professional') {
+    if (mode === 'b2b_professional') {
       return WIZARD_STEPS_B2B.map(step => ({
         ...step,
         isOptional: (step as WizardStepConfig).isOptional || false,
       }));
     }
     // Mode B2G secteur public : utilise les steps B2G
-    if (mode === 'b2g' || mode === 'b2g_public') {
+    if (mode === 'b2g_public') {
       return WIZARD_STEPS_B2G.map(step => ({
         ...step,
         isOptional: (step as WizardStepConfig).isOptional || false,
       }));
     }
-    // Mode B2C : steps classiques
+    // Mode B2C (simple ou detailed) : steps classiques
     return WIZARD_STEPS_B2C.map(step => ({ ...step, isOptional: false }));
   }
 
@@ -268,14 +269,14 @@ export class WizardService {
    * Vérifie si le mode est B2B
    */
   static isB2BMode(mode: WizardMode): boolean {
-    return mode === 'b2b' || mode === 'b2b_professional';
+    return mode === 'b2b_professional';
   }
 
   /**
    * Vérifie si le mode est B2G (secteur public)
    */
   static isB2GMode(mode: WizardMode): boolean {
-    return mode === 'b2g' || mode === 'b2g_public';
+    return mode === 'b2g_public';
   }
 
   /**

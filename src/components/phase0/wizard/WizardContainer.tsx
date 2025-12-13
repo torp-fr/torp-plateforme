@@ -78,7 +78,7 @@ export interface StepComponentProps {
 
 export function WizardContainer({ className, ...options }: WizardContainerProps) {
   const wizard = useWizard(options);
-  const mode = options.mode || 'b2c';
+  const mode = options.mode || 'b2c_simple';
   const isB2B = WizardService.isB2BMode(mode);
   const isB2G = WizardService.isB2GMode(mode);
   const stepsConfig = useMemo(() => WizardService.getStepsConfig(mode), [mode]);

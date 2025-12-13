@@ -57,7 +57,7 @@ export interface UseWizardReturn {
 }
 
 export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
-  const { projectId, mode = 'b2c', onComplete } = options;
+  const { projectId, mode = 'b2c_simple', onComplete } = options;
 
   const navigate = useNavigate();
   const { user, isLoading: isAuthLoading } = useApp();
@@ -152,7 +152,7 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
 
           // Pour B2C, on peut sauter l'étape 1 (profil) et commencer à l'étape 2 (bien)
           const wizardState = WizardService.initializeWizardState(mode, steps);
-          if (mode === 'b2c' && steps.length > 1) {
+          if ((mode === 'b2c_simple' || mode === 'b2c_detailed') && steps.length > 1) {
             // Marquer l'étape 1 comme complétée et commencer à l'étape 2
             wizardState.currentStepIndex = 1;
             wizardState.completedSteps = [0];
