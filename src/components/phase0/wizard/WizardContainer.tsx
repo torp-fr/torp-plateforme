@@ -19,6 +19,7 @@ import { Phase0ProjectService } from '@/services/phase0';
 import { StepOwnerProfile } from './steps/StepOwnerProfile';
 import { StepPropertyAddress } from './steps/StepPropertyAddress';
 import { StepPropertyDetails } from './steps/StepPropertyDetails';
+import { StepRoomDetails } from './steps/StepRoomDetails';
 import { StepWorkIntent } from './steps/StepWorkIntent';
 import { StepConstraints } from './steps/StepConstraints';
 import { StepSummary } from './steps/StepSummary';
@@ -42,6 +43,7 @@ export interface WizardContainerProps extends UseWizardOptions {
 const STEP_COMPONENTS_B2C: Record<string, React.ComponentType<StepComponentProps>> = {
   'step_profile': StepOwnerProfile,
   'step_property': StepPropertyAddress,
+  'step_room_details': StepRoomDetails,
   'step_works': StepWorkIntent,
   'step_constraints': StepConstraints,
   'step_budget': StepPropertyDetails,
