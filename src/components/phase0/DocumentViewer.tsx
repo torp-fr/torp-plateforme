@@ -361,7 +361,7 @@ export function DocumentViewer({
                     <div className="flex justify-between">
                       <span>Généré le</span>
                       <span className="font-medium">
-                        {doc.metadata.generationDate.toLocaleDateString('fr-FR')}
+                        {doc.metadata.generationDate?.toLocaleDateString?.('fr-FR') || 'N/A'}
                       </span>
                     </div>
                   </div>
@@ -439,10 +439,10 @@ export function DocumentViewer({
 
       {/* Modal de visualisation du document */}
       <Dialog open={!!selectedDocument} onOpenChange={() => setSelectedDocument(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
           {selectedDocument && (
             <>
-              <DialogHeader>
+              <DialogHeader className="flex-shrink-0">
                 <div className="flex items-center justify-between">
                   <div>
                     <DialogTitle className="flex items-center gap-2">
@@ -453,7 +453,7 @@ export function DocumentViewer({
                     </DialogTitle>
                     <DialogDescription>
                       Version {selectedDocument.metadata.version} •
-                      Généré le {selectedDocument.metadata.generationDate.toLocaleDateString('fr-FR')}
+                      Généré le {selectedDocument.metadata.generationDate?.toLocaleDateString?.('fr-FR') || 'N/A'}
                     </DialogDescription>
                   </div>
                   <div className="flex items-center gap-2">
@@ -474,11 +474,12 @@ export function DocumentViewer({
                 </div>
               </DialogHeader>
 
-              <Separator />
+              <Separator className="flex-shrink-0" />
 
               {/* Contenu du document */}
-              <ScrollArea className="flex-1 pr-4">
-                <div className="space-y-4 py-4">
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <ScrollArea className="h-full pr-4">
+                  <div className="space-y-4 py-4">
                   {/* Informations du projet */}
                   <Card className="bg-muted/50">
                     <CardContent className="py-3">
@@ -503,8 +504,9 @@ export function DocumentViewer({
                   <div className="space-y-2">
                     {selectedDocument.content.sections.map(section => renderSection(section))}
                   </div>
-                </div>
-              </ScrollArea>
+                  </div>
+                </ScrollArea>
+              </div>
             </>
           )}
         </DialogContent>

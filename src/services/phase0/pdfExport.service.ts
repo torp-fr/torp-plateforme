@@ -282,19 +282,19 @@ export class PDFExportService {
     pdf.setFontSize(11);
     pdf.setTextColor(...styles.secondaryColor);
 
-    const infoLines = [
-      ['Maître d\'ouvrage', document.metadata.ownerName],
-      ['Adresse du bien', document.metadata.propertyAddress],
-      ['Référence', document.metadata.projectReference],
-      ['Version', document.metadata.version],
-      ['Date de génération', document.metadata.generationDate.toLocaleDateString('fr-FR')],
+    const infoLines: [string, string][] = [
+      ['Maître d\'ouvrage', document.metadata.ownerName || 'Non renseigné'],
+      ['Adresse du bien', document.metadata.propertyAddress || 'Non renseignée'],
+      ['Référence', document.metadata.projectReference || '-'],
+      ['Version', document.metadata.version || '1.0'],
+      ['Date de génération', document.metadata.generationDate?.toLocaleDateString?.('fr-FR') || new Date().toLocaleDateString('fr-FR')],
     ];
 
     for (const [label, value] of infoLines) {
       pdf.setFont('helvetica', 'bold');
       pdf.text(label + ' :', 40, yPos);
       pdf.setFont('helvetica', 'normal');
-      pdf.text(value || 'Non renseigné', 85, yPos);
+      pdf.text(value, 85, yPos);
       yPos += 8;
     }
 
@@ -350,7 +350,7 @@ export class PDFExportService {
     pdf.setTextColor(0, 0, 0);
     pdf.setFontSize(14);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(projectReference, centerX, 115, { align: 'center' });
+    pdf.text(projectReference || 'Référence projet', centerX, 115, { align: 'center' });
 
     // Ligne décorative
     pdf.setDrawColor(...styles.primaryColor);
@@ -449,7 +449,7 @@ export class PDFExportService {
     pdf.setTextColor(...styles.secondaryColor);
     pdf.setFont('helvetica', 'normal');
     pdf.text('TORP', margin, 10);
-    pdf.text(document.metadata.projectReference, pageWidth - margin, 10, { align: 'right' });
+    pdf.text(document.metadata.projectReference || 'Réf. -', pageWidth - margin, 10, { align: 'right' });
 
     pdf.setDrawColor(...styles.primaryColor);
     pdf.setLineWidth(0.3);
@@ -513,7 +513,7 @@ export class PDFExportService {
     pdf.text(document.metadata.ownerName || '-', innerMargin + colWidth, innerY + 7);
 
     const address = document.metadata.propertyAddress || '-';
-    const truncatedAddress = address.length > 40 ? address.substring(0, 37) + '...' : address;
+    const truncatedAddress = address && address.length > 40 ? address.substring(0, 37) + '...' : (address || '-');
     pdf.text(truncatedAddress, innerMargin + colWidth * 2, innerY + 7);
 
     return yPos + 30;
@@ -587,7 +587,7 @@ export class PDFExportService {
    */
   private static generateFileName(document: GeneratedDocument, userType: UserType): string {
     const docLabel = DOC_LABELS[userType][document.type] || document.type.toUpperCase();
-    const ref = document.metadata.projectReference.replace(/[^a-zA-Z0-9]/g, '_');
+    const ref = (document.metadata.projectReference || 'projet').replace(/[^a-zA-Z0-9]/g, '_');
     const date = new Date().toISOString().split('T')[0];
     return `TORP_${docLabel.replace(/\s+/g, '_')}_${ref}_${date}.pdf`;
   }
