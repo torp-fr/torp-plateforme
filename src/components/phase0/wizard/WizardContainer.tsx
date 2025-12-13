@@ -22,9 +22,13 @@ import { StepWorkIntent } from './steps/StepWorkIntent';
 import { StepConstraints } from './steps/StepConstraints';
 import { StepSummary } from './steps/StepSummary';
 
-// Import des composants d'étapes B2B
-import { StepClientInfo } from './steps/StepClientInfo';
-import { StepSiteAddress } from './steps/StepSiteAddress';
+// Import des composants d'étapes B2B optimisés (4 étapes)
+import {
+  StepB2BClient,
+  StepB2BSiteProject,
+  StepB2BWorksPlanning,
+  StepB2BBudgetValidation,
+} from './steps/b2b';
 
 export interface WizardContainerProps extends UseWizardOptions {
   className?: string;
@@ -40,14 +44,12 @@ const STEP_COMPONENTS_B2C: Record<string, React.ComponentType<StepComponentProps
   'step_summary': StepSummary,
 };
 
-// Map des composants d'étapes B2B - IDs correspondent à WIZARD_STEPS_B2B
+// Map des composants d'étapes B2B optimisés (4 étapes sans redondances)
 const STEP_COMPONENTS_B2B: Record<string, React.ComponentType<StepComponentProps>> = {
-  'step_client': StepClientInfo,       // Infos client/MOA
-  'step_site': StepSiteAddress,        // Site d'intervention
-  'step_works': StepWorkIntent,        // Travaux (partagé)
-  'step_constraints': StepConstraints, // Contraintes (partagé)
-  'step_budget': StepPropertyDetails,  // Budget (partagé)
-  'step_summary': StepSummary,         // Validation (partagé)
+  'step_client': StepB2BClient,                   // 1. Client (MOA, contact, nature demande)
+  'step_site_project': StepB2BSiteProject,        // 2. Site & Projet (adresse, type projet)
+  'step_works_planning': StepB2BWorksPlanning,    // 3. Travaux & Planning (description, délais)
+  'step_budget_validation': StepB2BBudgetValidation, // 4. Budget & Validation (récap, docs)
 };
 
 export interface StepComponentProps {

@@ -103,63 +103,44 @@ export const WIZARD_STEPS_B2C = [
 
 /**
  * Configuration des étapes du wizard B2B (professionnel)
- * Adapté pour les entreprises qui interviennent chez leurs clients
+ * Structure optimisée en 4 étapes sans redondances
  */
 export const WIZARD_STEPS_B2B = [
   {
     id: 'step_client',
     number: 1,
-    name: 'Client & Projet',
+    name: 'Client',
     shortName: 'Client',
-    description: 'Informations du maître d\'ouvrage / donneur d\'ordres',
+    description: 'Informations du client et nature de la demande',
     icon: 'users',
+    estimatedMinutes: 3,
+  },
+  {
+    id: 'step_site_project',
+    number: 2,
+    name: 'Site & Projet',
+    shortName: 'Site',
+    description: 'Adresse, caractéristiques du site et type de projet',
+    icon: 'map-pin',
     estimatedMinutes: 4,
   },
   {
-    id: 'step_site',
-    number: 2,
-    name: 'Site d\'intervention',
-    shortName: 'Site',
-    description: 'Adresse et caractéristiques du lieu des travaux',
-    icon: 'map-pin',
-    estimatedMinutes: 5,
-  },
-  {
-    id: 'step_works',
+    id: 'step_works_planning',
     number: 3,
-    name: 'Travaux à réaliser',
+    name: 'Travaux & Planning',
     shortName: 'Travaux',
-    description: 'Sélection des lots et prestations',
+    description: 'Description des travaux, délais et contraintes',
     icon: 'hammer',
-    estimatedMinutes: 10,
-  },
-  {
-    id: 'step_constraints',
-    number: 4,
-    name: 'Contraintes chantier',
-    shortName: 'Chantier',
-    description: 'Accès, planning et conditions d\'exécution',
-    icon: 'calendar',
-    estimatedMinutes: 3,
-  },
-  {
-    id: 'step_budget',
-    number: 5,
-    name: 'Budget & Conditions',
-    shortName: 'Budget',
-    description: 'Enveloppe budgétaire et conditions commerciales',
-    icon: 'euro',
-    estimatedMinutes: 3,
-    isOptional: true,
-  },
-  {
-    id: 'step_summary',
-    number: 6,
-    name: 'Validation & Documents',
-    shortName: 'Documents',
-    description: 'Récapitulatif et génération du DCE/CCTP',
-    icon: 'file-text',
     estimatedMinutes: 5,
+  },
+  {
+    id: 'step_budget_validation',
+    number: 4,
+    name: 'Budget & Validation',
+    shortName: 'Validation',
+    description: 'Budget, récapitulatif et génération des documents',
+    icon: 'check-circle',
+    estimatedMinutes: 3,
   },
 ];
 
