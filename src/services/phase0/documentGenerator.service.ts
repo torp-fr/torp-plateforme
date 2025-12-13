@@ -1824,6 +1824,15 @@ Garanties:
       expired: 'archived',
     };
 
+    // Parse metadata and ensure generationDate is a Date object
+    const rawMetadata = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata;
+    const metadata: DocumentMetadata = {
+      ...rawMetadata,
+      generationDate: rawMetadata?.generationDate
+        ? new Date(rawMetadata.generationDate)
+        : new Date((row.generated_at || row.created_at) as string),
+    };
+
     return {
       id: row.id as string,
       projectId: row.project_id as string,
@@ -1831,7 +1840,7 @@ Garanties:
       title: (row.title || row.name) as string, // Fallback to name if title is null
       version: row.version as number,
       content: typeof row.content === 'string' ? JSON.parse(row.content) : row.content as DocumentContent,
-      metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata as DocumentMetadata,
+      metadata,
       generatedAt: new Date((row.generated_at || row.created_at) as string),
       status: statusMap[row.status as string] || 'draft',
     };
