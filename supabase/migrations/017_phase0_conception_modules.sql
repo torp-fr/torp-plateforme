@@ -275,8 +275,8 @@ CREATE TABLE IF NOT EXISTS public.phase0_budget_items (
     price_date DATE,
     confidence TEXT DEFAULT 'medium',
 
-    -- Lot reference
-    lot_id UUID REFERENCES public.phase0_selected_lots(id),
+    -- Lot reference (no FK to allow flexibility)
+    lot_id UUID,
     lot_code TEXT,
 
     -- Ordering
