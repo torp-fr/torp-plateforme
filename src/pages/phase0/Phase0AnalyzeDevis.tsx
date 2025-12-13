@@ -28,7 +28,7 @@ import {
   ChevronRight,
   Loader2,
 } from 'lucide-react';
-import { Header } from '@/components/Header';
+import { AppLayout } from '@/components/layout';
 import { useApp } from '@/context/AppContext';
 import { Phase0ProjectService } from '@/services/phase0';
 import { torpAnalyzerService } from '@/services/ai/torp-analyzer.service';
@@ -147,20 +147,18 @@ export function Phase0AnalyzeDevis() {
   // Rendu conditionnel selon l'état
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <Header />
-        <div className="flex-1 flex items-center justify-center">
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   if (error && !project) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <Header />
-        <div className="container max-w-2xl mx-auto px-4 py-12">
+      <AppLayout>
+        <div className="max-w-2xl mx-auto">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Erreur</AlertTitle>
@@ -171,15 +169,13 @@ export function Phase0AnalyzeDevis() {
             Retour aux projets
           </Button>
         </div>
-      </div>
+      </AppLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <Header />
-
-      <main className="flex-1 container max-w-5xl mx-auto px-4 py-8">
+    <AppLayout>
+      <div className="max-w-5xl mx-auto">
         {/* En-tête */}
         <div className="mb-8">
           <Button variant="ghost" onClick={() => navigate(`/phase0/project/${projectId}`)}>
@@ -369,8 +365,8 @@ export function Phase0AnalyzeDevis() {
             }}
           />
         )}
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 }
 

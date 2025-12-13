@@ -25,6 +25,7 @@ import {
 import { Phase0ProjectService, Phase0Summary, Phase0Status, PHASE0_STATUS_CONFIG } from '@/services/phase0';
 import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
+import { AppLayout } from '@/components/layout';
 
 export function Phase0Dashboard() {
   const navigate = useNavigate();
@@ -129,8 +130,8 @@ export function Phase0Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-muted/20">
-      <div className="container max-w-6xl mx-auto px-4 py-8">
+    <AppLayout>
+      <div className="max-w-6xl mx-auto">
         {/* En-tête */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
           <div>
@@ -309,7 +310,7 @@ export function Phase0Dashboard() {
           </div>
         )}
       </div>
-    </div>
+    </AppLayout>
   );
 }
 
