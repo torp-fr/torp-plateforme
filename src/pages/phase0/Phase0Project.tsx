@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
+import { AppLayout } from '@/components/layout';
 import {
   ArrowLeft, Edit, FileText, Download, RefreshCw, User, Building, MapPin,
   Hammer, Euro, Calendar, Clock, AlertTriangle, Loader2, CheckCircle2,
@@ -187,32 +188,36 @@ export function Phase0ProjectPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </AppLayout>
     );
   }
 
   if (error || !project) {
     return (
-      <div className="container max-w-4xl mx-auto px-4 py-8">
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>{error || 'Projet non trouvé'}</AlertDescription>
-        </Alert>
-        <Button variant="outline" className="mt-4" onClick={() => navigate('/phase0/dashboard')}>
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Retour aux projets
-        </Button>
-      </div>
+      <AppLayout>
+        <div className="max-w-4xl mx-auto">
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{error || 'Projet non trouvé'}</AlertDescription>
+          </Alert>
+          <Button variant="outline" className="mt-4" onClick={() => navigate('/phase0/dashboard')}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Retour aux projets
+          </Button>
+        </div>
+      </AppLayout>
     );
   }
 
   const statusConfig = PHASE0_STATUS_CONFIG[project.status];
 
   return (
-    <div className="min-h-screen bg-muted/20">
-      <div className="container max-w-6xl mx-auto px-4 py-8">
+    <AppLayout>
+      <div className="max-w-6xl mx-auto">
         {/* Navigation */}
         <div className="flex items-center justify-between mb-6">
           <Button variant="ghost" asChild>
@@ -829,7 +834,7 @@ export function Phase0ProjectPage() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </AppLayout>
   );
 }
 
