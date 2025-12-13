@@ -28,7 +28,6 @@ export const Header = () => {
   // Détermine les liens dashboard selon le type d'utilisateur
   const isB2B = userType === 'B2B';
   const isB2G = userType === 'B2G';
-  const isPro = isB2B || isB2G; // Pro = B2B ou B2G (pas de comparaison de devis)
 
   // Dashboard et labels adaptés au segment
   const dashboardLink = isB2B ? '/pro' : '/dashboard';
@@ -133,22 +132,12 @@ export const Header = () => {
             </Link>
 
             {user && (
-              <>
-                <Link
-                  to={dashboardLink}
-                  className="text-sm font-medium text-foreground hover:text-primary transition-colors"
-                >
-                  {dashboardLabel}
-                </Link>
-                {!isPro && (
-                  <Link
-                    to="/compare"
-                    className="text-sm font-medium text-foreground hover:text-primary transition-colors"
-                  >
-                    Comparer
-                  </Link>
-                )}
-              </>
+              <Link
+                to={dashboardLink}
+                className="text-sm font-medium text-foreground hover:text-primary transition-colors"
+              >
+                {dashboardLabel}
+              </Link>
             )}
           </nav>
 
@@ -168,11 +157,6 @@ export const Header = () => {
                     <DropdownMenuItem onClick={() => navigate(dashboardLink)}>
                       📊 {isB2G ? 'Espace Collectivité' : isB2B ? 'Espace Pro' : 'Dashboard'}
                     </DropdownMenuItem>
-                    {!isPro && (
-                      <DropdownMenuItem onClick={() => navigate('/compare')}>
-                        ⚖️ Comparer devis
-                      </DropdownMenuItem>
-                    )}
                     <DropdownMenuItem onClick={() => navigate('/profile')}>
                       👤 Mon Profil
                     </DropdownMenuItem>
@@ -263,24 +247,13 @@ export const Header = () => {
             </Link>
 
             {user && (
-              <>
-                <Link
-                  to={dashboardLink}
-                  className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  {dashboardLabel}
-                </Link>
-                {!isPro && (
-                  <Link
-                    to="/compare"
-                    className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    Comparer devis
-                  </Link>
-                )}
-              </>
+              <Link
+                to={dashboardLink}
+                className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {dashboardLabel}
+              </Link>
             )}
 
             <div className="pt-4 space-y-2">
