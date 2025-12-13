@@ -744,36 +744,83 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Créer les triggers
-CREATE TRIGGER update_contracts_timestamp
-  BEFORE UPDATE ON project_contracts
-  FOR EACH ROW EXECUTE FUNCTION update_payment_tables_timestamp();
+-- Créer les triggers (avec vérification que les tables existent)
+DO $$ BEGIN
+  CREATE TRIGGER update_contracts_timestamp
+    BEFORE UPDATE ON project_contracts
+    FOR EACH ROW EXECUTE FUNCTION update_payment_tables_timestamp();
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE TRIGGER update_milestones_timestamp
-  BEFORE UPDATE ON payment_milestones
-  FOR EACH ROW EXECUTE FUNCTION update_payment_tables_timestamp();
+DO $$ BEGIN
+  CREATE TRIGGER update_milestones_timestamp
+    BEFORE UPDATE ON payment_milestones
+    FOR EACH ROW EXECUTE FUNCTION update_payment_tables_timestamp();
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE TRIGGER update_payments_timestamp
-  BEFORE UPDATE ON payments
-  FOR EACH ROW EXECUTE FUNCTION update_payment_tables_timestamp();
+DO $$ BEGIN
+  CREATE TRIGGER update_payments_timestamp
+    BEFORE UPDATE ON payments
+    FOR EACH ROW EXECUTE FUNCTION update_payment_tables_timestamp();
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE TRIGGER update_disputes_timestamp
-  BEFORE UPDATE ON disputes
-  FOR EACH ROW EXECUTE FUNCTION update_payment_tables_timestamp();
+DO $$ BEGIN
+  CREATE TRIGGER update_disputes_timestamp
+    BEFORE UPDATE ON disputes
+    FOR EACH ROW EXECUTE FUNCTION update_payment_tables_timestamp();
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ===================
 -- ROW LEVEL SECURITY
 -- ===================
 
--- Activer RLS
-ALTER TABLE project_contracts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE payment_milestones ENABLE ROW LEVEL SECURITY;
-ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE disputes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE fraud_checks_log ENABLE ROW LEVEL SECURITY;
-ALTER TABLE enterprise_payment_accounts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE transmissions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE liens_acces ENABLE ROW LEVEL SECURITY;
+-- Activer RLS (avec vérification que les tables existent)
+DO $$ BEGIN
+  ALTER TABLE project_contracts ENABLE ROW LEVEL SECURITY;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE payment_milestones ENABLE ROW LEVEL SECURITY;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE disputes ENABLE ROW LEVEL SECURITY;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE fraud_checks_log ENABLE ROW LEVEL SECURITY;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE enterprise_payment_accounts ENABLE ROW LEVEL SECURITY;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE transmissions ENABLE ROW LEVEL SECURITY;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE liens_acces ENABLE ROW LEVEL SECURITY;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
 
 -- Supprimer les policies existantes pour les recréer (avec vérification)
 DO $$ BEGIN
@@ -828,117 +875,223 @@ EXCEPTION WHEN undefined_table THEN NULL;
 END $$;
 
 -- Policies pour project_contracts
-CREATE POLICY "contracts_select_own" ON project_contracts
-  FOR SELECT USING (
-    auth.uid() = client_id OR
-    auth.uid() = entreprise_id OR
-    EXISTS (SELECT 1 FROM auth.users WHERE id = auth.uid() AND raw_user_meta_data->>'user_type' IN ('admin', 'super_admin'))
-  );
+DO $$ BEGIN
+  CREATE POLICY "contracts_select_own" ON project_contracts
+    FOR SELECT USING (
+      auth.uid() = client_id OR
+      auth.uid() = entreprise_id OR
+      EXISTS (SELECT 1 FROM auth.users WHERE id = auth.uid() AND raw_user_meta_data->>'user_type' IN ('admin', 'super_admin'))
+    );
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "contracts_insert_entreprise" ON project_contracts
-  FOR INSERT WITH CHECK (auth.uid() = entreprise_id);
+DO $$ BEGIN
+  CREATE POLICY "contracts_insert_entreprise" ON project_contracts
+    FOR INSERT WITH CHECK (auth.uid() = entreprise_id);
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "contracts_update_parties" ON project_contracts
-  FOR UPDATE USING (auth.uid() = client_id OR auth.uid() = entreprise_id);
+DO $$ BEGIN
+  CREATE POLICY "contracts_update_parties" ON project_contracts
+    FOR UPDATE USING (auth.uid() = client_id OR auth.uid() = entreprise_id);
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Policies pour payment_milestones
-CREATE POLICY "milestones_select_contract_parties" ON payment_milestones
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM project_contracts
-      WHERE id = payment_milestones.contract_id
-        AND (client_id = auth.uid() OR entreprise_id = auth.uid())
-    ) OR
-    EXISTS (SELECT 1 FROM auth.users WHERE id = auth.uid() AND raw_user_meta_data->>'user_type' IN ('admin', 'super_admin'))
-  );
+DO $$ BEGIN
+  CREATE POLICY "milestones_select_contract_parties" ON payment_milestones
+    FOR SELECT USING (
+      EXISTS (
+        SELECT 1 FROM project_contracts
+        WHERE id = payment_milestones.contract_id
+          AND (client_id = auth.uid() OR entreprise_id = auth.uid())
+      ) OR
+      EXISTS (SELECT 1 FROM auth.users WHERE id = auth.uid() AND raw_user_meta_data->>'user_type' IN ('admin', 'super_admin'))
+    );
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "milestones_insert_entreprise" ON payment_milestones
-  FOR INSERT WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM project_contracts
-      WHERE id = payment_milestones.contract_id AND entreprise_id = auth.uid()
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "milestones_insert_entreprise" ON payment_milestones
+    FOR INSERT WITH CHECK (
+      EXISTS (
+        SELECT 1 FROM project_contracts
+        WHERE id = payment_milestones.contract_id AND entreprise_id = auth.uid()
+      )
+    );
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "milestones_update_parties" ON payment_milestones
-  FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM project_contracts
-      WHERE id = payment_milestones.contract_id
-        AND (client_id = auth.uid() OR entreprise_id = auth.uid())
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "milestones_update_parties" ON payment_milestones
+    FOR UPDATE USING (
+      EXISTS (
+        SELECT 1 FROM project_contracts
+        WHERE id = payment_milestones.contract_id
+          AND (client_id = auth.uid() OR entreprise_id = auth.uid())
+      )
+    );
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Policies pour payments
-CREATE POLICY "payments_select_own" ON payments
-  FOR SELECT USING (
-    payer_id = auth.uid() OR
-    payee_id = auth.uid() OR
-    EXISTS (SELECT 1 FROM auth.users WHERE id = auth.uid() AND raw_user_meta_data->>'user_type' IN ('admin', 'super_admin'))
-  );
+DO $$ BEGIN
+  CREATE POLICY "payments_select_own" ON payments
+    FOR SELECT USING (
+      payer_id = auth.uid() OR
+      payee_id = auth.uid() OR
+      EXISTS (SELECT 1 FROM auth.users WHERE id = auth.uid() AND raw_user_meta_data->>'user_type' IN ('admin', 'super_admin'))
+    );
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "payments_insert_system" ON payments
-  FOR INSERT WITH CHECK (TRUE);
+DO $$ BEGIN
+  CREATE POLICY "payments_insert_system" ON payments
+    FOR INSERT WITH CHECK (TRUE);
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Policies pour disputes
-CREATE POLICY "disputes_select_parties" ON disputes
-  FOR SELECT USING (
-    opened_by = auth.uid() OR
-    against = auth.uid() OR
-    assigned_to = auth.uid() OR
-    EXISTS (SELECT 1 FROM auth.users WHERE id = auth.uid() AND raw_user_meta_data->>'user_type' IN ('admin', 'super_admin'))
-  );
+DO $$ BEGIN
+  CREATE POLICY "disputes_select_parties" ON disputes
+    FOR SELECT USING (
+      opened_by = auth.uid() OR
+      against = auth.uid() OR
+      assigned_to = auth.uid() OR
+      EXISTS (SELECT 1 FROM auth.users WHERE id = auth.uid() AND raw_user_meta_data->>'user_type' IN ('admin', 'super_admin'))
+    );
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "disputes_insert_auth" ON disputes
-  FOR INSERT WITH CHECK (opened_by = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "disputes_insert_auth" ON disputes
+    FOR INSERT WITH CHECK (opened_by = auth.uid());
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "disputes_update_parties" ON disputes
-  FOR UPDATE USING (
-    opened_by = auth.uid() OR
-    against = auth.uid() OR
-    assigned_to = auth.uid()
-  );
+DO $$ BEGIN
+  CREATE POLICY "disputes_update_parties" ON disputes
+    FOR UPDATE USING (
+      opened_by = auth.uid() OR
+      against = auth.uid() OR
+      assigned_to = auth.uid()
+    );
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Policies pour enterprise_payment_accounts
-CREATE POLICY "payment_accounts_select_own" ON enterprise_payment_accounts
-  FOR SELECT USING (user_id = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "payment_accounts_select_own" ON enterprise_payment_accounts
+    FOR SELECT USING (user_id = auth.uid());
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "payment_accounts_insert_own" ON enterprise_payment_accounts
-  FOR INSERT WITH CHECK (user_id = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "payment_accounts_insert_own" ON enterprise_payment_accounts
+    FOR INSERT WITH CHECK (user_id = auth.uid());
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "payment_accounts_update_own" ON enterprise_payment_accounts
-  FOR UPDATE USING (user_id = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "payment_accounts_update_own" ON enterprise_payment_accounts
+    FOR UPDATE USING (user_id = auth.uid());
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Policies pour transmissions
-CREATE POLICY "transmissions_select_own" ON transmissions
-  FOR SELECT USING (entreprise_id = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "transmissions_select_own" ON transmissions
+    FOR SELECT USING (entreprise_id = auth.uid());
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "transmissions_insert_own" ON transmissions
-  FOR INSERT WITH CHECK (entreprise_id = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "transmissions_insert_own" ON transmissions
+    FOR INSERT WITH CHECK (entreprise_id = auth.uid());
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "transmissions_update_own" ON transmissions
-  FOR UPDATE USING (entreprise_id = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "transmissions_update_own" ON transmissions
+    FOR UPDATE USING (entreprise_id = auth.uid());
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Policies pour liens_acces (lecture publique pour consultation)
-CREATE POLICY "liens_select_all" ON liens_acces
-  FOR SELECT USING (TRUE);
+DO $$ BEGIN
+  CREATE POLICY "liens_select_all" ON liens_acces
+    FOR SELECT USING (TRUE);
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Policies pour fraud_checks_log (admin only)
-CREATE POLICY "fraud_log_admin_only" ON fraud_checks_log
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM auth.users WHERE id = auth.uid() AND raw_user_meta_data->>'user_type' IN ('admin', 'super_admin'))
-  );
+DO $$ BEGIN
+  CREATE POLICY "fraud_log_admin_only" ON fraud_checks_log
+    FOR ALL USING (
+      EXISTS (SELECT 1 FROM auth.users WHERE id = auth.uid() AND raw_user_meta_data->>'user_type' IN ('admin', 'super_admin'))
+    );
+EXCEPTION WHEN undefined_table THEN NULL;
+          WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ===================
 -- COMMENTAIRES
 -- ===================
 
-COMMENT ON TABLE project_contracts IS 'Contrats de projet liant client et entreprise';
-COMMENT ON TABLE payment_milestones IS 'Jalons de paiement avec validation et preuves';
-COMMENT ON TABLE payments IS 'Paiements avec séquestre et vérification anti-fraude';
-COMMENT ON TABLE disputes IS 'Litiges entre parties avec médiation TORP';
-COMMENT ON TABLE fraud_rules IS 'Règles configurables de détection de fraude';
-COMMENT ON TABLE fraud_checks_log IS 'Historique des vérifications anti-fraude';
-COMMENT ON TABLE enterprise_payment_accounts IS 'Comptes Stripe Connect des entreprises';
+DO $$ BEGIN
+  COMMENT ON TABLE project_contracts IS 'Contrats de projet liant client et entreprise';
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
 
-COMMENT ON FUNCTION generate_payment_reference IS 'Génère une référence unique pour les paiements';
+DO $$ BEGIN
+  COMMENT ON TABLE payment_milestones IS 'Jalons de paiement avec validation et preuves';
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  COMMENT ON TABLE payments IS 'Paiements avec séquestre et vérification anti-fraude';
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  COMMENT ON TABLE disputes IS 'Litiges entre parties avec médiation TORP';
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  COMMENT ON TABLE fraud_rules IS 'Règles configurables de détection de fraude';
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  COMMENT ON TABLE fraud_checks_log IS 'Historique des vérifications anti-fraude';
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  COMMENT ON TABLE enterprise_payment_accounts IS 'Comptes Stripe Connect des entreprises';
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  COMMENT ON FUNCTION generate_payment_reference IS 'Génère une référence unique pour les paiements';
+EXCEPTION WHEN undefined_function THEN NULL;
+END $$;
