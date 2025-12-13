@@ -124,6 +124,13 @@ export default function UnifiedDashboard() {
   const navigate = useNavigate();
   const { user, userType, projects, phase0Projects, refreshPhase0Projects } = useApp();
 
+  // Rediriger les utilisateurs B2B vers l'espace Pro dédié
+  useEffect(() => {
+    if (userType === 'B2B') {
+      navigate('/pro', { replace: true });
+    }
+  }, [userType, navigate]);
+
   // États
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
