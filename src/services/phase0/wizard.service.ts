@@ -144,6 +144,67 @@ export const WIZARD_STEPS_B2B = [
   },
 ];
 
+/**
+ * Configuration des étapes du wizard B2G (secteur public)
+ * Structure adaptée aux marchés publics et collectivités
+ */
+export const WIZARD_STEPS_B2G = [
+  {
+    id: 'step_entity',
+    number: 1,
+    name: 'Entité publique',
+    shortName: 'Entité',
+    description: 'Identification de la collectivité ou établissement public',
+    icon: 'building-2',
+    estimatedMinutes: 3,
+  },
+  {
+    id: 'step_site_patrimoine',
+    number: 2,
+    name: 'Site & Patrimoine',
+    shortName: 'Site',
+    description: 'Bâtiment ou patrimoine concerné par l\'opération',
+    icon: 'landmark',
+    estimatedMinutes: 5,
+  },
+  {
+    id: 'step_operation',
+    number: 3,
+    name: 'Opération',
+    shortName: 'Opération',
+    description: 'Nature de l\'opération et programme fonctionnel',
+    icon: 'file-text',
+    estimatedMinutes: 6,
+  },
+  {
+    id: 'step_marche',
+    number: 4,
+    name: 'Marché public',
+    shortName: 'Marché',
+    description: 'Type de marché, allotissement et procédure',
+    icon: 'scale',
+    estimatedMinutes: 4,
+  },
+  {
+    id: 'step_budget_planning',
+    number: 5,
+    name: 'Budget & Planning',
+    shortName: 'Budget',
+    description: 'Enveloppe budgétaire, financement et calendrier prévisionnel',
+    icon: 'euro',
+    estimatedMinutes: 4,
+  },
+  {
+    id: 'step_validation_dce',
+    number: 6,
+    name: 'Validation & DCE',
+    shortName: 'DCE',
+    description: 'Récapitulatif et préparation du dossier de consultation',
+    icon: 'check-circle',
+    estimatedMinutes: 3,
+  },
+];
+
 // =============================================================================
 // TYPES EXPORTS
 // =============================================================================
@@ -187,7 +248,14 @@ export class WizardService {
     if (mode === 'b2b' || mode === 'b2b_professional') {
       return WIZARD_STEPS_B2B.map(step => ({
         ...step,
-        isOptional: step.isOptional || false,
+        isOptional: (step as WizardStepConfig).isOptional || false,
+      }));
+    }
+    // Mode B2G secteur public : utilise les steps B2G
+    if (mode === 'b2g' || mode === 'b2g_public') {
+      return WIZARD_STEPS_B2G.map(step => ({
+        ...step,
+        isOptional: (step as WizardStepConfig).isOptional || false,
       }));
     }
     // Mode B2C : steps classiques
@@ -199,6 +267,13 @@ export class WizardService {
    */
   static isB2BMode(mode: WizardMode): boolean {
     return mode === 'b2b' || mode === 'b2b_professional';
+  }
+
+  /**
+   * Vérifie si le mode est B2G (secteur public)
+   */
+  static isB2GMode(mode: WizardMode): boolean {
+    return mode === 'b2g' || mode === 'b2g_public';
   }
 
   /**

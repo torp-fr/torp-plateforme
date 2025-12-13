@@ -164,6 +164,19 @@ export type {
   FinancingScenario,
 } from './budget.service';
 
+// Service de validation des lots (dépendances et incompatibilités)
+export { LotValidationService } from './lot-validation.service';
+export type {
+  LotDependency,
+  LotIncompatibility,
+  ValidationResult,
+  ValidationIssue,
+  LotSuggestion,
+} from './lot-validation.service';
+
+// Export des configurations wizard B2G
+export { WIZARD_STEPS_B2G } from './wizard.service';
+
 // Re-export des types Phase 0 nouveaux modules
 export type {
   // Types Diagnostic
