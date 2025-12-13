@@ -298,24 +298,35 @@ export function Phase0ProjectPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Profil: </span>
-                    <span className="font-medium">
-                      {project.owner?.identity?.type === 'b2c' ? 'Particulier' : 'Professionnel'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Contact: </span>
-                    <span className="font-medium">
-                      {project.owner?.identity?.type === 'b2c'
-                        ? `${project.owner?.identity?.firstName || ''} ${project.owner?.identity?.lastName || ''}`
-                        : project.owner?.identity?.companyName || 'Non renseigné'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Email: </span>
-                    <span>{project.owner?.contact?.email || 'Non renseigné'}</span>
-                  </div>
+                  {(() => {
+                    // Support both ownerProfile (new) and owner (legacy)
+                    const owner = project.ownerProfile || project.owner;
+                    const identity = owner?.identity;
+                    const contact = owner?.contact;
+                    const isB2C = identity?.type?.toLowerCase() === 'b2c';
+                    return (
+                      <>
+                        <div>
+                          <span className="text-muted-foreground">Profil: </span>
+                          <span className="font-medium">
+                            {isB2C ? 'Particulier' : 'Professionnel'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Contact: </span>
+                          <span className="font-medium">
+                            {isB2C
+                              ? `${identity?.firstName || ''} ${identity?.lastName || ''}`.trim() || 'Non renseigné'
+                              : identity?.companyName || 'Non renseigné'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Email: </span>
+                          <span>{contact?.email || 'Non renseigné'}</span>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </CardContent>
               </Card>
 

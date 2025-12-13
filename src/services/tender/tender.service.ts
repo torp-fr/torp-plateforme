@@ -99,10 +99,10 @@ export class TenderService {
       evaluation_criteria: options?.evaluationCriteria || DEFAULT_EVALUATION_CRITERIA,
       requirements,
 
-      // Contact
+      // Contact (support ownerProfile and legacy owner)
       contact_name: this.getContactName(phase0Project),
-      contact_email: phase0Project.owner?.contact?.email,
-      contact_phone: phase0Project.owner?.contact?.phone,
+      contact_email: phase0Project.ownerProfile?.contact?.email || phase0Project.owner?.contact?.email,
+      contact_phone: phase0Project.ownerProfile?.contact?.phone || phase0Project.owner?.contact?.phone,
 
       // Dates
       response_deadline: options?.responseDeadline,
@@ -663,10 +663,12 @@ export class TenderService {
    * Extrait le nom du contact depuis le projet
    */
   private static getContactName(project: Phase0Project): string {
-    const owner = project.owner;
+    // Support both ownerProfile (new) and owner (legacy)
+    const owner = project.ownerProfile || project.owner;
     if (!owner?.identity) return '';
 
-    if (owner.identity.type === 'b2c') {
+    const ownerType = owner.identity.type?.toLowerCase();
+    if (ownerType === 'b2c') {
       return `${owner.identity.firstName || ''} ${owner.identity.lastName || ''}`.trim();
     }
 

@@ -21,9 +21,14 @@ export interface Phase0Project {
 
   // Données métier
   ownerProfile: MasterOwnerProfile;
+  /** @deprecated Use ownerProfile instead - kept for backwards compatibility */
+  owner?: MasterOwnerProfile;
   property: Property;
   workProject: WorkProject;
   selectedLots: WorkLot[];
+
+  // Room details (pièces et travaux)
+  roomDetails?: import('./room-details.types').RoomDetailsData;
 
   // B2B: Données client/MOA (pour les professionnels)
   client?: Record<string, unknown>;

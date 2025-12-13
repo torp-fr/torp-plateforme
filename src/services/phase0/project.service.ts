@@ -607,13 +607,17 @@ export class Phase0ProjectService {
   }
 
   private mapRowToProject(row: Phase0ProjectRow): Phase0Project {
+    const ownerProfile = row.owner_profile as MasterOwnerProfile;
     return {
       id: row.id,
       userId: row.user_id,
-      ownerProfile: row.owner_profile as MasterOwnerProfile,
+      ownerProfile,
+      // Legacy alias for backwards compatibility
+      owner: ownerProfile,
       property: row.property as Property,
       workProject: row.work_project as WorkProject,
       selectedLots: row.selected_lots as WorkLot[],
+      roomDetails: (row as Record<string, unknown>).room_details as Phase0Project['roomDetails'],
       // B2B: Client/MOA information
       client: row.client || undefined,
       status: row.status,
