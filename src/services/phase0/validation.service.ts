@@ -106,9 +106,9 @@ export class ValidationService {
   ];
 
   private static propertyRules: ValidationRule[] = [
-    // Niveau minimal
+    // Niveau minimal - Chemins corrects selon property.types.ts
     {
-      field: 'address.street',
+      field: 'identification.address.streetName',
       section: 'property',
       check: (v) => !!v,
       message: 'L\'adresse du bien est requise',
@@ -116,7 +116,7 @@ export class ValidationService {
       level: 'minimal',
     },
     {
-      field: 'address.postalCode',
+      field: 'identification.address.postalCode',
       section: 'property',
       check: (v) => !!v && typeof v === 'string' && /^\d{5}$/.test(v),
       message: 'Un code postal valide (5 chiffres) est requis',
@@ -124,7 +124,7 @@ export class ValidationService {
       level: 'minimal',
     },
     {
-      field: 'address.city',
+      field: 'identification.address.city',
       section: 'property',
       check: (v) => !!v,
       message: 'La ville est requise',
@@ -132,7 +132,7 @@ export class ValidationService {
       level: 'minimal',
     },
     {
-      field: 'characteristics.type',
+      field: 'identification.type',
       section: 'property',
       check: (v) => !!v,
       message: 'Le type de bien est requis',
@@ -210,7 +210,7 @@ export class ValidationService {
       level: 'minimal',
     },
     {
-      field: 'scope.workType',
+      field: 'general.projectType',
       section: 'project',
       check: (v) => !!v,
       message: 'Le type de travaux est requis',

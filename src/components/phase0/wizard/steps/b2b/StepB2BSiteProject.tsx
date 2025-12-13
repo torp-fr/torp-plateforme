@@ -61,11 +61,12 @@ export function StepB2BSiteProject({
   onAnswersChange,
   isProcessing,
 }: StepComponentProps) {
-  const client = (project.client || {}) as Record<string, unknown>;
-  const site = (client.site || {}) as Record<string, unknown>;
-  const address = (site.address || {}) as Record<string, unknown>;
+  // Utiliser property.identification pour compatibilité avec la validation
+  const property = (project.property || {}) as Record<string, unknown>;
+  const identification = (property.identification || {}) as Record<string, unknown>;
+  const address = (identification.address || {}) as Record<string, unknown>;
   const workProject = (project.workProject || {}) as Record<string, unknown>;
-  const scope = (workProject.scope || {}) as Record<string, unknown>;
+  const general = (workProject.general || {}) as Record<string, unknown>;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -73,8 +74,8 @@ export function StepB2BSiteProject({
   const [addressValidated, setAddressValidated] = useState(false);
 
   const getValue = (path: string) => {
-    if (path.startsWith('client.')) {
-      return answers[path] ?? getNestedValue(client, path.replace('client.', '')) ?? '';
+    if (path.startsWith('property.')) {
+      return answers[path] ?? getNestedValue(property, path.replace('property.', '')) ?? '';
     }
     if (path.startsWith('workProject.')) {
       return answers[path] ?? getNestedValue(workProject, path.replace('workProject.', '')) ?? '';
@@ -82,11 +83,12 @@ export function StepB2BSiteProject({
     return answers[path] ?? '';
   };
 
-  const siteType = getValue('client.site.siteType') as string;
-  const projectType = getValue('workProject.scope.workType') as string;
-  const currentStreet = getValue('client.site.address.streetName') as string;
-  const currentPostalCode = getValue('client.site.address.postalCode') as string;
-  const currentCity = getValue('client.site.address.city') as string;
+  // Type de bien (utilisé comme type de site en B2B)
+  const siteType = (identification.type as string) || (answers['property.identification.type'] as string) || '';
+  const projectType = getValue('workProject.general.projectType') as string;
+  const currentStreet = getValue('property.identification.address.streetName') as string;
+  const currentPostalCode = getValue('property.identification.address.postalCode') as string;
+  const currentCity = getValue('property.identification.address.city') as string;
 
   // Recherche adresse API BAN
   const searchAddress = useCallback(async () => {
@@ -115,11 +117,12 @@ export function StepB2BSiteProject({
   }, [searchQuery]);
 
   const selectAddress = useCallback((suggestion: AddressSuggestion) => {
+    // Utiliser les chemins corrects pour compatibilité avec la validation
     onAnswersChange({
-      'client.site.address.streetName': suggestion.street,
-      'client.site.address.postalCode': suggestion.postalCode,
-      'client.site.address.city': suggestion.city,
-      'client.site.address.country': 'France',
+      'property.identification.address.streetName': suggestion.street,
+      'property.identification.address.postalCode': suggestion.postalCode,
+      'property.identification.address.city': suggestion.city,
+      'property.identification.address.country': 'France',
     });
     setAddressValidated(true);
     setSuggestions([]);
@@ -133,7 +136,7 @@ export function StepB2BSiteProject({
         <Label className="text-base font-medium">Type de site</Label>
         <RadioGroup
           value={siteType}
-          onValueChange={(v) => onAnswerChange('client.site.siteType', v)}
+          onValueChange={(v) => onAnswerChange('property.identification.type', v)}
           className="grid grid-cols-2 md:grid-cols-4 gap-2"
         >
           {SITE_TYPES.map((type) => (
@@ -206,21 +209,21 @@ export function StepB2BSiteProject({
           <div className="grid grid-cols-1 gap-4 pt-2">
             <Input
               value={currentStreet}
-              onChange={(e) => { onAnswerChange('client.site.address.streetName', e.target.value); setAddressValidated(false); }}
+              onChange={(e) => { onAnswerChange('property.identification.address.streetName', e.target.value); setAddressValidated(false); }}
               placeholder="Adresse (numéro et rue)"
               disabled={isProcessing}
             />
             <div className="grid grid-cols-2 gap-4">
               <Input
                 value={currentPostalCode}
-                onChange={(e) => { onAnswerChange('client.site.address.postalCode', e.target.value); setAddressValidated(false); }}
+                onChange={(e) => { onAnswerChange('property.identification.address.postalCode', e.target.value); setAddressValidated(false); }}
                 placeholder="Code postal"
                 maxLength={5}
                 disabled={isProcessing}
               />
               <Input
                 value={currentCity}
-                onChange={(e) => { onAnswerChange('client.site.address.city', e.target.value); setAddressValidated(false); }}
+                onChange={(e) => { onAnswerChange('property.identification.address.city', e.target.value); setAddressValidated(false); }}
                 placeholder="Ville"
                 disabled={isProcessing}
               />
@@ -240,8 +243,8 @@ export function StepB2BSiteProject({
               <Label>Surface (m²)</Label>
               <Input
                 type="number"
-                value={getValue('client.site.characteristics.totalArea') as string}
-                onChange={(e) => onAnswerChange('client.site.characteristics.totalArea', parseFloat(e.target.value) || '')}
+                value={getValue('property.characteristics.livingArea') as string}
+                onChange={(e) => onAnswerChange('property.characteristics.livingArea', parseFloat(e.target.value) || '')}
                 placeholder="150"
                 disabled={isProcessing}
               />
@@ -250,8 +253,8 @@ export function StepB2BSiteProject({
               <Label>Année construction</Label>
               <Input
                 type="number"
-                value={getValue('client.site.characteristics.constructionYear') as string}
-                onChange={(e) => onAnswerChange('client.site.characteristics.constructionYear', parseInt(e.target.value) || '')}
+                value={getValue('property.construction.year') as string}
+                onChange={(e) => onAnswerChange('property.construction.year', parseInt(e.target.value) || '')}
                 placeholder="1985"
                 disabled={isProcessing}
               />
@@ -260,8 +263,8 @@ export function StepB2BSiteProject({
               <Label>Niveaux</Label>
               <Input
                 type="number"
-                value={getValue('client.site.characteristics.levels') as string}
-                onChange={(e) => onAnswerChange('client.site.characteristics.levels', parseInt(e.target.value) || '')}
+                value={getValue('property.characteristics.levels') as string}
+                onChange={(e) => onAnswerChange('property.characteristics.levels', parseInt(e.target.value) || '')}
                 placeholder="2"
                 min={1}
                 disabled={isProcessing}
@@ -270,8 +273,8 @@ export function StepB2BSiteProject({
             <div className="space-y-2">
               <Label>Occupation</Label>
               <Select
-                value={getValue('client.site.occupancy.occupancyType') as string}
-                onValueChange={(v) => onAnswerChange('client.site.occupancy.occupancyType', v)}
+                value={getValue('workProject.constraints.occupancy.duringWorks') as string}
+                onValueChange={(v) => onAnswerChange('workProject.constraints.occupancy.duringWorks', v)}
                 disabled={isProcessing}
               >
                 <SelectTrigger><SelectValue placeholder="Statut" /></SelectTrigger>
@@ -293,8 +296,8 @@ export function StepB2BSiteProject({
             ].map((item) => (
               <label key={item.id} className="flex items-center gap-2 cursor-pointer">
                 <Checkbox
-                  checked={getValue(`client.site.accessConstraints.${item.id}`) as boolean || false}
-                  onCheckedChange={(c) => onAnswerChange(`client.site.accessConstraints.${item.id}`, c)}
+                  checked={getValue(`workProject.constraints.physical.${item.id}`) as boolean || false}
+                  onCheckedChange={(c) => onAnswerChange(`workProject.constraints.physical.${item.id}`, c)}
                   disabled={isProcessing}
                 />
                 <span className="text-sm">{item.label}</span>
@@ -315,7 +318,7 @@ export function StepB2BSiteProject({
         <CardContent>
           <RadioGroup
             value={projectType}
-            onValueChange={(v) => onAnswerChange('workProject.scope.workType', v)}
+            onValueChange={(v) => onAnswerChange('workProject.general.projectType', v)}
             className="grid grid-cols-2 md:grid-cols-3 gap-3"
           >
             {PROJECT_TYPES.map((type) => (
