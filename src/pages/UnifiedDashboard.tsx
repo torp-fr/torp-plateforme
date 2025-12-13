@@ -823,7 +823,6 @@ export default function UnifiedDashboard() {
             </TabsContent>
           </Tabs>
         </div>
-      </div>
     </AppLayout>
   );
 }
