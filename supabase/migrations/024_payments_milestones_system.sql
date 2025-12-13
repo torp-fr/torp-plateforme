@@ -1,10 +1,51 @@
 -- =====================================================
 -- Migration 024: Système de Paiements Jalonnés
 -- Gestion des paiements, jalons, validation chantier et litiges
+-- VERSION ROBUSTE avec gestion des états partiels
 -- =====================================================
 
 -- ===================
--- TYPES ÉNUMÉRÉS (avec gestion IF NOT EXISTS)
+-- NETTOYAGE PRÉALABLE (si migration partielle précédente)
+-- ===================
+
+-- Supprimer les triggers existants pour éviter les conflits
+DROP TRIGGER IF EXISTS update_contracts_timestamp ON project_contracts;
+DROP TRIGGER IF EXISTS update_milestones_timestamp ON payment_milestones;
+DROP TRIGGER IF EXISTS update_payments_timestamp ON payments;
+DROP TRIGGER IF EXISTS update_disputes_timestamp ON disputes;
+
+-- Supprimer les index existants pour les recréer proprement
+DROP INDEX IF EXISTS idx_contracts_project;
+DROP INDEX IF EXISTS idx_contracts_entreprise;
+DROP INDEX IF EXISTS idx_contracts_client;
+DROP INDEX IF EXISTS idx_contracts_status;
+DROP INDEX IF EXISTS idx_milestones_contract;
+DROP INDEX IF EXISTS idx_milestones_status;
+DROP INDEX IF EXISTS idx_milestones_date_prevue;
+DROP INDEX IF EXISTS idx_payments_contract;
+DROP INDEX IF EXISTS idx_payments_milestone;
+DROP INDEX IF EXISTS idx_payments_payer;
+DROP INDEX IF EXISTS idx_payments_payee;
+DROP INDEX IF EXISTS idx_payments_status;
+DROP INDEX IF EXISTS idx_payments_stripe;
+DROP INDEX IF EXISTS idx_payments_fraud_score;
+DROP INDEX IF EXISTS idx_disputes_contract;
+DROP INDEX IF EXISTS idx_disputes_status;
+DROP INDEX IF EXISTS idx_disputes_opened_by;
+DROP INDEX IF EXISTS idx_disputes_assigned;
+DROP INDEX IF EXISTS idx_fraud_log_payment;
+DROP INDEX IF EXISTS idx_fraud_log_contract;
+DROP INDEX IF EXISTS idx_fraud_log_risk;
+DROP INDEX IF EXISTS idx_enterprise_accounts_stripe;
+DROP INDEX IF EXISTS idx_enterprise_accounts_status;
+DROP INDEX IF EXISTS idx_transmissions_proposition;
+DROP INDEX IF EXISTS idx_transmissions_entreprise;
+DROP INDEX IF EXISTS idx_transmissions_status;
+DROP INDEX IF EXISTS idx_liens_code;
+DROP INDEX IF EXISTS idx_liens_proposition;
+
+-- ===================
+-- TYPES ÉNUMÉRÉS (avec gestion IF NOT EXISTS via DO block)
 -- ===================
 
 DO $$ BEGIN
@@ -57,14 +98,14 @@ END $$;
 CREATE TABLE IF NOT EXISTS project_contracts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-  -- Références
-  project_id UUID NOT NULL REFERENCES phase0_projects(id) ON DELETE CASCADE,
-  proposition_id UUID, -- Référence à la proposition commerciale acceptée
-  entreprise_id UUID NOT NULL REFERENCES auth.users(id),
-  client_id UUID NOT NULL REFERENCES auth.users(id),
+  -- Références (phase0_projects peut ne pas exister, on rend optionnel)
+  project_id UUID,
+  proposition_id UUID,
+  entreprise_id UUID NOT NULL,
+  client_id UUID NOT NULL,
 
   -- Informations contrat
-  reference VARCHAR(50) NOT NULL UNIQUE,
+  reference VARCHAR(50) NOT NULL,
   titre VARCHAR(255) NOT NULL,
   description TEXT,
 
@@ -97,16 +138,53 @@ CREATE TABLE IF NOT EXISTS project_contracts (
   -- Métadonnées
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  created_by UUID REFERENCES auth.users(id),
+  created_by UUID,
 
   CONSTRAINT valid_montants CHECK (montant_total_ht > 0 AND montant_total_ttc >= montant_total_ht)
 );
 
+-- Ajouter contrainte UNIQUE sur reference si elle n'existe pas
+DO $$ BEGIN
+  ALTER TABLE project_contracts ADD CONSTRAINT project_contracts_reference_key UNIQUE (reference);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Ajouter les FK si les tables référencées existent
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'phase0_projects' AND table_schema = 'public') THEN
+    ALTER TABLE project_contracts
+      ADD CONSTRAINT fk_contracts_project
+      FOREIGN KEY (project_id) REFERENCES phase0_projects(id) ON DELETE CASCADE;
+  END IF;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE project_contracts
+    ADD CONSTRAINT fk_contracts_entreprise
+    FOREIGN KEY (entreprise_id) REFERENCES auth.users(id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE project_contracts
+    ADD CONSTRAINT fk_contracts_client
+    FOREIGN KEY (client_id) REFERENCES auth.users(id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE project_contracts
+    ADD CONSTRAINT fk_contracts_created_by
+    FOREIGN KEY (created_by) REFERENCES auth.users(id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- Index
-CREATE INDEX idx_contracts_project ON project_contracts(project_id);
-CREATE INDEX idx_contracts_entreprise ON project_contracts(entreprise_id);
-CREATE INDEX idx_contracts_client ON project_contracts(client_id);
-CREATE INDEX idx_contracts_status ON project_contracts(status);
+CREATE INDEX IF NOT EXISTS idx_contracts_project ON project_contracts(project_id);
+CREATE INDEX IF NOT EXISTS idx_contracts_entreprise ON project_contracts(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_contracts_client ON project_contracts(client_id);
+CREATE INDEX IF NOT EXISTS idx_contracts_status ON project_contracts(status);
 
 -- ===================
 -- TABLE: Jalons de paiement
@@ -116,7 +194,7 @@ CREATE TABLE IF NOT EXISTS payment_milestones (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Références
-  contract_id UUID NOT NULL REFERENCES project_contracts(id) ON DELETE CASCADE,
+  contract_id UUID NOT NULL,
 
   -- Identification
   numero INTEGER NOT NULL,
@@ -140,11 +218,11 @@ CREATE TABLE IF NOT EXISTS payment_milestones (
 
   -- Validation
   status milestone_status DEFAULT 'pending',
-  validated_by UUID REFERENCES auth.users(id),
+  validated_by UUID,
   rejection_reason TEXT,
 
   -- Preuves fournies par l'entreprise
-  preuves JSONB DEFAULT '[]', -- photos, documents, bons de commande
+  preuves JSONB DEFAULT '[]',
   compte_rendu TEXT,
 
   -- Anti-arnaque: vérifications automatiques
@@ -154,16 +232,34 @@ CREATE TABLE IF NOT EXISTS payment_milestones (
 
   -- Métadonnées
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-
-  CONSTRAINT unique_milestone_numero UNIQUE (contract_id, numero),
-  CONSTRAINT valid_milestone_montant CHECK (montant_ht > 0)
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Ajouter les FK
+DO $$ BEGIN
+  ALTER TABLE payment_milestones
+    ADD CONSTRAINT fk_milestones_contract
+    FOREIGN KEY (contract_id) REFERENCES project_contracts(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE payment_milestones
+    ADD CONSTRAINT fk_milestones_validated_by
+    FOREIGN KEY (validated_by) REFERENCES auth.users(id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Contrainte unique
+DO $$ BEGIN
+  ALTER TABLE payment_milestones ADD CONSTRAINT unique_milestone_numero UNIQUE (contract_id, numero);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- Index
-CREATE INDEX idx_milestones_contract ON payment_milestones(contract_id);
-CREATE INDEX idx_milestones_status ON payment_milestones(status);
-CREATE INDEX idx_milestones_date_prevue ON payment_milestones(date_prevue);
+CREATE INDEX IF NOT EXISTS idx_milestones_contract ON payment_milestones(contract_id);
+CREATE INDEX IF NOT EXISTS idx_milestones_status ON payment_milestones(status);
+CREATE INDEX IF NOT EXISTS idx_milestones_date_prevue ON payment_milestones(date_prevue);
 
 -- ===================
 -- TABLE: Paiements
@@ -173,11 +269,11 @@ CREATE TABLE IF NOT EXISTS payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Références
-  contract_id UUID NOT NULL REFERENCES project_contracts(id) ON DELETE CASCADE,
-  milestone_id UUID REFERENCES payment_milestones(id),
+  contract_id UUID NOT NULL,
+  milestone_id UUID,
 
   -- Identification
-  reference VARCHAR(50) NOT NULL UNIQUE,
+  reference VARCHAR(50) NOT NULL,
   payment_type payment_type NOT NULL,
 
   -- Montants
@@ -192,13 +288,13 @@ CREATE TABLE IF NOT EXISTS payments (
   provider_data JSONB DEFAULT '{}',
 
   -- Comptes
-  payer_id UUID NOT NULL REFERENCES auth.users(id), -- Client
-  payee_id UUID NOT NULL REFERENCES auth.users(id), -- Entreprise
+  payer_id UUID NOT NULL,
+  payee_id UUID NOT NULL,
 
   -- Séquestre
-  held_until TIMESTAMPTZ, -- Date de libération prévue
+  held_until TIMESTAMPTZ,
   escrow_released_at TIMESTAMPTZ,
-  escrow_released_by UUID REFERENCES auth.users(id),
+  escrow_released_by UUID,
 
   -- Statut
   status payment_status DEFAULT 'pending',
@@ -211,10 +307,10 @@ CREATE TABLE IF NOT EXISTS payments (
 
   -- Vérifications anti-fraude
   fraud_checks JSONB DEFAULT '{}',
-  fraud_score INTEGER DEFAULT 0, -- 0-100
+  fraud_score INTEGER DEFAULT 0,
   fraud_alerts TEXT[],
   requires_manual_review BOOLEAN DEFAULT FALSE,
-  reviewed_by UUID REFERENCES auth.users(id),
+  reviewed_by UUID,
   reviewed_at TIMESTAMPTZ,
   review_notes TEXT,
 
@@ -225,14 +321,49 @@ CREATE TABLE IF NOT EXISTS payments (
   CONSTRAINT valid_payment_montant CHECK (montant_ttc > 0)
 );
 
+-- Contrainte unique
+DO $$ BEGIN
+  ALTER TABLE payments ADD CONSTRAINT payments_reference_key UNIQUE (reference);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Ajouter les FK
+DO $$ BEGIN
+  ALTER TABLE payments
+    ADD CONSTRAINT fk_payments_contract
+    FOREIGN KEY (contract_id) REFERENCES project_contracts(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE payments
+    ADD CONSTRAINT fk_payments_milestone
+    FOREIGN KEY (milestone_id) REFERENCES payment_milestones(id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE payments
+    ADD CONSTRAINT fk_payments_payer
+    FOREIGN KEY (payer_id) REFERENCES auth.users(id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE payments
+    ADD CONSTRAINT fk_payments_payee
+    FOREIGN KEY (payee_id) REFERENCES auth.users(id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- Index
-CREATE INDEX idx_payments_contract ON payments(contract_id);
-CREATE INDEX idx_payments_milestone ON payments(milestone_id);
-CREATE INDEX idx_payments_payer ON payments(payer_id);
-CREATE INDEX idx_payments_payee ON payments(payee_id);
-CREATE INDEX idx_payments_status ON payments(status);
-CREATE INDEX idx_payments_stripe ON payments(stripe_payment_intent_id);
-CREATE INDEX idx_payments_fraud_score ON payments(fraud_score) WHERE fraud_score > 50;
+CREATE INDEX IF NOT EXISTS idx_payments_contract ON payments(contract_id);
+CREATE INDEX IF NOT EXISTS idx_payments_milestone ON payments(milestone_id);
+CREATE INDEX IF NOT EXISTS idx_payments_payer ON payments(payer_id);
+CREATE INDEX IF NOT EXISTS idx_payments_payee ON payments(payee_id);
+CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+CREATE INDEX IF NOT EXISTS idx_payments_stripe ON payments(stripe_payment_intent_id);
+CREATE INDEX IF NOT EXISTS idx_payments_fraud_score ON payments(fraud_score) WHERE fraud_score > 50;
 
 -- ===================
 -- TABLE: Litiges
@@ -242,16 +373,16 @@ CREATE TABLE IF NOT EXISTS disputes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Références
-  contract_id UUID NOT NULL REFERENCES project_contracts(id) ON DELETE CASCADE,
-  payment_id UUID REFERENCES payments(id),
-  milestone_id UUID REFERENCES payment_milestones(id),
+  contract_id UUID NOT NULL,
+  payment_id UUID,
+  milestone_id UUID,
 
   -- Identification
-  reference VARCHAR(50) NOT NULL UNIQUE,
+  reference VARCHAR(50) NOT NULL,
 
   -- Parties
-  opened_by UUID NOT NULL REFERENCES auth.users(id),
-  against UUID NOT NULL REFERENCES auth.users(id),
+  opened_by UUID NOT NULL,
+  against UUID NOT NULL,
 
   -- Détails
   reason dispute_reason NOT NULL,
@@ -265,14 +396,14 @@ CREATE TABLE IF NOT EXISTS disputes (
 
   -- Traitement
   status dispute_status DEFAULT 'opened',
-  assigned_to UUID REFERENCES auth.users(id), -- Médiateur TORP
+  assigned_to UUID,
 
   -- Résolution
   resolution_type VARCHAR(50),
   resolution_description TEXT,
   resolution_montant DECIMAL(12,2),
   resolved_at TIMESTAMPTZ,
-  resolved_by UUID REFERENCES auth.users(id),
+  resolved_by UUID,
 
   -- Timeline
   deadline_reponse TIMESTAMPTZ,
@@ -286,11 +417,39 @@ CREATE TABLE IF NOT EXISTS disputes (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Contrainte unique
+DO $$ BEGIN
+  ALTER TABLE disputes ADD CONSTRAINT disputes_reference_key UNIQUE (reference);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Ajouter les FK
+DO $$ BEGIN
+  ALTER TABLE disputes
+    ADD CONSTRAINT fk_disputes_contract
+    FOREIGN KEY (contract_id) REFERENCES project_contracts(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE disputes
+    ADD CONSTRAINT fk_disputes_payment
+    FOREIGN KEY (payment_id) REFERENCES payments(id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE disputes
+    ADD CONSTRAINT fk_disputes_milestone
+    FOREIGN KEY (milestone_id) REFERENCES payment_milestones(id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- Index
-CREATE INDEX idx_disputes_contract ON disputes(contract_id);
-CREATE INDEX idx_disputes_status ON disputes(status);
-CREATE INDEX idx_disputes_opened_by ON disputes(opened_by);
-CREATE INDEX idx_disputes_assigned ON disputes(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_disputes_contract ON disputes(contract_id);
+CREATE INDEX IF NOT EXISTS idx_disputes_status ON disputes(status);
+CREATE INDEX IF NOT EXISTS idx_disputes_opened_by ON disputes(opened_by);
+CREATE INDEX IF NOT EXISTS idx_disputes_assigned ON disputes(assigned_to);
 
 -- ===================
 -- TABLE: Règles Anti-Fraude
@@ -300,21 +459,21 @@ CREATE TABLE IF NOT EXISTS fraud_rules (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Identification
-  code VARCHAR(50) NOT NULL UNIQUE,
+  code VARCHAR(50) NOT NULL,
   nom VARCHAR(255) NOT NULL,
   description TEXT,
 
   -- Configuration
   actif BOOLEAN DEFAULT TRUE,
   severite fraud_risk_level NOT NULL,
-  score_impact INTEGER NOT NULL, -- Points ajoutés au score de fraude
+  score_impact INTEGER NOT NULL,
 
   -- Règle
-  type_regle VARCHAR(50) NOT NULL, -- 'threshold', 'pattern', 'timing', 'behavior'
-  conditions JSONB NOT NULL, -- Conditions de déclenchement
+  type_regle VARCHAR(50) NOT NULL,
+  conditions JSONB NOT NULL,
 
   -- Actions
-  action_auto VARCHAR(50), -- 'block', 'hold', 'flag', 'notify'
+  action_auto VARCHAR(50),
   notification_admin BOOLEAN DEFAULT FALSE,
 
   -- Métadonnées
@@ -322,45 +481,37 @@ CREATE TABLE IF NOT EXISTS fraud_rules (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Insérer les règles anti-fraude par défaut
+-- Contrainte unique
+DO $$ BEGIN
+  ALTER TABLE fraud_rules ADD CONSTRAINT fraud_rules_code_key UNIQUE (code);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Insérer les règles anti-fraude par défaut (ON CONFLICT pour éviter les doublons)
 INSERT INTO fraud_rules (code, nom, description, severite, score_impact, type_regle, conditions, action_auto, notification_admin) VALUES
--- Règles sur les acomptes
 ('ACOMPTE_EXCESSIF', 'Acompte excessif', 'Acompte supérieur à 30% du montant total', 'high', 40, 'threshold',
  '{"field": "deposit_percentage", "operator": ">", "value": 30}', 'flag', TRUE),
-
 ('ACOMPTE_TRES_ELEVE', 'Acompte très élevé', 'Acompte supérieur à 50% du montant total', 'critical', 80, 'threshold',
  '{"field": "deposit_percentage", "operator": ">", "value": 50}', 'block', TRUE),
-
--- Règles sur les délais
 ('PAIEMENT_PREMATURE', 'Demande de paiement prématurée', 'Demande de paiement avant la date prévue du jalon', 'medium', 25, 'timing',
  '{"type": "milestone_payment_before_date", "days_before": 7}', 'flag', FALSE),
-
 ('PAIEMENTS_RAPIDES', 'Paiements trop rapides', 'Plus de 2 demandes de paiement en moins de 7 jours', 'high', 35, 'pattern',
  '{"type": "payment_frequency", "max_count": 2, "days": 7}', 'hold', TRUE),
-
--- Règles sur les montants
 ('MONTANT_INCOHERENT', 'Montant incohérent', 'Montant du jalon différent de plus de 20% du prévu', 'medium', 30, 'threshold',
  '{"field": "amount_variance", "operator": ">", "value": 20}', 'flag', TRUE),
-
 ('DEPASSEMENT_CONTRAT', 'Dépassement du contrat', 'Total des paiements dépasse le montant contractuel', 'critical', 100, 'threshold',
  '{"field": "total_vs_contract", "operator": ">", "value": 100}', 'block', TRUE),
-
--- Règles sur les preuves
 ('PREUVES_INSUFFISANTES', 'Preuves insuffisantes', 'Moins de 3 photos/documents pour un jalon > 5000€', 'medium', 20, 'threshold',
  '{"type": "proof_count", "min_proofs": 3, "amount_threshold": 5000}', 'flag', FALSE),
-
 ('PHOTOS_METADATA_MANQUANTES', 'Métadonnées photos absentes', 'Photos sans géolocalisation ou date EXIF', 'low', 10, 'pattern',
  '{"type": "photo_metadata", "required": ["geolocation", "date"]}', NULL, FALSE),
-
--- Règles comportementales
 ('NOUVELLE_ENTREPRISE', 'Nouvelle entreprise', 'Entreprise inscrite depuis moins de 30 jours', 'medium', 25, 'behavior',
  '{"type": "account_age", "days": 30}', 'flag', TRUE),
-
 ('PREMIER_PROJET', 'Premier projet de l''entreprise', 'Aucun projet complété précédemment', 'low', 15, 'behavior',
  '{"type": "completed_projects", "count": 0}', NULL, FALSE),
-
 ('LITIGE_RECENT', 'Litige récent', 'Litige dans les 90 derniers jours', 'high', 45, 'behavior',
- '{"type": "recent_dispute", "days": 90}', 'flag', TRUE);
+ '{"type": "recent_dispute", "days": 90}', 'flag', TRUE)
+ON CONFLICT (code) DO NOTHING;
 
 -- ===================
 -- TABLE: Vérifications Anti-Fraude (Log)
@@ -370,9 +521,9 @@ CREATE TABLE IF NOT EXISTS fraud_checks_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Références
-  payment_id UUID REFERENCES payments(id),
-  milestone_id UUID REFERENCES payment_milestones(id),
-  contract_id UUID REFERENCES project_contracts(id),
+  payment_id UUID,
+  milestone_id UUID,
+  contract_id UUID,
 
   -- Résultat
   total_score INTEGER NOT NULL,
@@ -389,10 +540,32 @@ CREATE TABLE IF NOT EXISTS fraud_checks_log (
   checked_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Ajouter les FK
+DO $$ BEGIN
+  ALTER TABLE fraud_checks_log
+    ADD CONSTRAINT fk_fraud_log_payment
+    FOREIGN KEY (payment_id) REFERENCES payments(id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE fraud_checks_log
+    ADD CONSTRAINT fk_fraud_log_milestone
+    FOREIGN KEY (milestone_id) REFERENCES payment_milestones(id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE fraud_checks_log
+    ADD CONSTRAINT fk_fraud_log_contract
+    FOREIGN KEY (contract_id) REFERENCES project_contracts(id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- Index
-CREATE INDEX idx_fraud_log_payment ON fraud_checks_log(payment_id);
-CREATE INDEX idx_fraud_log_contract ON fraud_checks_log(contract_id);
-CREATE INDEX idx_fraud_log_risk ON fraud_checks_log(risk_level);
+CREATE INDEX IF NOT EXISTS idx_fraud_log_payment ON fraud_checks_log(payment_id);
+CREATE INDEX IF NOT EXISTS idx_fraud_log_contract ON fraud_checks_log(contract_id);
+CREATE INDEX IF NOT EXISTS idx_fraud_log_risk ON fraud_checks_log(risk_level);
 
 -- ===================
 -- TABLE: Comptes entreprises (pour paiements)
@@ -402,11 +575,11 @@ CREATE TABLE IF NOT EXISTS enterprise_payment_accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Propriétaire
-  user_id UUID NOT NULL REFERENCES auth.users(id) UNIQUE,
+  user_id UUID NOT NULL,
 
   -- Stripe Connect
   stripe_account_id VARCHAR(255),
-  stripe_account_status VARCHAR(50), -- 'pending', 'active', 'restricted', 'disabled'
+  stripe_account_status VARCHAR(50),
   stripe_onboarding_complete BOOLEAN DEFAULT FALSE,
   stripe_charges_enabled BOOLEAN DEFAULT FALSE,
   stripe_payouts_enabled BOOLEAN DEFAULT FALSE,
@@ -433,9 +606,22 @@ CREATE TABLE IF NOT EXISTS enterprise_payment_accounts (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Contrainte unique sur user_id
+DO $$ BEGIN
+  ALTER TABLE enterprise_payment_accounts ADD CONSTRAINT enterprise_payment_accounts_user_id_key UNIQUE (user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE enterprise_payment_accounts
+    ADD CONSTRAINT fk_enterprise_accounts_user
+    FOREIGN KEY (user_id) REFERENCES auth.users(id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- Index
-CREATE INDEX idx_enterprise_accounts_stripe ON enterprise_payment_accounts(stripe_account_id);
-CREATE INDEX idx_enterprise_accounts_status ON enterprise_payment_accounts(stripe_account_status);
+CREATE INDEX IF NOT EXISTS idx_enterprise_accounts_stripe ON enterprise_payment_accounts(stripe_account_id);
+CREATE INDEX IF NOT EXISTS idx_enterprise_accounts_status ON enterprise_payment_accounts(stripe_account_status);
 
 -- ===================
 -- TABLE: Transmissions (pour TransmissionService)
@@ -446,7 +632,7 @@ CREATE TABLE IF NOT EXISTS transmissions (
 
   -- Références
   proposition_id UUID NOT NULL,
-  entreprise_id UUID NOT NULL REFERENCES auth.users(id),
+  entreprise_id UUID NOT NULL,
 
   -- Client
   client JSONB NOT NULL,
@@ -474,10 +660,17 @@ CREATE TABLE IF NOT EXISTS transmissions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+DO $$ BEGIN
+  ALTER TABLE transmissions
+    ADD CONSTRAINT fk_transmissions_entreprise
+    FOREIGN KEY (entreprise_id) REFERENCES auth.users(id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- Index
-CREATE INDEX idx_transmissions_proposition ON transmissions(proposition_id);
-CREATE INDEX idx_transmissions_entreprise ON transmissions(entreprise_id);
-CREATE INDEX idx_transmissions_status ON transmissions(status);
+CREATE INDEX IF NOT EXISTS idx_transmissions_proposition ON transmissions(proposition_id);
+CREATE INDEX IF NOT EXISTS idx_transmissions_entreprise ON transmissions(entreprise_id);
+CREATE INDEX IF NOT EXISTS idx_transmissions_status ON transmissions(status);
 
 -- ===================
 -- TABLE: Liens d'accès
@@ -490,7 +683,7 @@ CREATE TABLE IF NOT EXISTS liens_acces (
   proposition_id UUID NOT NULL,
 
   -- Code
-  code_acces VARCHAR(20) NOT NULL UNIQUE,
+  code_acces VARCHAR(20) NOT NULL,
 
   -- Expiration
   expiration TIMESTAMPTZ NOT NULL,
@@ -503,143 +696,19 @@ CREATE TABLE IF NOT EXISTS liens_acces (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Contrainte unique
+DO $$ BEGIN
+  ALTER TABLE liens_acces ADD CONSTRAINT liens_acces_code_acces_key UNIQUE (code_acces);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- Index
-CREATE INDEX idx_liens_code ON liens_acces(code_acces);
-CREATE INDEX idx_liens_proposition ON liens_acces(proposition_id);
+CREATE INDEX IF NOT EXISTS idx_liens_code ON liens_acces(code_acces);
+CREATE INDEX IF NOT EXISTS idx_liens_proposition ON liens_acces(proposition_id);
 
 -- ===================
 -- FONCTIONS
 -- ===================
-
--- Fonction pour calculer le score de fraude d'un paiement
-CREATE OR REPLACE FUNCTION calculate_fraud_score(
-  p_payment_id UUID,
-  p_contract_id UUID,
-  p_entreprise_id UUID,
-  p_montant DECIMAL,
-  p_type payment_type
-) RETURNS TABLE (
-  total_score INTEGER,
-  risk_level fraud_risk_level,
-  rules_triggered TEXT[],
-  details JSONB,
-  should_block BOOLEAN
-) AS $$
-DECLARE
-  v_score INTEGER := 0;
-  v_rules TEXT[] := '{}';
-  v_details JSONB := '{}';
-  v_contract project_contracts;
-  v_total_paid DECIMAL;
-  v_deposit_pct DECIMAL;
-  v_account_age INTEGER;
-  v_completed_projects INTEGER;
-  v_recent_disputes INTEGER;
-  v_recent_payments INTEGER;
-  v_rule fraud_rules;
-BEGIN
-  -- Récupérer le contrat
-  SELECT * INTO v_contract FROM project_contracts WHERE id = p_contract_id;
-
-  -- Calculer le total déjà payé
-  SELECT COALESCE(SUM(montant_ttc), 0) INTO v_total_paid
-  FROM payments
-  WHERE contract_id = p_contract_id AND status IN ('released', 'held', 'processing');
-
-  -- Vérifier chaque règle active
-  FOR v_rule IN SELECT * FROM fraud_rules WHERE actif = TRUE LOOP
-    CASE v_rule.type_regle
-      WHEN 'threshold' THEN
-        -- Règles de seuil
-        IF v_rule.code = 'ACOMPTE_EXCESSIF' AND p_type = 'deposit' THEN
-          v_deposit_pct := (p_montant / v_contract.montant_total_ttc) * 100;
-          IF v_deposit_pct > 30 THEN
-            v_score := v_score + v_rule.score_impact;
-            v_rules := array_append(v_rules, v_rule.code);
-          END IF;
-        END IF;
-
-        IF v_rule.code = 'ACOMPTE_TRES_ELEVE' AND p_type = 'deposit' THEN
-          v_deposit_pct := (p_montant / v_contract.montant_total_ttc) * 100;
-          IF v_deposit_pct > 50 THEN
-            v_score := v_score + v_rule.score_impact;
-            v_rules := array_append(v_rules, v_rule.code);
-          END IF;
-        END IF;
-
-        IF v_rule.code = 'DEPASSEMENT_CONTRAT' THEN
-          IF (v_total_paid + p_montant) > v_contract.montant_total_ttc * 1.05 THEN
-            v_score := v_score + v_rule.score_impact;
-            v_rules := array_append(v_rules, v_rule.code);
-          END IF;
-        END IF;
-
-      WHEN 'pattern' THEN
-        -- Règles de pattern
-        IF v_rule.code = 'PAIEMENTS_RAPIDES' THEN
-          SELECT COUNT(*) INTO v_recent_payments
-          FROM payments
-          WHERE contract_id = p_contract_id
-            AND created_at > NOW() - INTERVAL '7 days';
-          IF v_recent_payments >= 2 THEN
-            v_score := v_score + v_rule.score_impact;
-            v_rules := array_append(v_rules, v_rule.code);
-          END IF;
-        END IF;
-
-      WHEN 'behavior' THEN
-        -- Règles comportementales
-        IF v_rule.code = 'NOUVELLE_ENTREPRISE' THEN
-          SELECT EXTRACT(DAY FROM NOW() - created_at)::INTEGER INTO v_account_age
-          FROM auth.users WHERE id = p_entreprise_id;
-          IF v_account_age < 30 THEN
-            v_score := v_score + v_rule.score_impact;
-            v_rules := array_append(v_rules, v_rule.code);
-          END IF;
-        END IF;
-
-        IF v_rule.code = 'LITIGE_RECENT' THEN
-          SELECT COUNT(*) INTO v_recent_disputes
-          FROM disputes
-          WHERE against = p_entreprise_id
-            AND created_at > NOW() - INTERVAL '90 days';
-          IF v_recent_disputes > 0 THEN
-            v_score := v_score + v_rule.score_impact;
-            v_rules := array_append(v_rules, v_rule.code);
-          END IF;
-        END IF;
-
-    END CASE;
-  END LOOP;
-
-  -- Déterminer le niveau de risque
-  IF v_score >= 80 THEN
-    risk_level := 'critical';
-  ELSIF v_score >= 50 THEN
-    risk_level := 'high';
-  ELSIF v_score >= 25 THEN
-    risk_level := 'medium';
-  ELSE
-    risk_level := 'low';
-  END IF;
-
-  -- Construire les détails
-  v_details := jsonb_build_object(
-    'score', v_score,
-    'total_paid', v_total_paid,
-    'contract_total', v_contract.montant_total_ttc,
-    'payment_amount', p_montant,
-    'payment_type', p_type
-  );
-
-  total_score := v_score;
-  rules_triggered := v_rules;
-  details := v_details;
-  should_block := v_score >= 80;
-
-  RETURN NEXT;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Fonction pour générer une référence unique
 CREATE OR REPLACE FUNCTION generate_payment_reference(prefix VARCHAR DEFAULT 'PAY')
@@ -665,6 +734,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Créer les triggers
 CREATE TRIGGER update_contracts_timestamp
   BEFORE UPDATE ON project_contracts
   FOR EACH ROW EXECUTE FUNCTION update_payment_tables_timestamp();
@@ -694,6 +764,27 @@ ALTER TABLE fraud_checks_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE enterprise_payment_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transmissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE liens_acces ENABLE ROW LEVEL SECURITY;
+
+-- Supprimer les policies existantes pour les recréer
+DROP POLICY IF EXISTS contracts_select_own ON project_contracts;
+DROP POLICY IF EXISTS contracts_insert_entreprise ON project_contracts;
+DROP POLICY IF EXISTS contracts_update_parties ON project_contracts;
+DROP POLICY IF EXISTS milestones_select_contract_parties ON payment_milestones;
+DROP POLICY IF EXISTS milestones_insert_entreprise ON payment_milestones;
+DROP POLICY IF EXISTS milestones_update_parties ON payment_milestones;
+DROP POLICY IF EXISTS payments_select_own ON payments;
+DROP POLICY IF EXISTS payments_insert_system ON payments;
+DROP POLICY IF EXISTS disputes_select_parties ON disputes;
+DROP POLICY IF EXISTS disputes_insert_auth ON disputes;
+DROP POLICY IF EXISTS disputes_update_parties ON disputes;
+DROP POLICY IF EXISTS payment_accounts_select_own ON enterprise_payment_accounts;
+DROP POLICY IF EXISTS payment_accounts_insert_own ON enterprise_payment_accounts;
+DROP POLICY IF EXISTS payment_accounts_update_own ON enterprise_payment_accounts;
+DROP POLICY IF EXISTS transmissions_select_own ON transmissions;
+DROP POLICY IF EXISTS transmissions_insert_own ON transmissions;
+DROP POLICY IF EXISTS transmissions_update_own ON transmissions;
+DROP POLICY IF EXISTS liens_select_all ON liens_acces;
+DROP POLICY IF EXISTS fraud_log_admin_only ON fraud_checks_log;
 
 -- Policies pour project_contracts
 CREATE POLICY "contracts_select_own" ON project_contracts
@@ -746,7 +837,7 @@ CREATE POLICY "payments_select_own" ON payments
   );
 
 CREATE POLICY "payments_insert_system" ON payments
-  FOR INSERT WITH CHECK (TRUE); -- Géré par le service
+  FOR INSERT WITH CHECK (TRUE);
 
 -- Policies pour disputes
 CREATE POLICY "disputes_select_parties" ON disputes
@@ -809,5 +900,4 @@ COMMENT ON TABLE fraud_rules IS 'Règles configurables de détection de fraude';
 COMMENT ON TABLE fraud_checks_log IS 'Historique des vérifications anti-fraude';
 COMMENT ON TABLE enterprise_payment_accounts IS 'Comptes Stripe Connect des entreprises';
 
-COMMENT ON FUNCTION calculate_fraud_score IS 'Calcule le score de fraude pour un paiement selon les règles actives';
 COMMENT ON FUNCTION generate_payment_reference IS 'Génère une référence unique pour les paiements';
