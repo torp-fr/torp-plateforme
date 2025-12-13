@@ -9,8 +9,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import {
   Dialog,
@@ -18,12 +16,11 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
-  FileText, Download, Eye, CheckCircle2, Clock, AlertTriangle,
-  BookOpen, Layers, ChevronRight, ChevronDown, Award, Star,
-  FileCheck, Printer, Share2, RefreshCw, Loader2, X
+  FileText, Download, Eye, CheckCircle2, Clock,
+  BookOpen, ChevronRight, ChevronDown, Award,
+  RefreshCw, Loader2
 } from 'lucide-react';
 import { GeneratedDocument, DocumentSection, DocumentType } from '@/services/phase0/documentGenerator.service';
 import { PDFExportService } from '@/services/phase0/pdfExport.service';
@@ -439,7 +436,7 @@ export function DocumentViewer({
 
       {/* Modal de visualisation du document */}
       <Dialog open={!!selectedDocument} onOpenChange={() => setSelectedDocument(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
           {selectedDocument && (
             <>
               <DialogHeader className="flex-shrink-0">
@@ -474,12 +471,11 @@ export function DocumentViewer({
                 </div>
               </DialogHeader>
 
-              <Separator className="flex-shrink-0" />
+              <Separator className="flex-shrink-0 my-4" />
 
-              {/* Contenu du document */}
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <ScrollArea className="h-full pr-4">
-                  <div className="space-y-4 py-4">
+              {/* Contenu du document - défilement natif */}
+              <div className="flex-1 overflow-y-auto pr-2">
+                <div className="space-y-4 pb-4">
                   {/* Informations du projet */}
                   <Card className="bg-muted/50">
                     <CardContent className="py-3">
@@ -504,8 +500,7 @@ export function DocumentViewer({
                   <div className="space-y-2">
                     {selectedDocument.content.sections.map(section => renderSection(section))}
                   </div>
-                  </div>
-                </ScrollArea>
+                </div>
               </div>
             </>
           )}
