@@ -311,9 +311,10 @@ export class ValidationService {
   ): Phase0ValidationResult {
     const validations: Phase0FieldValidation[] = [];
 
-    // Valider chaque section
-    if (project.owner) {
-      validations.push(...this.validateOwner(project.owner, level));
+    // Valider chaque section - support ownerProfile et owner pour compatibilité
+    const owner = project.ownerProfile || project.owner;
+    if (owner) {
+      validations.push(...this.validateOwner(owner, level));
     } else {
       validations.push({
         field: 'owner',
@@ -422,9 +423,10 @@ export class ValidationService {
       overall: 0,
     };
 
-    // Calculer la complétude de chaque section
-    if (project.owner) {
-      sections.owner = this.calculateFieldCompleteness(project.owner, [
+    // Calculer la complétude de chaque section - support ownerProfile et owner
+    const owner = project.ownerProfile || project.owner;
+    if (owner) {
+      sections.owner = this.calculateFieldCompleteness(owner, [
         'identity.type',
         'identity.firstName',
         'identity.lastName',

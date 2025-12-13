@@ -126,9 +126,38 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
           const wizardState = await WizardService.getWizardState(projectId);
           setState(wizardState || WizardService.initializeWizardState(mode, steps));
         } else {
-          // Nouveau projet
-          setProject({});
-          setState(WizardService.initializeWizardState(mode, steps));
+          // Nouveau projet - pré-remplir avec les données utilisateur
+          const userType = user.type || 'B2C';
+          const ownerType = userType === 'B2B' ? 'company' : userType === 'B2G' ? 'public_entity' : 'individual';
+
+          // Extraire prénom et nom depuis user.name (format "Prénom Nom")
+          const nameParts = (user.name || '').split(' ');
+          const firstName = nameParts[0] || '';
+          const lastName = nameParts.slice(1).join(' ') || '';
+
+          const initialProject: Partial<Phase0Project> = {
+            ownerProfile: {
+              identity: {
+                type: ownerType,
+                firstName,
+                lastName,
+              },
+              contact: {
+                email: user.email || '',
+              },
+            } as any,
+          };
+
+          setProject(initialProject);
+
+          // Pour B2C, on peut sauter l'étape 1 (profil) et commencer à l'étape 2 (bien)
+          const wizardState = WizardService.initializeWizardState(mode, steps);
+          if (mode === 'b2c' && steps.length > 1) {
+            // Marquer l'étape 1 comme complétée et commencer à l'étape 2
+            wizardState.currentStepIndex = 1;
+            wizardState.completedSteps = [0];
+          }
+          setState(wizardState);
         }
       } catch (err) {
         console.error('Erreur initialisation wizard:', err);
