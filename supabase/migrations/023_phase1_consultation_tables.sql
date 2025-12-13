@@ -172,8 +172,8 @@ CREATE TABLE phase1_entreprises (
   -- Assurances
   assurances JSONB DEFAULT '[]',
 
-  -- Références
-  references JSONB DEFAULT '[]',
+  -- Références de chantiers passés
+  references_chantiers JSONB DEFAULT '[]',
 
   -- Capacités
   capacites JSONB DEFAULT '{}',
@@ -251,8 +251,8 @@ CREATE TABLE phase1_offres (
   -- Contenu
   contenu JSONB NOT NULL,
 
-  -- Analyse
-  analyse JSONB,
+  -- Analyse de l'offre
+  analyse_offre JSONB,
 
   -- Score
   score_offre JSONB,
@@ -604,5 +604,5 @@ COMMENT ON TABLE phase1_consultations IS 'Sessions de consultation avec les entr
 COMMENT ON TABLE phase1_offres IS 'Offres reçues des entreprises';
 COMMENT ON TABLE phase1_contrats IS 'Contrats de travaux générés';
 COMMENT ON TABLE phase1_formalites IS 'Formalités administratives avant démarrage chantier';
-COMMENT ON TABLE phase1_prises_references IS 'Prises de références auprès d\'anciens clients';
+COMMENT ON TABLE phase1_prises_references IS 'Prises de références auprès d''anciens clients';
 COMMENT ON TABLE phase1_negociations IS 'Négociations contractuelles';

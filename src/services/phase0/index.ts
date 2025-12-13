@@ -47,6 +47,9 @@ export type {
   DocumentMetadata,
 } from './documentGenerator.service';
 
+// Service d'export PDF
+export { PDFExportService } from './pdfExport.service';
+
 // Services d'APIs externes
 export {
   BANApiService,

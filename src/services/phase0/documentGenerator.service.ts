@@ -1786,21 +1786,26 @@ Garanties:
     content: DocumentContent;
     metadata: DocumentMetadata;
   }): Promise<GeneratedDocument> {
+    // DB enum document_generation_status: 'pending', 'generating', 'ready', 'failed', 'expired'
+    // Use 'ready' for successfully generated documents
     const { data, error } = await supabase
       .from('phase0_documents')
       .insert({
         project_id: doc.projectId,
         document_type: doc.type,
-        title: doc.title,
+        name: doc.title, // Original column name
+        title: doc.title, // Added by migration 022
         version: doc.version,
-        content: JSON.stringify(doc.content),
-        metadata: JSON.stringify(doc.metadata),
-        status: 'draft',
+        content: doc.content, // JSONB accepts objects directly
+        metadata: doc.metadata, // JSONB accepts objects directly
+        status: 'ready', // Use valid enum value
+        generated_at: new Date().toISOString(),
       })
       .select()
       .single();
 
     if (error) {
+      console.error('[DocumentGenerator] Save error:', error);
       throw error;
     }
 
@@ -1808,16 +1813,36 @@ Garanties:
   }
 
   private static mapRowToDocument(row: Record<string, unknown>): GeneratedDocument {
+    // Map DB status enum to our internal status
+    // DB: 'pending', 'generating', 'ready', 'failed', 'expired'
+    // UI: 'draft', 'final', 'archived'
+    const statusMap: Record<string, 'draft' | 'final' | 'archived'> = {
+      pending: 'draft',
+      generating: 'draft',
+      ready: 'draft',
+      failed: 'archived',
+      expired: 'archived',
+    };
+
+    // Parse metadata and ensure generationDate is a Date object
+    const rawMetadata = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata;
+    const metadata: DocumentMetadata = {
+      ...rawMetadata,
+      generationDate: rawMetadata?.generationDate
+        ? new Date(rawMetadata.generationDate)
+        : new Date((row.generated_at || row.created_at) as string),
+    };
+
     return {
       id: row.id as string,
       projectId: row.project_id as string,
       type: row.document_type as DocumentType,
-      title: row.title as string,
+      title: (row.title || row.name) as string, // Fallback to name if title is null
       version: row.version as number,
       content: typeof row.content === 'string' ? JSON.parse(row.content) : row.content as DocumentContent,
-      metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata as DocumentMetadata,
-      generatedAt: new Date(row.created_at as string),
-      status: row.status as 'draft' | 'final' | 'archived',
+      metadata,
+      generatedAt: new Date((row.generated_at || row.created_at) as string),
+      status: statusMap[row.status as string] || 'draft',
     };
   }
 }
