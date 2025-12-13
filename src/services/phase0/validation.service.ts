@@ -498,31 +498,61 @@ export class ValidationService {
   /**
    * Vérifie si un projet peut passer à l'étape suivante
    * NOTE: Les cases correspondent à l'index de l'étape actuelle + 1 (1-indexed)
-   * Wizard steps order: Profile(1), Property(2), Works(3), Constraints(4), Budget(5), Summary(6)
+   *
+   * B2C Wizard steps order: Profile(1), Property(2), Works(3), Constraints(4), Budget(5), Summary(6)
+   * B2B Wizard steps order: Client(1), Site(2), Works(3), Constraints(4), Budget(5), Summary(6)
    */
   static canProceedToNextStep(
     project: Partial<Phase0Project>,
-    currentStep: number
+    currentStep: number,
+    mode: 'b2c' | 'b2b' | 'b2b_professional' = 'b2c'
   ): { canProceed: boolean; blockers: string[] } {
     const blockers: string[] = [];
+    const isB2B = mode === 'b2b' || mode === 'b2b_professional';
+
+    // Accès aux données selon le mode
     const owner = project.ownerProfile || project.owner;
+    const client = project.client as Record<string, unknown> | undefined;
+    const clientIdentity = client?.identity as Record<string, unknown> | undefined;
+    const clientContext = client?.context as Record<string, unknown> | undefined;
+    const clientSite = client?.site as Record<string, unknown> | undefined;
+    const siteAddress = clientSite?.address as Record<string, unknown> | undefined;
 
     switch (currentStep) {
-      case 1: // Profil MOA - seulement le type est requis pour avancer
-        if (!owner?.identity?.type) {
-          blockers.push('Sélectionnez votre profil (particulier, professionnel, etc.)');
+      case 1:
+        if (isB2B) {
+          // B2B: Étape Client & Projet - type de client requis
+          if (!clientIdentity?.clientType) {
+            blockers.push('Sélectionnez le type de client');
+          }
+        } else {
+          // B2C: Profil MOA - seulement le type est requis pour avancer
+          if (!owner?.identity?.type) {
+            blockers.push('Sélectionnez votre profil (particulier, professionnel, etc.)');
+          }
         }
         break;
 
-      case 2: // Identification bien (adresse)
-        if (!project.property?.address?.street) {
-          blockers.push('L\'adresse du bien est requise');
-        }
-        if (!project.property?.address?.postalCode) {
-          blockers.push('Le code postal est requis');
-        }
-        if (!project.property?.characteristics?.type) {
-          blockers.push('Le type de bien est requis');
+      case 2:
+        if (isB2B) {
+          // B2B: Site d'intervention - adresse requise
+          if (!siteAddress?.street && !siteAddress?.label) {
+            blockers.push('L\'adresse du site d\'intervention est requise');
+          }
+          if (!siteAddress?.postalCode) {
+            blockers.push('Le code postal est requis');
+          }
+        } else {
+          // B2C: Identification bien (adresse)
+          if (!project.property?.address?.street) {
+            blockers.push('L\'adresse du bien est requise');
+          }
+          if (!project.property?.address?.postalCode) {
+            blockers.push('Le code postal est requis');
+          }
+          if (!project.property?.characteristics?.type) {
+            blockers.push('Le type de bien est requis');
+          }
         }
         break;
 

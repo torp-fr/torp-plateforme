@@ -195,18 +195,12 @@ export default function ProDashboard() {
   return (
     <ProLayout>
       <div className="space-y-6">
-        {/* Header avec bouton principal */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">Tableau de bord</h1>
-            <p className="text-muted-foreground">
-              Bienvenue, {user?.name || 'Professionnel'}
-            </p>
-          </div>
-          <Button size="lg" onClick={() => navigate('/pro/projects/new')}>
-            <PlusCircle className="mr-2 h-5 w-5" />
-            Nouveau projet
-          </Button>
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl font-bold">Tableau de bord</h1>
+          <p className="text-muted-foreground">
+            Bienvenue, {user?.name || 'Professionnel'}
+          </p>
         </div>
 
         {/* Actions rapides */}
