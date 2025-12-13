@@ -457,7 +457,7 @@ export function StepB2GMarche({
               disabled={isProcessing}
             />
             <Label htmlFor="revision" className="cursor-pointer">
-              Clause de révision des prix (recommandé pour marchés > 12 mois)
+              Clause de révision des prix (recommandé pour marchés &gt; 12 mois)
             </Label>
           </div>
         </CardContent>
