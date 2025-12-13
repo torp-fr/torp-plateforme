@@ -32,34 +32,29 @@ import {
 
 interface Project {
   id: string;
-  reference: string;
+  reference_number: string | null;
+  name: string;
   status: string;
   created_at: string;
   updated_at: string;
-  client?: {
+  // Denormalized client fields
+  client_name?: string | null;
+  client_type?: string | null;
+  client_city?: string | null;
+  owner_profile?: {
     identity?: {
-      name?: string;
+      type?: string;
+      firstName?: string;
+      lastName?: string;
       companyName?: string;
-      clientType?: string;
     };
-    site?: {
+  };
+  property?: {
+    identification?: {
       address?: {
         city?: string;
         postalCode?: string;
       };
-    };
-    context?: {
-      projectType?: string;
-    };
-  };
-  owner_profile?: {
-    identity?: {
-      name?: string;
-    };
-  };
-  property?: {
-    address?: {
-      city?: string;
     };
   };
 }
@@ -83,7 +78,7 @@ export default function ProProjects() {
       setLoading(true);
       const { data, error } = await supabase
         .from('phase0_projects')
-        .select('id, reference, status, created_at, updated_at, client, owner_profile, property')
+        .select('id, reference_number, status, created_at, updated_at, owner_profile, property, name, client_name, client_type, client_city')
         .eq('user_id', user!.id)
         .order('created_at', { ascending: false });
 
@@ -126,30 +121,39 @@ export default function ProProjects() {
   }
 
   function getClientName(project: Project): string {
-    if (project.client?.identity?.name) {
-      return project.client.identity.name;
+    // Use denormalized client_name first
+    if (project.client_name) {
+      return project.client_name;
     }
-    if (project.client?.identity?.companyName) {
-      return project.client.identity.companyName;
+    // Fallback to owner_profile
+    const identity = project.owner_profile?.identity;
+    if (identity) {
+      if (identity.companyName) return identity.companyName;
+      if (identity.firstName || identity.lastName) {
+        return `${identity.firstName || ''} ${identity.lastName || ''}`.trim();
+      }
     }
-    if (project.owner_profile?.identity?.name) {
-      return project.owner_profile.identity.name;
-    }
-    return 'Client non renseigné';
+    return project.name || 'Client non renseigné';
   }
 
   function getLocation(project: Project): string | null {
-    const city = project.client?.site?.address?.city || project.property?.address?.city;
-    const postalCode = project.client?.site?.address?.postalCode;
-    if (city && postalCode) return `${postalCode} ${city}`;
-    return city || null;
+    // Use denormalized client_city first
+    if (project.client_city) {
+      return project.client_city;
+    }
+    // Fallback to property address
+    const addr = project.property?.identification?.address;
+    if (addr?.city) {
+      return addr.postalCode ? `${addr.postalCode} ${addr.city}` : addr.city;
+    }
+    return null;
   }
 
   // Filtrage
   const filteredProjects = projects.filter(project => {
     const matchesSearch = searchQuery === '' ||
       getClientName(project).toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.reference?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      project.reference_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       getLocation(project)?.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
@@ -255,12 +259,14 @@ export default function ProProjects() {
                             {getClientName(project)}
                           </p>
                           {getStatusBadge(project.status)}
-                          <span className="text-xs text-muted-foreground">
-                            #{project.reference}
-                          </span>
+                          {project.reference_number && (
+                            <span className="text-xs text-muted-foreground">
+                              #{project.reference_number}
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                          <span>{getProjectTypeLabel(project.client?.context?.projectType)}</span>
+                          {project.client_type && <span>{project.client_type}</span>}
                           {getLocation(project) && (
                             <span className="flex items-center gap-1">
                               <MapPin className="h-3 w-3" />

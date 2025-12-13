@@ -392,7 +392,7 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
 
       toast({
         title: 'Projet créé avec succès',
-        description: `Référence: ${finalProject.reference}`,
+        description: finalProject.id ? `Projet enregistré` : 'Projet enregistré',
       });
 
       if (onComplete) {

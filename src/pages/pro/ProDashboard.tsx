@@ -28,33 +28,26 @@ import {
 
 interface RecentProject {
   id: string;
-  reference: string;
+  reference_number: string | null;
+  name: string;
   status: string;
   created_at: string;
+  // Denormalized client fields
+  client_name?: string | null;
+  client_type?: string | null;
   owner_profile?: {
     identity?: {
-      name?: string;
+      type?: string;
+      firstName?: string;
+      lastName?: string;
       companyName?: string;
-    };
-  };
-  client?: {
-    identity?: {
-      name?: string;
-      companyName?: string;
-      clientType?: string;
-    };
-    site?: {
-      address?: {
-        city?: string;
-      };
-    };
-    context?: {
-      projectType?: string;
     };
   };
   property?: {
-    address?: {
-      city?: string;
+    identification?: {
+      address?: {
+        city?: string;
+      };
     };
   };
 }
@@ -95,7 +88,7 @@ export default function ProDashboard() {
       try {
         const { data: projects } = await supabase
           .from('phase0_projects')
-          .select('id, reference, status, created_at, owner_profile, client, property')
+          .select('id, reference_number, status, created_at, owner_profile, property, name, client_name, client_type')
           .eq('user_id', user!.id)
           .order('created_at', { ascending: false })
           .limit(5);
@@ -141,22 +134,23 @@ export default function ProDashboard() {
   }
 
   function getClientName(project: RecentProject): string {
-    // B2B: client info
-    if (project.client?.identity?.name) {
-      return project.client.identity.name;
+    // Use denormalized client_name first
+    if (project.client_name) {
+      return project.client_name;
     }
-    if (project.client?.identity?.companyName) {
-      return project.client.identity.companyName;
+    // Fallback to owner_profile
+    const identity = project.owner_profile?.identity;
+    if (identity) {
+      if (identity.companyName) return identity.companyName;
+      if (identity.firstName || identity.lastName) {
+        return `${identity.firstName || ''} ${identity.lastName || ''}`.trim();
+      }
     }
-    // Legacy: owner profile
-    if (project.owner_profile?.identity?.name) {
-      return project.owner_profile.identity.name;
-    }
-    return 'Client non renseigné';
+    return project.name || 'Client non renseigné';
   }
 
   function getLocation(project: RecentProject): string | null {
-    return project.client?.site?.address?.city || project.property?.address?.city || null;
+    return project.property?.identification?.address?.city || null;
   }
 
   if (loading) {
@@ -300,7 +294,7 @@ export default function ProDashboard() {
                           {getStatusBadge(project.status)}
                         </div>
                         <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                          <span>{getProjectTypeLabel(project.client?.context?.projectType)}</span>
+                          {project.client_type && <span>{project.client_type}</span>}
                           {getLocation(project) && (
                             <>
                               <span>•</span>
