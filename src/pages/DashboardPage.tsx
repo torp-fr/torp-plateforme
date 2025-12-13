@@ -221,18 +221,15 @@ export default function DashboardPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {activePhase0Projects.map((project) => (
                       <div
-                        key={project.id}
+                        key={project.projectId}
                         className="border rounded-lg p-4 hover:shadow-md transition-shadow"
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
-                              <Badge variant="outline" className="font-mono text-xs">
-                                {project.reference}
-                              </Badge>
                               {renderPhase0Status(project.status)}
                             </div>
-                            <h3 className="font-semibold truncate">{project.title}</h3>
+                            <h3 className="font-semibold truncate">{project.projectName}</h3>
                           </div>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -241,18 +238,18 @@ export default function DashboardPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => navigate(`/phase0/project/${project.id}`)}>
+                              <DropdownMenuItem onClick={() => navigate(`/phase0/project/${project.projectId}`)}>
                                 <Eye className="w-4 h-4 mr-2" />
                                 Voir le projet
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => navigate(`/phase0/wizard/${project.id}`)}>
+                              <DropdownMenuItem onClick={() => navigate(`/phase0/wizard/${project.projectId}`)}>
                                 <Edit className="w-4 h-4 mr-2" />
                                 Modifier
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 className="text-destructive"
-                                onClick={() => handleDeletePhase0Project(project.id, project.title)}
+                                onClick={() => handleDeletePhase0Project(project.projectId, project.projectName)}
                               >
                                 <Trash2 className="w-4 h-4 mr-2" />
                                 Supprimer
@@ -305,7 +302,7 @@ export default function DashboardPage() {
                             size="sm"
                             variant="outline"
                             className="flex-1"
-                            onClick={() => navigate(`/phase0/project/${project.id}`)}
+                            onClick={() => navigate(`/phase0/project/${project.projectId}`)}
                           >
                             <Eye className="w-4 h-4 mr-2" />
                             Voir
@@ -313,7 +310,7 @@ export default function DashboardPage() {
                           <Button
                             size="sm"
                             className="flex-1"
-                            onClick={() => navigate(`/analyze?projectId=${project.id}`)}
+                            onClick={() => navigate(`/analyze?projectId=${project.projectId}`)}
                           >
                             <FileSearch className="w-4 h-4 mr-2" />
                             Analyser un devis
