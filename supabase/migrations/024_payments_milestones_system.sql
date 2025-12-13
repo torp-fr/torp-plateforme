@@ -8,11 +8,21 @@
 -- NETTOYAGE PRÉALABLE (si migration partielle précédente)
 -- ===================
 
--- Supprimer les triggers existants pour éviter les conflits
-DROP TRIGGER IF EXISTS update_contracts_timestamp ON project_contracts;
-DROP TRIGGER IF EXISTS update_milestones_timestamp ON payment_milestones;
-DROP TRIGGER IF EXISTS update_payments_timestamp ON payments;
-DROP TRIGGER IF EXISTS update_disputes_timestamp ON disputes;
+-- Supprimer les triggers existants pour éviter les conflits (avec vérification table existe)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'project_contracts' AND table_schema = 'public') THEN
+    DROP TRIGGER IF EXISTS update_contracts_timestamp ON project_contracts;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'payment_milestones' AND table_schema = 'public') THEN
+    DROP TRIGGER IF EXISTS update_milestones_timestamp ON payment_milestones;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'payments' AND table_schema = 'public') THEN
+    DROP TRIGGER IF EXISTS update_payments_timestamp ON payments;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'disputes' AND table_schema = 'public') THEN
+    DROP TRIGGER IF EXISTS update_disputes_timestamp ON disputes;
+  END IF;
+END $$;
 
 -- Supprimer les index existants pour les recréer proprement
 DROP INDEX IF EXISTS idx_contracts_project;
@@ -765,26 +775,57 @@ ALTER TABLE enterprise_payment_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transmissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE liens_acces ENABLE ROW LEVEL SECURITY;
 
--- Supprimer les policies existantes pour les recréer
-DROP POLICY IF EXISTS contracts_select_own ON project_contracts;
-DROP POLICY IF EXISTS contracts_insert_entreprise ON project_contracts;
-DROP POLICY IF EXISTS contracts_update_parties ON project_contracts;
-DROP POLICY IF EXISTS milestones_select_contract_parties ON payment_milestones;
-DROP POLICY IF EXISTS milestones_insert_entreprise ON payment_milestones;
-DROP POLICY IF EXISTS milestones_update_parties ON payment_milestones;
-DROP POLICY IF EXISTS payments_select_own ON payments;
-DROP POLICY IF EXISTS payments_insert_system ON payments;
-DROP POLICY IF EXISTS disputes_select_parties ON disputes;
-DROP POLICY IF EXISTS disputes_insert_auth ON disputes;
-DROP POLICY IF EXISTS disputes_update_parties ON disputes;
-DROP POLICY IF EXISTS payment_accounts_select_own ON enterprise_payment_accounts;
-DROP POLICY IF EXISTS payment_accounts_insert_own ON enterprise_payment_accounts;
-DROP POLICY IF EXISTS payment_accounts_update_own ON enterprise_payment_accounts;
-DROP POLICY IF EXISTS transmissions_select_own ON transmissions;
-DROP POLICY IF EXISTS transmissions_insert_own ON transmissions;
-DROP POLICY IF EXISTS transmissions_update_own ON transmissions;
-DROP POLICY IF EXISTS liens_select_all ON liens_acces;
-DROP POLICY IF EXISTS fraud_log_admin_only ON fraud_checks_log;
+-- Supprimer les policies existantes pour les recréer (avec vérification)
+DO $$ BEGIN
+  DROP POLICY IF EXISTS contracts_select_own ON project_contracts;
+  DROP POLICY IF EXISTS contracts_insert_entreprise ON project_contracts;
+  DROP POLICY IF EXISTS contracts_update_parties ON project_contracts;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  DROP POLICY IF EXISTS milestones_select_contract_parties ON payment_milestones;
+  DROP POLICY IF EXISTS milestones_insert_entreprise ON payment_milestones;
+  DROP POLICY IF EXISTS milestones_update_parties ON payment_milestones;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  DROP POLICY IF EXISTS payments_select_own ON payments;
+  DROP POLICY IF EXISTS payments_insert_system ON payments;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  DROP POLICY IF EXISTS disputes_select_parties ON disputes;
+  DROP POLICY IF EXISTS disputes_insert_auth ON disputes;
+  DROP POLICY IF EXISTS disputes_update_parties ON disputes;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  DROP POLICY IF EXISTS payment_accounts_select_own ON enterprise_payment_accounts;
+  DROP POLICY IF EXISTS payment_accounts_insert_own ON enterprise_payment_accounts;
+  DROP POLICY IF EXISTS payment_accounts_update_own ON enterprise_payment_accounts;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  DROP POLICY IF EXISTS transmissions_select_own ON transmissions;
+  DROP POLICY IF EXISTS transmissions_insert_own ON transmissions;
+  DROP POLICY IF EXISTS transmissions_update_own ON transmissions;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  DROP POLICY IF EXISTS liens_select_all ON liens_acces;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  DROP POLICY IF EXISTS fraud_log_admin_only ON fraud_checks_log;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
 
 -- Policies pour project_contracts
 CREATE POLICY "contracts_select_own" ON project_contracts
