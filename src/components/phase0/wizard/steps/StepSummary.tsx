@@ -17,13 +17,16 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import {
   User, Building, MapPin, Hammer, Euro, Calendar, Clock, Home,
   Check, AlertTriangle, Info, FileText, Edit, ChevronRight,
-  Sparkles, Map, Shield, Briefcase, Building2, ChevronDown, Plus, Minus
+  Sparkles, Map, Shield, Briefcase, Building2, ChevronDown, Plus, Minus,
+  TrendingUp, TrendingDown, BarChart3, Calculator, Layers, ArrowUpDown
 } from 'lucide-react';
 import { LOT_CATALOG, LotType, LotCategory } from '@/types/phase0/lots.types';
 import { EstimationService } from '@/services/phase0/estimation.service';
 import { ValidationService } from '@/services/phase0/validation.service';
 import { Phase0Project } from '@/types/phase0/project.types';
 import { WorkType } from '@/types/phase0/work-project.types';
+import { PricingEstimationService, ProjectEstimation } from '@/services/phase0/pricing-estimation.service';
+import { RoomDetailsData, ROOM_TYPE_CONFIG } from '@/types/phase0/room-details.types';
 
 // Lots suggérés par type de travaux
 const SUGGESTED_LOTS_BY_WORK_TYPE: Record<WorkType, LotType[]> = {
@@ -149,6 +152,27 @@ export function StepSummary({
   const workQuality = (workProject.quality || {}) as Record<string, unknown>;
 
   const workType = (workScope.workType as WorkType) || (answers['workProject.scope.workType'] as WorkType);
+
+  // Room details data
+  const roomDetailsData = useMemo((): RoomDetailsData => {
+    const data = (project.roomDetails || answers['roomDetails']) as RoomDetailsData | undefined;
+    return data || { rooms: [] };
+  }, [project.roomDetails, answers]);
+
+  // AI Pricing Estimation from room details
+  const aiEstimation = useMemo((): ProjectEstimation | null => {
+    if (roomDetailsData.rooms.length === 0) return null;
+    const totalWorks = roomDetailsData.rooms.reduce((sum, r) => sum + r.works.length, 0);
+    if (totalWorks === 0) return null;
+
+    const postalCode = propertyAddress.postalCode as string || '';
+    return PricingEstimationService.estimateProjectCost(roomDetailsData, {
+      postalCode,
+      complexity: 'standard',
+      finishLevel: (workQuality.finishLevel as 'basic' | 'standard' | 'premium' | 'luxury') || 'standard',
+      contingencyPercentage: 10,
+    });
+  }, [roomDetailsData, propertyAddress.postalCode, workQuality.finishLevel]);
 
   // Lots suggérés automatiquement basés sur le type de travaux
   const suggestedLots = useMemo(() => {
@@ -611,7 +635,7 @@ export function StepSummary({
         </Card>
       </Collapsible>
 
-      {/* Estimation financière */}
+      {/* Estimation financière améliorée */}
       <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
@@ -619,10 +643,11 @@ export function StepSummary({
             Estimation budgétaire
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">Votre budget indiqué</p>
+        <CardContent className="space-y-6">
+          {/* Votre budget vs Estimations */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 bg-white/50 dark:bg-black/20 rounded-lg">
+              <p className="text-sm text-muted-foreground mb-1">Votre budget</p>
               <p className="text-xl font-bold">
                 {budgetEnvelope.min || budgetEnvelope.max ? (
                   <>
@@ -633,28 +658,187 @@ export function StepSummary({
                 )}
               </p>
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">Estimation TORP</p>
+            <div className="p-4 bg-white/50 dark:bg-black/20 rounded-lg">
+              <p className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
+                <Layers className="w-3 h-3" />
+                Estimation lots
+              </p>
               <p className="text-xl font-bold text-primary">
                 {formatBudget(estimation.budget.total.min)} - {formatBudget(estimation.budget.total.max)}
               </p>
             </div>
+            {aiEstimation && (
+              <div className="p-4 bg-green-50 dark:bg-green-950/30 rounded-lg border border-green-200">
+                <p className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
+                  <Calculator className="w-3 h-3 text-green-600" />
+                  Estimation IA détaillée
+                </p>
+                <p className="text-xl font-bold text-green-700 dark:text-green-400">
+                  {PricingEstimationService.formatPriceRange(aiEstimation.total.min, aiEstimation.total.max)}
+                </p>
+              </div>
+            )}
           </div>
 
-          <div className="flex items-center gap-2 text-sm">
-            <Clock className="w-4 h-4 text-muted-foreground" />
-            <span>Durée estimée : {estimation.duration.totalWeeks.min} - {estimation.duration.totalWeeks.max} semaines</span>
+          {/* Benchmark marché (si AI estimation disponible) */}
+          {aiEstimation?.benchmarkComparison && (
+            <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-blue-600" />
+                  Analyse benchmark marché
+                </h4>
+                <Badge
+                  variant={
+                    aiEstimation.benchmarkComparison.marketPosition === 'below'
+                      ? 'secondary'
+                      : aiEstimation.benchmarkComparison.marketPosition === 'above'
+                      ? 'default'
+                      : 'outline'
+                  }
+                  className="flex items-center gap-1"
+                >
+                  {aiEstimation.benchmarkComparison.marketPosition === 'below' && (
+                    <TrendingDown className="w-3 h-3" />
+                  )}
+                  {aiEstimation.benchmarkComparison.marketPosition === 'above' && (
+                    <TrendingUp className="w-3 h-3" />
+                  )}
+                  {aiEstimation.benchmarkComparison.marketPosition === 'below'
+                    ? 'Sous la moyenne'
+                    : aiEstimation.benchmarkComparison.marketPosition === 'above'
+                    ? 'Au-dessus de la moyenne'
+                    : 'Dans la moyenne'}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-3">
+                <div>
+                  <span className="text-muted-foreground block">Moyenne régionale</span>
+                  <span className="font-semibold text-blue-700 dark:text-blue-300">
+                    {PricingEstimationService.formatPrice(aiEstimation.benchmarkComparison.regionalAverage)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block">Moyenne nationale</span>
+                  <span className="font-semibold">
+                    {PricingEstimationService.formatPrice(aiEstimation.benchmarkComparison.nationalAverage)}
+                  </span>
+                </div>
+                {aiEstimation.pricePerSqm && (
+                  <>
+                    <div>
+                      <span className="text-muted-foreground block">Prix/m² estimé</span>
+                      <span className="font-semibold">
+                        {PricingEstimationService.formatPriceRange(
+                          aiEstimation.pricePerSqm.min,
+                          aiEstimation.pricePerSqm.max
+                        )}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block">Écart marché</span>
+                      <span className={`font-semibold ${
+                        aiEstimation.benchmarkComparison.percentageFromAverage > 0
+                          ? 'text-amber-600'
+                          : 'text-green-600'
+                      }`}>
+                        {aiEstimation.benchmarkComparison.percentageFromAverage > 0 ? '+' : ''}
+                        {aiEstimation.benchmarkComparison.percentageFromAverage}%
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <p className="text-sm text-blue-700 dark:text-blue-300 border-l-2 border-blue-300 pl-3">
+                {aiEstimation.benchmarkComparison.message}
+              </p>
+            </div>
+          )}
+
+          {/* Détail par pièce (si AI estimation disponible) */}
+          {aiEstimation && aiEstimation.rooms.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="font-semibold flex items-center gap-2 text-sm">
+                <Home className="w-4 h-4" />
+                Estimation détaillée par pièce
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {aiEstimation.rooms.map((room) => (
+                  <div key={room.roomId} className="flex justify-between p-2 bg-white/30 dark:bg-black/10 rounded text-sm">
+                    <span className="text-muted-foreground">
+                      {room.roomName}
+                      {room.surface && <span className="ml-1">({room.surface} m²)</span>}
+                    </span>
+                    <span className="font-medium">
+                      {PricingEstimationService.formatPriceRange(
+                        room.totalEstimate.min,
+                        room.totalEstimate.max
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between text-sm pt-2 border-t">
+                <span className="text-muted-foreground">
+                  Provision imprévus ({aiEstimation.contingency.percentage}%)
+                </span>
+                <span className="font-medium">
+                  {PricingEstimationService.formatPriceRange(
+                    aiEstimation.contingency.min,
+                    aiEstimation.contingency.max
+                  )}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Durée estimée */}
+          <div className="flex items-center justify-between text-sm pt-2 border-t">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-muted-foreground" />
+              <span>Durée estimée : {estimation.duration.totalWeeks.min} - {estimation.duration.totalWeeks.max} semaines</span>
+            </div>
+            {aiEstimation && (
+              <span className="text-xs text-muted-foreground">
+                Confiance: {aiEstimation.confidence === 'high' ? 'Élevée' : aiEstimation.confidence === 'medium' ? 'Moyenne' : 'Indicative'}
+              </span>
+            )}
           </div>
 
-          {/* Cohérence budget */}
-          {budgetEnvelope.max && (budgetEnvelope.max as number) < estimation.budget.total.min && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                Votre budget semble inférieur à l'estimation. Nous vous conseillons de revoir
-                le périmètre des travaux ou d'ajuster votre enveloppe budgétaire.
-              </AlertDescription>
-            </Alert>
+          {/* Alerte cohérence budget */}
+          {budgetEnvelope.max && (
+            <>
+              {(budgetEnvelope.max as number) < estimation.budget.total.min && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    Votre budget semble inférieur à l'estimation basée sur les lots. Nous vous conseillons de revoir
+                    le périmètre des travaux ou d'ajuster votre enveloppe budgétaire.
+                  </AlertDescription>
+                </Alert>
+              )}
+              {aiEstimation && (budgetEnvelope.max as number) < aiEstimation.total.min && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    L'estimation IA détaillée ({PricingEstimationService.formatPriceRange(aiEstimation.total.min, aiEstimation.total.max)})
+                    dépasse votre budget. Envisagez d'ajuster le périmètre des travaux.
+                  </AlertDescription>
+                </Alert>
+              )}
+              {aiEstimation &&
+               (budgetEnvelope.min as number) >= aiEstimation.total.min &&
+               (budgetEnvelope.max as number) <= aiEstimation.total.max * 1.2 && (
+                <Alert className="bg-green-50 border-green-200">
+                  <Check className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-green-800">
+                    Votre budget est cohérent avec l'estimation IA détaillée. Vous êtes bien positionné pour ce projet.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
