@@ -262,7 +262,7 @@ export function Phase0ProjectPage() {
               </div>
               <div className="text-right">
                 <div className="text-sm text-muted-foreground">Complétude</div>
-                <div className="text-2xl font-bold text-primary">{project.completeness || 0}%</div>
+                <div className="text-2xl font-bold text-primary">{project.completeness?.overall || 0}%</div>
               </div>
             </div>
           </CardHeader>
