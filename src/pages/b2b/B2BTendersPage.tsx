@@ -23,6 +23,7 @@ import {
   Briefcase, AlertTriangle, Loader2, MapPin, Euro, Calendar,
   Building, Download, CheckCircle2, Star, TrendingUp, Zap
 } from 'lucide-react';
+import { AppLayout } from '@/components/layout';
 import { TenderService } from '@/services/tender/tender.service';
 import { MatchingService } from '@/services/tender/matching.service';
 import { ResponseService } from '@/services/tender/response.service';
@@ -126,15 +127,17 @@ export function B2BTendersPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </AppLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-muted/20">
-      <div className="container max-w-6xl mx-auto px-4 py-8">
+    <AppLayout>
+      <div className="max-w-6xl mx-auto">
         {/* Navigation */}
         <div className="flex items-center justify-between mb-6">
           <Button variant="ghost" asChild>
@@ -364,7 +367,7 @@ export function B2BTendersPage() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </AppLayout>
   );
 }
 

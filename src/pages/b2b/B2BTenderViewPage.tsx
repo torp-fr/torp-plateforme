@@ -18,6 +18,7 @@ import {
   CheckCircle2, Phone, Mail, FileSpreadsheet, TrendingUp,
   Target, Lightbulb, AlertCircle
 } from 'lucide-react';
+import { AppLayout } from '@/components/layout';
 import { TenderService } from '@/services/tender/tender.service';
 import { ResponseService } from '@/services/tender/response.service';
 import { supabase } from '@/lib/supabase';
@@ -190,24 +191,28 @@ export function B2BTenderViewPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </AppLayout>
     );
   }
 
   if (error || !tender) {
     return (
-      <div className="container max-w-4xl mx-auto px-4 py-8">
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>{error || 'Appel d\'offres non trouvé'}</AlertDescription>
-        </Alert>
-        <Button variant="outline" className="mt-4" onClick={() => navigate('/b2b/ao')}>
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Retour aux AO
-        </Button>
-      </div>
+      <AppLayout>
+        <div className="max-w-4xl mx-auto">
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{error || 'Appel d\'offres non trouvé'}</AlertDescription>
+          </Alert>
+          <Button variant="outline" className="mt-4" onClick={() => navigate('/b2b/ao')}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Retour aux AO
+          </Button>
+        </div>
+      </AppLayout>
     );
   }
 
@@ -217,8 +222,8 @@ export function B2BTenderViewPage() {
     : null;
 
   return (
-    <div className="min-h-screen bg-muted/20">
-      <div className="container max-w-6xl mx-auto px-4 py-8">
+    <AppLayout>
+      <div className="max-w-6xl mx-auto">
         {/* Navigation */}
         <div className="flex items-center justify-between mb-6">
           <Button variant="ghost" asChild>
@@ -712,7 +717,7 @@ export function B2BTenderViewPage() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </AppLayout>
   );
 }
 
