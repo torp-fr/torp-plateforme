@@ -785,13 +785,13 @@ export class FeasibilityService {
     };
 
     const regulatory = calculateSectionScore([...plu.issues, ...permits.issues, ...heritage.issues]);
-    const technical = calculateSectionScore(technical.issues);
+    const technicalScore = calculateSectionScore(technical.issues);
     const financial = 80; // Default, would be calculated from costs
     const timing = 80; // Default, would be calculated from delays
 
-    const overall = Math.round((regulatory * 0.4 + technical * 0.3 + financial * 0.15 + timing * 0.15));
+    const overall = Math.round((regulatory * 0.4 + technicalScore * 0.3 + financial * 0.15 + timing * 0.15));
 
-    return { overall, regulatory, technical, financial, timing };
+    return { overall, regulatory, technical: technicalScore, financial, timing };
   }
 
   private static calculateCompleteness(input: FeasibilityAnalysisInput): number {

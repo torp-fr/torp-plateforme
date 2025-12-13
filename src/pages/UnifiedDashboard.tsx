@@ -441,18 +441,15 @@ export default function UnifiedDashboard() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {activePhase0Projects.map((project) => (
                         <div
-                          key={project.id}
+                          key={project.projectId}
                           className="border rounded-lg p-4 hover:shadow-md transition-shadow"
                         >
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
-                                <Badge variant="outline" className="font-mono text-xs">
-                                  {project.reference}
-                                </Badge>
                                 {renderPhase0Status(project.status)}
                               </div>
-                              <h3 className="font-semibold truncate">{project.title}</h3>
+                              <h3 className="font-semibold truncate">{project.projectName}</h3>
                             </div>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -462,13 +459,13 @@ export default function UnifiedDashboard() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem
-                                  onClick={() => navigate(`/phase0/project/${project.id}`)}
+                                  onClick={() => navigate(`/phase0/project/${project.projectId}`)}
                                 >
                                   <Eye className="w-4 h-4 mr-2" />
                                   Voir le projet
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  onClick={() => navigate(`/phase0/wizard/${project.id}`)}
+                                  onClick={() => navigate(`/phase0/wizard/${project.projectId}`)}
                                 >
                                   <Edit className="w-4 h-4 mr-2" />
                                   Modifier
@@ -477,7 +474,7 @@ export default function UnifiedDashboard() {
                                 <DropdownMenuItem
                                   className="text-destructive"
                                   onClick={() =>
-                                    handleDeletePhase0Project(project.id, project.title)
+                                    handleDeletePhase0Project(project.projectId, project.projectName)
                                   }
                                 >
                                   <Trash2 className="w-4 h-4 mr-2" />
@@ -527,7 +524,7 @@ export default function UnifiedDashboard() {
                               size="sm"
                               variant="outline"
                               className="flex-1"
-                              onClick={() => navigate(`/phase0/project/${project.id}`)}
+                              onClick={() => navigate(`/phase0/project/${project.projectId}`)}
                             >
                               <Eye className="w-4 h-4 mr-2" />
                               Voir
@@ -536,7 +533,7 @@ export default function UnifiedDashboard() {
                               size="sm"
                               className="flex-1"
                               onClick={() =>
-                                navigate(`/phase0/project/${project.id}/analyze`)
+                                navigate(`/phase0/project/${project.projectId}/analyze`)
                               }
                             >
                               <FileSearch className="w-4 h-4 mr-2" />
@@ -659,14 +656,14 @@ export default function UnifiedDashboard() {
                             {/* Combiner projets et analyses récents */}
                             {activePhase0Projects.slice(0, 3).map((project) => (
                               <div
-                                key={`p0-${project.id}`}
+                                key={`p0-${project.projectId}`}
                                 className="flex items-center gap-4 p-3 rounded-lg bg-muted/50"
                               >
                                 <div className="p-2 bg-primary/10 rounded-lg">
                                   <FolderOpen className="w-4 h-4 text-primary" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="font-medium truncate">{project.title}</p>
+                                  <p className="font-medium truncate">{project.projectName}</p>
                                   <p className="text-sm text-muted-foreground">
                                     Projet créé • {new Date(project.createdAt).toLocaleDateString()}
                                   </p>

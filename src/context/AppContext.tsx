@@ -190,22 +190,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     try {
       console.log('[AppContext] Loading Phase0 projects for user:', user.id);
-      const userPhase0Projects = await Phase0ProjectService.getUserProjects(user.id);
+      const result = await Phase0ProjectService.getUserProjects(user.id);
 
-      // Transformer en Phase0Summary
-      const summaries: Phase0Summary[] = userPhase0Projects.map(p => ({
-        id: p.id,
-        reference: p.reference,
-        title: p.workProject?.general?.title || 'Projet sans titre',
-        status: p.status,
-        propertyAddress: p.property?.address ?
-          `${p.property.address.postalCode} ${p.property.address.city}` : undefined,
-        selectedLotsCount: p.selectedLots?.length || 0,
-        completeness: p.completeness || 0,
-        estimatedBudget: p.workProject?.budget?.totalEnvelope,
-        createdAt: p.createdAt,
-        updatedAt: p.updatedAt,
-      }));
+      // getUserProjects returns Phase0ProjectList with items array containing Phase0Summary
+      // The items are already in Phase0Summary format, so we use them directly
+      const summaries: Phase0Summary[] = result.items || [];
 
       console.log(`[AppContext] Loaded ${summaries.length} Phase0 projects`);
       setPhase0Projects(summaries);

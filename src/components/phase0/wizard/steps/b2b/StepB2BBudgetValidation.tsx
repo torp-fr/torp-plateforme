@@ -11,11 +11,10 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Euro, CheckCircle2, User, MapPin, Hammer, Calendar,
-  FileText, Download, Sparkles, AlertTriangle
+  FileText, Sparkles, AlertTriangle
 } from 'lucide-react';
 
 // Niveaux de finition
@@ -224,34 +223,59 @@ export function StepB2BBudgetValidation({
         </CardContent>
       </Card>
 
-      {/* Documents générés */}
+      {/* Documents à générer - Sélection optionnelle */}
       <Card>
         <CardHeader className="pb-4">
           <CardTitle className="text-lg flex items-center gap-2">
             <FileText className="w-5 h-5 text-primary" />
-            Documents générés
+            Documents à générer
           </CardTitle>
           <CardDescription>
-            Ces documents seront générés automatiquement après validation
+            Sélectionnez les documents que vous souhaitez générer (optionnel)
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {[
-            { name: 'Fiche projet client', desc: 'Synthèse des informations client et site' },
-            { name: 'CCTP (Cahier des Clauses Techniques)', desc: 'Spécifications techniques des travaux' },
-            { name: 'DCE (Dossier de Consultation)', desc: 'Dossier complet pour consultation' },
-          ].map((doc) => (
-            <div key={doc.name} className="flex items-center justify-between p-3 border rounded-lg">
-              <div>
-                <div className="font-medium text-sm">{doc.name}</div>
-                <div className="text-xs text-muted-foreground">{doc.desc}</div>
-              </div>
-              <Badge variant="outline">
-                <Sparkles className="w-3 h-3 mr-1" />
-                Auto
-              </Badge>
-            </div>
-          ))}
+            { id: 'fiche_projet', name: 'Fiche projet client', desc: 'Synthèse des informations client et site', default: true },
+            { id: 'cctp', name: 'CCTP (Cahier des Clauses Techniques)', desc: 'Spécifications techniques des travaux', default: false },
+            { id: 'dce', name: 'DCE (Dossier de Consultation)', desc: 'Dossier complet pour consultation', default: false },
+            { id: 'dpgf', name: 'DPGF (Décomposition Prix)', desc: 'Bordereau de prix pour chiffrage', default: false },
+          ].map((doc) => {
+            const selectedDocs = (answers['documentsToGenerate'] as string[]) || ['fiche_projet'];
+            const isSelected = selectedDocs.includes(doc.id);
+
+            return (
+              <label
+                key={doc.id}
+                className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all
+                  ${isSelected ? 'border-primary bg-primary/5' : 'border-muted hover:border-primary/30'}`}
+              >
+                <Checkbox
+                  checked={isSelected}
+                  onCheckedChange={(checked) => {
+                    const current = (answers['documentsToGenerate'] as string[]) || ['fiche_projet'];
+                    const updated = checked
+                      ? [...current, doc.id]
+                      : current.filter(d => d !== doc.id);
+                    onAnswerChange('documentsToGenerate', updated);
+                  }}
+                  disabled={isProcessing}
+                />
+                <div className="flex-1">
+                  <div className="font-medium text-sm">{doc.name}</div>
+                  <div className="text-xs text-muted-foreground">{doc.desc}</div>
+                </div>
+                {doc.default && (
+                  <Badge variant="secondary" className="text-xs">
+                    Recommandé
+                  </Badge>
+                )}
+              </label>
+            );
+          })}
+          <p className="text-xs text-muted-foreground pt-2">
+            💡 Vous pourrez toujours générer les autres documents ultérieurement depuis la page projet.
+          </p>
         </CardContent>
       </Card>
 

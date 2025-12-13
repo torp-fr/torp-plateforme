@@ -46,20 +46,9 @@ export function Phase0Dashboard() {
       setError(null);
 
       try {
-        const userProjects = await Phase0ProjectService.getUserProjects(user.id);
-        setProjects(userProjects.map(p => ({
-          id: p.id,
-          reference: p.reference,
-          title: p.workProject?.general?.title || 'Projet sans titre',
-          status: p.status,
-          propertyAddress: p.property?.address ?
-            `${p.property.address.postalCode} ${p.property.address.city}` : undefined,
-          selectedLotsCount: p.selectedLots?.length || 0,
-          completeness: p.completeness || 0,
-          estimatedBudget: p.workProject?.budget?.totalEnvelope,
-          createdAt: p.createdAt,
-          updatedAt: p.updatedAt,
-        })));
+        const result = await Phase0ProjectService.getUserProjects(user.id);
+        // getUserProjects returns Phase0ProjectList with items array of Phase0Summary
+        setProjects(result.items || []);
       } catch (err) {
         console.error('Erreur chargement projets:', err);
         setError('Impossible de charger vos projets');
@@ -74,8 +63,7 @@ export function Phase0Dashboard() {
   // Filtrer les projets
   const filteredProjects = projects.filter(project => {
     const matchesSearch = searchQuery === '' ||
-      project.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      project.projectName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       project.propertyAddress?.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
@@ -87,22 +75,12 @@ export function Phase0Dashboard() {
   const handleDuplicate = async (projectId: string) => {
     try {
       const duplicated = await Phase0ProjectService.duplicateProject(projectId);
-      setProjects(prev => [...prev, {
-        id: duplicated.id,
-        reference: duplicated.reference,
-        title: duplicated.workProject?.general?.title || 'Projet dupliqué',
-        status: duplicated.status,
-        propertyAddress: duplicated.property?.address ?
-          `${duplicated.property.address.postalCode} ${duplicated.property.address.city}` : undefined,
-        selectedLotsCount: duplicated.selectedLots?.length || 0,
-        completeness: duplicated.completeness || 0,
-        estimatedBudget: duplicated.workProject?.budget?.totalEnvelope,
-        createdAt: duplicated.createdAt,
-        updatedAt: duplicated.updatedAt,
-      }]);
+      // Reload projects to get the new summary
+      const result = await Phase0ProjectService.getUserProjects(user!.id);
+      setProjects(result.items || []);
       toast({
         title: 'Projet dupliqué',
-        description: `Nouveau projet: ${duplicated.reference}`,
+        description: 'Nouveau projet créé avec succès',
       });
     } catch (err) {
       toast({
@@ -118,7 +96,7 @@ export function Phase0Dashboard() {
 
     try {
       await Phase0ProjectService.deleteProject(projectId);
-      setProjects(prev => prev.filter(p => p.id !== projectId));
+      setProjects(prev => prev.filter(p => p.projectId !== projectId));
       toast({
         title: 'Projet supprimé',
       });
@@ -224,21 +202,18 @@ export function Phase0Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredProjects.map((project) => (
               <Card
-                key={project.id}
+                key={project.projectId}
                 className="hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => navigate(`/phase0/project/${project.id}`)}
+                onClick={() => navigate(`/phase0/project/${project.projectId}`)}
               >
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <Badge variant="outline" className="font-mono text-xs">
-                          {project.reference}
-                        </Badge>
                         {renderStatus(project.status)}
                       </div>
                       <CardTitle className="text-lg truncate">
-                        {project.title}
+                        {project.projectName}
                       </CardTitle>
                     </div>
                     <DropdownMenu>
@@ -250,21 +225,21 @@ export function Phase0Dashboard() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/phase0/wizard/${project.id}`);
+                          navigate(`/phase0/wizard/${project.projectId}`);
                         }}>
                           <Edit className="w-4 h-4 mr-2" />
                           Modifier
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={(e) => {
                           e.stopPropagation();
-                          handleDuplicate(project.id);
+                          handleDuplicate(project.projectId);
                         }}>
                           <Copy className="w-4 h-4 mr-2" />
                           Dupliquer
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/phase0/project/${project.id}/documents`);
+                          navigate(`/phase0/project/${project.projectId}/documents`);
                         }}>
                           <FileText className="w-4 h-4 mr-2" />
                           Documents
@@ -274,7 +249,7 @@ export function Phase0Dashboard() {
                           className="text-destructive"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDelete(project.id);
+                            handleDelete(project.projectId);
                           }}
                         >
                           <Trash2 className="w-4 h-4 mr-2" />
