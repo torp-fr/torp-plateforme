@@ -1,6 +1,7 @@
 /**
  * Conteneur principal du wizard Phase 0
  * Orchestre les étapes, la navigation et l'affichage
+ * Supporte les modes B2C (particuliers) et B2B (professionnels)
  */
 
 import React, { useCallback, useMemo } from 'react';
@@ -13,7 +14,7 @@ import { WizardProgress } from './WizardProgress';
 import { WizardNavigation } from './WizardNavigation';
 import { WizardService } from '@/services/phase0/wizard.service';
 
-// Import des composants d'étapes
+// Import des composants d'étapes B2C
 import { StepOwnerProfile } from './steps/StepOwnerProfile';
 import { StepPropertyAddress } from './steps/StepPropertyAddress';
 import { StepPropertyDetails } from './steps/StepPropertyDetails';
@@ -21,18 +22,32 @@ import { StepWorkIntent } from './steps/StepWorkIntent';
 import { StepConstraints } from './steps/StepConstraints';
 import { StepSummary } from './steps/StepSummary';
 
+// Import des composants d'étapes B2B
+import { StepClientInfo } from './steps/StepClientInfo';
+import { StepSiteAddress } from './steps/StepSiteAddress';
+
 export interface WizardContainerProps extends UseWizardOptions {
   className?: string;
 }
 
-// Map des composants d'étapes - IDs doivent correspondre à WIZARD_STEPS_B2C
-const STEP_COMPONENTS: Record<string, React.ComponentType<StepComponentProps>> = {
+// Map des composants d'étapes B2C - IDs correspondent à WIZARD_STEPS_B2C
+const STEP_COMPONENTS_B2C: Record<string, React.ComponentType<StepComponentProps>> = {
   'step_profile': StepOwnerProfile,
   'step_property': StepPropertyAddress,
   'step_works': StepWorkIntent,
   'step_constraints': StepConstraints,
-  'step_budget': StepPropertyDetails, // Budget/détails
+  'step_budget': StepPropertyDetails,
   'step_summary': StepSummary,
+};
+
+// Map des composants d'étapes B2B - IDs correspondent à WIZARD_STEPS_B2B
+const STEP_COMPONENTS_B2B: Record<string, React.ComponentType<StepComponentProps>> = {
+  'step_client': StepClientInfo,       // Infos client/MOA
+  'step_site': StepSiteAddress,        // Site d'intervention
+  'step_works': StepWorkIntent,        // Travaux (partagé)
+  'step_constraints': StepConstraints, // Contraintes (partagé)
+  'step_budget': StepPropertyDetails,  // Budget (partagé)
+  'step_summary': StepSummary,         // Validation (partagé)
 };
 
 export interface StepComponentProps {
@@ -46,14 +61,18 @@ export interface StepComponentProps {
 
 export function WizardContainer({ className, ...options }: WizardContainerProps) {
   const wizard = useWizard(options);
-  const stepsConfig = useMemo(() => WizardService.getStepsConfig(options.mode || 'b2c'), [options.mode]);
+  const mode = options.mode || 'b2c';
+  const isB2B = WizardService.isB2BMode(mode);
+  const stepsConfig = useMemo(() => WizardService.getStepsConfig(mode), [mode]);
 
-  // Récupérer le composant pour l'étape courante
+  // Récupérer le composant pour l'étape courante selon le mode
   const currentStepConfig = stepsConfig[wizard.currentStepIndex];
   const StepComponent = useMemo(() => {
     if (!currentStepConfig) return null;
-    return STEP_COMPONENTS[currentStepConfig.id] || null;
-  }, [currentStepConfig]);
+    // Sélectionner le bon map de composants selon le mode
+    const componentsMap = isB2B ? STEP_COMPONENTS_B2B : STEP_COMPONENTS_B2C;
+    return componentsMap[currentStepConfig.id] || null;
+  }, [currentStepConfig, isB2B]);
 
   // Handlers
   const handleStepClick = useCallback((stepId: string) => {

@@ -101,6 +101,68 @@ export const WIZARD_STEPS_B2C = [
   },
 ];
 
+/**
+ * Configuration des étapes du wizard B2B (professionnel)
+ * Adapté pour les entreprises qui interviennent chez leurs clients
+ */
+export const WIZARD_STEPS_B2B = [
+  {
+    id: 'step_client',
+    number: 1,
+    name: 'Client & Projet',
+    shortName: 'Client',
+    description: 'Informations du maître d\'ouvrage / donneur d\'ordres',
+    icon: 'users',
+    estimatedMinutes: 4,
+  },
+  {
+    id: 'step_site',
+    number: 2,
+    name: 'Site d\'intervention',
+    shortName: 'Site',
+    description: 'Adresse et caractéristiques du lieu des travaux',
+    icon: 'map-pin',
+    estimatedMinutes: 5,
+  },
+  {
+    id: 'step_works',
+    number: 3,
+    name: 'Travaux à réaliser',
+    shortName: 'Travaux',
+    description: 'Sélection des lots et prestations',
+    icon: 'hammer',
+    estimatedMinutes: 10,
+  },
+  {
+    id: 'step_constraints',
+    number: 4,
+    name: 'Contraintes chantier',
+    shortName: 'Chantier',
+    description: 'Accès, planning et conditions d\'exécution',
+    icon: 'calendar',
+    estimatedMinutes: 3,
+  },
+  {
+    id: 'step_budget',
+    number: 5,
+    name: 'Budget & Conditions',
+    shortName: 'Budget',
+    description: 'Enveloppe budgétaire et conditions commerciales',
+    icon: 'euro',
+    estimatedMinutes: 3,
+    isOptional: true,
+  },
+  {
+    id: 'step_summary',
+    number: 6,
+    name: 'Validation & Documents',
+    shortName: 'Documents',
+    description: 'Récapitulatif et génération du DCE/CCTP',
+    icon: 'file-text',
+    estimatedMinutes: 5,
+  },
+];
+
 // =============================================================================
 // TYPES EXPORTS
 // =============================================================================
@@ -140,13 +202,22 @@ export class WizardService {
    * Get wizard steps configuration based on mode
    */
   static getStepsConfig(mode: WizardMode = 'b2c'): WizardStepConfig[] {
+    // Mode B2B professionnel : utilise les steps B2B adaptés
     if (mode === 'b2b' || mode === 'b2b_professional') {
-      return WIZARD_STEPS_B2C.map(step => ({
+      return WIZARD_STEPS_B2B.map(step => ({
         ...step,
-        isOptional: step.id === 'step_budget', // Budget optional for B2B
+        isOptional: step.isOptional || false,
       }));
     }
+    // Mode B2C : steps classiques
     return WIZARD_STEPS_B2C.map(step => ({ ...step, isOptional: false }));
+  }
+
+  /**
+   * Vérifie si le mode est B2B
+   */
+  static isB2BMode(mode: WizardMode): boolean {
+    return mode === 'b2b' || mode === 'b2b_professional';
   }
 
   /**
