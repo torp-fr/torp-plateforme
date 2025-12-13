@@ -41,7 +41,10 @@ export function Phase0Dashboard() {
   // Charger les projets
   useEffect(() => {
     const loadProjects = async () => {
-      if (!user?.id) return;
+      if (!user?.id) {
+        setIsLoading(false);
+        return;
+      }
 
       setIsLoading(true);
       setError(null);

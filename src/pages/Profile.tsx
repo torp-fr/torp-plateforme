@@ -154,7 +154,10 @@ export default function Profile() {
   // Fetch extended profile data
   useEffect(() => {
     const fetchProfile = async () => {
-      if (!user?.id) return;
+      if (!user?.id) {
+        setIsFetching(false);
+        return;
+      }
 
       try {
         const { data, error } = await supabase

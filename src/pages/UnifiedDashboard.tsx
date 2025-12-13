@@ -208,7 +208,7 @@ export default function UnifiedDashboard() {
     loadStats();
   }, [user, completedAnalyses, activePhase0Projects, projects]);
 
-  // Actions sur les projets
+  // Actions sur les projets Phase0
   const handleDeletePhase0Project = async (projectId: string, projectTitle: string) => {
     const confirmed = window.confirm(
       `Êtes-vous sûr de vouloir supprimer "${projectTitle}" ? Cette action est irréversible.`
@@ -223,6 +223,34 @@ export default function UnifiedDashboard() {
     } catch (error) {
       console.error('Error deleting phase0 project:', error);
       toast.error('Erreur lors de la suppression du projet');
+    }
+  };
+
+  // Action supprimer une analyse de devis
+  const handleDeleteDevis = async (devisId: string, devisName: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const confirmed = window.confirm(
+      `Êtes-vous sûr de vouloir supprimer l'analyse "${devisName}" ? Cette action est irréversible.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabase
+        .from('devis')
+        .delete()
+        .eq('id', devisId);
+
+      if (error) throw error;
+
+      // Mettre à jour la liste des projets (analyses)
+      setProjects(prev => prev.filter(p => p.id !== devisId));
+      toast.success('Analyse supprimée avec succès');
+    } catch (error) {
+      console.error('Error deleting devis:', error);
+      toast.error('Erreur lors de la suppression de l\'analyse');
     }
   };
 
@@ -566,45 +594,67 @@ export default function UnifiedDashboard() {
                 <CardContent>
                   <div className="space-y-4">
                     {projects.slice(0, 10).map((project) => (
-                      <Link
+                      <div
                         key={project.id}
-                        to={`/results?devisId=${project.id}`}
-                        className="block"
+                        className="flex items-center justify-between p-4 border rounded-lg hover:shadow-md hover:border-primary/50 transition-all"
                       >
-                        <div className="flex items-center justify-between p-4 border rounded-lg hover:shadow-md hover:border-primary/50 transition-all">
-                          <div className="flex items-center space-x-4">
-                            <div
-                              className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg
-                                ${
-                                  project.score && project.score >= 800
-                                    ? 'bg-emerald-500 text-white'
-                                    : project.score && project.score >= 600
-                                      ? 'bg-yellow-500 text-white'
-                                      : project.score && project.score > 0
-                                        ? 'bg-red-500 text-white'
-                                        : 'bg-muted text-muted-foreground'
-                                }`}
-                            >
-                              {project.grade || '?'}
-                            </div>
-                            <div>
-                              <h3 className="font-semibold text-foreground">
-                                {project.name}
-                              </h3>
-                              <p className="text-sm text-muted-foreground">
-                                {project.company || 'Entreprise'} •{' '}
-                                {new Date(project.createdAt).toLocaleDateString()}
-                              </p>
-                            </div>
+                        <Link
+                          to={`/results?devisId=${project.id}`}
+                          className="flex items-center space-x-4 flex-1"
+                        >
+                          <div
+                            className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg
+                              ${
+                                project.score && project.score >= 800
+                                  ? 'bg-emerald-500 text-white'
+                                  : project.score && project.score >= 600
+                                    ? 'bg-yellow-500 text-white'
+                                    : project.score && project.score > 0
+                                      ? 'bg-red-500 text-white'
+                                      : 'bg-muted text-muted-foreground'
+                              }`}
+                          >
+                            {project.grade || '?'}
                           </div>
-                          <div className="flex items-center space-x-4">
-                            <span className="text-lg font-semibold text-foreground">
-                              {project.amount}
-                            </span>
-                            <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                          <div>
+                            <h3 className="font-semibold text-foreground">
+                              {project.name}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              {project.company || 'Entreprise'} •{' '}
+                              {new Date(project.createdAt).toLocaleDateString()}
+                            </p>
                           </div>
+                        </Link>
+                        <div className="flex items-center space-x-4">
+                          <span className="text-lg font-semibold text-foreground">
+                            {project.amount}
+                          </span>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem asChild>
+                                <Link to={`/results?devisId=${project.id}`}>
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  Voir les résultats
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={(e) => handleDeleteDevis(project.id, project.name, e)}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Supprimer
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
-                      </Link>
+                      </div>
                     ))}
 
                     {projects.length === 0 && (

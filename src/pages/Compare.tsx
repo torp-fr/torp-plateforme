@@ -164,7 +164,7 @@ export default function Compare() {
   // Charger les devis analysés
   useEffect(() => {
     if (!user?.id) {
-      navigate('/login');
+      setLoading(false);
       return;
     }
 
@@ -186,7 +186,8 @@ export default function Compare() {
     };
 
     loadDevis();
-  }, [user?.id, navigate, toast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // Toggle sélection d'un devis
   const toggleDevis = (devisId: string) => {
