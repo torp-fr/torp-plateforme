@@ -25,6 +25,9 @@ export interface Phase0Project {
   workProject: WorkProject;
   selectedLots: WorkLot[];
 
+  // B2B: Données client/MOA (pour les professionnels)
+  client?: Record<string, unknown>;
+
   // État du projet
   status: Phase0Status;
   completeness: Phase0Completeness;

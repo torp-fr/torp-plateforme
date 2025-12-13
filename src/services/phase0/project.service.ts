@@ -32,6 +32,11 @@ interface Phase0ProjectRow {
   property: Property;
   work_project: WorkProject;
   selected_lots: WorkLot[];
+  // B2B: Client/MOA information
+  client: Record<string, unknown> | null;
+  client_name: string | null;
+  client_type: string | null;
+  client_city: string | null;
   status: Phase0Status;
   wizard_mode: WizardMode;
   completeness: number;
@@ -94,6 +99,7 @@ export class Phase0ProjectService {
         property: updates.property,
         workProject: updates.workProject,
         selectedLots: updates.selectedLots,
+        client: updates.client, // B2B client info
         status: updates.status,
         wizardState: updates.wizardState,
         deductions: updates.deductions,
@@ -373,6 +379,25 @@ export class Phase0ProjectService {
       updateData.selected_lots = updates.selectedLots;
     }
 
+    // B2B: Handle client/MOA information
+    if (updates.client) {
+      updateData.client = updates.client;
+      // Update denormalized fields for quick queries
+      const clientData = updates.client as Record<string, unknown>;
+      const identity = clientData.identity as Record<string, unknown> | undefined;
+      const site = clientData.site as Record<string, unknown> | undefined;
+      if (identity) {
+        updateData.client_type = identity.clientType as string || null;
+        updateData.client_name = (identity.name as string) || (identity.companyName as string) || null;
+      }
+      if (site) {
+        const address = site.address as Record<string, unknown> | undefined;
+        if (address) {
+          updateData.client_city = address.city as string || null;
+        }
+      }
+    }
+
     if (updates.status) {
       updateData.status = updates.status;
     }
@@ -540,6 +565,8 @@ export class Phase0ProjectService {
       property: row.property as Property,
       workProject: row.work_project as WorkProject,
       selectedLots: row.selected_lots as WorkLot[],
+      // B2B: Client/MOA information
+      client: row.client || undefined,
       status: row.status,
       wizardMode: row.wizard_mode,
       completeness: {

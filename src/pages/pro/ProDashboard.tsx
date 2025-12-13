@@ -1,66 +1,78 @@
 /**
  * ProDashboard Page
  * Tableau de bord pour les professionnels B2B
- * Utilise la table devis (même que B2C)
+ * Orienté projets clients et génération de documents
  */
 
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ProLayout } from '@/components/pro/ProLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useApp } from '@/context/AppContext';
 import { supabase } from '@/lib/supabase';
 import {
-  TrendingUp,
-  FileSearch,
-  Ticket,
-  AlertTriangle,
   PlusCircle,
   ArrowRight,
   Building2,
-  CheckCircle2,
   Clock,
   Loader2,
   Eye,
+  Briefcase,
+  FileText,
+  FolderOpen,
+  Users,
+  MapPin,
 } from 'lucide-react';
 
-interface DashboardStats {
-  totalAnalyses: number;
-  averageScore: number | null;
-  ticketsGeneres: number;
-  documentsExpirant: number;
-  analysesEnCours: number;
-}
-
-interface RecentAnalysis {
+interface RecentProject {
   id: string;
-  nom_projet: string | null;
-  file_name: string | null;
-  type_travaux: string | null;
+  reference: string;
   status: string;
-  score_total: number | null;
-  grade: string | null;
   created_at: string;
+  owner_profile?: {
+    identity?: {
+      name?: string;
+      companyName?: string;
+    };
+  };
+  client?: {
+    identity?: {
+      name?: string;
+      companyName?: string;
+      clientType?: string;
+    };
+    site?: {
+      address?: {
+        city?: string;
+      };
+    };
+    context?: {
+      projectType?: string;
+    };
+  };
+  property?: {
+    address?: {
+      city?: string;
+    };
+  };
 }
 
 export default function ProDashboard() {
   const { user } = useApp();
   const navigate = useNavigate();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [recentAnalyses, setRecentAnalyses] = useState<RecentAnalysis[]>([]);
-  const [companyId, setCompanyId] = useState<string | null>(null);
+  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasCompany, setHasCompany] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (user?.id) {
-      loadCompanyAndData();
+      loadData();
     }
   }, [user?.id]);
 
-  async function loadCompanyAndData() {
+  async function loadData() {
     try {
       setLoading(true);
 
@@ -78,67 +90,21 @@ export default function ProDashboard() {
       }
 
       setHasCompany(true);
-      setCompanyId(company.id);
 
-      // Charger les analyses depuis la table devis (même que B2C)
-      const { data: analyses } = await supabase
-        .from('devis')
-        .select('id, nom_projet, file_name, type_travaux, status, score_total, grade, created_at')
-        .eq('user_id', user!.id)
-        .order('created_at', { ascending: false });
-
-      const completed = analyses?.filter((a) => a.status === 'analyzed') || [];
-      const pending = analyses?.filter((a) => a.status === 'analyzing' || a.status === 'uploaded') || [];
-
-      // Calculer les stats
-      const avgScore =
-        completed.length > 0
-          ? Math.round(
-              completed.reduce((sum, a) => sum + (a.score_total || 0), 0) /
-                completed.length
-            )
-          : null;
-
-      // Compter les documents expirant (dans les 30 prochains jours)
-      const thirtyDaysFromNow = new Date();
-      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-
-      let expiringDocs = 0;
+      // Charger les projets Phase 0 récents
       try {
-        const { count } = await supabase
-          .from('company_documents')
-          .select('*', { count: 'exact', head: true })
-          .eq('company_id', company.id)
-          .lt('date_expiration', thirtyDaysFromNow.toISOString())
-          .gt('date_expiration', new Date().toISOString());
-        expiringDocs = count || 0;
+        const { data: projects } = await supabase
+          .from('phase0_projects')
+          .select('id, reference, status, created_at, owner_profile, client, property')
+          .eq('user_id', user!.id)
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        setRecentProjects(projects || []);
       } catch (e) {
-        // Table might not exist yet
-        console.log('[ProDashboard] company_documents table not available');
+        console.log('[ProDashboard] phase0_projects table not available');
+        setRecentProjects([]);
       }
-
-      // Compter les tickets (table torp_tickets si elle existe)
-      let ticketsCount = 0;
-      try {
-        const { count } = await supabase
-          .from('torp_tickets')
-          .select('*', { count: 'exact', head: true })
-          .eq('company_id', company.id);
-        ticketsCount = count || 0;
-      } catch (e) {
-        // Table might not exist yet
-        console.log('[ProDashboard] torp_tickets table not available');
-      }
-
-      setStats({
-        totalAnalyses: completed.length,
-        averageScore: avgScore,
-        ticketsGeneres: ticketsCount,
-        documentsExpirant: expiringDocs,
-        analysesEnCours: pending.length,
-      });
-
-      setRecentAnalyses((analyses || []).slice(0, 5));
     } catch (error) {
       console.error('[ProDashboard] Erreur:', error);
     } finally {
@@ -146,38 +112,51 @@ export default function ProDashboard() {
     }
   }
 
-  function getGradeBg(grade: string) {
-    switch (grade) {
-      case 'A':
-      case 'A+':
-        return 'bg-emerald-500';
-      case 'B':
-        return 'bg-green-500';
-      case 'C':
-        return 'bg-yellow-500';
-      case 'D':
-        return 'bg-orange-500';
-      case 'E':
-      case 'F':
-        return 'bg-red-500';
-      default:
-        return 'bg-gray-400';
-    }
-  }
-
   function getStatusBadge(status: string) {
     switch (status) {
-      case 'analyzed':
+      case 'completed':
         return <Badge variant="default" className="bg-green-500">Terminé</Badge>;
-      case 'analyzing':
+      case 'in_progress':
         return <Badge variant="secondary">En cours</Badge>;
-      case 'uploaded':
-        return <Badge variant="outline">En attente</Badge>;
-      case 'failed':
-        return <Badge variant="destructive">Échec</Badge>;
+      case 'draft':
+        return <Badge variant="outline">Brouillon</Badge>;
+      case 'validated':
+        return <Badge className="bg-blue-500">Validé</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
+  }
+
+  function getProjectTypeLabel(type?: string): string {
+    const labels: Record<string, string> = {
+      renovation_globale: 'Rénovation globale',
+      renovation_energetique: 'Rénovation énergétique',
+      extension: 'Extension',
+      amenagement: 'Aménagement',
+      mise_aux_normes: 'Mise aux normes',
+      maintenance: 'Maintenance',
+      construction_neuve: 'Construction neuve',
+    };
+    return type ? labels[type] || type : 'Projet';
+  }
+
+  function getClientName(project: RecentProject): string {
+    // B2B: client info
+    if (project.client?.identity?.name) {
+      return project.client.identity.name;
+    }
+    if (project.client?.identity?.companyName) {
+      return project.client.identity.companyName;
+    }
+    // Legacy: owner profile
+    if (project.owner_profile?.identity?.name) {
+      return project.owner_profile.identity.name;
+    }
+    return 'Client non renseigné';
+  }
+
+  function getLocation(project: RecentProject): string | null {
+    return project.client?.site?.address?.city || project.property?.address?.city || null;
   }
 
   if (loading) {
@@ -201,8 +180,8 @@ export default function ProDashboard() {
           </h1>
           <p className="text-muted-foreground mb-8">
             Pour commencer, vous devez créer le profil de votre entreprise.
-            Cela nous permettra de personnaliser vos analyses et de générer
-            des tickets TORP pour vos clients.
+            Cela nous permettra de personnaliser vos projets et de générer
+            les documents adaptés à votre activité.
           </p>
           <Button size="lg" onClick={() => navigate('/pro/onboarding')}>
             <PlusCircle className="h-5 w-5 mr-2" />
@@ -216,7 +195,7 @@ export default function ProDashboard() {
   return (
     <ProLayout>
       <div className="space-y-6">
-        {/* Header */}
+        {/* Header avec bouton principal */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">Tableau de bord</h1>
@@ -224,148 +203,129 @@ export default function ProDashboard() {
               Bienvenue, {user?.name || 'Professionnel'}
             </p>
           </div>
-          <Button asChild>
-            <Link to="/pro/analyses/new">
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Nouvelle analyse
-            </Link>
+          <Button size="lg" onClick={() => navigate('/pro/projects/new')}>
+            <PlusCircle className="mr-2 h-5 w-5" />
+            Nouveau projet
           </Button>
         </div>
 
-        {/* KPIs */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-          <Card>
+        {/* Actions rapides */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => navigate('/pro/projects/new')}>
             <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-blue-100">
-                  <TrendingUp className="h-5 w-5 text-blue-600" />
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-lg bg-primary/10">
+                  <Briefcase className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Score moyen</p>
-                  <p className="text-xl font-bold">
-                    {stats?.averageScore ?? 'N/A'}
-                    {stats?.averageScore && <span className="text-sm font-normal text-muted-foreground">/1000</span>}
+                  <h3 className="font-semibold">Créer un projet</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Renseigner les infos client et chantier
                   </p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => navigate('/pro/documents')}>
             <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-green-100">
-                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-lg bg-blue-100">
+                  <FileText className="h-6 w-6 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Analyses</p>
-                  <p className="text-xl font-bold">{stats?.totalAnalyses ?? 0}</p>
+                  <h3 className="font-semibold">Mes documents</h3>
+                  <p className="text-sm text-muted-foreground">
+                    DCE, CCTP, devis générés
+                  </p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => navigate('/b2b/ao')}>
             <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-amber-100">
-                  <Clock className="h-5 w-5 text-amber-600" />
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-lg bg-amber-100">
+                  <FolderOpen className="h-6 w-6 text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">En cours</p>
-                  <p className="text-xl font-bold">{stats?.analysesEnCours ?? 0}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-purple-100">
-                  <Ticket className="h-5 w-5 text-purple-600" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Tickets</p>
-                  <p className="text-xl font-bold">{stats?.ticketsGeneres ?? 0}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-orange-100">
-                  <AlertTriangle className="h-5 w-5 text-orange-600" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Docs expirant</p>
-                  <p className="text-xl font-bold">{stats?.documentsExpirant ?? 0}</p>
+                  <h3 className="font-semibold">Appels d'offres</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Consulter et répondre aux AO
+                  </p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Analyses récentes */}
+        {/* Projets récents */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Dernières analyses</CardTitle>
+            <div>
+              <CardTitle>Projets récents</CardTitle>
+              <CardDescription>Vos derniers projets clients</CardDescription>
+            </div>
             <Button variant="ghost" size="sm" asChild>
-              <Link to="/pro/analyses">
+              <Link to="/pro/projects">
                 Voir tout <ArrowRight className="ml-1 h-4 w-4" />
               </Link>
             </Button>
           </CardHeader>
           <CardContent>
-            {recentAnalyses.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <FileSearch className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p className="mb-4">Aucune analyse pour le moment</p>
-                <Button asChild>
-                  <Link to="/pro/analyses/new">Analyser mon premier devis</Link>
+            {recentProjects.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Briefcase className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="mb-2 font-medium">Aucun projet pour le moment</p>
+                <p className="text-sm mb-6">
+                  Créez votre premier projet pour commencer à générer vos documents
+                </p>
+                <Button onClick={() => navigate('/pro/projects/new')}>
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Créer mon premier projet
                 </Button>
               </div>
             ) : (
-              <div className="space-y-2">
-                {recentAnalyses.map((analysis) => (
+              <div className="space-y-3">
+                {recentProjects.map((project) => (
                   <div
-                    key={analysis.id}
-                    className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors"
+                    key={project.id}
+                    className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
+                    onClick={() => navigate(`/pro/projects/${project.id}`)}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      {analysis.grade ? (
-                        <span
-                          className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${getGradeBg(
-                            analysis.grade
-                          )}`}
-                        >
-                          {analysis.grade}
-                        </span>
-                      ) : (
-                        <span className="w-10 h-10 rounded-full flex items-center justify-center bg-muted">
-                          <Clock className="h-5 w-5 text-muted-foreground" />
-                        </span>
-                      )}
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="p-2 rounded-lg bg-muted">
+                        <Briefcase className="h-5 w-5 text-muted-foreground" />
+                      </div>
                       <div className="min-w-0">
-                        <p className="font-medium truncate">
-                          {analysis.nom_projet || analysis.file_name || 'Sans nom'}
-                        </p>
-                        <p className="text-sm text-muted-foreground truncate">
-                          {analysis.type_travaux || 'Type non spécifié'}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium truncate">
+                            {getClientName(project)}
+                          </p>
+                          {getStatusBadge(project.status)}
+                        </div>
+                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                          <span>{getProjectTypeLabel(project.client?.context?.projectType)}</span>
+                          {getLocation(project) && (
+                            <>
+                              <span>•</span>
+                              <span className="flex items-center gap-1">
+                                <MapPin className="h-3 w-3" />
+                                {getLocation(project)}
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
-                      {getStatusBadge(analysis.status)}
-                      {analysis.status === 'analyzed' && (
-                        <Button variant="outline" size="sm" asChild>
-                          <Link to={`/results?devisId=${analysis.id}`}>
-                            <Eye className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                      )}
+                      <span className="text-sm text-muted-foreground">
+                        {new Date(project.created_at).toLocaleDateString('fr-FR')}
+                      </span>
+                      <Button variant="ghost" size="sm">
+                        <Eye className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -373,33 +333,6 @@ export default function ProDashboard() {
             )}
           </CardContent>
         </Card>
-
-        {/* Alertes documents */}
-        {stats && stats.documentsExpirant > 0 && (
-          <Card className="border-orange-200 bg-orange-50">
-            <CardContent className="pt-6">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-orange-500 mt-0.5" />
-                <div>
-                  <p className="font-medium text-orange-700">
-                    {stats.documentsExpirant} document(s) expire(nt) bientôt
-                  </p>
-                  <p className="text-sm text-orange-600 mt-1">
-                    Pensez à mettre à jour vos documents pour maintenir votre score TORP.
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-3"
-                    onClick={() => navigate('/pro/documents')}
-                  >
-                    Voir mes documents
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </ProLayout>
   );
