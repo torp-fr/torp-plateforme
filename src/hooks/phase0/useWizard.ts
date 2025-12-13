@@ -344,6 +344,12 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
             ...prev,
             selectedLots: value as unknown[],
           };
+        // B2B: Gestion des données client (MOA/donneur d'ordres)
+        case 'client':
+          return {
+            ...prev,
+            client: setNestedValue(prev.client || {}, field, value),
+          };
         default:
           return prev;
       }

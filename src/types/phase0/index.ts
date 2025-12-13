@@ -727,3 +727,40 @@ export type {
 } from './project.types';
 
 export { PHASE0_STATUS_CONFIG } from './project.types';
+
+// =============================================================================
+// TYPES CLIENT B2B (Maître d'Ouvrage / Donneur d'ordres)
+// =============================================================================
+export type {
+  // Profil client
+  ClientProfile,
+  ClientType,
+  ClientIdentity,
+  ClientContact,
+
+  // Site d'intervention
+  InterventionSite,
+  SiteType,
+  SiteCharacteristics,
+  AccessConstraints,
+  SiteOccupancy,
+
+  // Contexte intervention
+  InterventionContext,
+  B2BProjectType,
+  RequestNature,
+  LeadSource,
+  ClientBudget,
+  ProjectTimeline,
+  ClientDocument,
+  ClientDocumentType,
+
+  // Métadonnées
+  ClientMetadata,
+
+  // Analyse contextuelle
+  ClientAnalysis,
+  InferredClientProfile,
+  IdentifiedRisk,
+  SuggestedDocument,
+} from './client.types';
