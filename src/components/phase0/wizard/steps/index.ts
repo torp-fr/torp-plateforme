@@ -15,4 +15,5 @@ export * from './b2b';
 
 // Étapes B2G (secteur public)
 export { StepB2GEntity } from './StepB2GEntity';
+export { StepB2GSitePatrimoine } from './StepB2GSitePatrimoine';
 export { StepB2GMarche } from './StepB2GMarche';

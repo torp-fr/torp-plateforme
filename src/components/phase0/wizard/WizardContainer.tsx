@@ -32,7 +32,7 @@ import {
 } from './steps/b2b';
 
 // Import des composants d'étapes B2G (secteur public)
-import { StepB2GEntity, StepB2GMarche } from './steps';
+import { StepB2GEntity, StepB2GSitePatrimoine, StepB2GMarche } from './steps';
 
 export interface WizardContainerProps extends UseWizardOptions {
   className?: string;
@@ -60,7 +60,7 @@ const STEP_COMPONENTS_B2B: Record<string, React.ComponentType<StepComponentProps
 // IDs doivent correspondre à WIZARD_STEPS_B2G dans wizard.service.ts
 const STEP_COMPONENTS_B2G: Record<string, React.ComponentType<StepComponentProps>> = {
   'step_entity': StepB2GEntity,                   // 1. Entité publique (collectivité, SIRET)
-  'step_site_patrimoine': StepB2BSiteProject,     // 2. Site & Patrimoine (réutilise composant B2B)
+  'step_site_patrimoine': StepB2GSitePatrimoine,  // 2. Site & Patrimoine (bâtiments, voiries, réseaux, espaces verts)
   'step_operation': StepB2BWorksPlanning,         // 3. Opération (réutilise composant B2B)
   'step_marche': StepB2GMarche,                   // 4. Marché public (procédure, allotissement)
   'step_budget_planning': StepB2BBudgetValidation, // 5. Budget & Planning (réutilise composant B2B)
