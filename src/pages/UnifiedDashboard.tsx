@@ -134,7 +134,8 @@ export default function UnifiedDashboard() {
   // États
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [activeTab, setActiveTab] = useState('projects');
+  // Les projets sont maintenant la section principale, onglet secondaire par défaut = analyses
+  const [activeTab, setActiveTab] = useState('analyses');
 
   // Déterminer le segment utilisateur basé sur le profil
   const segment: UserSegment = useMemo(() => {
@@ -408,169 +409,196 @@ export default function UnifiedDashboard() {
             )}
           </div>
 
-          {/* Onglets de navigation */}
+          {/* Section principale : Créer un projet */}
+          <Card className="mb-8 border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-xl">
+                    <Hammer className="w-6 h-6 text-primary" />
+                    {segment === 'B2G' ? 'Définir un marché' : 'Définir mon projet de travaux'}
+                  </CardTitle>
+                  <CardDescription className="mt-2">
+                    {segment === 'B2G'
+                      ? 'Structurez votre consultation pour recevoir des offres conformes et les analyser efficacement.'
+                      : 'La première étape pour bien analyser vos devis : définir clairement votre projet.'}
+                  </CardDescription>
+                </div>
+                <Button size="lg" onClick={() => navigate('/phase0/new')} className="hidden md:flex">
+                  <Plus className="h-5 w-5 mr-2" />
+                  {config.ctaLabel}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {activePhase0Projects.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="max-w-lg mx-auto">
+                    <div className="flex justify-center gap-4 mb-6">
+                      <div className="flex flex-col items-center">
+                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                          <span className="text-primary font-bold">1</span>
+                        </div>
+                        <span className="text-sm text-muted-foreground">Définir</span>
+                      </div>
+                      <ArrowRight className="w-6 h-6 text-muted-foreground self-center" />
+                      <div className="flex flex-col items-center">
+                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                          <span className="text-primary font-bold">2</span>
+                        </div>
+                        <span className="text-sm text-muted-foreground">Recevoir devis</span>
+                      </div>
+                      <ArrowRight className="w-6 h-6 text-muted-foreground self-center" />
+                      <div className="flex flex-col items-center">
+                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                          <span className="text-primary font-bold">3</span>
+                        </div>
+                        <span className="text-sm text-muted-foreground">Analyser</span>
+                      </div>
+                    </div>
+                    <p className="text-muted-foreground mb-6">
+                      Décrivez vos travaux, votre bien, vos contraintes. TORP utilisera ces informations pour analyser vos devis en contexte.
+                    </p>
+                    <Button onClick={() => navigate('/phase0/new')} className="md:hidden">
+                      <Plus className="w-4 h-4 mr-2" />
+                      {config.ctaLabel}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {activePhase0Projects.map((project) => (
+                    <div
+                      key={project.projectId}
+                      className="border rounded-lg p-4 hover:shadow-md transition-shadow bg-background"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            {renderPhase0Status(project.status)}
+                          </div>
+                          <h3 className="font-semibold truncate">{project.projectName}</h3>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => navigate(`/phase0/project/${project.projectId}`)}
+                            >
+                              <Eye className="w-4 h-4 mr-2" />
+                              Voir le projet
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => navigate(`/phase0/wizard/${project.projectId}`)}
+                            >
+                              <Edit className="w-4 h-4 mr-2" />
+                              Modifier
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={() =>
+                                handleDeletePhase0Project(project.projectId, project.projectName)
+                              }
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Supprimer
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+
+                      {/* Adresse */}
+                      {project.propertyAddress && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                          <MapPin className="w-4 h-4" />
+                          <span className="truncate">{project.propertyAddress}</span>
+                        </div>
+                      )}
+
+                      {/* Infos */}
+                      <div className="flex items-center gap-4 text-sm mb-3">
+                        {project.estimatedBudget && (
+                          <div className="flex items-center gap-1">
+                            <Euro className="w-4 h-4 text-muted-foreground" />
+                            <span>
+                              {project.estimatedBudget.min?.toLocaleString('fr-FR')} -{' '}
+                              {project.estimatedBudget.max?.toLocaleString('fr-FR')} €
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1">
+                          <FileText className="w-4 h-4 text-muted-foreground" />
+                          <span>{project.selectedLotsCount} lot(s)</span>
+                        </div>
+                      </div>
+
+                      {/* Progression */}
+                      <div className="space-y-1 mb-4">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">Complétude</span>
+                          <span>{project.completeness}%</span>
+                        </div>
+                        <Progress value={project.completeness} className="h-1.5" />
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => navigate(`/phase0/project/${project.projectId}`)}
+                        >
+                          <Eye className="w-4 h-4 mr-2" />
+                          Voir
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="flex-1"
+                          onClick={() =>
+                            navigate(`/phase0/project/${project.projectId}/analyze`)
+                          }
+                        >
+                          <FileSearch className="w-4 h-4 mr-2" />
+                          Analyser
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Card pour créer un nouveau projet */}
+                  <div
+                    onClick={() => navigate('/phase0/new')}
+                    className="border-2 border-dashed rounded-lg p-4 hover:shadow-md hover:border-primary/50 transition-all cursor-pointer flex flex-col items-center justify-center min-h-[200px] bg-muted/30"
+                  >
+                    <Plus className="w-10 h-10 text-muted-foreground mb-2" />
+                    <span className="font-medium text-muted-foreground">Nouveau projet</span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Onglets secondaires : Analyses et Activité */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
-            <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid">
-              <TabsTrigger value="projects" className="flex items-center gap-2">
-                <FolderOpen className="w-4 h-4" />
-                <span className="hidden sm:inline">Projets</span>
-              </TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:inline-grid">
               <TabsTrigger value="analyses" className="flex items-center gap-2">
                 <FileSearch className="w-4 h-4" />
-                <span className="hidden sm:inline">Analyses</span>
+                <span className="hidden sm:inline">Mes analyses</span>
+                {completedAnalyses.length > 0 && (
+                  <Badge variant="secondary" className="ml-1">{completedAnalyses.length}</Badge>
+                )}
               </TabsTrigger>
               <TabsTrigger value="activity" className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4" />
                 <span className="hidden sm:inline">Activité</span>
               </TabsTrigger>
             </TabsList>
-
-            {/* Contenu : Projets Phase0 */}
-            <TabsContent value="projects" className="mt-6">
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                      <FolderOpen className="w-5 h-5" />
-                      {segment === 'B2G' ? 'Mes marchés' : 'Mes projets de travaux'}
-                    </CardTitle>
-                    <Button size="sm" variant="outline" onClick={() => navigate('/phase0/new')}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      {segment === 'B2G' ? 'Nouveau marché' : 'Nouveau projet'}
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {activePhase0Projects.length === 0 ? (
-                    <div className="text-center py-12">
-                      <FolderOpen className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-foreground mb-2">
-                        {segment === 'B2G'
-                          ? 'Commencez par définir votre marché'
-                          : 'Commencez par définir votre projet'}
-                      </h3>
-                      <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                        {segment === 'B2B'
-                          ? 'Définissez le contexte du projet client pour une analyse plus pertinente.'
-                          : segment === 'B2G'
-                            ? 'Structurez votre consultation pour recevoir des offres conformes.'
-                            : 'Décrivez vos travaux pour obtenir une analyse sur-mesure de vos devis.'}
-                      </p>
-                      <Button onClick={() => navigate('/phase0/new')}>
-                        <Plus className="w-4 h-4 mr-2" />
-                        {config.ctaLabel}
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {activePhase0Projects.map((project) => (
-                        <div
-                          key={project.projectId}
-                          className="border rounded-lg p-4 hover:shadow-md transition-shadow"
-                        >
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                {renderPhase0Status(project.status)}
-                              </div>
-                              <h3 className="font-semibold truncate">{project.projectName}</h3>
-                            </div>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon">
-                                  <MoreVertical className="w-4 h-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={() => navigate(`/phase0/project/${project.projectId}`)}
-                                >
-                                  <Eye className="w-4 h-4 mr-2" />
-                                  Voir le projet
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => navigate(`/phase0/wizard/${project.projectId}`)}
-                                >
-                                  <Edit className="w-4 h-4 mr-2" />
-                                  Modifier
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  className="text-destructive"
-                                  onClick={() =>
-                                    handleDeletePhase0Project(project.projectId, project.projectName)
-                                  }
-                                >
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                  Supprimer
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-
-                          {/* Adresse */}
-                          {project.propertyAddress && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                              <MapPin className="w-4 h-4" />
-                              {project.propertyAddress}
-                            </div>
-                          )}
-
-                          {/* Infos */}
-                          <div className="flex items-center gap-4 text-sm mb-3">
-                            {project.estimatedBudget && (
-                              <div className="flex items-center gap-1">
-                                <Euro className="w-4 h-4 text-muted-foreground" />
-                                <span>
-                                  {project.estimatedBudget.min?.toLocaleString('fr-FR')} -{' '}
-                                  {project.estimatedBudget.max?.toLocaleString('fr-FR')} €
-                                </span>
-                              </div>
-                            )}
-                            <div className="flex items-center gap-1">
-                              <FileText className="w-4 h-4 text-muted-foreground" />
-                              <span>{project.selectedLotsCount} lot(s)</span>
-                            </div>
-                          </div>
-
-                          {/* Progression */}
-                          <div className="space-y-1 mb-4">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-muted-foreground">Complétude</span>
-                              <span>{project.completeness}%</span>
-                            </div>
-                            <Progress value={project.completeness} className="h-1.5" />
-                          </div>
-
-                          {/* Actions */}
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="flex-1"
-                              onClick={() => navigate(`/phase0/project/${project.projectId}`)}
-                            >
-                              <Eye className="w-4 h-4 mr-2" />
-                              Voir
-                            </Button>
-                            <Button
-                              size="sm"
-                              className="flex-1"
-                              onClick={() =>
-                                navigate(`/phase0/project/${project.projectId}/analyze`)
-                              }
-                            >
-                              <FileSearch className="w-4 h-4 mr-2" />
-                              Analyser un devis
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
 
             {/* Contenu : Analyses */}
             <TabsContent value="analyses" className="mt-6">
