@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Header } from '@/components/Header';
+import { AppLayout } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -553,13 +553,12 @@ export default function Compare() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <main className="container mx-auto px-4 py-8">
+    <AppLayout>
+      <div className="max-w-7xl mx-auto">
         {step === 'selection' && renderSelection()}
         {step === 'comparing' && renderComparing()}
         {step === 'results' && renderResults()}
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 }

@@ -9,8 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, FileText, Clock, Shield, CheckCircle, Home, Zap, Droplet, Paintbrush, Download, Loader2 } from 'lucide-react';
-import { Header } from '@/components/Header';
-import { BackButton } from '@/components/BackButton';
+import { AppLayout } from '@/components/layout';
 import { devisService } from '@/services/api/supabase/devis.service';
 
 const projectTypes = [
@@ -354,22 +353,16 @@ export default function Analyze() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      
-      <div className="container mx-auto px-4 py-12">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center gap-4 mb-8">
-            <BackButton />
-            <div>
-              <h1 className="text-4xl font-bold text-foreground">
-                Analyser votre devis BTP
-              </h1>
-              <p className="text-xl text-muted-foreground">
-                Obtenez un score de confiance en quelques clics
-              </p>
-            </div>
-          </div>
+    <AppLayout>
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-foreground">
+            Analyser votre devis BTP
+          </h1>
+          <p className="text-xl text-muted-foreground">
+            Obtenez un score de confiance en quelques clics
+          </p>
+        </div>
 
           {step === 1 && (
             <Card>
@@ -585,9 +578,8 @@ export default function Analyze() {
                 </div>
               </CardContent>
             </Card>
-          )}
-        </div>
+        )}
       </div>
-    </div>
+    </AppLayout>
   );
 }
