@@ -23,14 +23,14 @@ const WIZARD_CONFIG: Record<UserType, {
   icon: React.ReactNode;
 }> = {
   B2C: {
-    mode: 'b2c',
+    mode: 'b2c_simple',
     title: 'Créer votre projet',
     titleEdit: 'Modifier votre projet',
     description: 'Suivez les étapes pour définir votre projet de travaux',
     icon: <Home className="w-6 h-6" />,
   },
   B2B: {
-    mode: 'b2b',
+    mode: 'b2b_professional',
     title: 'Nouvelle mission',
     titleEdit: 'Modifier la mission',
     description: 'Définissez le projet client pour une analyse contextualisée',
@@ -39,7 +39,7 @@ const WIZARD_CONFIG: Record<UserType, {
     icon: <Building2 className="w-6 h-6" />,
   },
   B2G: {
-    mode: 'b2g',
+    mode: 'b2g_public',
     title: 'Nouveau marché public',
     titleEdit: 'Modifier le marché',
     description: 'Structurez votre consultation pour des offres conformes',
@@ -48,7 +48,7 @@ const WIZARD_CONFIG: Record<UserType, {
     icon: <Landmark className="w-6 h-6" />,
   },
   admin: {
-    mode: 'b2c', // Admin utilise B2C par défaut
+    mode: 'b2c_simple', // Admin utilise B2C par défaut
     title: 'Créer un projet (Admin)',
     titleEdit: 'Modifier le projet',
     description: 'Mode administrateur',
