@@ -251,8 +251,8 @@ CREATE TABLE phase1_offres (
   -- Contenu
   contenu JSONB NOT NULL,
 
-  -- Analyse
-  analyse JSONB,
+  -- Analyse de l'offre
+  analyse_offre JSONB,
 
   -- Score
   score_offre JSONB,
