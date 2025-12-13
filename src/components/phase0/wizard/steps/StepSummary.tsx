@@ -138,7 +138,9 @@ export function StepSummary({
   const ownerIdentity = (owner.identity || {}) as Record<string, unknown>;
   const ownerContact = (owner.contact || {}) as Record<string, unknown>;
   const property = (project.property || {}) as Record<string, unknown>;
-  const propertyAddress = (property.address || {}) as Record<string, unknown>;
+  // Chemins corrects selon property.types.ts: property.identification.address
+  const propertyIdentification = (property.identification || {}) as Record<string, unknown>;
+  const propertyAddress = (propertyIdentification.address || {}) as Record<string, unknown>;
   const propertyChars = (property.characteristics || {}) as Record<string, unknown>;
   const propertyConstruction = (property.construction || {}) as Record<string, unknown>;
   const propertyCondo = (property.condo || {}) as Record<string, unknown>;
@@ -153,7 +155,8 @@ export function StepSummary({
   const budgetEnvelope = (workBudget.totalEnvelope || {}) as Record<string, unknown>;
   const workQuality = (workProject.quality || {}) as Record<string, unknown>;
 
-  const workType = (workScope.workType as WorkType) || (answers['workProject.scope.workType'] as WorkType);
+  // Chemin correct: workProject.general.projectType (non scope.workType)
+  const workType = (workGeneral.projectType as WorkType) || (answers['workProject.general.projectType'] as WorkType);
 
   // Room details data
   const roomDetailsData = useMemo((): RoomDetailsData => {
@@ -440,7 +443,7 @@ export function StepSummary({
                   <Building className="w-5 h-5 text-primary" />
                   Bien concerné
                   <Badge variant="outline" className="ml-2">
-                    {propertyTypeLabels[propertyChars.type as string] || 'Non défini'}
+                    {propertyTypeLabels[propertyIdentification.type as string] || 'Non défini'}
                   </Badge>
                 </CardTitle>
                 <ChevronDown className={`w-5 h-5 transition-transform ${openSections.includes('property') ? 'rotate-180' : ''}`} />
@@ -455,9 +458,9 @@ export function StepSummary({
                   <MapPin className="w-5 h-5 text-muted-foreground mt-0.5" />
                   <div className="flex-1">
                     <p className="font-medium">
-                      {propertyAddress.street ? (
+                      {propertyAddress.streetName ? (
                         <>
-                          {propertyAddress.street as string}
+                          {propertyAddress.streetName as string}
                           {propertyAddress.complement && <span>, {propertyAddress.complement as string}</span>}
                         </>
                       ) : (
