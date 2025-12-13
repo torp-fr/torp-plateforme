@@ -24,6 +24,7 @@ import {
 import { LOT_CATALOG, LotType, LotCategory } from '@/types/phase0/lots.types';
 import { EstimationService } from '@/services/phase0/estimation.service';
 import { ValidationService } from '@/services/phase0/validation.service';
+import { ProjectContextService, ProjectContextAnalysis } from '@/services/phase0/project-context.service';
 import { Phase0Project } from '@/types/phase0/project.types';
 import { WorkType } from '@/types/phase0/work-project.types';
 import { PricingEstimationService, ProjectEstimation } from '@/services/phase0/pricing-estimation.service';
@@ -159,6 +160,24 @@ export function StepSummary({
     const data = (project.roomDetails || answers['roomDetails']) as RoomDetailsData | undefined;
     return data || { rooms: [] };
   }, [project.roomDetails, answers]);
+
+  // Project description
+  const projectDescription = (workGeneral.description as string) || (answers['workProject.general.description'] as string) || '';
+  const projectTitle = (workGeneral.title as string) || (answers['workProject.general.title'] as string) || '';
+
+  // Analyse contextuelle du projet
+  const projectContext = useMemo((): ProjectContextAnalysis | null => {
+    if (!workType && !projectDescription && roomDetailsData.rooms.length === 0) {
+      return null;
+    }
+    return ProjectContextService.analyzeProject(
+      projectDescription || projectTitle,
+      workType,
+      roomDetailsData,
+      propertyChars.type as string,
+      propertyChars.livingArea as number
+    );
+  }, [workType, projectDescription, projectTitle, roomDetailsData, propertyChars.type, propertyChars.livingArea]);
 
   // AI Pricing Estimation from room details
   const aiEstimation = useMemo((): ProjectEstimation | null => {
@@ -572,13 +591,78 @@ export function StepSummary({
           </CollapsibleTrigger>
           <CollapsibleContent>
             <CardContent className="pt-0 space-y-4">
-              <Alert className="bg-blue-50 border-blue-200">
-                <Info className="h-4 w-4 text-blue-600" />
-                <AlertDescription className="text-blue-800">
-                  Ces mots-clés décrivent votre projet de façon simple. Le détail technique complet
-                  sera inclus dans les documents générés (CCF, APS) pour les professionnels.
-                </AlertDescription>
-              </Alert>
+              {/* Synthèse contextuelle du projet */}
+              {projectContext && (
+                <div className="p-4 bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <Sparkles className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div className="space-y-3 flex-1">
+                      <div>
+                        <h4 className="font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                          Synthèse de votre projet
+                        </h4>
+                        <p className="text-amber-800 dark:text-amber-200 text-sm leading-relaxed">
+                          {projectContext.summary}
+                        </p>
+                      </div>
+
+                      {/* Quantités extraites */}
+                      {projectContext.extractedQuantities.length > 0 && (
+                        <div className="pt-2 border-t border-amber-200 dark:border-amber-700">
+                          <div className="text-xs font-medium text-amber-700 dark:text-amber-300 mb-2">
+                            Éléments quantifiés :
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {projectContext.extractedQuantities.slice(0, 8).map((q, idx) => (
+                              <Badge
+                                key={idx}
+                                variant="outline"
+                                className="bg-white/50 dark:bg-black/20 border-amber-300 text-amber-800 dark:text-amber-200"
+                              >
+                                {q.quantity} {q.item}{q.quantity > 1 && !q.item.endsWith('s') ? 's' : ''}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Objectifs identifiés */}
+                      {projectContext.keyObjectives.length > 0 && (
+                        <div className="pt-2 border-t border-amber-200 dark:border-amber-700">
+                          <div className="text-xs font-medium text-amber-700 dark:text-amber-300 mb-1">
+                            Objectifs identifiés :
+                          </div>
+                          <ul className="text-xs text-amber-700 dark:text-amber-300 space-y-0.5">
+                            {projectContext.keyObjectives.map((obj, idx) => (
+                              <li key={idx} className="flex items-center gap-1">
+                                <Check className="w-3 h-3" />
+                                {obj}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Complexité */}
+                      <div className="flex items-center gap-2 pt-2">
+                        <span className="text-xs text-amber-600 dark:text-amber-400">
+                          Complexité estimée :
+                        </span>
+                        <Badge
+                          variant={
+                            projectContext.estimatedComplexity === 'simple' ? 'secondary' :
+                            projectContext.estimatedComplexity === 'moderate' ? 'outline' : 'default'
+                          }
+                          className="text-xs"
+                        >
+                          {projectContext.estimatedComplexity === 'simple' ? 'Simple' :
+                           projectContext.estimatedComplexity === 'moderate' ? 'Modéré' : 'Complexe'}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Tags simplifiés B2C */}
               <div className="p-4 bg-muted/20 rounded-lg">
