@@ -341,12 +341,6 @@ export default function UnifiedDashboard() {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button onClick={() => navigate(config.ctaLink)}>
-                <Plus className="h-4 w-4 mr-2" />
-                {config.ctaLabel}
-              </Button>
-            </div>
           </div>
 
           {/* KPIs adaptés au segment */}

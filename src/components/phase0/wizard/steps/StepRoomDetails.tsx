@@ -55,6 +55,7 @@ import {
   Sofa,
   MoreVertical,
   ChevronRight,
+  ChevronDown,
   Hammer,
   Paintbrush,
   Wrench,
@@ -71,6 +72,35 @@ import {
   Calculator,
   Info,
   BarChart3,
+  Grid3X3,
+  Layers,
+  Droplets,
+  Zap,
+  Fan,
+  DoorOpen,
+  Fence,
+  Trees,
+  Warehouse,
+  Building2,
+  Square,
+  Tv,
+  ShowerHead,
+  AirVent,
+  Flame,
+  Plug,
+  Cable,
+  Blinds,
+  PaintBucket,
+  CircleDot,
+  Laptop,
+  Briefcase,
+  Shirt,
+  Baby,
+  Gamepad2,
+  Wine,
+  Car,
+  Flower2,
+  Sun,
 } from 'lucide-react';
 import {
   RoomType,
@@ -88,26 +118,71 @@ import {
 // ICONS MAPPING
 // =============================================================================
 
-const ROOM_ICONS: Partial<Record<RoomType, React.ReactNode>> = {
-  living_room: <Sofa className="w-5 h-5" />,
-  bedroom: <Bed className="w-5 h-5" />,
-  kitchen: <UtensilsCrossed className="w-5 h-5" />,
-  bathroom: <Bath className="w-5 h-5" />,
-  toilet: <Bath className="w-4 h-4" />,
-  hallway: <Home className="w-5 h-5" />,
-  office: <Home className="w-5 h-5" />,
-  other: <Home className="w-5 h-5" />,
+const ROOM_ICONS: Record<RoomType, React.ReactNode> = {
+  living_room: <Sofa className="w-6 h-6" />,
+  bedroom: <Bed className="w-6 h-6" />,
+  kitchen: <UtensilsCrossed className="w-6 h-6" />,
+  bathroom: <Bath className="w-6 h-6" />,
+  toilet: <ShowerHead className="w-6 h-6" />,
+  hallway: <DoorOpen className="w-6 h-6" />,
+  office: <Laptop className="w-6 h-6" />,
+  laundry: <Droplets className="w-6 h-6" />,
+  garage: <Car className="w-6 h-6" />,
+  basement: <Warehouse className="w-6 h-6" />,
+  attic: <Building2 className="w-6 h-6" />,
+  balcony: <Sun className="w-6 h-6" />,
+  terrace: <Trees className="w-6 h-6" />,
+  other: <Grid3X3 className="w-6 h-6" />,
 };
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   coating: <Paintbrush className="w-4 h-4" />,
-  woodwork: <Hammer className="w-4 h-4" />,
-  plumbing: <Wrench className="w-4 h-4" />,
-  electrical: <Lightbulb className="w-4 h-4" />,
+  woodwork: <DoorOpen className="w-4 h-4" />,
+  plumbing: <Droplets className="w-4 h-4" />,
+  electrical: <Zap className="w-4 h-4" />,
   hvac: <Thermometer className="w-4 h-4" />,
-  equipment: <Home className="w-4 h-4" />,
-  exterior: <Home className="w-4 h-4" />,
-  structure: <Hammer className="w-4 h-4" />,
+  equipment: <Tv className="w-4 h-4" />,
+  exterior: <Trees className="w-4 h-4" />,
+  structure: <Building2 className="w-4 h-4" />,
+};
+
+// Icons par type de travaux pour l'affichage illustré
+const WORK_ICONS: Partial<Record<WorkItemType, React.ReactNode>> = {
+  // Revêtements
+  painting: <PaintBucket className="w-5 h-5" />,
+  flooring: <Layers className="w-5 h-5" />,
+  tiling: <Grid3X3 className="w-5 h-5" />,
+  wallpaper: <Blinds className="w-5 h-5" />,
+  parquet: <Square className="w-5 h-5" />,
+  // Menuiserie
+  doors: <DoorOpen className="w-5 h-5" />,
+  windows: <Square className="w-5 h-5" />,
+  closets: <Shirt className="w-5 h-5" />,
+  kitchen_furniture: <UtensilsCrossed className="w-5 h-5" />,
+  bathroom_furniture: <Bath className="w-5 h-5" />,
+  // Plomberie
+  plumbing_fixtures: <ShowerHead className="w-5 h-5" />,
+  water_heater: <Flame className="w-5 h-5" />,
+  pipes: <Droplets className="w-5 h-5" />,
+  // Électricité
+  electrical_outlets: <Plug className="w-5 h-5" />,
+  lighting: <Lightbulb className="w-5 h-5" />,
+  electrical_panel: <Zap className="w-5 h-5" />,
+  network_wiring: <Cable className="w-5 h-5" />,
+  // CVC
+  heating: <Flame className="w-5 h-5" />,
+  air_conditioning: <AirVent className="w-5 h-5" />,
+  ventilation: <Fan className="w-5 h-5" />,
+  insulation: <Thermometer className="w-5 h-5" />,
+  // Équipements
+  appliances: <Tv className="w-5 h-5" />,
+  smart_home: <Laptop className="w-5 h-5" />,
+  // Extérieur
+  fencing: <Fence className="w-5 h-5" />,
+  landscaping: <Flower2 className="w-5 h-5" />,
+  // Structure
+  demolition: <Hammer className="w-5 h-5" />,
+  masonry: <Building2 className="w-5 h-5" />,
 };
 
 // =============================================================================
@@ -218,10 +293,11 @@ interface RoomCardProps {
 
 function RoomCard({ room, onUpdate, onDelete, onDuplicate, isExpanded }: RoomCardProps) {
   const config = ROOM_TYPE_CONFIG[room.type];
+  const [showAllWorks, setShowAllWorks] = useState(false);
 
   // Grouper les travaux par catégorie
   const worksByCategory = useMemo(() => {
-    const groups: Record<string, typeof WORK_ITEM_CONFIG[WorkItemType][]> = {};
+    const groups: Record<string, (typeof WORK_ITEM_CONFIG[WorkItemType] & { type: WorkItemType })[]> = {};
     Object.entries(WORK_ITEM_CONFIG).forEach(([type, cfg]) => {
       if (!groups[cfg.category]) groups[cfg.category] = [];
       groups[cfg.category].push({ ...cfg, type: type as WorkItemType });
@@ -332,75 +408,119 @@ function RoomCard({ room, onUpdate, onDelete, onDuplicate, isExpanded }: RoomCar
             </DropdownMenu>
           </div>
 
-          {/* Sélection des travaux par catégorie */}
+          {/* Sélection des travaux avec boutons illustrés */}
           <div className="space-y-4">
             <Label className="text-base">Travaux à réaliser</Label>
             <p className="text-sm text-muted-foreground">
-              Cochez les travaux concernés. Plus vous êtes précis, meilleure sera l'analyse.
+              Cliquez sur les travaux concernés. Plus vous êtes précis, meilleure sera l'analyse.
             </p>
 
-            {Object.entries(worksByCategory).map(([category, items]) => {
-              // Ne montrer que les catégories pertinentes pour ce type de pièce
-              const relevantItems = items.filter(item =>
-                config.commonWorks.includes(item.type as WorkItemType) ||
-                hasWork(item.type as WorkItemType)
-              );
+            {/* Travaux courants pour ce type de pièce - Affichage en grille de boutons */}
+            <div className="space-y-4">
+              {Object.entries(worksByCategory).map(([category, items]) => {
+                // Filtrer selon le mode (courant ou tous)
+                const relevantItems = showAllWorks
+                  ? items
+                  : items.filter(item =>
+                      config.commonWorks.includes(item.type as WorkItemType) ||
+                      hasWork(item.type as WorkItemType)
+                    );
 
-              if (relevantItems.length === 0) return null;
+                if (relevantItems.length === 0) return null;
 
-              return (
-                <div key={category} className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    {CATEGORY_ICONS[category]}
-                    <span>{categoryLabels[category]}</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {relevantItems.map((item) => {
-                      const isChecked = hasWork(item.type as WorkItemType);
-                      const workItem = room.works.find(w => w.type === item.type);
+                return (
+                  <div key={category} className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                      {CATEGORY_ICONS[category]}
+                      <span>{categoryLabels[category]}</span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {relevantItems.map((item) => {
+                        const isSelected = hasWork(item.type);
+                        const workItem = room.works.find(w => w.type === item.type);
 
-                      return (
-                        <div
-                          key={item.type}
-                          className={`
-                            flex items-start gap-3 p-3 rounded-lg border transition-all
-                            ${isChecked ? 'border-primary bg-primary/5' : 'border-muted'}
-                          `}
-                        >
-                          <Checkbox
-                            id={`${room.id}-${item.type}`}
-                            checked={isChecked}
-                            onCheckedChange={() => handleToggleWork(item.type as WorkItemType)}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <label
-                              htmlFor={`${room.id}-${item.type}`}
-                              className="text-sm font-medium cursor-pointer"
-                            >
-                              {item.label}
-                            </label>
-                            {isChecked && workItem && (
-                              <Input
-                                placeholder="Précisions (ex: parquet chêne massif)"
-                                value={workItem.description}
-                                onChange={(e) => handleWorkDescriptionChange(workItem.id, e.target.value)}
-                                className="mt-2 text-sm"
-                              />
+                        return (
+                          <button
+                            key={item.type}
+                            type="button"
+                            onClick={() => handleToggleWork(item.type)}
+                            className={`
+                              flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all text-center
+                              ${isSelected
+                                ? 'border-primary bg-primary/10 text-primary'
+                                : 'border-muted hover:border-primary/50 hover:bg-muted/50'
+                              }
+                            `}
+                          >
+                            <span className={isSelected ? 'text-primary' : 'text-muted-foreground'}>
+                              {WORK_ICONS[item.type] || CATEGORY_ICONS[category] || <Hammer className="w-5 h-5" />}
+                            </span>
+                            <span className="text-xs font-medium leading-tight">{item.label}</span>
+                            {isSelected && (
+                              <CheckCircle2 className="w-4 h-4 text-primary absolute -top-1 -right-1" />
                             )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
 
-            {/* Bouton pour voir plus de travaux */}
-            <Button variant="outline" size="sm" className="w-full">
-              <Plus className="w-4 h-4 mr-2" />
-              Voir plus de types de travaux
+            {/* Bouton pour voir plus/moins de travaux */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => setShowAllWorks(!showAllWorks)}
+            >
+              {showAllWorks ? (
+                <>
+                  <ChevronDown className="w-4 h-4 mr-2 rotate-180" />
+                  Afficher moins
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Voir tous les types de travaux
+                </>
+              )}
             </Button>
+
+            {/* Descriptions des travaux sélectionnés */}
+            {room.works.length > 0 && (
+              <div className="space-y-3 pt-4 border-t">
+                <Label className="text-sm">Précisions sur les travaux sélectionnés</Label>
+                {room.works.map((work) => {
+                  const workConfig = WORK_ITEM_CONFIG[work.type];
+                  return (
+                    <div key={work.id} className="flex items-start gap-3 p-3 bg-muted/30 rounded-lg">
+                      <span className="text-primary mt-0.5">
+                        {WORK_ICONS[work.type] || <Hammer className="w-4 h-4" />}
+                      </span>
+                      <div className="flex-1 space-y-2">
+                        <div className="font-medium text-sm">{workConfig?.label || work.type}</div>
+                        <Input
+                          placeholder="Précisions (ex: parquet chêne massif, peinture blanche mate...)"
+                          value={work.description}
+                          onChange={(e) => handleWorkDescriptionChange(work.id, e.target.value)}
+                          className="text-sm"
+                        />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleToggleWork(work.type)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Notes */}
@@ -729,17 +849,28 @@ export function StepRoomDetails({
           ))}
         </Accordion>
       ) : (
-        <Card className="border-dashed">
-          <CardContent className="py-12 text-center">
-            <Home className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Aucune pièce ajoutée</h3>
-            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-              Commencez par ajouter les pièces de votre bien qui sont concernées par des travaux.
-            </p>
-            <Button onClick={() => setIsAddDialogOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Ajouter une pièce
-            </Button>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Sélectionnez les pièces concernées</CardTitle>
+            <CardDescription>
+              Cliquez sur les pièces où vous souhaitez réaliser des travaux
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-3">
+              {(Object.entries(ROOM_TYPE_CONFIG) as [RoomType, typeof ROOM_TYPE_CONFIG[RoomType]][]).map(([type, config]) => (
+                <button
+                  key={type}
+                  onClick={() => handleAddRoom(type)}
+                  className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-muted hover:border-primary/50 hover:bg-primary/5 transition-all group"
+                >
+                  <span className="text-muted-foreground group-hover:text-primary transition-colors">
+                    {ROOM_ICONS[type]}
+                  </span>
+                  <span className="text-xs font-medium text-center leading-tight">{config.label}</span>
+                </button>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}
