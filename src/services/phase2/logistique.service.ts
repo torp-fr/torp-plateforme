@@ -3,7 +3,7 @@
  * Gestion installation chantier, approvisionnements, documents, journal
  */
 
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import type {
   InstallationChantier,
   Approvisionnement,
