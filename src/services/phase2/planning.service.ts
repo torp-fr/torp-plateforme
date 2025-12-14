@@ -3,7 +3,7 @@
  * Gestion du planning d'exécution (WBS, Gantt, dépendances)
  */
 
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import type {
   PlanningLot,
   PlanningTache,

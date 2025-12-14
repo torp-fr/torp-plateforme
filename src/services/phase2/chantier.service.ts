@@ -3,7 +3,7 @@
  * Gestion des chantiers et ordres de service
  */
 
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import type {
   Chantier,
   ChantierConfig,
