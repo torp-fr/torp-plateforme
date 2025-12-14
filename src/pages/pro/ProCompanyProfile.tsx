@@ -177,9 +177,9 @@ export default function ProCompanyProfile() {
           company_methodology: data.company_methodology || '',
           company_quality_commitments: data.company_quality_commitments || '',
         });
-        setCertifications(data.company_certifications || []);
-        setReferences(data.company_references || []);
-        setDocuments(data.company_documents || []);
+        setCertifications(Array.isArray(data.company_certifications) ? data.company_certifications : []);
+        setReferences(Array.isArray(data.company_references) ? data.company_references : []);
+        setDocuments(Array.isArray(data.company_documents) ? data.company_documents : []);
       }
     } catch (error) {
       console.error('[ProCompanyProfile] Erreur chargement:', error);
