@@ -44,8 +44,8 @@ import {
 } from '@/context/AppContext';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
-import { SiretLookupService, TextOptimizerService } from '@/services/company';
-import type { CompanyLookupResult, OptimizationType } from '@/services/company';
+import { SiretLookupService, TextOptimizerService, MaterialRecognitionService } from '@/services/company';
+import type { CompanyLookupResult, OptimizationType, MaterialRecognitionResult } from '@/services/company';
 import {
   EMPLOYEE_CATEGORIES,
   COMMON_EMPLOYEE_ROLES,
@@ -83,6 +83,10 @@ import {
   HardHat,
   Briefcase,
   ExternalLink,
+  Camera,
+  ScanLine,
+  ImagePlus,
+  X,
 } from 'lucide-react';
 
 // Types de certifications disponibles
@@ -185,6 +189,12 @@ export default function ProCompanyProfile() {
     isOwned: true,
     yearAcquisition: new Date().getFullYear(),
   });
+
+  // AI Material Recognition state
+  const [recognizing, setRecognizing] = useState(false);
+  const [recognitionResult, setRecognitionResult] = useState<MaterialRecognitionResult | null>(null);
+  const [materialImagePreview, setMaterialImagePreview] = useState<string | null>(null);
+  const fileInputRef = useState<HTMLInputElement | null>(null);
 
   // Charger les données du profil
   useEffect(() => {
@@ -701,6 +711,109 @@ export default function ProCompanyProfile() {
     return stats;
   };
 
+  // ============================================
+  // AI MATERIAL RECOGNITION
+  // ============================================
+
+  const handleImageSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Valider le fichier
+    const validation = MaterialRecognitionService.validateFile(file);
+    if (!validation.valid) {
+      toast({
+        variant: 'destructive',
+        title: 'Fichier invalide',
+        description: validation.error,
+      });
+      return;
+    }
+
+    // Afficher la preview
+    const previewUrl = URL.createObjectURL(file);
+    setMaterialImagePreview(previewUrl);
+
+    // Lancer la reconnaissance
+    await recognizeMaterial(file);
+  };
+
+  const handleCameraCapture = async () => {
+    try {
+      const file = await MaterialRecognitionService.captureFromCamera();
+
+      // Afficher la preview
+      const previewUrl = URL.createObjectURL(file);
+      setMaterialImagePreview(previewUrl);
+
+      // Lancer la reconnaissance
+      await recognizeMaterial(file);
+    } catch (error) {
+      console.error('[MaterialRecognition] Camera error:', error);
+    }
+  };
+
+  const recognizeMaterial = async (file: File) => {
+    setRecognizing(true);
+    setRecognitionResult(null);
+
+    try {
+      const result = await MaterialRecognitionService.recognizeFromFile(file, {
+        context: 'Matériel professionnel BTP pour entreprise du bâtiment',
+      });
+
+      setRecognitionResult(result);
+
+      if (result.success && result.confidence > 0.5) {
+        // Mapper les résultats vers le formulaire
+        const mappedData = MaterialRecognitionService.mapToMaterialForm(result);
+
+        setNewMaterial((prev) => ({
+          ...prev,
+          ...mappedData,
+        }));
+
+        setSelectedMaterialCategory(mappedData.category);
+
+        toast({
+          title: 'Matériel identifié !',
+          description: `${result.type}${result.brand ? ` - ${result.brand}` : ''} (${Math.round(result.confidence * 100)}% confiance)`,
+        });
+      } else {
+        toast({
+          variant: 'default',
+          title: 'Identification partielle',
+          description: result.rawDescription || 'Le matériel n\'a pas pu être identifié avec certitude.',
+        });
+      }
+    } catch (error: any) {
+      console.error('[MaterialRecognition] Error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erreur de reconnaissance',
+        description: error.message || 'Impossible d\'analyser l\'image.',
+      });
+    } finally {
+      setRecognizing(false);
+    }
+  };
+
+  const clearRecognitionPreview = () => {
+    if (materialImagePreview) {
+      URL.revokeObjectURL(materialImagePreview);
+    }
+    setMaterialImagePreview(null);
+    setRecognitionResult(null);
+  };
+
+  // Reset recognition state when dialog closes
+  const handleMaterialDialogChange = (open: boolean) => {
+    setMaterialDialogOpen(open);
+    if (!open) {
+      clearRecognitionPreview();
+    }
+  };
+
   if (loading) {
     return (
       <ProLayout>
@@ -1150,17 +1263,135 @@ export default function ProCompanyProfile() {
             </Card>
 
             {/* Dialog ajout/modification matériel */}
-            <Dialog open={materialDialogOpen} onOpenChange={setMaterialDialogOpen}>
-              <DialogContent className="max-w-lg">
+            <Dialog open={materialDialogOpen} onOpenChange={handleMaterialDialogChange}>
+              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>
                     {editingMaterial ? 'Modifier le matériel' : `Ajouter - ${MATERIAL_CATEGORIES[selectedMaterialCategory]?.label}`}
                   </DialogTitle>
                   <DialogDescription>
-                    Renseignez les informations du matériel
+                    Prenez une photo ou renseignez les informations manuellement
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
+                  {/* Section reconnaissance photo IA */}
+                  {!editingMaterial && (
+                    <div className="space-y-3">
+                      <Label className="flex items-center gap-2">
+                        <ScanLine className="h-4 w-4" />
+                        Identification automatique
+                      </Label>
+
+                      {/* Zone de preview/upload */}
+                      {materialImagePreview ? (
+                        <div className="relative">
+                          <img
+                            src={materialImagePreview}
+                            alt="Preview"
+                            className="w-full h-40 object-cover rounded-lg border"
+                          />
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            className="absolute top-2 right-2 h-8 w-8"
+                            onClick={clearRecognitionPreview}
+                            disabled={recognizing}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                          {recognizing && (
+                            <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
+                              <div className="text-center text-white">
+                                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                                <span className="text-sm">Analyse en cours...</span>
+                              </div>
+                            </div>
+                          )}
+                          {recognitionResult && recognitionResult.success && (
+                            <div className="absolute bottom-2 left-2 right-2">
+                              <Badge variant="secondary" className="bg-green-500/90 text-white">
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                {Math.round(recognitionResult.confidence * 100)}% confiance
+                              </Badge>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="border-2 border-dashed rounded-lg p-6 text-center bg-muted/30 hover:bg-muted/50 transition-colors">
+                          <div className="flex justify-center gap-4">
+                            {/* Bouton Caméra */}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={handleCameraCapture}
+                              disabled={recognizing}
+                              className="flex-col h-auto py-3 px-4"
+                            >
+                              <Camera className="h-6 w-6 mb-1" />
+                              <span className="text-xs">Photo</span>
+                            </Button>
+
+                            {/* Bouton Upload */}
+                            <label className="cursor-pointer">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={recognizing}
+                                className="flex-col h-auto py-3 px-4 pointer-events-none"
+                                asChild
+                              >
+                                <span>
+                                  <ImagePlus className="h-6 w-6 mb-1" />
+                                  <span className="text-xs">Importer</span>
+                                </span>
+                              </Button>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handleImageSelect}
+                                disabled={recognizing}
+                              />
+                            </label>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-3">
+                            L'IA identifiera automatiquement le matériel
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Résultat de la reconnaissance */}
+                      {recognitionResult && recognitionResult.success && (
+                        <Alert className="bg-green-50 border-green-200">
+                          <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          <AlertDescription className="text-green-700 text-sm">
+                            <strong>{recognitionResult.type}</strong>
+                            {recognitionResult.brand && ` - ${recognitionResult.brand}`}
+                            {recognitionResult.model && ` ${recognitionResult.model}`}
+                            {recognitionResult.estimatedValue && (
+                              <span className="block mt-1 text-xs">
+                                Valeur estimée: {recognitionResult.estimatedValue.min.toLocaleString('fr-FR')} - {recognitionResult.estimatedValue.max.toLocaleString('fr-FR')} €
+                              </span>
+                            )}
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                          <span className="w-full border-t" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                          <span className="bg-background px-2 text-muted-foreground">
+                            ou saisie manuelle
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Catégorie */}
                   <div className="space-y-2">
                     <Label>Catégorie</Label>
