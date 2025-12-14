@@ -9,8 +9,14 @@
  * - Informations de maintenance et sécurité
  */
 
-import { corsHeaders } from '../_shared/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+// CORS Headers (inline pour compatibilité Dashboard)
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+};
 
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
 
