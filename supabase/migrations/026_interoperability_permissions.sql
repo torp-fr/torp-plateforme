@@ -28,6 +28,30 @@ DROP FUNCTION IF EXISTS get_user_project_permissions CASCADE;
 DROP FUNCTION IF EXISTS user_has_role_on_project CASCADE;
 DROP FUNCTION IF EXISTS get_unread_notification_count CASCADE;
 
+-- Supprimer les index orphelins
+DROP INDEX IF EXISTS idx_project_actors_project;
+DROP INDEX IF EXISTS idx_project_actors_user;
+DROP INDEX IF EXISTS idx_project_actors_role;
+DROP INDEX IF EXISTS idx_project_actors_status;
+DROP INDEX IF EXISTS idx_invitations_email;
+DROP INDEX IF EXISTS idx_invitations_token;
+DROP INDEX IF EXISTS idx_invitations_project;
+DROP INDEX IF EXISTS idx_invitations_status;
+DROP INDEX IF EXISTS idx_notifications_recipient;
+DROP INDEX IF EXISTS idx_notifications_project;
+DROP INDEX IF EXISTS idx_notifications_read;
+DROP INDEX IF EXISTS idx_notifications_type;
+DROP INDEX IF EXISTS idx_notifications_created;
+DROP INDEX IF EXISTS idx_shared_docs_project;
+DROP INDEX IF EXISTS idx_shared_docs_type;
+DROP INDEX IF EXISTS idx_shared_docs_status;
+DROP INDEX IF EXISTS idx_shared_docs_shared_by;
+DROP INDEX IF EXISTS idx_audit_project;
+DROP INDEX IF EXISTS idx_audit_actor;
+DROP INDEX IF EXISTS idx_audit_resource;
+DROP INDEX IF EXISTS idx_audit_action;
+DROP INDEX IF EXISTS idx_audit_created;
+
 -- ===================
 -- TYPES ÉNUMÉRÉS
 -- ===================
