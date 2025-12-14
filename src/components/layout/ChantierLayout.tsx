@@ -26,10 +26,10 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApp } from '@/context/AppContext';
 import { ChantierService } from '@/services/phase2';
 import type { Chantier } from '@/types/phase2';
+import { AppLayout } from './AppLayout';
 
 interface NavSection {
   id: string;
@@ -149,128 +149,136 @@ export function ChantierLayout() {
   };
 
   return (
-    <div className="flex h-full min-h-[calc(100vh-4rem)]">
-      {/* Sidebar contextuel */}
-      <aside
-        className={cn(
-          'bg-white border-r transition-all duration-300 flex flex-col',
-          collapsed ? 'w-16' : 'w-64'
-        )}
-      >
-        {/* En-tête chantier */}
-        <div className={cn('p-4 border-b', collapsed && 'p-2')}>
-          {!collapsed && chantier && (
-            <>
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="font-semibold text-sm truncate">{chantier.nom}</h2>
-                <Badge className={STATUT_LABELS[chantier.statut]?.color || 'bg-gray-500'}>
-                  {STATUT_LABELS[chantier.statut]?.label || chantier.statut}
-                </Badge>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Avancement</span>
-                  <span>{chantier.avancementGlobal}%</span>
-                </div>
-                <Progress value={chantier.avancementGlobal} className="h-1.5" />
-              </div>
-            </>
+    <AppLayout>
+      <div className="flex h-full min-h-[calc(100vh-4rem)] -m-4 md:-m-6">
+        {/* Sidebar contextuel chantier */}
+        <aside
+          className={cn(
+            'bg-white border-r transition-all duration-300 flex flex-col',
+            collapsed ? 'w-16' : 'w-64'
           )}
-          {collapsed && (
-            <div className="flex justify-center">
-              <Building2 className="h-6 w-6 text-primary" />
-            </div>
-          )}
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto p-2">
-          {CHANTIER_NAV.map((section) => (
-            <div key={section.id} className="mb-4">
-              {!collapsed && (
-                <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  {getLabel(section)}
-                </div>
-              )}
-              <div className="space-y-1">
-                {section.items.map((item) => {
-                  const href = buildLink(item);
-                  const isActive = activeItem?.item.href === item.href;
-                  const Icon = item.icon;
-
-                  return (
-                    <Link
-                      key={item.href}
-                      to={href}
-                      className={cn(
-                        'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative',
-                        isActive
-                          ? 'bg-primary text-white'
-                          : 'text-gray-700 hover:bg-gray-100',
-                        collapsed && 'justify-center px-2'
-                      )}
-                      title={collapsed ? getLabel(item) : undefined}
-                    >
-                      <Icon className={cn('h-5 w-5', collapsed && 'h-6 w-6')} />
-                      {!collapsed && (
-                        <>
-                          <span className="flex-1">{getLabel(item)}</span>
-                          {item.badge && (
-                            <Badge className={cn('text-xs', item.badgeColor || 'bg-primary')}>
-                              {item.badge}
-                            </Badge>
-                          )}
-                        </>
-                      )}
-                      {collapsed && item.badge && (
-                        <span className="absolute -top-1 -right-1 h-2 w-2 bg-green-500 rounded-full" />
-                      )}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </nav>
-
-        {/* Bouton collapse */}
-        <div className="p-2 border-t">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full"
-            onClick={() => setCollapsed(!collapsed)}
-          >
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
+        >
+          {/* En-tête chantier */}
+          <div className={cn('p-4 border-b', collapsed && 'p-2')}>
+            {!collapsed && chantier && (
               <>
-                <ChevronLeft className="h-4 w-4 mr-2" />
-                <span>Réduire</span>
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="font-semibold text-sm truncate">{chantier.nom}</h2>
+                  <Badge className={STATUT_LABELS[chantier.statut]?.color || 'bg-gray-500'}>
+                    {STATUT_LABELS[chantier.statut]?.label || chantier.statut}
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Avancement</span>
+                    <span>{chantier.avancementGlobal}%</span>
+                  </div>
+                  <Progress value={chantier.avancementGlobal} className="h-1.5" />
+                </div>
               </>
             )}
-          </Button>
-        </div>
+            {loading && !chantier && !collapsed && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                Chargement...
+              </div>
+            )}
+            {collapsed && (
+              <div className="flex justify-center">
+                <Building2 className="h-6 w-6 text-primary" />
+              </div>
+            )}
+          </div>
 
-        {/* Retour projets */}
-        <div className={cn('p-2 border-t', collapsed && 'p-1')}>
-          <Button
-            variant="outline"
-            size="sm"
-            className={cn('w-full', collapsed && 'p-2')}
-            onClick={() => navigate('/chantiers')}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            {!collapsed && <span className="ml-2">Mes chantiers</span>}
-          </Button>
-        </div>
-      </aside>
+          {/* Navigation */}
+          <nav className="flex-1 overflow-y-auto p-2">
+            {CHANTIER_NAV.map((section) => (
+              <div key={section.id} className="mb-4">
+                {!collapsed && (
+                  <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {getLabel(section)}
+                  </div>
+                )}
+                <div className="space-y-1">
+                  {section.items.map((item) => {
+                    const href = buildLink(item);
+                    const isActive = activeItem?.item.href === item.href;
+                    const Icon = item.icon;
 
-      {/* Contenu principal */}
-      <main className="flex-1 overflow-auto">
-        <Outlet />
-      </main>
-    </div>
+                    return (
+                      <Link
+                        key={item.href}
+                        to={href}
+                        className={cn(
+                          'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors relative',
+                          isActive
+                            ? 'bg-primary text-white'
+                            : 'text-gray-700 hover:bg-gray-100',
+                          collapsed && 'justify-center px-2'
+                        )}
+                        title={collapsed ? getLabel(item) : undefined}
+                      >
+                        <Icon className={cn('h-5 w-5', collapsed && 'h-6 w-6')} />
+                        {!collapsed && (
+                          <>
+                            <span className="flex-1">{getLabel(item)}</span>
+                            {item.badge && (
+                              <Badge className={cn('text-xs', item.badgeColor || 'bg-primary')}>
+                                {item.badge}
+                              </Badge>
+                            )}
+                          </>
+                        )}
+                        {collapsed && item.badge && (
+                          <span className="absolute -top-1 -right-1 h-2 w-2 bg-green-500 rounded-full" />
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </nav>
+
+          {/* Bouton collapse */}
+          <div className="p-2 border-t">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full"
+              onClick={() => setCollapsed(!collapsed)}
+            >
+              {collapsed ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <>
+                  <ChevronLeft className="h-4 w-4 mr-2" />
+                  <span>Réduire</span>
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Retour chantiers */}
+          <div className={cn('p-2 border-t', collapsed && 'p-1')}>
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn('w-full', collapsed && 'p-2')}
+              onClick={() => navigate('/chantiers')}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              {!collapsed && <span className="ml-2">Mes chantiers</span>}
+            </Button>
+          </div>
+        </aside>
+
+        {/* Contenu principal */}
+        <main className="flex-1 overflow-auto p-4 md:p-6">
+          <Outlet />
+        </main>
+      </div>
+    </AppLayout>
   );
 }
 

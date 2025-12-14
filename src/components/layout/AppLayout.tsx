@@ -135,7 +135,7 @@ const USER_TYPE_CONFIG = {
 export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, userType, setUser } = useApp();
+  const { user, userType, logout } = useApp();
   const { toast } = useToast();
   const { labels, mainRoutes, defaultRoute, profileName, profileColor } = useProfile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -163,17 +163,17 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const handleLogout = async () => {
     try {
-      await authService.logout();
-      setUser(null);
+      await logout();
       toast({
         title: 'Déconnexion réussie',
         description: 'À bientôt!',
       });
-      navigate('/login');
+      // Redirection vers la landing page
+      navigate('/');
     } catch (error) {
       console.error('Logout error:', error);
-      setUser(null);
-      navigate('/login');
+      // Même en cas d'erreur, rediriger vers la landing page
+      navigate('/');
     }
   };
 

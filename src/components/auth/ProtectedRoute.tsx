@@ -24,8 +24,17 @@ export function ProtectedRoute({
   requiredTypes,
   redirectTo = '/login',
 }: ProtectedRouteProps) {
-  const { user, userType } = useApp();
+  const { user, userType, isLoading } = useApp();
   const location = useLocation();
+
+  // Show loading while auth state is being determined
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+      </div>
+    );
+  }
 
   // Check if user is authenticated
   if (!user) {
@@ -39,7 +48,9 @@ export function ProtectedRoute({
     const dashboardMap: Record<UserType, string> = {
       B2C: '/dashboard',
       B2B: '/pro',
+      B2G: '/dashboard',
       admin: '/admin-dashboard',
+      super_admin: '/admin/analytics',
     };
 
     return <Navigate to={dashboardMap[userType] || '/'} replace />;
@@ -59,10 +70,27 @@ export function PublicOnlyRoute({
   children: ReactNode;
   redirectTo?: string;
 }) {
-  const { user } = useApp();
+  const { user, userType, isLoading } = useApp();
+
+  // Show loading while auth state is being determined
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+      </div>
+    );
+  }
 
   if (user) {
-    return <Navigate to={redirectTo} replace />;
+    // Redirect to appropriate dashboard based on user type
+    const dashboardMap: Record<UserType, string> = {
+      B2C: '/dashboard',
+      B2B: '/pro',
+      B2G: '/dashboard',
+      admin: '/admin-dashboard',
+      super_admin: '/admin/analytics',
+    };
+    return <Navigate to={dashboardMap[userType] || redirectTo} replace />;
   }
 
   return <>{children}</>;
