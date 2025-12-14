@@ -57,6 +57,7 @@ interface NavItem {
 const B2C_NAV_ITEMS: NavItem[] = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord', exact: true },
   { href: '/phase0/dashboard', icon: Briefcase, label: 'Mes projets' },
+  { href: '/chantiers', icon: Hammer, label: 'Mes chantiers' },
   { href: '/analyze', icon: FileSearch, label: 'Analyser un devis' },
   { href: '/compare', icon: Scale, label: 'Comparer devis' },
   { href: '/profile', icon: User, label: 'Mon profil' },
@@ -66,6 +67,7 @@ const B2C_NAV_ITEMS: NavItem[] = [
 const B2B_NAV_ITEMS: NavItem[] = [
   { href: '/pro', icon: LayoutDashboard, label: 'Tableau de bord', exact: true },
   { href: '/pro/projects', icon: Briefcase, label: 'Mes projets' },
+  { href: '/chantiers', icon: Hammer, label: 'Mes chantiers' },
   { href: '/pro/documents', icon: FileText, label: 'Documents' },
   { href: '/b2b/ao', icon: FolderOpen, label: 'Appels d\'offres' },
   { href: '/pro/analyses', icon: FileSearch, label: 'Analyses devis' },
@@ -76,6 +78,7 @@ const B2B_NAV_ITEMS: NavItem[] = [
 const B2G_NAV_ITEMS: NavItem[] = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord', exact: true },
   { href: '/phase0/dashboard', icon: Briefcase, label: 'Marchés en cours' },
+  { href: '/chantiers', icon: Hammer, label: 'Suivi chantiers' },
   { href: '/tenders', icon: FolderOpen, label: 'Appels d\'offres' },
   { href: '/pro/documents', icon: FileText, label: 'Documents' },
   { href: '/profile', icon: Landmark, label: 'Ma collectivité' },
