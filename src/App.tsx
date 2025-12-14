@@ -65,6 +65,8 @@ import { Phase1Consultation } from "./pages/phase1";
 import { Phase2Dashboard, PlanningPage, ReunionsPage, JournalPage, ChantiersListPage } from "./pages/phase2";
 // Phase 3 Pages (Exécution Chantier)
 import { ControlesPage, CoordinationPage, SituationsPage } from "./pages/phase3";
+// Phase 4 Pages (Réception & Garanties)
+import Phase4Dashboard from "./pages/phase4/Phase4Dashboard";
 // Layout contextuel chantier
 import ChantierLayout from "./components/layout/ChantierLayout";
 
@@ -146,6 +148,12 @@ const AppContent = () => {
             <Route path="coordination" element={<CoordinationPage />} />
             <Route path="situations" element={<SituationsPage />} />
           </Route>
+          {/* Routes Phase 4 - Réception & Garanties */}
+          <Route path="/phase4/:projectId" element={<ProtectedRoute><Phase4Dashboard /></ProtectedRoute>} />
+          <Route path="/phase4/:projectId/reception" element={<ProtectedRoute><Phase4Dashboard /></ProtectedRoute>} />
+          <Route path="/phase4/:projectId/reserves" element={<ProtectedRoute><Phase4Dashboard /></ProtectedRoute>} />
+          <Route path="/phase4/:projectId/garanties" element={<ProtectedRoute><Phase4Dashboard /></ProtectedRoute>} />
+          <Route path="/phase4/:projectId/doe" element={<ProtectedRoute><Phase4Dashboard /></ProtectedRoute>} />
           {/* Routes Appels d'Offres (MOA) */}
           <Route path="/tenders" element={<ProtectedRoute><TendersPage /></ProtectedRoute>} />
           <Route path="/tenders/:tenderId" element={<ProtectedRoute><TenderDetailPage /></ProtectedRoute>} />
