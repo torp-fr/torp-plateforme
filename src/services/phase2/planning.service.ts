@@ -412,46 +412,305 @@ export class PlanningService {
   }
 
   /**
-   * Calculer le chemin critique
+   * Calculer le chemin critique avec l'algorithme PERT complet
+   * Calcule les dates au plus tôt (ES/EF), au plus tard (LS/LF) et les marges
    */
   static async calculerCheminCritique(chantierId: string): Promise<CheminCritique> {
     const taches = await this.getTachesByChantier(chantierId);
     const dependances = await this.getDependances(chantierId);
 
-    // Algorithme simplifié du chemin critique
-    // TODO: Implémenter l'algorithme PERT complet
-
-    // Trouver la date de fin la plus tardive
-    let dateFinMax = '';
-    for (const tache of taches) {
-      if (tache.dateFinPrevue > dateFinMax) {
-        dateFinMax = tache.dateFinPrevue;
-      }
+    if (taches.length === 0) {
+      return {
+        tacheIds: [],
+        dureeTotaleJours: 0,
+        dateDebut: new Date().toISOString().split('T')[0],
+        dateFin: new Date().toISOString().split('T')[0],
+      };
     }
 
-    // Trouver les tâches qui finissent à cette date (tâches critiques simplifiées)
-    const tachesCritiques = taches
-      .filter(t => t.dateFinPrevue === dateFinMax)
-      .map(t => t.id);
-
-    // Calculer la durée totale
-    let dateDebutMin = taches[0]?.dateDebutPrevue || new Date().toISOString().split('T')[0];
-    for (const tache of taches) {
-      if (tache.dateDebutPrevue < dateDebutMin) {
-        dateDebutMin = tache.dateDebutPrevue;
-      }
+    // Structure PERT pour chaque tâche
+    interface PertNode {
+      id: string;
+      duree: number;
+      predecesseurs: string[];
+      successeurs: string[];
+      ES: number; // Early Start
+      EF: number; // Early Finish
+      LS: number; // Late Start
+      LF: number; // Late Finish
+      marge: number; // Total Float
     }
 
-    const dureeTotale = Math.ceil(
-      (new Date(dateFinMax).getTime() - new Date(dateDebutMin).getTime()) / (1000 * 60 * 60 * 24)
+    // Initialiser les nœuds PERT
+    const nodes: Map<string, PertNode> = new Map();
+    const dateRef = new Date(
+      taches.reduce((min, t) => t.dateDebutPrevue < min ? t.dateDebutPrevue : min, taches[0].dateDebutPrevue)
     );
+
+    for (const tache of taches) {
+      const startDate = new Date(tache.dateDebutPrevue);
+      const esJours = Math.floor((startDate.getTime() - dateRef.getTime()) / (1000 * 60 * 60 * 24));
+
+      nodes.set(tache.id, {
+        id: tache.id,
+        duree: tache.dureeJours,
+        predecesseurs: [],
+        successeurs: [],
+        ES: esJours,
+        EF: esJours + tache.dureeJours,
+        LS: 0,
+        LF: 0,
+        marge: 0,
+      });
+    }
+
+    // Construire le graphe des dépendances
+    for (const dep of dependances) {
+      const source = nodes.get(dep.tacheSourceId);
+      const cible = nodes.get(dep.tacheCibleId);
+
+      if (source && cible) {
+        source.successeurs.push(dep.tacheCibleId);
+        cible.predecesseurs.push(dep.tacheSourceId);
+      }
+    }
+
+    // PASSE AVANT : Calcul des dates au plus tôt (ES/EF)
+    // Tri topologique des tâches
+    const sortedNodes = this.triTopologique(nodes);
+
+    for (const nodeId of sortedNodes) {
+      const node = nodes.get(nodeId)!;
+
+      if (node.predecesseurs.length > 0) {
+        // ES = max(EF de tous les prédécesseurs) + décalage
+        let maxEF = 0;
+        for (const predId of node.predecesseurs) {
+          const pred = nodes.get(predId);
+          if (pred) {
+            // Trouver le décalage pour cette dépendance
+            const dep = dependances.find(d => d.tacheSourceId === predId && d.tacheCibleId === nodeId);
+            const decalage = dep?.decalageJours || 0;
+            maxEF = Math.max(maxEF, pred.EF + decalage);
+          }
+        }
+        node.ES = maxEF;
+      }
+      node.EF = node.ES + node.duree;
+    }
+
+    // Date de fin du projet (EF maximum)
+    let projectEF = 0;
+    for (const node of nodes.values()) {
+      projectEF = Math.max(projectEF, node.EF);
+    }
+
+    // PASSE ARRIÈRE : Calcul des dates au plus tard (LS/LF)
+    // Initialiser LF pour les tâches sans successeurs
+    for (const node of nodes.values()) {
+      if (node.successeurs.length === 0) {
+        node.LF = projectEF;
+        node.LS = node.LF - node.duree;
+      }
+    }
+
+    // Parcours inverse
+    const reverseSorted = [...sortedNodes].reverse();
+    for (const nodeId of reverseSorted) {
+      const node = nodes.get(nodeId)!;
+
+      if (node.successeurs.length > 0) {
+        // LF = min(LS de tous les successeurs) - décalage
+        let minLS = Infinity;
+        for (const succId of node.successeurs) {
+          const succ = nodes.get(succId);
+          if (succ) {
+            const dep = dependances.find(d => d.tacheSourceId === nodeId && d.tacheCibleId === succId);
+            const decalage = dep?.decalageJours || 0;
+            minLS = Math.min(minLS, succ.LS - decalage);
+          }
+        }
+        node.LF = minLS;
+        node.LS = node.LF - node.duree;
+      }
+
+      // Calcul de la marge totale
+      node.marge = node.LS - node.ES;
+    }
+
+    // Identifier les tâches critiques (marge = 0)
+    const tachesCritiques: string[] = [];
+    for (const node of nodes.values()) {
+      if (node.marge === 0) {
+        tachesCritiques.push(node.id);
+      }
+    }
+
+    // Calculer les dates réelles
+    const dateDebut = dateRef.toISOString().split('T')[0];
+    const dateFinProjet = new Date(dateRef);
+    dateFinProjet.setDate(dateFinProjet.getDate() + projectEF);
+    const dateFin = dateFinProjet.toISOString().split('T')[0];
 
     return {
       tacheIds: tachesCritiques,
-      dureeTotaleJours: dureeTotale,
-      dateDebut: dateDebutMin,
-      dateFin: dateFinMax,
+      dureeTotaleJours: projectEF,
+      dateDebut,
+      dateFin,
     };
+  }
+
+  /**
+   * Tri topologique des tâches (algorithme de Kahn)
+   */
+  private static triTopologique(nodes: Map<string, { predecesseurs: string[]; successeurs: string[] }>): string[] {
+    const inDegree = new Map<string, number>();
+    const queue: string[] = [];
+    const result: string[] = [];
+
+    // Calculer le degré entrant de chaque nœud
+    for (const [id, node] of nodes) {
+      inDegree.set(id, node.predecesseurs.length);
+      if (node.predecesseurs.length === 0) {
+        queue.push(id);
+      }
+    }
+
+    // Parcourir le graphe
+    while (queue.length > 0) {
+      const nodeId = queue.shift()!;
+      result.push(nodeId);
+
+      const node = nodes.get(nodeId);
+      if (node) {
+        for (const succId of node.successeurs) {
+          const degree = (inDegree.get(succId) || 0) - 1;
+          inDegree.set(succId, degree);
+          if (degree === 0) {
+            queue.push(succId);
+          }
+        }
+      }
+    }
+
+    // Si toutes les tâches n'ont pas été traitées, il y a un cycle
+    if (result.length !== nodes.size) {
+      console.warn('[PlanningService] Cycle détecté dans les dépendances');
+      // Retourner toutes les tâches dans un ordre quelconque
+      return [...nodes.keys()];
+    }
+
+    return result;
+  }
+
+  /**
+   * Calculer les marges de chaque tâche (PERT avancé)
+   */
+  static async calculerMarges(chantierId: string): Promise<Map<string, { margeTotale: number; margeLibre: number }>> {
+    const taches = await this.getTachesByChantier(chantierId);
+    const dependances = await this.getDependances(chantierId);
+    const marges = new Map<string, { margeTotale: number; margeLibre: number }>();
+
+    // Calculer le chemin critique pour obtenir les dates
+    const cheminCritique = await this.calculerCheminCritique(chantierId);
+
+    // Pour chaque tâche, calculer les marges
+    const dateRef = new Date(cheminCritique.dateDebut);
+
+    for (const tache of taches) {
+      const startDate = new Date(tache.dateDebutPrevue);
+      const endDate = new Date(tache.dateFinPrevue);
+
+      // Trouver les successeurs de cette tâche
+      const successeursDeps = dependances.filter(d => d.tacheSourceId === tache.id);
+
+      // Marge libre = min(ES successeurs) - EF de la tâche
+      let margeLibre = Infinity;
+      if (successeursDeps.length === 0) {
+        // Pas de successeur : marge libre jusqu'à la fin du projet
+        const projectEnd = new Date(cheminCritique.dateFin);
+        margeLibre = Math.floor((projectEnd.getTime() - endDate.getTime()) / (1000 * 60 * 60 * 24));
+      } else {
+        for (const dep of successeursDeps) {
+          const successeur = taches.find(t => t.id === dep.tacheCibleId);
+          if (successeur) {
+            const succStart = new Date(successeur.dateDebutPrevue);
+            const ecart = Math.floor((succStart.getTime() - endDate.getTime()) / (1000 * 60 * 60 * 24)) - dep.decalageJours;
+            margeLibre = Math.min(margeLibre, ecart);
+          }
+        }
+      }
+
+      // Marge totale = date au plus tard - date prévue
+      // Pour simplifier, on utilise la marge libre comme approximation
+      const margeTotale = cheminCritique.tacheIds.includes(tache.id) ? 0 : margeLibre;
+
+      marges.set(tache.id, {
+        margeTotale: Math.max(0, margeTotale),
+        margeLibre: Math.max(0, margeLibre === Infinity ? 0 : margeLibre),
+      });
+    }
+
+    return marges;
+  }
+
+  /**
+   * Recalculer automatiquement les dates en cascade (propagation PERT)
+   */
+  static async recalculerDatesEnCascade(chantierId: string, tacheModifieeId: string, nouveauDecalage: number): Promise<void> {
+    const taches = await this.getTachesByChantier(chantierId);
+    const dependances = await this.getDependances(chantierId);
+
+    // Trouver toutes les tâches impactées (successeurs directs et indirects)
+    const tachesAMettreAJour: Set<string> = new Set();
+    const queue = [tacheModifieeId];
+
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      const successeursDeps = dependances.filter(d => d.tacheSourceId === currentId);
+
+      for (const dep of successeursDeps) {
+        if (!tachesAMettreAJour.has(dep.tacheCibleId)) {
+          tachesAMettreAJour.add(dep.tacheCibleId);
+          queue.push(dep.tacheCibleId);
+        }
+      }
+    }
+
+    // Mettre à jour les dates de chaque tâche impactée
+    for (const tacheId of tachesAMettreAJour) {
+      const tache = taches.find(t => t.id === tacheId);
+      if (!tache) continue;
+
+      // Trouver la nouvelle date de début (max des EF des prédécesseurs)
+      const predecesseursDeps = dependances.filter(d => d.tacheCibleId === tacheId);
+      let nouvelleDateDebut = new Date(tache.dateDebutPrevue);
+
+      for (const dep of predecesseursDeps) {
+        const pred = taches.find(t => t.id === dep.tacheSourceId);
+        if (pred) {
+          const predFin = new Date(pred.dateFinPrevue);
+          predFin.setDate(predFin.getDate() + dep.decalageJours + 1);
+          if (predFin > nouvelleDateDebut) {
+            nouvelleDateDebut = predFin;
+          }
+        }
+      }
+
+      // Calculer la nouvelle date de fin
+      const nouvelleDateFin = new Date(nouvelleDateDebut);
+      nouvelleDateFin.setDate(nouvelleDateFin.getDate() + tache.dureeJours - 1);
+
+      // Mettre à jour en base
+      await supabase
+        .from('phase2_planning_taches')
+        .update({
+          date_debut_prevue: nouvelleDateDebut.toISOString().split('T')[0],
+          date_fin_prevue: nouvelleDateFin.toISOString().split('T')[0],
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', tacheId);
+    }
   }
 
   /**

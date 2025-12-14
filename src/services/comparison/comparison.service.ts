@@ -1,9 +1,11 @@
 /**
  * Comparison Service
  * Service pour comparer plusieurs devis analysés
+ * Utilise l'IA Claude pour une analyse intelligente des devis
  */
 
 import { supabase } from '@/lib/supabase';
+import { claudeService } from '@/services/ai/claude.service';
 
 // =====================================================
 // INTERFACES
@@ -27,6 +29,16 @@ export interface DevisComparable {
   dateAnalyse: string;
 }
 
+export interface AIComparisonInsights {
+  syntheseGlobale: string;
+  pointsForts: { devisId: string; entreprise: string; points: string[] }[];
+  pointsFaibles: { devisId: string; entreprise: string; points: string[] }[];
+  risques: { devisId: string; niveau: 'faible' | 'moyen' | 'eleve'; description: string }[];
+  conseilsNegociation: string[];
+  questionsAPposer: string[];
+  verdictFinal: string;
+}
+
 export interface ComparisonResult {
   id: string;
   name: string;
@@ -42,6 +54,7 @@ export interface ComparisonResult {
     ecartPrix: number;
     ecartPrixPourcentage: number;
   };
+  aiInsights?: AIComparisonInsights;
   recommandation: string;
   createdAt: string;
 }
@@ -353,6 +366,98 @@ class ComparisonService {
     }
 
     return recommandation;
+  }
+
+  /**
+   * Analyse IA approfondie des devis avec Claude
+   * Génère des insights intelligents pour aider à la décision
+   */
+  async generateAIInsights(devis: DevisComparable[]): Promise<AIComparisonInsights | null> {
+    if (!claudeService.isConfigured()) {
+      console.warn('[ComparisonService] Claude non configuré - analyse IA désactivée');
+      return null;
+    }
+
+    try {
+      const prompt = `Tu es un expert en analyse de devis de travaux BTP. Analyse ces ${devis.length} devis et fournis une comparaison détaillée.
+
+DEVIS À COMPARER:
+${devis.map((d, i) => `
+--- DEVIS ${i + 1} ---
+Entreprise: ${d.entreprise}
+SIRET: ${d.siret || 'Non renseigné'}
+Montant TTC: ${d.montant.toLocaleString('fr-FR')}€
+Score TORP: ${d.scoreTotal}/1000 (${d.grade})
+Score Entreprise: ${d.scoreEntreprise}/250
+Score Prix: ${d.scorePrix}/300
+Score Complétude: ${d.scoreCompletude}/200
+Score Conformité: ${d.scoreConformite}/150
+Score Délais: ${d.scoreDelais}/100
+Surcoûts détectés: ${d.surcoutsDetectes.toLocaleString('fr-FR')}€
+Économies potentielles: ${d.economiesPotentielles.toLocaleString('fr-FR')}€
+`).join('\n')}
+
+Analyse et retourne un JSON avec cette structure exacte:
+{
+  "syntheseGlobale": "Résumé de 2-3 phrases sur la comparaison globale",
+  "pointsForts": [
+    { "devisId": "id du devis", "entreprise": "nom", "points": ["point fort 1", "point fort 2"] }
+  ],
+  "pointsFaibles": [
+    { "devisId": "id du devis", "entreprise": "nom", "points": ["point faible 1"] }
+  ],
+  "risques": [
+    { "devisId": "id du devis", "niveau": "faible|moyen|eleve", "description": "description du risque" }
+  ],
+  "conseilsNegociation": ["conseil 1", "conseil 2", "conseil 3"],
+  "questionsAPposer": ["question 1 à poser à l'entreprise", "question 2"],
+  "verdictFinal": "Recommandation finale détaillée avec justification"
+}
+
+IMPORTANT:
+- Les devisId doivent correspondre aux IDs suivants: ${devis.map(d => d.id).join(', ')}
+- Sois précis et factuel dans ton analyse
+- Base-toi sur les scores TORP pour identifier les forces/faiblesses
+- Fournis des conseils de négociation concrets et actionnables
+- Les questions doivent aider le client à clarifier des points importants`;
+
+      const insights = await claudeService.generateJSON<AIComparisonInsights>(prompt, {
+        temperature: 0.4,
+        maxTokens: 4000,
+        systemPrompt: `Tu es un expert en analyse de devis BTP. Tu aides les particuliers à comparer des devis de travaux de manière objective et détaillée. Tu dois toujours retourner du JSON valide sans markdown.`,
+      });
+
+      console.log('[ComparisonService] Analyse IA générée avec succès');
+      return insights;
+    } catch (error) {
+      console.error('[ComparisonService] Erreur analyse IA:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Créer une comparaison avec analyse IA
+   */
+  async createComparisonWithAI(userId: string, input: CreateComparisonInput): Promise<ComparisonResult> {
+    // Créer la comparaison standard
+    const result = await this.createComparison(userId, input);
+
+    // Ajouter l'analyse IA si disponible
+    const aiInsights = await this.generateAIInsights(result.devis);
+    if (aiInsights) {
+      result.aiInsights = aiInsights;
+
+      // Mettre à jour en base avec les insights IA
+      await supabase
+        .from('comparisons')
+        .update({
+          result: result,
+          ai_insights: aiInsights,
+        })
+        .eq('id', result.id);
+    }
+
+    return result;
   }
 }
 

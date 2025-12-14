@@ -1,6 +1,7 @@
 /**
  * Email Service
  * Service d'envoi d'emails transactionnels via Resend
+ * Support SMS via Twilio
  */
 
 import { Resend } from 'resend';
@@ -11,6 +12,11 @@ const resend = import.meta.env.VITE_RESEND_API_KEY
 
 const EMAIL_FROM = import.meta.env.VITE_EMAIL_FROM || 'TORP <noreply@torp.fr>';
 const APP_URL = import.meta.env.VITE_APP_URL || 'https://torp.fr';
+
+// Twilio configuration for SMS
+const TWILIO_ACCOUNT_SID = import.meta.env.VITE_TWILIO_ACCOUNT_SID;
+const TWILIO_AUTH_TOKEN = import.meta.env.VITE_TWILIO_AUTH_TOKEN;
+const TWILIO_PHONE_NUMBER = import.meta.env.VITE_TWILIO_PHONE_NUMBER;
 
 export interface EmailTemplate {
   to: string;
@@ -345,6 +351,377 @@ Voir l'analyse : ${APP_URL}/results?devisId=${params.analysisId}
       subject: `${urgency} : Votre ${params.documentType} expire dans ${params.daysRemaining} jour(s)`,
       html,
     });
+  }
+
+  // =====================================================
+  // EMAILS FRAUDE & SÉCURITÉ
+  // =====================================================
+
+  /**
+   * Email : Alerte de fraude détectée
+   */
+  async sendFraudAlert(params: {
+    to: string;
+    userName: string;
+    levelLabel: string;
+    montant: number;
+    entrepriseName: string;
+    rulesTriggered: string[];
+    contractId: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const ruleLabels: Record<string, string> = {
+      ACOMPTE_TRES_ELEVE: 'Acompte anormalement élevé',
+      ACOMPTE_EXCESSIF: 'Acompte excessif',
+      DEPASSEMENT_CONTRAT: 'Dépassement du montant contractuel',
+      PAIEMENTS_RAPIDES: 'Fréquence de paiements inhabituelle',
+      NOUVELLE_ENTREPRISE: 'Entreprise récemment créée',
+      LITIGE_RECENT: 'Litiges récents avec cette entreprise',
+      PREUVES_INSUFFISANTES: 'Preuves de travaux insuffisantes',
+      PAIEMENT_PREMATURE: 'Demande de paiement prématurée',
+      MONTANT_INCOHERENT: 'Montant incohérent avec le contrat',
+    };
+
+    const rulesHtml = params.rulesTriggered
+      .map(r => `<li>${ruleLabels[r] || r}</li>`)
+      .join('');
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Alerte Sécurité - TORP</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+
+  <div style="text-align: center; margin-bottom: 30px;">
+    <h1 style="color: #DC2626; margin: 0;">TORP</h1>
+    <p style="color: #666; margin: 5px 0 0 0;">Protection anti-arnaque</p>
+  </div>
+
+  <div style="background: #fef2f2; border: 2px solid #ef4444; border-radius: 12px; padding: 30px; margin-bottom: 20px;">
+    <h2 style="margin: 0 0 15px 0; color: #b91c1c;">Alerte Sécurité : ${params.levelLabel}</h2>
+
+    <p>Bonjour ${params.userName || ''},</p>
+
+    <p>Notre système de détection de fraude a identifié des points de vigilance concernant une demande de paiement :</p>
+
+    <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0;">
+      <p style="margin: 0 0 10px 0;"><strong>Entreprise :</strong> ${params.entrepriseName}</p>
+      <p style="margin: 0 0 10px 0;"><strong>Montant demandé :</strong> ${params.montant.toLocaleString('fr-FR')}€</p>
+      <p style="margin: 0;"><strong>Points d'alerte :</strong></p>
+      <ul style="margin: 10px 0; padding-left: 20px;">${rulesHtml}</ul>
+    </div>
+
+    <p><strong>Nos recommandations :</strong></p>
+    <ul>
+      <li>Vérifiez que les travaux correspondent bien aux preuves fournies</li>
+      <li>Contactez l'entreprise pour clarifier les points soulevés</li>
+      <li>N'approuvez pas ce paiement tant que vous n'êtes pas satisfait</li>
+    </ul>
+
+    <div style="text-align: center; margin-top: 25px;">
+      <a href="${APP_URL}/projects/${params.contractId}"
+         style="display: inline-block; background: #DC2626; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600;">
+        Voir les détails
+      </a>
+    </div>
+  </div>
+
+  <div style="text-align: center; color: #999; font-size: 12px;">
+    <p>Cette alerte est générée automatiquement par le système TORP pour votre protection.</p>
+  </div>
+
+</body>
+</html>
+    `;
+
+    return this.send({
+      to: params.to,
+      subject: `Alerte Sécurité TORP : ${params.levelLabel}`,
+      html,
+    });
+  }
+
+  /**
+   * Email : Paiement bloqué
+   */
+  async sendPaymentBlocked(params: {
+    to: string;
+    userName: string;
+    montant: number;
+    entrepriseName: string;
+    reason: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Paiement Bloqué - TORP</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+
+  <div style="text-align: center; margin-bottom: 30px;">
+    <h1 style="color: #DC2626; margin: 0;">TORP</h1>
+  </div>
+
+  <div style="background: #fef2f2; border-radius: 12px; padding: 30px;">
+    <h2 style="margin: 0 0 15px 0; color: #b91c1c;">Paiement bloqué pour votre protection</h2>
+
+    <p>Bonjour ${params.userName || ''},</p>
+
+    <p>Pour protéger vos intérêts, nous avons bloqué le paiement suivant :</p>
+
+    <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0;">
+      <p style="margin: 0 0 10px 0;"><strong>Montant :</strong> ${params.montant.toLocaleString('fr-FR')}€</p>
+      <p style="margin: 0 0 10px 0;"><strong>Entreprise :</strong> ${params.entrepriseName}</p>
+      <p style="margin: 0;"><strong>Raison :</strong> ${params.reason}</p>
+    </div>
+
+    <p>Ce blocage est une mesure de sécurité. Si vous estimez que ce paiement est légitime, vous pouvez :</p>
+    <ul>
+      <li>Contacter notre support pour débloquer la situation</li>
+      <li>Demander des preuves supplémentaires à l'entreprise</li>
+      <li>Ouvrir un litige si vous suspectez une tentative de fraude</li>
+    </ul>
+
+    <div style="text-align: center; margin-top: 25px;">
+      <a href="${APP_URL}/support"
+         style="display: inline-block; background: #DC2626; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600;">
+        Contacter le support
+      </a>
+    </div>
+  </div>
+
+</body>
+</html>
+    `;
+
+    return this.send({
+      to: params.to,
+      subject: `Paiement bloqué - Protection TORP`,
+      html,
+    });
+  }
+
+  // =====================================================
+  // EMAILS PAIEMENT
+  // =====================================================
+
+  /**
+   * Email : Jalon de paiement à venir
+   */
+  async sendPaymentMilestoneDue(params: {
+    to: string;
+    userName: string;
+    projectName: string;
+    milestoneName: string;
+    montant: number;
+    dueDate: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const dateFormatted = new Date(params.dueDate).toLocaleDateString('fr-FR');
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Jalon de paiement - TORP</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+
+  <div style="text-align: center; margin-bottom: 30px;">
+    <h1 style="color: #DC2626; margin: 0;">TORP</h1>
+  </div>
+
+  <div style="background: #fefce8; border: 1px solid #facc15; border-radius: 12px; padding: 30px;">
+    <h2 style="margin: 0 0 15px 0;">Jalon de paiement à venir</h2>
+
+    <p>Bonjour ${params.userName || ''},</p>
+
+    <p>Un jalon de paiement arrive bientôt pour votre projet :</p>
+
+    <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center;">
+      <p style="margin: 0 0 5px 0; color: #666;">Projet</p>
+      <p style="margin: 0 0 15px 0; font-size: 18px; font-weight: bold;">${params.projectName}</p>
+
+      <p style="margin: 0 0 5px 0; color: #666;">Jalon</p>
+      <p style="margin: 0 0 15px 0; font-weight: 600;">${params.milestoneName}</p>
+
+      <div style="display: inline-block; background: #22c55e; color: white; padding: 10px 20px; border-radius: 8px; font-size: 24px; font-weight: bold;">
+        ${params.montant.toLocaleString('fr-FR')}€
+      </div>
+
+      <p style="margin: 15px 0 0 0; color: #666;">Prévu le <strong>${dateFormatted}</strong></p>
+    </div>
+
+    <p>Assurez-vous que les travaux correspondants sont bien terminés avant d'approuver ce paiement.</p>
+
+    <div style="text-align: center; margin-top: 25px;">
+      <a href="${APP_URL}/projects"
+         style="display: inline-block; background: #DC2626; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600;">
+        Voir mon projet
+      </a>
+    </div>
+  </div>
+
+</body>
+</html>
+    `;
+
+    return this.send({
+      to: params.to,
+      subject: `Jalon de paiement : ${params.milestoneName} - ${params.montant.toLocaleString('fr-FR')}€`,
+      html,
+    });
+  }
+
+  /**
+   * Email : Paiement libéré
+   */
+  async sendPaymentReleased(params: {
+    to: string;
+    userName: string;
+    projectName: string;
+    montant: number;
+    entrepriseName: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Paiement libéré - TORP</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+
+  <div style="text-align: center; margin-bottom: 30px;">
+    <h1 style="color: #DC2626; margin: 0;">TORP</h1>
+  </div>
+
+  <div style="background: #f0fdf4; border: 1px solid #22c55e; border-radius: 12px; padding: 30px;">
+    <h2 style="margin: 0 0 15px 0; color: #166534;">Paiement libéré avec succès</h2>
+
+    <p>Bonjour ${params.userName || ''},</p>
+
+    <p>Le paiement suivant a été effectué :</p>
+
+    <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center;">
+      <div style="display: inline-block; background: #22c55e; color: white; padding: 15px 30px; border-radius: 8px; font-size: 28px; font-weight: bold;">
+        ${params.montant.toLocaleString('fr-FR')}€
+      </div>
+
+      <p style="margin: 15px 0 5px 0; color: #666;">Projet</p>
+      <p style="margin: 0 0 10px 0; font-weight: 600;">${params.projectName}</p>
+
+      <p style="margin: 0 0 5px 0; color: #666;">Versé à</p>
+      <p style="margin: 0; font-weight: 600;">${params.entrepriseName}</p>
+    </div>
+
+    <p>Ce paiement est définitif. Conservez cet email comme preuve de transaction.</p>
+  </div>
+
+</body>
+</html>
+    `;
+
+    return this.send({
+      to: params.to,
+      subject: `Paiement effectué : ${params.montant.toLocaleString('fr-FR')}€ - ${params.projectName}`,
+      html,
+    });
+  }
+
+  // =====================================================
+  // SMS VIA TWILIO
+  // =====================================================
+
+  /**
+   * Vérifie si le service SMS est configuré
+   */
+  isSMSConfigured(): boolean {
+    return !!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_PHONE_NUMBER);
+  }
+
+  /**
+   * Envoie un SMS via Twilio
+   */
+  async sendSMS(params: {
+    to: string;
+    message: string;
+  }): Promise<{ success: boolean; error?: string; sid?: string }> {
+    if (!this.isSMSConfigured()) {
+      console.warn('[EmailService] SMS non configuré - SMS non envoyé:', params.message);
+      return { success: false, error: 'Service SMS non configuré' };
+    }
+
+    try {
+      // Formater le numéro de téléphone
+      let phoneNumber = params.to.replace(/\s/g, '');
+      if (phoneNumber.startsWith('0')) {
+        phoneNumber = '+33' + phoneNumber.slice(1);
+      }
+      if (!phoneNumber.startsWith('+')) {
+        phoneNumber = '+' + phoneNumber;
+      }
+
+      // Appel API Twilio
+      const response = await fetch(
+        `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Basic ' + btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`),
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            To: phoneNumber,
+            From: TWILIO_PHONE_NUMBER!,
+            Body: params.message,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('[EmailService] Erreur Twilio:', data);
+        return { success: false, error: data.message || 'Erreur envoi SMS' };
+      }
+
+      console.log('[EmailService] SMS envoyé à:', phoneNumber, 'SID:', data.sid);
+      return { success: true, sid: data.sid };
+    } catch (err) {
+      console.error('[EmailService] Exception SMS:', err);
+      return { success: false, error: 'Erreur inattendue' };
+    }
+  }
+
+  /**
+   * SMS : Alerte de fraude
+   */
+  async sendFraudAlertSMS(params: {
+    to: string;
+    montant: number;
+    entrepriseName: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const message = `[TORP] Alerte sécurité : Demande de paiement suspecte de ${params.montant.toLocaleString('fr-FR')}€ par ${params.entrepriseName}. Connectez-vous pour vérifier.`;
+    return this.sendSMS({ to: params.to, message });
+  }
+
+  /**
+   * SMS : Jalon de paiement
+   */
+  async sendPaymentMilestoneSMS(params: {
+    to: string;
+    projectName: string;
+    montant: number;
+    dueDate: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const dateFormatted = new Date(params.dueDate).toLocaleDateString('fr-FR');
+    const message = `[TORP] Rappel : Jalon de ${params.montant.toLocaleString('fr-FR')}€ prévu le ${dateFormatted} pour "${params.projectName}".`;
+    return this.sendSMS({ to: params.to, message });
   }
 
   // Helpers

@@ -1,17 +1,23 @@
 /**
- * Service de géocodage - API Géoplateforme IGN
+ * Service de géocodage - API Géoplateforme IGN + Google Places
  *
- * API gratuite et sans authentification
+ * API IGN (gratuite et sans authentification)
  * Base URL : https://data.geopf.fr/geocodage
+ *
+ * Google Places API (clé requise pour recherche d'entreprises)
  *
  * Fonctionnalités :
  * - Géocodage direct : adresse → coordonnées GPS
  * - Géocodage inverse : GPS → adresse
  * - Recherche parcelles cadastrales
  * - Calcul de distances
+ * - Recherche d'entreprises locales (Google Places)
+ * - Autocomplete d'adresses (Google Places)
  */
 
 const GEOCODING_API_URL = 'https://data.geopf.fr/geocodage';
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+const GOOGLE_PLACES_URL = 'https://places.googleapis.com/v1/places';
 
 // ============================================
 // TYPES
@@ -113,6 +119,44 @@ export interface GeoZone {
   regionCode: string;
   isUrban: boolean;
   priceCoefficient: number; // Coefficient prix régional
+}
+
+// ============================================
+// TYPES GOOGLE PLACES
+// ============================================
+
+export interface PlaceSearchResult {
+  placeId: string;
+  name: string;
+  formattedAddress: string;
+  location: {
+    lat: number;
+    lng: number;
+  };
+  types: string[];
+  rating?: number;
+  userRatingsTotal?: number;
+  businessStatus?: 'OPERATIONAL' | 'CLOSED_TEMPORARILY' | 'CLOSED_PERMANENTLY';
+  openingHours?: {
+    openNow: boolean;
+    weekdayText?: string[];
+  };
+  phoneNumber?: string;
+  website?: string;
+  priceLevel?: number;
+  distanceKm?: number;
+}
+
+export interface PlaceDetails extends PlaceSearchResult {
+  reviews?: {
+    author: string;
+    rating: number;
+    text: string;
+    time: string;
+  }[];
+  photos?: string[];
+  googleMapsUri?: string;
+  adrFormatAddress?: string;
 }
 
 // ============================================
@@ -762,6 +806,357 @@ class GeocodingService {
       '04': '93', '05': '93', '06': '93', '13': '93', '83': '93', '84': '93',
     };
     return mapping[departmentCode] || '';
+  }
+
+  // ============================================
+  // API GOOGLE PLACES (NEW)
+  // ============================================
+
+  /**
+   * Vérifie si l'API Google Places est configurée
+   */
+  isGooglePlacesConfigured(): boolean {
+    return !!GOOGLE_MAPS_API_KEY;
+  }
+
+  /**
+   * Recherche d'entreprises locales via Google Places API (New)
+   * Idéal pour trouver des artisans/entreprises BTP
+   *
+   * @param query Terme de recherche (ex: "plombier", "électricien")
+   * @param location Centre de la recherche
+   * @param radiusKm Rayon de recherche en km
+   */
+  async searchPlaces(
+    query: string,
+    location: { lat: number; lng: number },
+    options: {
+      radiusKm?: number;
+      types?: string[];
+      maxResults?: number;
+      openNow?: boolean;
+      minRating?: number;
+    } = {}
+  ): Promise<{
+    success: boolean;
+    data?: PlaceSearchResult[];
+    error?: string;
+  }> {
+    if (!GOOGLE_MAPS_API_KEY) {
+      console.warn('[Geocoding] Google Places API non configurée');
+      return { success: false, error: 'API Google Places non configurée' };
+    }
+
+    try {
+      const radiusM = (options.radiusKm || 20) * 1000;
+
+      // Types d'entreprises BTP pertinents
+      const includedTypes = options.types || [
+        'plumber', 'electrician', 'painter', 'roofing_contractor',
+        'general_contractor', 'flooring_store', 'home_improvement_store',
+        'locksmith', 'moving_company', 'hvac_contractor'
+      ];
+
+      // Construire la requête
+      const requestBody = {
+        textQuery: query,
+        locationBias: {
+          circle: {
+            center: {
+              latitude: location.lat,
+              longitude: location.lng,
+            },
+            radius: radiusM,
+          },
+        },
+        maxResultCount: options.maxResults || 20,
+        languageCode: 'fr',
+        regionCode: 'FR',
+        ...(options.openNow && { openNow: true }),
+      };
+
+      const response = await fetch(`${GOOGLE_PLACES_URL}:searchText`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.types,places.rating,places.userRatingCount,places.businessStatus,places.currentOpeningHours,places.nationalPhoneNumber,places.websiteUri,places.priceLevel',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('[Geocoding] Erreur Google Places:', error);
+        return { success: false, error: `Erreur API: ${response.status}` };
+      }
+
+      const data = await response.json();
+
+      if (!data.places || data.places.length === 0) {
+        return { success: true, data: [] };
+      }
+
+      // Mapper les résultats
+      let results: PlaceSearchResult[] = data.places.map((place: any) => {
+        const result: PlaceSearchResult = {
+          placeId: place.id,
+          name: place.displayName?.text || '',
+          formattedAddress: place.formattedAddress || '',
+          location: {
+            lat: place.location?.latitude || 0,
+            lng: place.location?.longitude || 0,
+          },
+          types: place.types || [],
+          rating: place.rating,
+          userRatingsTotal: place.userRatingCount,
+          businessStatus: place.businessStatus,
+          openingHours: place.currentOpeningHours ? {
+            openNow: place.currentOpeningHours.openNow,
+            weekdayText: place.currentOpeningHours.weekdayDescriptions,
+          } : undefined,
+          phoneNumber: place.nationalPhoneNumber,
+          website: place.websiteUri,
+          priceLevel: place.priceLevel,
+        };
+
+        // Calculer la distance
+        if (result.location.lat && result.location.lng) {
+          const distanceM = this.haversineDistance(
+            location.lat, location.lng,
+            result.location.lat, result.location.lng
+          );
+          result.distanceKm = Math.round(distanceM / 100) / 10;
+        }
+
+        return result;
+      });
+
+      // Filtrer par note minimale si demandé
+      if (options.minRating) {
+        results = results.filter(r => (r.rating || 0) >= options.minRating!);
+      }
+
+      // Trier par distance
+      results.sort((a, b) => (a.distanceKm || 0) - (b.distanceKm || 0));
+
+      console.log('[Geocoding] Google Places:', results.length, 'résultats trouvés');
+      return { success: true, data: results };
+
+    } catch (error) {
+      console.error('[Geocoding] Exception Google Places:', error);
+      return { success: false, error: 'Erreur de connexion' };
+    }
+  }
+
+  /**
+   * Récupère les détails d'un lieu via son placeId
+   */
+  async getPlaceDetails(placeId: string): Promise<{
+    success: boolean;
+    data?: PlaceDetails;
+    error?: string;
+  }> {
+    if (!GOOGLE_MAPS_API_KEY) {
+      return { success: false, error: 'API Google Places non configurée' };
+    }
+
+    try {
+      const response = await fetch(`${GOOGLE_PLACES_URL}/${placeId}`, {
+        method: 'GET',
+        headers: {
+          'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+          'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,types,rating,userRatingCount,businessStatus,currentOpeningHours,nationalPhoneNumber,websiteUri,priceLevel,reviews,photos,googleMapsUri,adrFormatAddress',
+        },
+      });
+
+      if (!response.ok) {
+        return { success: false, error: `Erreur API: ${response.status}` };
+      }
+
+      const place = await response.json();
+
+      const details: PlaceDetails = {
+        placeId: place.id,
+        name: place.displayName?.text || '',
+        formattedAddress: place.formattedAddress || '',
+        location: {
+          lat: place.location?.latitude || 0,
+          lng: place.location?.longitude || 0,
+        },
+        types: place.types || [],
+        rating: place.rating,
+        userRatingsTotal: place.userRatingCount,
+        businessStatus: place.businessStatus,
+        openingHours: place.currentOpeningHours ? {
+          openNow: place.currentOpeningHours.openNow,
+          weekdayText: place.currentOpeningHours.weekdayDescriptions,
+        } : undefined,
+        phoneNumber: place.nationalPhoneNumber,
+        website: place.websiteUri,
+        priceLevel: place.priceLevel,
+        googleMapsUri: place.googleMapsUri,
+        adrFormatAddress: place.adrFormatAddress,
+        reviews: place.reviews?.map((r: any) => ({
+          author: r.authorAttribution?.displayName || 'Anonyme',
+          rating: r.rating,
+          text: r.text?.text || '',
+          time: r.relativePublishTimeDescription || '',
+        })),
+        photos: place.photos?.map((p: any) =>
+          `https://places.googleapis.com/v1/${p.name}/media?maxHeightPx=400&key=${GOOGLE_MAPS_API_KEY}`
+        ),
+      };
+
+      return { success: true, data: details };
+
+    } catch (error) {
+      console.error('[Geocoding] Erreur détails lieu:', error);
+      return { success: false, error: 'Erreur de connexion' };
+    }
+  }
+
+  /**
+   * Autocomplete d'adresses via Google Places
+   * Plus précis que l'IGN pour les recherches partielles
+   */
+  async autocompleteAddress(
+    query: string,
+    sessionToken?: string
+  ): Promise<{
+    success: boolean;
+    suggestions?: {
+      placeId: string;
+      description: string;
+      mainText: string;
+      secondaryText: string;
+    }[];
+    error?: string;
+  }> {
+    if (!GOOGLE_MAPS_API_KEY) {
+      // Fallback vers IGN
+      const result = await this.suggest(query, 5);
+      return {
+        success: true,
+        suggestions: result.suggestions.map((s, i) => ({
+          placeId: `ign-${i}`,
+          description: s,
+          mainText: s.split(',')[0],
+          secondaryText: s.split(',').slice(1).join(',').trim(),
+        })),
+      };
+    }
+
+    try {
+      const response = await fetch(`${GOOGLE_PLACES_URL}:autocomplete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        },
+        body: JSON.stringify({
+          input: query,
+          languageCode: 'fr',
+          regionCode: 'FR',
+          includedPrimaryTypes: ['geocode', 'establishment'],
+          ...(sessionToken && { sessionToken }),
+        }),
+      });
+
+      if (!response.ok) {
+        // Fallback vers IGN
+        return this.autocompleteAddress(query);
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        suggestions: data.suggestions?.map((s: any) => ({
+          placeId: s.placePrediction?.placeId || '',
+          description: s.placePrediction?.text?.text || '',
+          mainText: s.placePrediction?.structuredFormat?.mainText?.text || '',
+          secondaryText: s.placePrediction?.structuredFormat?.secondaryText?.text || '',
+        })) || [],
+      };
+
+    } catch (error) {
+      console.error('[Geocoding] Erreur autocomplete:', error);
+      // Fallback vers IGN
+      const result = await this.suggest(query, 5);
+      return {
+        success: true,
+        suggestions: result.suggestions.map((s, i) => ({
+          placeId: `ign-${i}`,
+          description: s,
+          mainText: s.split(',')[0],
+          secondaryText: s.split(',').slice(1).join(',').trim(),
+        })),
+      };
+    }
+  }
+
+  /**
+   * Recherche d'artisans BTP par métier et zone
+   * Wrapper simplifié pour la recherche d'entreprises
+   */
+  async searchArtisansBTP(
+    metier: 'plombier' | 'electricien' | 'maçon' | 'peintre' | 'couvreur' | 'menuisier' | 'carreleur' | 'chauffagiste' | string,
+    adresseOuCoords: string | { lat: number; lng: number },
+    radiusKm: number = 30
+  ): Promise<{
+    success: boolean;
+    artisans?: PlaceSearchResult[];
+    error?: string;
+  }> {
+    // Résoudre les coordonnées si c'est une adresse
+    let location: { lat: number; lng: number };
+
+    if (typeof adresseOuCoords === 'string') {
+      const geocodeResult = await this.geocode(adresseOuCoords, { limit: 1 });
+      if (!geocodeResult.success || !geocodeResult.bestMatch) {
+        return { success: false, error: 'Adresse non trouvée' };
+      }
+      location = {
+        lat: geocodeResult.bestMatch.latitude,
+        lng: geocodeResult.bestMatch.longitude,
+      };
+    } else {
+      location = adresseOuCoords;
+    }
+
+    // Mapping métiers français → termes de recherche
+    const metierTerms: Record<string, string> = {
+      'plombier': 'plombier chauffagiste',
+      'electricien': 'électricien',
+      'maçon': 'maçonnerie gros œuvre',
+      'peintre': 'peintre bâtiment',
+      'couvreur': 'couvreur zingueur toiture',
+      'menuisier': 'menuisier ébéniste',
+      'carreleur': 'carreleur faïencier',
+      'chauffagiste': 'chauffagiste climatisation',
+    };
+
+    const searchTerm = metierTerms[metier.toLowerCase()] || metier;
+
+    const result = await this.searchPlaces(
+      searchTerm,
+      location,
+      {
+        radiusKm,
+        maxResults: 20,
+        minRating: 3.5, // Filtrer les entreprises mal notées
+      }
+    );
+
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+
+    return {
+      success: true,
+      artisans: result.data,
+    };
   }
 }
 

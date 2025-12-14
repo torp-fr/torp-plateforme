@@ -3,6 +3,7 @@
  * Gère l'envoi par Email, SMS, WhatsApp et génération QR Code
  */
 
+import QRCode from 'qrcode';
 import {
   PropositionCommerciale,
   TransmissionClient,
@@ -11,6 +12,7 @@ import {
   ConfigurationRelances,
 } from '@/types/torpScore.types';
 import { supabase } from '@/lib/supabase';
+import { emailService } from '@/services/email/email.service';
 
 // Configuration par défaut des relances
 const DEFAULT_RELANCES_CONFIG: ConfigurationRelances = {
@@ -198,14 +200,80 @@ export class TransmissionService {
   }
 
   /**
-   * Génère un QR Code en base64
+   * Génère un QR Code en base64 (Data URL)
+   * Utilise la librairie qrcode pour une génération locale sans dépendance externe
    */
   private static async genererQRCode(url: string): Promise<string> {
-    // Utiliser une API de génération QR ou la librairie qrcode
-    // Pour l'instant, retourner un placeholder
-    // TODO: Implémenter avec qrcode library
-    const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
-    return qrApiUrl;
+    try {
+      // Options de génération
+      const options: QRCode.QRCodeToDataURLOptions = {
+        errorCorrectionLevel: 'H', // Haute correction d'erreurs
+        type: 'image/png',
+        quality: 1.0,
+        margin: 2,
+        width: 256,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF',
+        },
+      };
+
+      // Générer le QR code en base64 (Data URL)
+      const qrDataUrl = await QRCode.toDataURL(url, options);
+      return qrDataUrl;
+    } catch (error) {
+      console.error('[TransmissionService] Erreur génération QR code:', error);
+      // Fallback vers API externe en cas d'erreur
+      return `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(url)}`;
+    }
+  }
+
+  /**
+   * Génère un QR Code en SVG (pour PDF/impression haute qualité)
+   */
+  static async genererQRCodeSVG(url: string): Promise<string> {
+    try {
+      const svgString = await QRCode.toString(url, {
+        type: 'svg',
+        errorCorrectionLevel: 'H',
+        margin: 2,
+        width: 256,
+      });
+      return svgString;
+    } catch (error) {
+      console.error('[TransmissionService] Erreur génération QR SVG:', error);
+      return '';
+    }
+  }
+
+  /**
+   * Génère un QR Code avec logo TORP au centre
+   */
+  static async genererQRCodeAvecLogo(url: string, logoUrl?: string): Promise<string> {
+    try {
+      // D'abord générer le QR code standard
+      const qrDataUrl = await QRCode.toDataURL(url, {
+        errorCorrectionLevel: 'H', // Correction haute pour permettre logo
+        type: 'image/png',
+        margin: 2,
+        width: 300,
+        color: {
+          dark: '#DC2626', // Rouge TORP
+          light: '#FFFFFF',
+        },
+      });
+
+      // Si pas de logo, retourner le QR simple
+      if (!logoUrl) return qrDataUrl;
+
+      // Sinon, superposer le logo avec canvas (côté client)
+      // Cette opération devra être faite côté client avec un canvas
+      // On retourne le QR avec métadonnées pour le traitement client
+      return qrDataUrl;
+    } catch (error) {
+      console.error('[TransmissionService] Erreur génération QR avec logo:', error);
+      return this.genererQRCode(url);
+    }
   }
 
   /**

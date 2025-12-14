@@ -24,6 +24,11 @@ export type NotificationType =
   | 'ticket_generated'
   | 'document_expiring'
   | 'comparison_complete'
+  | 'fraud_alert'
+  | 'fraud_blocked'
+  | 'payment_milestone'
+  | 'payment_released'
+  | 'payment_dispute'
   | 'general';
 
 class NotificationService {
@@ -254,6 +259,245 @@ class NotificationService {
         to: params.userEmail,
         userName: params.userName,
         userType: params.userType,
+      },
+    });
+  }
+
+  // =====================================================
+  // NOTIFICATIONS DE FRAUDE
+  // =====================================================
+
+  /**
+   * Notifie une alerte de fraude détectée (niveau moyen/élevé)
+   */
+  async notifyFraudAlert(params: {
+    userId: string;
+    userEmail: string;
+    userName: string;
+    contractId: string;
+    riskLevel: 'medium' | 'high' | 'critical';
+    rulesTriggered: string[];
+    montant: number;
+    entrepriseName: string;
+  }): Promise<void> {
+    const levelLabel = {
+      medium: 'Vigilance requise',
+      high: 'Risque élevé',
+      critical: 'Risque critique',
+    }[params.riskLevel];
+
+    await this.create({
+      userId: params.userId,
+      type: 'fraud_alert',
+      title: `Alerte sécurité : ${levelLabel}`,
+      message: `Une demande de paiement de ${params.montant.toLocaleString('fr-FR')}€ nécessite votre attention. ${params.rulesTriggered.length} point(s) d'alerte détecté(s).`,
+      data: {
+        contractId: params.contractId,
+        riskLevel: params.riskLevel,
+        rulesTriggered: params.rulesTriggered,
+        montant: params.montant,
+        entrepriseName: params.entrepriseName,
+      },
+      sendEmail: true,
+      emailParams: {
+        to: params.userEmail,
+        userName: params.userName,
+        levelLabel,
+        montant: params.montant,
+        entrepriseName: params.entrepriseName,
+        rulesTriggered: params.rulesTriggered,
+        contractId: params.contractId,
+      },
+    });
+  }
+
+  /**
+   * Notifie un paiement bloqué pour fraude
+   */
+  async notifyFraudBlocked(params: {
+    userId: string;
+    userEmail: string;
+    userName: string;
+    contractId: string;
+    montant: number;
+    entrepriseName: string;
+    reason: string;
+  }): Promise<void> {
+    await this.create({
+      userId: params.userId,
+      type: 'fraud_blocked',
+      title: 'Paiement bloqué par sécurité',
+      message: `Un paiement de ${params.montant.toLocaleString('fr-FR')}€ a été bloqué pour protéger vos intérêts. Raison: ${params.reason}`,
+      data: {
+        contractId: params.contractId,
+        montant: params.montant,
+        entrepriseName: params.entrepriseName,
+        reason: params.reason,
+      },
+      sendEmail: true,
+      emailParams: {
+        to: params.userEmail,
+        userName: params.userName,
+        montant: params.montant,
+        entrepriseName: params.entrepriseName,
+        reason: params.reason,
+      },
+    });
+  }
+
+  /**
+   * Notifie les administrateurs d'une alerte critique
+   */
+  async notifyAdminFraudCritical(params: {
+    contractId: string;
+    userId: string;
+    entrepriseId: string;
+    riskScore: number;
+    rulesTriggered: string[];
+    montant: number;
+    details: Record<string, unknown>;
+  }): Promise<void> {
+    // Récupérer les admins
+    const { data: admins } = await supabase
+      .from('users')
+      .select('id, email, name')
+      .eq('role', 'admin');
+
+    if (!admins || admins.length === 0) {
+      console.warn('[NotificationService] Aucun admin trouvé pour alerte fraude critique');
+      return;
+    }
+
+    for (const admin of admins) {
+      await this.create({
+        userId: admin.id,
+        type: 'fraud_alert',
+        title: `ALERTE CRITIQUE - Score fraude: ${params.riskScore}`,
+        message: `Contrat ${params.contractId}: ${params.rulesTriggered.length} règles déclenchées pour ${params.montant.toLocaleString('fr-FR')}€`,
+        data: {
+          ...params,
+          adminNotification: true,
+        },
+        sendEmail: true,
+        emailParams: {
+          to: admin.email,
+          userName: admin.name,
+          isAdmin: true,
+          ...params,
+        },
+      });
+    }
+  }
+
+  // =====================================================
+  // NOTIFICATIONS DE PAIEMENT
+  // =====================================================
+
+  /**
+   * Notifie qu'un jalon de paiement est dû
+   */
+  async notifyPaymentMilestoneDue(params: {
+    userId: string;
+    userEmail: string;
+    userName: string;
+    projectName: string;
+    milestoneName: string;
+    montant: number;
+    dueDate: string;
+    contractId: string;
+  }): Promise<void> {
+    await this.create({
+      userId: params.userId,
+      type: 'payment_milestone',
+      title: `Jalon de paiement à venir : ${params.milestoneName}`,
+      message: `Le jalon "${params.milestoneName}" (${params.montant.toLocaleString('fr-FR')}€) pour le projet "${params.projectName}" est prévu pour le ${new Date(params.dueDate).toLocaleDateString('fr-FR')}.`,
+      data: {
+        projectName: params.projectName,
+        milestoneName: params.milestoneName,
+        montant: params.montant,
+        dueDate: params.dueDate,
+        contractId: params.contractId,
+      },
+      sendEmail: true,
+      emailParams: {
+        to: params.userEmail,
+        userName: params.userName,
+        projectName: params.projectName,
+        milestoneName: params.milestoneName,
+        montant: params.montant,
+        dueDate: params.dueDate,
+      },
+    });
+  }
+
+  /**
+   * Notifie qu'un paiement a été libéré
+   */
+  async notifyPaymentReleased(params: {
+    userId: string;
+    userEmail: string;
+    userName: string;
+    projectName: string;
+    montant: number;
+    entrepriseName: string;
+    milestoneDescription?: string;
+  }): Promise<void> {
+    await this.create({
+      userId: params.userId,
+      type: 'payment_released',
+      title: 'Paiement libéré avec succès',
+      message: `Le paiement de ${params.montant.toLocaleString('fr-FR')}€ pour "${params.projectName}" a été libéré vers ${params.entrepriseName}.`,
+      data: {
+        projectName: params.projectName,
+        montant: params.montant,
+        entrepriseName: params.entrepriseName,
+        milestoneDescription: params.milestoneDescription,
+      },
+      sendEmail: true,
+      emailParams: {
+        to: params.userEmail,
+        userName: params.userName,
+        projectName: params.projectName,
+        montant: params.montant,
+        entrepriseName: params.entrepriseName,
+      },
+    });
+  }
+
+  /**
+   * Notifie l'ouverture d'un litige
+   */
+  async notifyDisputeOpened(params: {
+    userId: string;
+    userEmail: string;
+    userName: string;
+    disputeId: string;
+    projectName: string;
+    montant: number;
+    reason: string;
+    isClient: boolean;
+  }): Promise<void> {
+    const role = params.isClient ? 'Client' : 'Entreprise';
+    await this.create({
+      userId: params.userId,
+      type: 'payment_dispute',
+      title: 'Litige ouvert sur votre projet',
+      message: `Un litige a été ouvert concernant le paiement de ${params.montant.toLocaleString('fr-FR')}€ sur "${params.projectName}". Motif: ${params.reason}`,
+      data: {
+        disputeId: params.disputeId,
+        projectName: params.projectName,
+        montant: params.montant,
+        reason: params.reason,
+        role,
+      },
+      sendEmail: true,
+      emailParams: {
+        to: params.userEmail,
+        userName: params.userName,
+        disputeId: params.disputeId,
+        projectName: params.projectName,
+        montant: params.montant,
+        reason: params.reason,
       },
     });
   }
