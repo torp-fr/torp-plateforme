@@ -20,7 +20,7 @@ import {
   ArrowLeft, FileText, Building2, ClipboardList, Scale, FileCheck,
   Loader2, AlertTriangle, CheckCircle2, Clock, Users, Euro,
   Search, Star, Shield, Award, Send, Eye, Download, Filter, Plus, Trash2, Save, Calendar,
-  HardHat, ArrowRight
+  HardHat, ArrowRight, Sparkles
 } from 'lucide-react';
 import { Phase0ProjectService, Phase0Project } from '@/services/phase0';
 import { DCEService } from '@/services/phase1/dce.service';
@@ -34,6 +34,8 @@ import type { Entreprise, RecommandationEntreprise } from '@/types/phase1/entrep
 import type { Offre, TableauComparatif } from '@/types/phase1/offre.types';
 import { useApp, UserType } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
+import { DCEDocumentViewer } from '@/components/phase1/DCEDocumentViewer';
+import { AIAssistant } from '@/components/shared/AIAssistant';
 
 // Configuration selon le type de profil
 const PROFILE_CONFIG: Record<UserType, {
@@ -283,6 +285,10 @@ export function Phase1Consultation() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
+
+  // State pour le visualiseur de documents DCE
+  const [showDocViewer, setShowDocViewer] = useState(false);
+  const [docViewerType, setDocViewerType] = useState<'rc' | 'ae' | 'dpgf' | 'mt' | 'all'>('all');
 
   // State pour le formulaire d'offre B2B
   const [b2bOfferForm, setB2BOfferForm] = useState<B2BOfferFormState>(initialB2BOfferForm);
@@ -1063,16 +1069,16 @@ export function Phase1Consultation() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant="default">Généré</Badge>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" onClick={() => { setDocViewerType('rc'); setShowDocViewer(true); }}>
                           <Eye className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" onClick={() => { setDocViewerType('rc'); setShowDocViewer(true); }}>
                           <Download className="w-4 h-4" />
                         </Button>
                       </div>
                     </div>
 
-                    {/* CCTP */}
+                    {/* CCTP - Note: CCTP uses RC viewer for now as it contains similar info */}
                     <div className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded bg-green-100 flex items-center justify-center">
@@ -1089,10 +1095,10 @@ export function Phase1Consultation() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant="default">Généré</Badge>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" onClick={() => { setDocViewerType('rc'); setShowDocViewer(true); }}>
                           <Eye className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" onClick={() => { setDocViewerType('rc'); setShowDocViewer(true); }}>
                           <Download className="w-4 h-4" />
                         </Button>
                       </div>
@@ -1115,10 +1121,10 @@ export function Phase1Consultation() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant="default">Généré</Badge>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" onClick={() => { setDocViewerType('dpgf'); setShowDocViewer(true); }}>
                           <Eye className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" onClick={() => { setDocViewerType('dpgf'); setShowDocViewer(true); }}>
                           <Download className="w-4 h-4" />
                         </Button>
                       </div>
@@ -1141,13 +1147,25 @@ export function Phase1Consultation() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant="default">Généré</Badge>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" onClick={() => { setDocViewerType('ae'); setShowDocViewer(true); }}>
                           <Eye className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" onClick={() => { setDocViewerType('ae'); setShowDocViewer(true); }}>
                           <Download className="w-4 h-4" />
                         </Button>
                       </div>
+                    </div>
+
+                    {/* Bouton voir tous les documents */}
+                    <div className="pt-4 border-t">
+                      <Button
+                        className="w-full"
+                        variant="outline"
+                        onClick={() => { setDocViewerType('all'); setShowDocViewer(true); }}
+                      >
+                        <Eye className="w-4 h-4 mr-2" />
+                        Voir tous les documents du DCE
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -1721,7 +1739,36 @@ export function Phase1Consultation() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Assistant IA contextuel */}
+        <div className="fixed bottom-4 right-4 z-40">
+          <AIAssistant
+            context={{
+              phase: 'phase1',
+              step: activeTab,
+              userType: userType as 'B2C' | 'B2B' | 'B2G',
+              projectData: project ? {
+                selectedLots: project.selectedLots,
+                budget: project.workProject?.budget,
+              } : undefined,
+              currentPage: 'Phase1Consultation',
+            }}
+            position="floating"
+            showChat={true}
+          />
+        </div>
       </div>
+
+      {/* Visualiseur de documents DCE */}
+      {consultationState.dce && (
+        <DCEDocumentViewer
+          open={showDocViewer}
+          onOpenChange={setShowDocViewer}
+          dce={consultationState.dce}
+          documentType={docViewerType}
+          userType={userType as 'B2C' | 'B2B' | 'B2G'}
+        />
+      )}
     </AppLayout>
   );
 }
