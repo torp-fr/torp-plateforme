@@ -59,10 +59,10 @@ const PROFILE_CONFIG: Record<UserType, {
   },
   B2B: {
     label: 'Professionnel',
-    dceLabel: 'DCE',
-    entrepriseLabel: 'Recherche entreprises',
-    offreLabel: 'Analyse des offres',
-    contractLabel: 'Marchés de travaux',
+    dceLabel: 'Dossier reçu',
+    entrepriseLabel: 'Sous-traitance',
+    offreLabel: 'Mon offre',
+    contractLabel: 'Contrat',
     features: {
       showScoring: true,
       showJuridique: true,
@@ -114,7 +114,44 @@ const PROFILE_CONFIG: Record<UserType, {
 // Étapes de la consultation selon le profil
 const getConsultationSteps = (userType: UserType) => {
   const isB2C = userType === 'B2C';
+  const isB2B = userType === 'B2B';
   const isB2G = userType === 'B2G';
+
+  // Étapes spécifiques B2B (réponse à appel d'offres)
+  if (isB2B) {
+    return [
+      {
+        id: 'dce',
+        label: 'Consulter le dossier',
+        description: 'Analysez le DCE reçu et les exigences du maître d\'ouvrage',
+        icon: FileText,
+      },
+      {
+        id: 'entreprises',
+        label: 'Sous-traitance',
+        description: 'Identifiez des sous-traitants si nécessaire pour ce projet',
+        icon: Building2,
+      },
+      {
+        id: 'offres',
+        label: 'Préparer mon offre',
+        description: 'Rédigez votre offre technique et financière',
+        icon: ClipboardList,
+      },
+      {
+        id: 'selection',
+        label: 'Soumettre',
+        description: 'Soumettez votre offre et suivez son évaluation',
+        icon: Scale,
+      },
+      {
+        id: 'formalites',
+        label: 'Préparation chantier',
+        description: 'Si retenu, préparez le démarrage du chantier',
+        icon: FileCheck,
+      },
+    ];
+  }
 
   return [
     {
@@ -122,19 +159,15 @@ const getConsultationSteps = (userType: UserType) => {
       label: isB2C ? 'Préparer le dossier' : 'Constitution du DCE',
       description: isB2C
         ? 'Rassemblez les documents pour consulter les artisans'
-        : isB2G
-          ? 'Règlement de consultation, CCTP, DPGF, Acte d\'engagement'
-          : 'Documents de consultation entreprises',
+        : 'Règlement de consultation, CCTP, DPGF, Acte d\'engagement',
       icon: FileText,
     },
     {
       id: 'entreprises',
-      label: isB2C ? 'Trouver des artisans' : isB2G ? 'Publication & candidatures' : 'Recherche entreprises',
+      label: isB2C ? 'Trouver des artisans' : 'Publication & candidatures',
       description: isB2C
         ? 'Artisans qualifiés RGE et Qualibat près de chez vous'
-        : isB2G
-          ? 'Publication sur les plateformes, réception des candidatures'
-          : 'Sourcing et qualification des entreprises',
+        : 'Publication sur les plateformes, réception des candidatures',
       icon: Building2,
     },
     {
@@ -147,12 +180,10 @@ const getConsultationSteps = (userType: UserType) => {
     },
     {
       id: 'selection',
-      label: isB2C ? 'Choisir et signer' : isB2G ? 'Attribution du marché' : 'Sélection & contractualisation',
+      label: isB2C ? 'Choisir et signer' : 'Attribution du marché',
       description: isB2C
         ? 'Signez votre contrat en toute sécurité'
-        : isB2G
-          ? 'Notification, signature du marché public'
-          : 'Négociation et signature des contrats',
+        : 'Notification, signature du marché public',
       icon: Scale,
     },
     {
@@ -213,7 +244,7 @@ export function Phase1Consultation() {
         }
         setProject(projectData);
 
-        // Charger le DCE existant si présent
+        // Charger le DCE existant si présent (ne pas bloquer en cas d'erreur)
         try {
           const existingDCE = await DCEService.getDCEByProjectId(projectId);
           if (existingDCE) {
@@ -225,8 +256,8 @@ export function Phase1Consultation() {
             }));
           }
         } catch (dceErr) {
-          // Pas de DCE existant, c'est normal
-          console.log('Pas de DCE existant pour ce projet');
+          // Erreur normale si table n'existe pas encore ou pas de DCE
+          console.log('DCE non disponible:', dceErr instanceof Error ? dceErr.message : 'erreur');
         }
       } catch (err) {
         console.error('Erreur chargement projet:', err);
@@ -566,13 +597,44 @@ export function Phase1Consultation() {
               </Card>
             </div>
 
-            {/* Actions rapides selon l'étape */}
+            {/* Actions rapides selon l'étape et le profil */}
             <Card>
               <CardHeader>
                 <CardTitle>Prochaine étape</CardTitle>
               </CardHeader>
               <CardContent>
-                {consultationState.status === 'draft' && (
+                {/* Mode B2B : Réponse à appel d'offres */}
+                {userType === 'B2B' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-medium">Préparez votre offre</h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Rédigez votre proposition technique et financière pour ce projet
+                        </p>
+                      </div>
+                      <Button onClick={() => setActiveTab('offres')}>
+                        <ClipboardList className="w-4 h-4 mr-2" />
+                        Rédiger mon offre
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between pt-4 border-t">
+                      <div>
+                        <h3 className="font-medium text-muted-foreground">Besoin de sous-traitance ?</h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Recherchez des partenaires pour certains lots
+                        </p>
+                      </div>
+                      <Button variant="outline" onClick={() => setActiveTab('entreprises')}>
+                        <Building2 className="w-4 h-4 mr-2" />
+                        Sous-traitance
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Mode B2C/B2G : Consultation */}
+                {userType !== 'B2B' && consultationState.status === 'draft' && (
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="font-medium">
@@ -599,15 +661,13 @@ export function Phase1Consultation() {
                   </div>
                 )}
 
-                {consultationState.status === 'dce_ready' && (
+                {userType !== 'B2B' && consultationState.status === 'dce_ready' && (
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="font-medium">
                         {userType === 'B2C'
                           ? 'Trouvez des artisans qualifiés'
-                          : userType === 'B2G'
-                            ? 'Lancez la consultation'
-                            : 'Recherchez des entreprises'
+                          : 'Lancez la consultation'
                         }
                       </h3>
                       <p className="text-sm text-muted-foreground mt-1">
@@ -628,7 +688,7 @@ export function Phase1Consultation() {
                   </div>
                 )}
 
-                {consultationState.status === 'en_consultation' && (
+                {userType !== 'B2B' && consultationState.status === 'en_consultation' && (
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="font-medium">Consultation en cours</h3>
