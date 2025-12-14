@@ -52,12 +52,13 @@ export class TenderService {
     // Convertir les lots Phase 0 en lots Tender
     const tenderLots = this.convertPhase0Lots(phase0Project);
 
-    // Extraire l'adresse
-    const workAddress = phase0Project.property?.address ? {
-      street: phase0Project.property.address.street,
-      complement: phase0Project.property.address.complement,
-      city: phase0Project.property.address.city || '',
-      postalCode: phase0Project.property.address.postalCode || '',
+    // Extraire l'adresse - Chemin correct: property.identification.address
+    const propertyAddress = phase0Project.property?.identification?.address;
+    const workAddress = propertyAddress ? {
+      street: propertyAddress.streetName || propertyAddress.street,
+      complement: propertyAddress.complement,
+      city: propertyAddress.city || '',
+      postalCode: propertyAddress.postalCode || '',
     } : undefined;
 
     // Créer les exigences par défaut basées sur les lots

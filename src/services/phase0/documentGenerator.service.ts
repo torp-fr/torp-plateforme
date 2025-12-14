@@ -1042,13 +1042,14 @@ export class DocumentGeneratorService {
   }
 
   private static formatAddress(property?: Property): string {
-    if (!property?.address) return 'Adresse non renseignée';
+    // Support both identification.address (correct) and legacy address
+    const addr = property?.identification?.address || (property as any)?.address;
+    if (!addr) return 'Adresse non renseignée';
 
-    const addr = property.address;
     const parts = [
-      addr.street,
+      addr.streetName || addr.street,
       addr.complement,
-      `${addr.postalCode} ${addr.city}`,
+      `${addr.postalCode || ''} ${addr.city || ''}`.trim(),
     ].filter(Boolean);
 
     return parts.join('\n');
