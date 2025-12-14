@@ -29,7 +29,7 @@ ADD COLUMN IF NOT EXISTS company_creation_date DATE,
 ADD COLUMN IF NOT EXISTS company_effectif INTEGER,
 ADD COLUMN IF NOT EXISTS company_ca_annuel DECIMAL(15,2);
 
--- Index pour recherche
+-- Index pour recherche (company_siret existe déjà depuis migration 019)
 CREATE INDEX IF NOT EXISTS idx_users_company_siret ON public.users(company_siret) WHERE company_siret IS NOT NULL;
 
 -- Commentaires
@@ -46,9 +46,11 @@ COMMENT ON COLUMN public.users.company_documents IS 'Documents administratifs (K
 -- TABLE: company_employees (Salariés de l'entreprise)
 -- =============================================================================
 
-CREATE TABLE IF NOT EXISTS company_employees (
+DROP TABLE IF EXISTS company_employees CASCADE;
+
+CREATE TABLE company_employees (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  owner_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
 
   -- Identification
   first_name VARCHAR(100) NOT NULL,
@@ -88,18 +90,20 @@ CREATE TABLE IF NOT EXISTS company_employees (
 );
 
 -- Index
-CREATE INDEX IF NOT EXISTS idx_employees_user ON company_employees(user_id);
-CREATE INDEX IF NOT EXISTS idx_employees_active ON company_employees(user_id, is_active);
-CREATE INDEX IF NOT EXISTS idx_employees_availability ON company_employees(availability_status) WHERE is_active = TRUE;
+CREATE INDEX idx_employees_owner ON company_employees(owner_id);
+CREATE INDEX idx_employees_active ON company_employees(owner_id, is_active);
+CREATE INDEX idx_employees_availability ON company_employees(availability_status) WHERE is_active = TRUE;
 
 -- RLS
 ALTER TABLE company_employees ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own employees" ON company_employees;
 CREATE POLICY "Users can view own employees" ON company_employees
-  FOR SELECT USING (user_id = auth.uid());
+  FOR SELECT USING (owner_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can manage own employees" ON company_employees;
 CREATE POLICY "Users can manage own employees" ON company_employees
-  FOR ALL USING (user_id = auth.uid());
+  FOR ALL USING (owner_id = auth.uid());
 
 -- Trigger updated_at
 CREATE OR REPLACE FUNCTION update_employees_updated_at()
@@ -117,6 +121,7 @@ CREATE TRIGGER trigger_employees_updated_at
 
 -- Commentaires
 COMMENT ON TABLE company_employees IS 'Salariés des entreprises B2B';
+COMMENT ON COLUMN company_employees.owner_id IS 'Propriétaire (utilisateur B2B)';
 COMMENT ON COLUMN company_employees.qualifications IS 'Qualifications professionnelles (CAP, BEP, BP, etc.)';
 COMMENT ON COLUMN company_employees.certifications IS 'Certifications obtenues';
 COMMENT ON COLUMN company_employees.habilitations IS 'Habilitations (électrique, travail en hauteur, etc.)';
@@ -125,11 +130,13 @@ COMMENT ON COLUMN company_employees.habilitations IS 'Habilitations (électrique
 -- TABLE: project_team_assignments (Affectation équipes aux projets)
 -- =============================================================================
 
-CREATE TABLE IF NOT EXISTS project_team_assignments (
+DROP TABLE IF EXISTS project_team_assignments CASCADE;
+
+CREATE TABLE project_team_assignments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id UUID NOT NULL REFERENCES phase0_projects(id) ON DELETE CASCADE,
   employee_id UUID NOT NULL REFERENCES company_employees(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  owner_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
 
   -- Rôle sur le projet
   role VARCHAR(100) NOT NULL,
@@ -157,19 +164,21 @@ CREATE TABLE IF NOT EXISTS project_team_assignments (
 );
 
 -- Index
-CREATE INDEX IF NOT EXISTS idx_team_project ON project_team_assignments(project_id);
-CREATE INDEX IF NOT EXISTS idx_team_employee ON project_team_assignments(employee_id);
-CREATE INDEX IF NOT EXISTS idx_team_user ON project_team_assignments(user_id);
-CREATE INDEX IF NOT EXISTS idx_team_active ON project_team_assignments(project_id, status) WHERE status IN ('assigned', 'active');
+CREATE INDEX idx_team_project ON project_team_assignments(project_id);
+CREATE INDEX idx_team_employee ON project_team_assignments(employee_id);
+CREATE INDEX idx_team_owner ON project_team_assignments(owner_id);
+CREATE INDEX idx_team_active ON project_team_assignments(project_id, status) WHERE status IN ('assigned', 'active');
 
 -- RLS
 ALTER TABLE project_team_assignments ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own team assignments" ON project_team_assignments;
 CREATE POLICY "Users can view own team assignments" ON project_team_assignments
-  FOR SELECT USING (user_id = auth.uid());
+  FOR SELECT USING (owner_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can manage own team assignments" ON project_team_assignments;
 CREATE POLICY "Users can manage own team assignments" ON project_team_assignments
-  FOR ALL USING (user_id = auth.uid());
+  FOR ALL USING (owner_id = auth.uid());
 
 -- Trigger updated_at
 DROP TRIGGER IF EXISTS trigger_team_updated_at ON project_team_assignments;
@@ -182,12 +191,14 @@ COMMENT ON TABLE project_team_assignments IS 'Affectation des employés aux proj
 COMMENT ON COLUMN project_team_assignments.allocation_percentage IS 'Pourcentage du temps de travail dédié au projet';
 
 -- =============================================================================
--- TABLE: company_documents (Documents entreprise avec suivi validité)
+-- TABLE: company_documents_files (Documents entreprise avec suivi validité)
 -- =============================================================================
 
-CREATE TABLE IF NOT EXISTS company_documents (
+DROP TABLE IF EXISTS company_documents_files CASCADE;
+
+CREATE TABLE company_documents_files (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  owner_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
 
   -- Type de document
   document_type VARCHAR(50) NOT NULL CHECK (document_type IN (
@@ -222,59 +233,61 @@ CREATE TABLE IF NOT EXISTS company_documents (
 );
 
 -- Index
-CREATE INDEX IF NOT EXISTS idx_company_docs_user ON company_documents(user_id);
-CREATE INDEX IF NOT EXISTS idx_company_docs_type ON company_documents(user_id, document_type);
-CREATE INDEX IF NOT EXISTS idx_company_docs_expiry ON company_documents(expiry_date) WHERE is_valid = TRUE;
+CREATE INDEX idx_company_docs_owner ON company_documents_files(owner_id);
+CREATE INDEX idx_company_docs_type ON company_documents_files(owner_id, document_type);
+CREATE INDEX idx_company_docs_expiry ON company_documents_files(expiry_date) WHERE is_valid = TRUE;
 
 -- RLS
-ALTER TABLE company_documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE company_documents_files ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view own documents" ON company_documents
-  FOR SELECT USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can view own documents" ON company_documents_files;
+CREATE POLICY "Users can view own documents" ON company_documents_files
+  FOR SELECT USING (owner_id = auth.uid());
 
-CREATE POLICY "Users can manage own documents" ON company_documents
-  FOR ALL USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "Users can manage own documents" ON company_documents_files;
+CREATE POLICY "Users can manage own documents" ON company_documents_files
+  FOR ALL USING (owner_id = auth.uid());
 
 -- Trigger updated_at
-DROP TRIGGER IF EXISTS trigger_company_docs_updated_at ON company_documents;
+DROP TRIGGER IF EXISTS trigger_company_docs_updated_at ON company_documents_files;
 CREATE TRIGGER trigger_company_docs_updated_at
-  BEFORE UPDATE ON company_documents
+  BEFORE UPDATE ON company_documents_files
   FOR EACH ROW EXECUTE FUNCTION update_employees_updated_at();
 
 -- Commentaires
-COMMENT ON TABLE company_documents IS 'Documents administratifs des entreprises B2B avec suivi de validité';
+COMMENT ON TABLE company_documents_files IS 'Documents administratifs des entreprises B2B avec suivi de validité';
 
 -- =============================================================================
 -- FONCTION: Vérifier documents expirés
 -- =============================================================================
 
-CREATE OR REPLACE FUNCTION check_expired_documents()
+CREATE OR REPLACE FUNCTION get_expiring_documents()
 RETURNS TABLE (
-  user_id UUID,
-  document_id UUID,
-  document_type VARCHAR(50),
-  document_name VARCHAR(255),
-  expiry_date DATE,
-  days_until_expiry INTEGER
+  doc_owner_id UUID,
+  doc_id UUID,
+  doc_type VARCHAR(50),
+  doc_name VARCHAR(255),
+  doc_expiry_date DATE,
+  days_remaining INTEGER
 ) AS $$
 BEGIN
   RETURN QUERY
   SELECT
-    cd.user_id,
-    cd.id as document_id,
-    cd.document_type,
-    cd.document_name,
-    cd.expiry_date,
-    (cd.expiry_date - CURRENT_DATE)::INTEGER as days_until_expiry
-  FROM company_documents cd
+    cd.owner_id AS doc_owner_id,
+    cd.id AS doc_id,
+    cd.document_type AS doc_type,
+    cd.document_name AS doc_name,
+    cd.expiry_date AS doc_expiry_date,
+    (cd.expiry_date - CURRENT_DATE)::INTEGER AS days_remaining
+  FROM company_documents_files cd
   WHERE cd.is_valid = TRUE
     AND cd.expiry_date IS NOT NULL
     AND cd.expiry_date <= CURRENT_DATE + INTERVAL '30 days'
   ORDER BY cd.expiry_date ASC;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
-COMMENT ON FUNCTION check_expired_documents IS 'Retourne les documents expirant dans les 30 prochains jours';
+COMMENT ON FUNCTION get_expiring_documents IS 'Retourne les documents expirant dans les 30 prochains jours';
 
 -- =============================================================================
 -- Mise à jour du calcul de complétion profil B2B

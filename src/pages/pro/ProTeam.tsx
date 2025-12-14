@@ -171,7 +171,7 @@ export default function ProTeam() {
       const { data, error } = await supabase
         .from('company_employees')
         .select('*')
-        .eq('user_id', user!.id)
+        .eq('owner_id', user!.id)
         .order('last_name', { ascending: true });
 
       if (error) throw error;
@@ -284,7 +284,7 @@ export default function ProTeam() {
         // Ajout
         const { error } = await supabase.from('company_employees').insert({
           ...formData,
-          user_id: user!.id,
+          owner_id: user!.id,
         });
 
         if (error) throw error;
