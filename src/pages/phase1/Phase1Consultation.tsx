@@ -20,7 +20,7 @@ import {
   ArrowLeft, FileText, Building2, ClipboardList, Scale, FileCheck,
   Loader2, AlertTriangle, CheckCircle2, Clock, Users, Euro,
   Search, Star, Shield, Award, Send, Eye, Download, Filter, Plus, Trash2, Save, Calendar,
-  HardHat, ArrowRight, Sparkles
+  HardHat, ArrowRight, Sparkles, Lock, FileSignature, ScrollText, BookOpen, Stamp
 } from 'lucide-react';
 import { Phase0ProjectService, Phase0Project } from '@/services/phase0';
 import { DCEService } from '@/services/phase1/dce.service';
@@ -28,10 +28,14 @@ import { EntrepriseService } from '@/services/phase1/entreprise.service';
 import { OffreService } from '@/services/phase1/offre.service';
 import { ContratService } from '@/services/phase1/contrat.service';
 import { FormalitesService } from '@/services/phase1/formalites.service';
+import { UrbanismeService } from '@/services/phase1/urbanisme.service';
+import type { AnalyseUrbanistique } from '@/services/phase1/urbanisme.service';
 import { B2BOffreService } from '@/services/phase1/b2b-offre.service';
 import type { DCEDocument, DCEStatus } from '@/types/phase1/dce.types';
 import type { Entreprise, RecommandationEntreprise } from '@/types/phase1/entreprise.types';
 import type { Offre, TableauComparatif } from '@/types/phase1/offre.types';
+import type { Contrat } from '@/types/phase1/contrat.types';
+import type { ChecklistFormalites, AlerteFormalite, DossierFormalites } from '@/types/phase1/formalites.types';
 import { useApp, UserType } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 import { DCEDocumentViewer } from '@/components/phase1/DCEDocumentViewer';
@@ -292,6 +296,23 @@ export function Phase1Consultation() {
   // State pour le formulaire d'offre B2B
   const [b2bOfferForm, setB2BOfferForm] = useState<B2BOfferFormState>(initialB2BOfferForm);
   const [offerSaveStatus, setOfferSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  // State pour les contrats
+  const [showContractExample, setShowContractExample] = useState<string | null>(null);
+  const [selectedEntrepriseForContract, setSelectedEntrepriseForContract] = useState<string | null>(null);
+  const [generatingContract, setGeneratingContract] = useState<string | null>(null);
+  const [generatedContract, setGeneratedContract] = useState<Contrat | null>(null);
+  const [signatureStep, setSignatureStep] = useState<'idle' | 'review' | 'signing' | 'signed'>('idle');
+
+  // State pour les formalités
+  const [formalitesDossier, setFormalitesDossier] = useState<DossierFormalites | null>(null);
+  const [formalitesChecklist, setFormalitesChecklist] = useState<ChecklistFormalites | null>(null);
+  const [loadingFormalites, setLoadingFormalites] = useState(false);
+
+  // State pour l'analyse urbanistique
+  const [analyseUrbanistique, setAnalyseUrbanistique] = useState<AnalyseUrbanistique | null>(null);
+  const [loadingUrbanisme, setLoadingUrbanisme] = useState(false);
+  const [showPrefilledDoc, setShowPrefilledDoc] = useState<string | null>(null);
 
   const config = PROFILE_CONFIG[userType];
   const steps = getConsultationSteps(userType);
@@ -798,12 +819,13 @@ export function Phase1Consultation() {
 
         {/* Contenu principal */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
+          <TabsList className="mb-6 flex-wrap">
             <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
             <TabsTrigger value="dce">{config.dceLabel}</TabsTrigger>
             <TabsTrigger value="entreprises">{config.entrepriseLabel}</TabsTrigger>
             <TabsTrigger value="offres">{config.offreLabel}</TabsTrigger>
             <TabsTrigger value="contrat">{config.contractLabel}</TabsTrigger>
+            <TabsTrigger value="formalites">Formalités</TabsTrigger>
           </TabsList>
 
           {/* Vue d'ensemble */}
@@ -1718,24 +1740,1323 @@ export function Phase1Consultation() {
 
           {/* Onglet Contrat */}
           <TabsContent value="contrat" className="space-y-6">
-            <Card className="border-2 border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                  <Scale className="w-8 h-8 text-primary" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2">
-                  {userType === 'B2C' ? 'Signez votre contrat' : config.contractLabel}
-                </h3>
-                <p className="text-muted-foreground text-center max-w-md">
+            {/* En-tête avec explication */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Scale className="w-5 h-5 text-primary" />
+                  {userType === 'B2C' ? 'Documents contractuels' : config.contractLabel}
+                </CardTitle>
+                <CardDescription>
                   {userType === 'B2C'
-                    ? 'Après avoir choisi votre artisan, signez le contrat en toute sécurité'
+                    ? 'Découvrez les documents qui formaliseront votre accord avec l\'artisan sélectionné'
                     : userType === 'B2G'
-                      ? 'Attribution et notification du marché public'
-                      : 'Génération et signature des marchés de travaux'
+                      ? 'Documents officiels pour l\'attribution du marché public'
+                      : 'Documents contractuels pour sécuriser vos travaux'
                   }
-                </p>
+                </CardDescription>
+              </CardHeader>
+            </Card>
+
+            {/* Liste des documents contractuels */}
+            <div className="grid gap-4">
+              {/* Contrat de travaux principal */}
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                        <FileSignature className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg">
+                          {userType === 'B2G' ? 'Acte d\'engagement' : 'Contrat de travaux'}
+                        </h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {userType === 'B2C'
+                            ? 'Document principal définissant les travaux, le prix, les délais et les garanties'
+                            : userType === 'B2G'
+                              ? 'Document officiel d\'engagement de l\'entreprise attributaire'
+                              : 'Marché de travaux avec toutes les conditions contractuelles'
+                          }
+                        </p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Badge variant="outline" className="text-xs">Obligatoire</Badge>
+                          {userType === 'B2C' && (
+                            <Badge variant="outline" className="text-xs">Délai rétractation 14j</Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowContractExample('contrat_travaux')}
+                      >
+                        <BookOpen className="w-4 h-4 mr-2" />
+                        Voir exemple
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={consultationState.entreprises.length === 0 || generatingContract === 'contrat_travaux'}
+                        onClick={() => {
+                          if (consultationState.entreprises.length > 0) {
+                            setGeneratingContract('contrat_travaux');
+                            toast({
+                              title: 'Sélectionnez une entreprise',
+                              description: 'Pour générer le contrat, veuillez d\'abord sélectionner une entreprise dans l\'onglet "Trouver des artisans".',
+                            });
+                            setGeneratingContract(null);
+                          }
+                        }}
+                      >
+                        {consultationState.entreprises.length === 0 ? (
+                          <Lock className="w-4 h-4 mr-2" />
+                        ) : generatingContract === 'contrat_travaux' ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <FileSignature className="w-4 h-4 mr-2" />
+                        )}
+                        Générer
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Conditions générales */}
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                        <ScrollText className="w-6 h-6 text-purple-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg">
+                          {userType === 'B2G' ? 'CCAP - Cahier des clauses administratives' : 'Conditions générales'}
+                        </h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {userType === 'B2C'
+                            ? 'Clauses standards régissant l\'exécution des travaux et les responsabilités'
+                            : userType === 'B2G'
+                              ? 'Clauses administratives particulières du marché'
+                              : 'Conditions générales applicables aux marchés privés'
+                          }
+                        </p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Badge variant="outline" className="text-xs">Annexe au contrat</Badge>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowContractExample('conditions_generales')}
+                      >
+                        <BookOpen className="w-4 h-4 mr-2" />
+                        Voir exemple
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={consultationState.entreprises.length === 0}
+                      >
+                        {consultationState.entreprises.length === 0 ? (
+                          <Lock className="w-4 h-4 mr-2" />
+                        ) : (
+                          <FileSignature className="w-4 h-4 mr-2" />
+                        )}
+                        Générer
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Attestation d'assurance */}
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                        <Shield className="w-6 h-6 text-green-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg">Attestation d'assurance décennale</h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Document obligatoire prouvant que l'entreprise dispose d'une assurance décennale valide
+                        </p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Badge variant="outline" className="text-xs">Obligatoire</Badge>
+                          <Badge variant="outline" className="text-xs">Validité à vérifier</Badge>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowContractExample('attestation_assurance')}
+                      >
+                        <BookOpen className="w-4 h-4 mr-2" />
+                        Voir exemple
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={consultationState.entreprises.length === 0}
+                      >
+                        {consultationState.entreprises.length === 0 ? (
+                          <Lock className="w-4 h-4 mr-2" />
+                        ) : (
+                          <Download className="w-4 h-4 mr-2" />
+                        )}
+                        Récupérer
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* PV de réception */}
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+                        <Stamp className="w-6 h-6 text-amber-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg">Procès-verbal de réception</h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Document officialisant la fin des travaux et le début des garanties légales
+                        </p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Badge variant="outline" className="text-xs">À établir en fin de chantier</Badge>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowContractExample('pv_reception')}
+                      >
+                        <BookOpen className="w-4 h-4 mr-2" />
+                        Voir exemple
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={consultationState.status !== 'contractualise'}
+                      >
+                        <Lock className="w-4 h-4 mr-2" />
+                        Générer
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Documents B2G spécifiques */}
+              {userType === 'B2G' && (
+                <>
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-4">
+                          <div className="w-12 h-12 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+                            <FileText className="w-6 h-6 text-red-600" />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-lg">Lettre de notification</h3>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Notification officielle de l'attribution du marché à l'entreprise retenue
+                            </p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <Badge variant="outline" className="text-xs">Marché public</Badge>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowContractExample('notification')}
+                          >
+                            <BookOpen className="w-4 h-4 mr-2" />
+                            Voir exemple
+                          </Button>
+                          <Button size="sm" disabled={consultationState.entreprises.length === 0}>
+                            {consultationState.entreprises.length === 0 ? (
+                              <Lock className="w-4 h-4 mr-2" />
+                            ) : (
+                              <FileSignature className="w-4 h-4 mr-2" />
+                            )}
+                            Générer
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-4">
+                          <div className="w-12 h-12 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                            <FileCheck className="w-6 h-6 text-indigo-600" />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-lg">Ordre de service</h3>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Document donnant l'ordre de démarrer les travaux
+                            </p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <Badge variant="outline" className="text-xs">Démarrage travaux</Badge>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowContractExample('ordre_service')}
+                          >
+                            <BookOpen className="w-4 h-4 mr-2" />
+                            Voir exemple
+                          </Button>
+                          <Button size="sm" disabled={consultationState.status !== 'contractualise'}>
+                            <Lock className="w-4 h-4 mr-2" />
+                            Générer
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+            </div>
+
+            {/* Message si aucune entreprise consultée */}
+            {consultationState.entreprises.length === 0 && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <span className="font-medium">Entreprise requise</span>
+                  <br />
+                  Pour générer les documents contractuels, vous devez d'abord consulter des entreprises et recevoir des offres.
+                  <Button
+                    variant="link"
+                    className="p-0 h-auto ml-1"
+                    onClick={() => setActiveTab('entreprises')}
+                  >
+                    Rechercher des entreprises
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Section génération et signature de contrat */}
+            {consultationState.entreprises.length > 0 && (
+              <Card className="border-2 border-primary/20">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileSignature className="w-5 h-5 text-primary" />
+                    Générer et signer le contrat
+                  </CardTitle>
+                  <CardDescription>
+                    Sélectionnez l'entreprise retenue pour générer le contrat de travaux
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Sélection entreprise */}
+                  {!generatedContract && (
+                    <div className="space-y-4">
+                      <Label>Entreprise sélectionnée</Label>
+                      <div className="grid gap-2">
+                        {consultationState.entreprises.map((entreprise) => (
+                          <div
+                            key={entreprise.id}
+                            className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                              selectedEntrepriseForContract === entreprise.id
+                                ? 'border-primary bg-primary/5'
+                                : 'hover:border-primary/50'
+                            }`}
+                            onClick={() => setSelectedEntrepriseForContract(entreprise.id)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-4 h-4 rounded-full border-2 ${
+                                  selectedEntrepriseForContract === entreprise.id
+                                    ? 'border-primary bg-primary'
+                                    : 'border-muted-foreground'
+                                }`}>
+                                  {selectedEntrepriseForContract === entreprise.id && (
+                                    <CheckCircle2 className="w-3 h-3 text-white" />
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="font-medium">{entreprise.nom}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {entreprise.specialites?.join(', ') || 'Artisan qualifié'}
+                                  </p>
+                                </div>
+                              </div>
+                              {entreprise.score && (
+                                <Badge variant="secondary">
+                                  <Star className="w-3 h-3 mr-1" />
+                                  {entreprise.score}%
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        className="w-full"
+                        disabled={!selectedEntrepriseForContract || generatingContract !== null}
+                        onClick={async () => {
+                          if (!selectedEntrepriseForContract || !project) return;
+                          setGeneratingContract('generating');
+                          try {
+                            // Simuler la génération du contrat
+                            await new Promise(resolve => setTimeout(resolve, 1500));
+
+                            const mockContrat: Contrat = {
+                              id: crypto.randomUUID(),
+                              projectId: project.id,
+                              consultationId: consultationState.dce?.id || '',
+                              offreId: '',
+                              type: 'marche_prive_b2c',
+                              mode: project.wizardMode || 'b2c_simple',
+                              parties: {
+                                maitreOuvrage: {
+                                  type: 'particulier',
+                                  nom: project.ownerProfile?.identity?.type === 'B2C'
+                                    ? `${(project.ownerProfile.identity as any).firstName || ''} ${(project.ownerProfile.identity as any).lastName || ''}`.trim()
+                                    : 'Maître d\'ouvrage',
+                                  adresse: project.ownerProfile?.contact?.address || { street: '', postalCode: '', city: '', country: 'France' },
+                                  email: project.ownerProfile?.contact?.email || '',
+                                  telephone: project.ownerProfile?.contact?.phone || '',
+                                },
+                                entreprise: {
+                                  raisonSociale: consultationState.entreprises.find(e => e.id === selectedEntrepriseForContract)?.nom || '',
+                                  formeJuridique: 'SARL',
+                                  siret: '123 456 789 00012',
+                                  adresse: { street: '', postalCode: '', city: '', country: 'France' },
+                                  representant: { nom: '', qualite: 'Gérant' },
+                                  email: '',
+                                  telephone: '',
+                                  assuranceDecennale: { compagnie: '', numeroPolice: '', validiteJusquau: '', montantGaranti: 0 },
+                                  assuranceRC: { compagnie: '', numeroPolice: '', validiteJusquau: '', montantGaranti: 0 },
+                                  qualifications: [],
+                                },
+                              },
+                              objet: {
+                                titre: project.workProject?.general?.title || 'Travaux de rénovation',
+                                description: project.workProject?.general?.description || '',
+                                adresseChantier: project.property?.address || { street: '', postalCode: '', city: '', country: 'France' },
+                                natureTravaux: project.workProject?.scope?.workType || 'renovation',
+                                lots: [],
+                              },
+                              conditionsFinancieres: {
+                                prix: { type: 'forfaitaire', montantHT: 25000, tauxTVA: 10, montantTVA: 2500, montantTTC: 27500 },
+                                revision: { applicable: false },
+                                paiement: { echeancier: [], delaiPaiement: 30, baseDelai: 'situation_validee' },
+                                retenueGarantie: { applicable: true, pourcentage: 5, duree: 12, liberation: { automatique: true, conditions: [] }, substitution: { cautionBancaire: true } },
+                                penalites: { retard: { montantParJour: '1/1000', debutDecompte: '', causesSuspension: [] } },
+                              },
+                              delais: {
+                                preparation: { duree: 2, unite: 'semaines' },
+                                execution: { duree: 60, unite: 'jours_calendaires', debutType: 'ordre_service' },
+                                reception: { delaiDemande: 15, delaiReponse: 20, delaiLeveeReserves: 30 },
+                              },
+                              garanties: {
+                                legales: {
+                                  parfaitAchevement: { duree: 1, couverture: '' },
+                                  biennale: { duree: 2, couverture: '', elementsCouverts: [] },
+                                  decennale: { duree: 10, couverture: '' },
+                                },
+                                assurancesObligatoires: { rcDecennale: true, rcProfessionnelle: true, montantMinimum: 0 },
+                                assurancesFacultatives: { dommageOuvrage: { souscrit: false }, trc: { souscrit: false } },
+                              },
+                              clauses: { obligatoires: [], particulieres: [] },
+                              annexes: [],
+                              signature: {
+                                entreprise: { signee: false, typeSignature: 'electronique_simple', cachet: true },
+                                maitreOuvrage: { signee: false, typeSignature: 'electronique_simple' },
+                              },
+                              statut: 'brouillon',
+                              metadata: { version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), createdBy: 'system', exportFormats: ['pdf'] },
+                            };
+
+                            setGeneratedContract(mockContrat);
+                            setSignatureStep('review');
+                            toast({
+                              title: 'Contrat généré',
+                              description: 'Vérifiez les informations avant de signer',
+                            });
+                          } catch (err) {
+                            console.error('Error generating contract:', err);
+                            toast({
+                              title: 'Erreur',
+                              description: 'Impossible de générer le contrat',
+                              variant: 'destructive',
+                            });
+                          } finally {
+                            setGeneratingContract(null);
+                          }
+                        }}
+                      >
+                        {generatingContract === 'generating' ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <FileSignature className="w-4 h-4 mr-2" />
+                        )}
+                        Générer le contrat
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Workflow de signature */}
+                  {generatedContract && (
+                    <div className="space-y-4">
+                      {/* Étapes de signature */}
+                      <div className="flex items-center justify-between mb-6">
+                        <div className={`flex items-center gap-2 ${signatureStep === 'review' ? 'text-primary' : signatureStep === 'signing' || signatureStep === 'signed' ? 'text-green-600' : ''}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${signatureStep === 'review' ? 'bg-primary text-white' : signatureStep === 'signing' || signatureStep === 'signed' ? 'bg-green-600 text-white' : 'bg-muted'}`}>
+                            {signatureStep === 'signing' || signatureStep === 'signed' ? <CheckCircle2 className="w-4 h-4" /> : '1'}
+                          </div>
+                          <span className="text-sm font-medium">Vérification</span>
+                        </div>
+                        <div className="flex-1 h-px bg-muted mx-2" />
+                        <div className={`flex items-center gap-2 ${signatureStep === 'signing' ? 'text-primary' : signatureStep === 'signed' ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${signatureStep === 'signing' ? 'bg-primary text-white' : signatureStep === 'signed' ? 'bg-green-600 text-white' : 'bg-muted'}`}>
+                            {signatureStep === 'signed' ? <CheckCircle2 className="w-4 h-4" /> : '2'}
+                          </div>
+                          <span className="text-sm font-medium">Signature</span>
+                        </div>
+                        <div className="flex-1 h-px bg-muted mx-2" />
+                        <div className={`flex items-center gap-2 ${signatureStep === 'signed' ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${signatureStep === 'signed' ? 'bg-green-600 text-white' : 'bg-muted'}`}>
+                            {signatureStep === 'signed' ? <CheckCircle2 className="w-4 h-4" /> : '3'}
+                          </div>
+                          <span className="text-sm font-medium">Validé</span>
+                        </div>
+                      </div>
+
+                      {/* Contenu selon l'étape */}
+                      {signatureStep === 'review' && (
+                        <div className="space-y-4">
+                          <Alert>
+                            <FileText className="h-4 w-4" />
+                            <AlertDescription>
+                              <span className="font-medium">Vérifiez les informations du contrat</span>
+                              <br />
+                              Montant TTC: {generatedContract.conditionsFinancieres.prix.montantTTC.toLocaleString('fr-FR')} €
+                              <br />
+                              Durée: {generatedContract.delais.execution.duree} jours
+                            </AlertDescription>
+                          </Alert>
+                          <div className="flex gap-2">
+                            <Button variant="outline" onClick={() => { setGeneratedContract(null); setSignatureStep('idle'); }}>
+                              Modifier
+                            </Button>
+                            <Button onClick={() => setSignatureStep('signing')}>
+                              Valider et signer
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {signatureStep === 'signing' && (
+                        <div className="space-y-4">
+                          <div className="p-6 border-2 border-dashed rounded-lg text-center">
+                            <FileSignature className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                            <p className="font-medium mb-2">Signature électronique</p>
+                            <p className="text-sm text-muted-foreground mb-4">
+                              En cliquant sur "Signer", vous acceptez les termes du contrat
+                            </p>
+                            <div className="flex justify-center gap-2">
+                              <Button variant="outline" onClick={() => setSignatureStep('review')}>
+                                Retour
+                              </Button>
+                              <Button
+                                onClick={async () => {
+                                  setGeneratingContract('signing');
+                                  await new Promise(resolve => setTimeout(resolve, 1500));
+                                  setGeneratedContract({
+                                    ...generatedContract,
+                                    signature: {
+                                      ...generatedContract.signature,
+                                      maitreOuvrage: {
+                                        ...generatedContract.signature.maitreOuvrage,
+                                        signee: true,
+                                        dateSignature: new Date().toISOString(),
+                                      },
+                                    },
+                                    statut: 'signe_mo',
+                                  });
+                                  setSignatureStep('signed');
+                                  setGeneratingContract(null);
+                                  toast({
+                                    title: 'Contrat signé !',
+                                    description: 'Le contrat a été signé avec succès. L\'entreprise sera notifiée.',
+                                  });
+                                }}
+                                disabled={generatingContract === 'signing'}
+                              >
+                                {generatingContract === 'signing' ? (
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                  <FileSignature className="w-4 h-4 mr-2" />
+                                )}
+                                Signer le contrat
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {signatureStep === 'signed' && (
+                        <div className="space-y-4">
+                          <Alert className="border-green-200 bg-green-50">
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            <AlertDescription className="text-green-800">
+                              <span className="font-medium">Contrat signé avec succès !</span>
+                              <br />
+                              Signé le {new Date(generatedContract.signature.maitreOuvrage.dateSignature || '').toLocaleDateString('fr-FR')}
+                              <br />
+                              En attente de la signature de l'entreprise
+                            </AlertDescription>
+                          </Alert>
+                          <div className="flex gap-2">
+                            <Button variant="outline">
+                              <Download className="w-4 h-4 mr-2" />
+                              Télécharger PDF
+                            </Button>
+                            <Button variant="outline" onClick={() => setActiveTab('formalites')}>
+                              <ArrowRight className="w-4 h-4 mr-2" />
+                              Voir les formalités
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Modal exemple de document */}
+            {showContractExample && (
+              <Card className="border-2 border-primary/20 bg-primary/5">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <BookOpen className="w-5 h-5" />
+                      Exemple de document
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowContractExample(null)}
+                    >
+                      Fermer
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-white rounded-lg p-6 border shadow-sm max-h-96 overflow-y-auto">
+                    {showContractExample === 'contrat_travaux' && (
+                      <div className="space-y-4 text-sm">
+                        <div className="text-center border-b pb-4">
+                          <h2 className="font-bold text-lg">CONTRAT DE TRAVAUX</h2>
+                          <p className="text-muted-foreground">Entre les soussignés</p>
+                        </div>
+                        <div>
+                          <h3 className="font-semibold">ARTICLE 1 - PARTIES</h3>
+                          <p className="text-muted-foreground mt-1">
+                            <strong>Le Maître d'Ouvrage :</strong> [Nom du client], demeurant [adresse]<br />
+                            <strong>L'Entreprise :</strong> [Raison sociale], SIRET [numéro], représentée par [nom]
+                          </p>
+                        </div>
+                        <div>
+                          <h3 className="font-semibold">ARTICLE 2 - OBJET</h3>
+                          <p className="text-muted-foreground mt-1">
+                            Le présent contrat a pour objet la réalisation des travaux de [description]
+                            situés à [adresse du chantier], conformément au descriptif technique annexé.
+                          </p>
+                        </div>
+                        <div>
+                          <h3 className="font-semibold">ARTICLE 3 - PRIX</h3>
+                          <p className="text-muted-foreground mt-1">
+                            Le prix forfaitaire des travaux est fixé à : XX XXX,XX € TTC<br />
+                            Ce prix comprend la fourniture des matériaux et la main d'œuvre.
+                          </p>
+                        </div>
+                        <div>
+                          <h3 className="font-semibold">ARTICLE 4 - DÉLAIS</h3>
+                          <p className="text-muted-foreground mt-1">
+                            Durée des travaux : XX jours ouvrés<br />
+                            Date de début prévisionnelle : [date]
+                          </p>
+                        </div>
+                        <div>
+                          <h3 className="font-semibold">ARTICLE 5 - GARANTIES</h3>
+                          <p className="text-muted-foreground mt-1">
+                            L'entreprise est couverte par une assurance décennale n°[numéro]
+                            auprès de [compagnie].
+                          </p>
+                        </div>
+                        <div className="text-center text-xs text-muted-foreground mt-4 pt-4 border-t">
+                          Ceci est un exemple - Le document réel sera personnalisé avec vos informations
+                        </div>
+                      </div>
+                    )}
+                    {showContractExample === 'conditions_generales' && (
+                      <div className="space-y-4 text-sm">
+                        <div className="text-center border-b pb-4">
+                          <h2 className="font-bold text-lg">CONDITIONS GÉNÉRALES</h2>
+                          <p className="text-muted-foreground">Applicables aux marchés de travaux</p>
+                        </div>
+                        <div>
+                          <h3 className="font-semibold">1. EXÉCUTION DES TRAVAUX</h3>
+                          <p className="text-muted-foreground mt-1">
+                            Les travaux seront exécutés conformément aux règles de l'art et
+                            aux normes en vigueur (DTU, NF...).
+                          </p>
+                        </div>
+                        <div>
+                          <h3 className="font-semibold">2. MODIFICATIONS</h3>
+                          <p className="text-muted-foreground mt-1">
+                            Toute modification du projet devra faire l'objet d'un avenant signé par les deux parties.
+                          </p>
+                        </div>
+                        <div>
+                          <h3 className="font-semibold">3. RÉCEPTION</h3>
+                          <p className="text-muted-foreground mt-1">
+                            La réception des travaux sera prononcée contradictoirement.
+                            Un procès-verbal sera établi.
+                          </p>
+                        </div>
+                        <div className="text-center text-xs text-muted-foreground mt-4 pt-4 border-t">
+                          Ceci est un exemple - Le document réel sera personnalisé
+                        </div>
+                      </div>
+                    )}
+                    {showContractExample === 'attestation_assurance' && (
+                      <div className="space-y-4 text-sm">
+                        <div className="text-center border-b pb-4">
+                          <h2 className="font-bold text-lg">ATTESTATION D'ASSURANCE</h2>
+                          <p className="text-muted-foreground">Responsabilité Civile Décennale</p>
+                        </div>
+                        <div className="p-4 bg-green-50 rounded-lg">
+                          <p className="text-muted-foreground">
+                            <strong>Compagnie :</strong> [Nom de l'assureur]<br />
+                            <strong>Numéro de police :</strong> XXXX-XXXX-XXXX<br />
+                            <strong>Activités garanties :</strong> Tous corps d'état bâtiment<br />
+                            <strong>Période de validité :</strong> Du 01/01/2024 au 31/12/2024<br />
+                            <strong>Montant garanti :</strong> Illimité
+                          </p>
+                        </div>
+                        <div className="text-center text-xs text-muted-foreground mt-4 pt-4 border-t">
+                          Ce document sera fourni par l'entreprise sélectionnée
+                        </div>
+                      </div>
+                    )}
+                    {showContractExample === 'pv_reception' && (
+                      <div className="space-y-4 text-sm">
+                        <div className="text-center border-b pb-4">
+                          <h2 className="font-bold text-lg">PROCÈS-VERBAL DE RÉCEPTION</h2>
+                          <p className="text-muted-foreground">Des travaux</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">
+                            <strong>Chantier :</strong> [adresse]<br />
+                            <strong>Date de réception :</strong> [date]<br />
+                            <strong>Présents :</strong> Le maître d'ouvrage et l'entreprise
+                          </p>
+                        </div>
+                        <div>
+                          <h3 className="font-semibold">RÉSERVES</h3>
+                          <p className="text-muted-foreground mt-1">
+                            ☐ Sans réserve<br />
+                            ☐ Avec réserves (liste ci-dessous)
+                          </p>
+                        </div>
+                        <div className="text-center text-xs text-muted-foreground mt-4 pt-4 border-t">
+                          Ce document sera généré à la fin des travaux
+                        </div>
+                      </div>
+                    )}
+                    {showContractExample === 'notification' && (
+                      <div className="space-y-4 text-sm">
+                        <div className="text-center border-b pb-4">
+                          <h2 className="font-bold text-lg">NOTIFICATION D'ATTRIBUTION</h2>
+                          <p className="text-muted-foreground">Marché public</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">
+                            La collectivité [nom] notifie par la présente l'attribution
+                            du marché n°[référence] à l'entreprise [nom].<br /><br />
+                            Montant du marché : XX XXX,XX € HT<br />
+                            Délai d'exécution : XX jours
+                          </p>
+                        </div>
+                        <div className="text-center text-xs text-muted-foreground mt-4 pt-4 border-t">
+                          Document officiel de marché public
+                        </div>
+                      </div>
+                    )}
+                    {showContractExample === 'ordre_service' && (
+                      <div className="space-y-4 text-sm">
+                        <div className="text-center border-b pb-4">
+                          <h2 className="font-bold text-lg">ORDRE DE SERVICE</h2>
+                          <p className="text-muted-foreground">N° 01 - Démarrage des travaux</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">
+                            Le maître d'ouvrage ordonne à l'entreprise [nom] de commencer
+                            l'exécution des travaux objets du marché n°[référence].<br /><br />
+                            <strong>Date d'effet :</strong> [date]<br />
+                            <strong>Délai d'exécution :</strong> XX jours à compter de cette date
+                          </p>
+                        </div>
+                        <div className="text-center text-xs text-muted-foreground mt-4 pt-4 border-t">
+                          Document officiel de marché public
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* Onglet Formalités - Analyse Intelligente */}
+          <TabsContent value="formalites" className="space-y-6">
+            {/* En-tête avec bouton d'analyse */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileCheck className="w-5 h-5 text-primary" />
+                      Formalités pré-démarrage
+                    </CardTitle>
+                    <CardDescription>
+                      Analyse automatique des démarches administratives requises selon votre projet
+                    </CardDescription>
+                  </div>
+                  {!analyseUrbanistique && project && (
+                    <Button
+                      onClick={async () => {
+                        if (!project) return;
+                        setLoadingUrbanisme(true);
+                        try {
+                          const analyse = await UrbanismeService.analyzeProject(project);
+                          setAnalyseUrbanistique(analyse);
+
+                          // Générer aussi le dossier formalités
+                          const result = await FormalitesService.generateDossierFormalites({
+                            project,
+                            contrat: generatedContract || undefined,
+                          });
+                          if (result.success && result.dossier) {
+                            setFormalitesDossier(result.dossier);
+                            setFormalitesChecklist(result.checklist || null);
+                          }
+
+                          toast({
+                            title: 'Analyse terminée',
+                            description: `${analyse.autorisationsRequises.length} autorisation(s) détectée(s)`,
+                          });
+                        } catch (err) {
+                          console.error('Error analyzing:', err);
+                          toast({
+                            title: 'Erreur',
+                            description: 'Impossible d\'analyser le projet',
+                            variant: 'destructive',
+                          });
+                        } finally {
+                          setLoadingUrbanisme(false);
+                        }
+                      }}
+                      disabled={loadingUrbanisme}
+                    >
+                      {loadingUrbanisme ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-4 h-4 mr-2" />
+                      )}
+                      Analyser mon projet
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+            </Card>
+
+            {/* Résultat de l'analyse urbanistique */}
+            {analyseUrbanistique && (
+              <>
+                {/* Contexte local */}
+                <Card className="border-blue-200 bg-blue-50/50">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-blue-600" />
+                      Contexte urbanistique local
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid md:grid-cols-3 gap-4">
+                      {/* Commune */}
+                      <div className="p-3 bg-white rounded-lg border">
+                        <p className="text-xs text-muted-foreground mb-1">Commune</p>
+                        <p className="font-semibold">{analyseUrbanistique.commune.nom}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {analyseUrbanistique.commune.departement} - {analyseUrbanistique.commune.region}
+                        </p>
+                        <p className="text-xs mt-1">
+                          Document d'urbanisme: <span className="font-medium">{analyseUrbanistique.commune.typePLU}</span>
+                        </p>
+                      </div>
+
+                      {/* Zone PLU */}
+                      <div className="p-3 bg-white rounded-lg border">
+                        <p className="text-xs text-muted-foreground mb-1">Zone PLU</p>
+                        <p className="font-semibold">{analyseUrbanistique.zonePLU.code} - {analyseUrbanistique.zonePLU.designation}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {analyseUrbanistique.zonePLU.description}
+                        </p>
+                        {analyseUrbanistique.zonePLU.hauteurMax && (
+                          <p className="text-xs mt-1">
+                            Hauteur max: <span className="font-medium">{analyseUrbanistique.zonePLU.hauteurMax}m</span>
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Contact mairie */}
+                      <div className="p-3 bg-white rounded-lg border">
+                        <p className="text-xs text-muted-foreground mb-1">Service urbanisme</p>
+                        {analyseUrbanistique.commune.contactUrbanisme && (
+                          <>
+                            <p className="text-sm">{analyseUrbanistique.commune.contactUrbanisme.email}</p>
+                            <p className="text-sm">{analyseUrbanistique.commune.contactUrbanisme.telephone}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {analyseUrbanistique.commune.contactUrbanisme.horaires}
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Secteurs protégés */}
+                {analyseUrbanistique.secteursProteges.length > 0 && (
+                  <Alert variant="destructive" className="border-amber-300 bg-amber-50 text-amber-900">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription>
+                      <span className="font-semibold">Attention : Secteur protégé détecté</span>
+                      {analyseUrbanistique.secteursProteges.map((secteur, idx) => (
+                        <div key={idx} className="mt-2 p-2 bg-white/50 rounded">
+                          <p className="font-medium">{secteur.nom}</p>
+                          <p className="text-sm">{secteur.description}</p>
+                          {secteur.architecteBatimentsFrance && (
+                            <Badge className="mt-1 bg-amber-200 text-amber-800">
+                              Avis ABF obligatoire (+{secteur.delaiSupplementaire} jours)
+                            </Badge>
+                          )}
+                        </div>
+                      ))}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Autorisations requises détectées */}
+                <Card className="border-2 border-primary/20">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileSignature className="w-5 h-5 text-primary" />
+                      Autorisations détectées pour votre projet
+                    </CardTitle>
+                    <CardDescription>
+                      Basé sur l'analyse de vos travaux, voici les démarches administratives requises
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {analyseUrbanistique.autorisationsRequises.length === 0 ? (
+                      <Alert className="border-green-200 bg-green-50">
+                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        <AlertDescription className="text-green-800">
+                          <span className="font-medium">Aucune autorisation d'urbanisme requise</span>
+                          <br />
+                          Vos travaux ne nécessitent pas de déclaration préalable ni de permis.
+                        </AlertDescription>
+                      </Alert>
+                    ) : (
+                      analyseUrbanistique.autorisationsRequises.map((auto, idx) => (
+                        <Card key={idx} className={auto.obligatoire ? 'border-red-200' : ''}>
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <h4 className="font-semibold">
+                                    {auto.type === 'declaration_prealable' && 'Déclaration Préalable de Travaux'}
+                                    {auto.type === 'permis_construire' && 'Permis de Construire'}
+                                    {auto.type === 'permis_demolir' && 'Permis de Démolir'}
+                                    {auto.type === 'autorisation_abf' && 'Autorisation ABF'}
+                                  </h4>
+                                  {auto.obligatoire && (
+                                    <Badge variant="destructive">Obligatoire</Badge>
+                                  )}
+                                </div>
+                                <p className="text-sm text-muted-foreground mb-2">{auto.motif}</p>
+                                <div className="grid md:grid-cols-2 gap-2 text-sm">
+                                  <div>
+                                    <span className="text-muted-foreground">Formulaire:</span>{' '}
+                                    <span className="font-medium">Cerfa {auto.formulaire.cerfa}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Délai:</span>{' '}
+                                    <span className="font-medium">
+                                      {auto.delaiMajore || auto.delaiInstruction} jours
+                                      {auto.delaiMajore && ' (majoré ABF)'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Dépôt:</span>{' '}
+                                    <span className="font-medium">{auto.destination}</span>
+                                  </div>
+                                </div>
+
+                                {/* Pièces principales */}
+                                <details className="mt-3">
+                                  <summary className="text-sm font-medium cursor-pointer text-primary">
+                                    Voir les pièces à fournir ({auto.piecesPrincipales.length})
+                                  </summary>
+                                  <ul className="mt-2 ml-4 text-sm space-y-1">
+                                    {auto.piecesPrincipales.map((piece, i) => (
+                                      <li key={i} className="text-muted-foreground">• {piece}</li>
+                                    ))}
+                                  </ul>
+                                </details>
+                              </div>
+
+                              <div className="flex flex-col gap-2 ml-4">
+                                <Button
+                                  size="sm"
+                                  onClick={() => setShowPrefilledDoc(auto.type)}
+                                >
+                                  <FileText className="w-3 h-3 mr-1" />
+                                  Pré-remplir
+                                </Button>
+                                {auto.formulaire.url && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => window.open(auto.formulaire.url, '_blank')}
+                                  >
+                                    <Download className="w-3 h-3 mr-1" />
+                                    Cerfa
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Recommandations */}
+                {analyseUrbanistique.recommandations.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-amber-500" />
+                        Recommandations
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {analyseUrbanistique.recommandations.map((reco, idx) => (
+                          <div key={idx} className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                            <Badge variant={reco.priorite === 'haute' ? 'destructive' : reco.priorite === 'moyenne' ? 'default' : 'secondary'} className="mt-0.5">
+                              {reco.priorite}
+                            </Badge>
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">{reco.titre}</p>
+                              <p className="text-xs text-muted-foreground">{reco.description}</p>
+                              <p className="text-xs text-primary mt-1">→ {reco.action}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Risques identifiés */}
+                {analyseUrbanistique.risques.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-red-500" />
+                        Risques identifiés
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {analyseUrbanistique.risques.map((risque, idx) => (
+                          <div key={idx} className="p-3 border rounded-lg">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant={risque.probabilite === 'haute' ? 'destructive' : risque.probabilite === 'moyenne' ? 'default' : 'secondary'}>
+                                {risque.probabilite}
+                              </Badge>
+                              <span className="font-medium text-sm capitalize">{risque.type}</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{risque.description}</p>
+                            <p className="text-xs text-green-700 mt-1">Prévention: {risque.prevention}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            )}
+
+            {/* Autres formalités obligatoires */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-purple-600" />
+                  Déclarations complémentaires
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <input type="checkbox" className="w-4 h-4" disabled />
+                    <div>
+                      <p className="font-medium text-sm">DICT - Déclaration réseaux</p>
+                      <p className="text-xs text-muted-foreground">Obligatoire 7 jours avant le démarrage</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setShowContractExample('dict')}>
+                      <Eye className="w-3 h-3 mr-1" />
+                      Voir
+                    </Button>
+                    <Button size="sm" onClick={() => window.open('https://www.reseaux-et-canalisations.gouv.fr', '_blank')}>
+                      Effectuer
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <input type="checkbox" className="w-4 h-4" disabled />
+                    <div>
+                      <p className="font-medium text-sm">DOC - Ouverture de chantier</p>
+                      <p className="text-xs text-muted-foreground">À déposer en mairie après obtention de l'autorisation</p>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setShowContractExample('doc')}>
+                    <Eye className="w-3 h-3 mr-1" />
+                    Modèle
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <input type="checkbox" className="w-4 h-4" disabled />
+                    <div>
+                      <p className="font-medium text-sm">Information voisinage</p>
+                      <p className="text-xs text-muted-foreground">Courrier de courtoisie recommandé</p>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setShowContractExample('courrier_voisinage')}>
+                    <Eye className="w-3 h-3 mr-1" />
+                    Modèle
+                  </Button>
+                </div>
               </CardContent>
             </Card>
+
+            {/* Document pré-rempli */}
+            {showPrefilledDoc && analyseUrbanistique && project && (
+              <Card className="border-2 border-green-200 bg-green-50/50">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-green-600" />
+                      Document pré-rempli avec vos données
+                    </CardTitle>
+                    <Button variant="ghost" size="sm" onClick={() => setShowPrefilledDoc(null)}>
+                      Fermer
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-white rounded-lg p-6 border shadow-sm max-h-96 overflow-y-auto font-mono text-xs whitespace-pre-wrap">
+                    {UrbanismeService.generatePrefilledDocument(
+                      showPrefilledDoc as any,
+                      project,
+                      analyseUrbanistique
+                    )}
+                  </div>
+                  <div className="mt-4 flex gap-2">
+                    <Button variant="outline" size="sm">
+                      <Download className="w-3 h-3 mr-1" />
+                      Télécharger
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => {
+                      const text = UrbanismeService.generatePrefilledDocument(
+                        showPrefilledDoc as any,
+                        project,
+                        analyseUrbanistique
+                      );
+                      navigator.clipboard.writeText(text);
+                      toast({ title: 'Copié !', description: 'Document copié dans le presse-papier' });
+                    }}>
+                      Copier
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Exemples de documents */}
+            {showContractExample && ['dict', 'doc', 'panneau', 'courrier_voisinage'].includes(showContractExample) && (
+              <Card className="border-2 border-primary/20 bg-primary/5">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <BookOpen className="w-5 h-5" />
+                      Modèle de document
+                    </CardTitle>
+                    <Button variant="ghost" size="sm" onClick={() => setShowContractExample(null)}>
+                      Fermer
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-white rounded-lg p-6 border shadow-sm max-h-96 overflow-y-auto font-mono text-xs whitespace-pre-wrap">
+                    {showContractExample === 'dict' && `======================================================================
+DÉCLARATION D'INTENTION DE COMMENCEMENT DE TRAVAUX (DICT)
+Cerfa n°14434*03
+======================================================================
+
+1. DÉCLARANT
+   Raison sociale: [Nom de l'entreprise]
+   SIRET: [Numéro SIRET]
+
+2. MAÎTRE D'OUVRAGE
+   Nom: ${project?.ownerProfile?.identity?.type === 'B2C' ? `${(project.ownerProfile.identity as any).firstName || ''} ${(project.ownerProfile.identity as any).lastName || ''}` : '[Votre nom]'}
+   Adresse: ${project?.ownerProfile?.contact?.address?.street || '[Votre adresse]'}
+   Email: ${project?.ownerProfile?.contact?.email || '[Email]'}
+   Téléphone: ${project?.ownerProfile?.contact?.phone || '[Téléphone]'}
+
+3. LOCALISATION DES TRAVAUX
+   Adresse: ${project?.property?.identification?.address?.streetName || project?.property?.address?.street || '[Adresse du chantier]'}
+   ${project?.property?.identification?.address?.postalCode || project?.property?.address?.postalCode || ''} ${project?.property?.identification?.address?.city || project?.property?.address?.city || ''}
+
+4. NATURE DES TRAVAUX
+   ${project?.workProject?.general?.description || '[Description des travaux]'}
+
+5. DATE DE COMMENCEMENT PRÉVUE
+   [Date]
+
+----------------------------------------------------------------------
+À effectuer sur: www.reseaux-et-canalisations.gouv.fr`}
+                    {showContractExample === 'doc' && `======================================================================
+DÉCLARATION D'OUVERTURE DE CHANTIER (DOC)
+Cerfa n°13407*05
+======================================================================
+
+1. IDENTITÉ DU DÉCLARANT
+   ${project?.ownerProfile?.identity?.type === 'B2C' ? `Nom: ${(project.ownerProfile.identity as any).firstName || ''} ${(project.ownerProfile.identity as any).lastName || ''}` : '[Votre nom]'}
+   Adresse: ${project?.ownerProfile?.contact?.address?.street || '[Adresse]'}
+   ${project?.ownerProfile?.contact?.address?.postalCode || ''} ${project?.ownerProfile?.contact?.address?.city || ''}
+
+2. TERRAIN
+   Adresse: ${project?.property?.identification?.address?.streetName || project?.property?.address?.street || '[Adresse du chantier]'}
+   ${project?.property?.identification?.address?.postalCode || project?.property?.address?.postalCode || ''} ${project?.property?.identification?.address?.city || project?.property?.address?.city || ''}
+
+3. AUTORISATION D'URBANISME
+   Type: [ ] Déclaration préalable [ ] Permis de construire
+   Numéro: _______________
+
+----------------------------------------------------------------------
+À déposer en mairie du lieu des travaux.`}
+                    {showContractExample === 'panneau' && `============================================================
+PANNEAU D'AFFICHAGE RÉGLEMENTAIRE
+============================================================
+
+Bénéficiaire: ${project?.ownerProfile?.identity?.type === 'B2C' ? `${(project.ownerProfile.identity as any).firstName || ''} ${(project.ownerProfile.identity as any).lastName || ''}` : '[Votre nom]'}
+
+Nature des travaux:
+${project?.workProject?.general?.description || '[Description des travaux]'}
+
+Surface de plancher: ${project?.property?.surface || '___'} m²
+
+--------------------------------------------------------------
+Dimensions minimales: 80cm x 120cm
+À installer sur le terrain, visible de la voie publique`}
+                    {showContractExample === 'courrier_voisinage' && `${project?.ownerProfile?.identity?.type === 'B2C' ? `${(project.ownerProfile.identity as any).firstName || ''} ${(project.ownerProfile.identity as any).lastName || ''}` : '[Votre nom]'}
+${project?.ownerProfile?.contact?.address?.street || '[Votre adresse]'}
+${project?.ownerProfile?.contact?.address?.postalCode || ''} ${project?.ownerProfile?.contact?.address?.city || ''}
+
+                            ${project?.property?.identification?.address?.city || project?.property?.address?.city || '[Ville]'}, le ${new Date().toLocaleDateString('fr-FR')}
+
+Madame, Monsieur,
+
+Je vous informe que des travaux vont être réalisés à l'adresse:
+${project?.property?.identification?.address?.streetName || project?.property?.address?.street || '[Adresse du chantier]'}
+
+Nature: ${project?.workProject?.general?.description || '[Description]'}
+
+Horaires: 7h30-18h00 (lun-ven), 8h00-12h00 (sam si nécessaire)
+
+Contact: ${project?.ownerProfile?.contact?.email || '[Email]'}
+         ${project?.ownerProfile?.contact?.phone || '[Téléphone]'}
+
+Cordialement`}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Message si pas encore analysé */}
+            {!analyseUrbanistique && project && (
+              <Card className="border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Sparkles className="w-16 h-16 text-primary/30 mb-4" />
+                  <h3 className="text-xl font-semibold mb-2">Analyse intelligente disponible</h3>
+                  <p className="text-muted-foreground text-center max-w-md mb-6">
+                    Cliquez sur "Analyser mon projet" pour identifier automatiquement les autorisations
+                    d'urbanisme requises selon votre localisation et votre type de travaux.
+                  </p>
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      <span>Détection zone PLU</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      <span>Secteurs protégés</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      <span>Documents pré-remplis</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
 
