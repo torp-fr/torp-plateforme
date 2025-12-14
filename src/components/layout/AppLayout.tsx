@@ -63,10 +63,12 @@ const B2C_NAV_ITEMS: NavItem[] = [
   { href: '/profile', icon: User, label: 'Mon profil' },
 ];
 
-// Navigation pour B2B (professionnels)
+// Navigation pour B2B (professionnels) - Sidebar complet et cohérent
 const B2B_NAV_ITEMS: NavItem[] = [
   { href: '/pro', icon: LayoutDashboard, label: 'Tableau de bord', exact: true },
   { href: '/pro/projects', icon: Briefcase, label: 'Mes projets' },
+  { href: '/pro/company', icon: Building2, label: 'Mon entreprise' },
+  { href: '/pro/team', icon: Users, label: 'Mon équipe' },
   { href: '/chantiers', icon: Hammer, label: 'Mes chantiers' },
   { href: '/pro/documents', icon: FileText, label: 'Documents' },
   { href: '/b2b/ao', icon: FolderOpen, label: 'Appels d\'offres' },
