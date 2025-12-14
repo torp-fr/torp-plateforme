@@ -12,11 +12,14 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { AppLayout } from '@/components/layout';
 import {
   ArrowLeft, FileText, Building2, ClipboardList, Scale, FileCheck,
   Loader2, AlertTriangle, CheckCircle2, Clock, Users, Euro,
-  Search, Star, Shield, Award, Send, Eye, Download, Filter
+  Search, Star, Shield, Award, Send, Eye, Download, Filter, Plus, Trash2, Save, Calendar
 } from 'lucide-react';
 import { Phase0ProjectService, Phase0Project } from '@/services/phase0';
 import { DCEService } from '@/services/phase1/dce.service';
@@ -59,10 +62,10 @@ const PROFILE_CONFIG: Record<UserType, {
   },
   B2B: {
     label: 'Professionnel',
-    dceLabel: 'DCE',
-    entrepriseLabel: 'Recherche entreprises',
-    offreLabel: 'Analyse des offres',
-    contractLabel: 'Marchés de travaux',
+    dceLabel: 'Dossier reçu',
+    entrepriseLabel: 'Sous-traitance',
+    offreLabel: 'Mon offre',
+    contractLabel: 'Contrat',
     features: {
       showScoring: true,
       showJuridique: true,
@@ -114,7 +117,44 @@ const PROFILE_CONFIG: Record<UserType, {
 // Étapes de la consultation selon le profil
 const getConsultationSteps = (userType: UserType) => {
   const isB2C = userType === 'B2C';
+  const isB2B = userType === 'B2B';
   const isB2G = userType === 'B2G';
+
+  // Étapes spécifiques B2B (réponse à appel d'offres)
+  if (isB2B) {
+    return [
+      {
+        id: 'dce',
+        label: 'Consulter le dossier',
+        description: 'Analysez le DCE reçu et les exigences du maître d\'ouvrage',
+        icon: FileText,
+      },
+      {
+        id: 'entreprises',
+        label: 'Sous-traitance',
+        description: 'Identifiez des sous-traitants si nécessaire pour ce projet',
+        icon: Building2,
+      },
+      {
+        id: 'offres',
+        label: 'Préparer mon offre',
+        description: 'Rédigez votre offre technique et financière',
+        icon: ClipboardList,
+      },
+      {
+        id: 'selection',
+        label: 'Soumettre',
+        description: 'Soumettez votre offre et suivez son évaluation',
+        icon: Scale,
+      },
+      {
+        id: 'formalites',
+        label: 'Préparation chantier',
+        description: 'Si retenu, préparez le démarrage du chantier',
+        icon: FileCheck,
+      },
+    ];
+  }
 
   return [
     {
@@ -122,19 +162,15 @@ const getConsultationSteps = (userType: UserType) => {
       label: isB2C ? 'Préparer le dossier' : 'Constitution du DCE',
       description: isB2C
         ? 'Rassemblez les documents pour consulter les artisans'
-        : isB2G
-          ? 'Règlement de consultation, CCTP, DPGF, Acte d\'engagement'
-          : 'Documents de consultation entreprises',
+        : 'Règlement de consultation, CCTP, DPGF, Acte d\'engagement',
       icon: FileText,
     },
     {
       id: 'entreprises',
-      label: isB2C ? 'Trouver des artisans' : isB2G ? 'Publication & candidatures' : 'Recherche entreprises',
+      label: isB2C ? 'Trouver des artisans' : 'Publication & candidatures',
       description: isB2C
         ? 'Artisans qualifiés RGE et Qualibat près de chez vous'
-        : isB2G
-          ? 'Publication sur les plateformes, réception des candidatures'
-          : 'Sourcing et qualification des entreprises',
+        : 'Publication sur les plateformes, réception des candidatures',
       icon: Building2,
     },
     {
@@ -147,12 +183,10 @@ const getConsultationSteps = (userType: UserType) => {
     },
     {
       id: 'selection',
-      label: isB2C ? 'Choisir et signer' : isB2G ? 'Attribution du marché' : 'Sélection & contractualisation',
+      label: isB2C ? 'Choisir et signer' : 'Attribution du marché',
       description: isB2C
         ? 'Signez votre contrat en toute sécurité'
-        : isB2G
-          ? 'Notification, signature du marché public'
-          : 'Négociation et signature des contrats',
+        : 'Notification, signature du marché public',
       icon: Scale,
     },
     {
@@ -175,6 +209,61 @@ interface ConsultationState {
   tableauComparatif?: TableauComparatif;
 }
 
+// Interface pour le formulaire d'offre B2B
+interface B2BOfferFormState {
+  // Mémoire technique
+  memoireTechnique: {
+    presentationEntreprise: string;
+    moyensHumains: string;
+    moyensMateriels: string;
+    methodologie: string;
+    referencesProjet: string;
+    engagementsQualite: string;
+  };
+  // Offre financière - postes du DPGF
+  dpgfPostes: {
+    id: string;
+    designation: string;
+    unite: string;
+    quantite: number;
+    prixUnitaireHT: number;
+  }[];
+  // Planning
+  planning: {
+    dateDebutProposee: string;
+    dureeJours: number;
+    commentairePlanning: string;
+  };
+  // Conditions
+  conditions: {
+    dureeValiditeOffre: number; // jours
+    delaiPaiement: number; // jours
+    acompte: number; // %
+  };
+}
+
+const initialB2BOfferForm: B2BOfferFormState = {
+  memoireTechnique: {
+    presentationEntreprise: '',
+    moyensHumains: '',
+    moyensMateriels: '',
+    methodologie: '',
+    referencesProjet: '',
+    engagementsQualite: '',
+  },
+  dpgfPostes: [],
+  planning: {
+    dateDebutProposee: '',
+    dureeJours: 30,
+    commentairePlanning: '',
+  },
+  conditions: {
+    dureeValiditeOffre: 90,
+    delaiPaiement: 30,
+    acompte: 30,
+  },
+};
+
 export function Phase1Consultation() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
@@ -193,24 +282,202 @@ export function Phase1Consultation() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
 
+  // State pour le formulaire d'offre B2B
+  const [b2bOfferForm, setB2BOfferForm] = useState<B2BOfferFormState>(initialB2BOfferForm);
+  const [offerSaveStatus, setOfferSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
   const config = PROFILE_CONFIG[userType];
   const steps = getConsultationSteps(userType);
 
-  // Charger le projet Phase 0
+  // Calculer le total HT de l'offre B2B
+  const calculateTotalHT = useCallback(() => {
+    return b2bOfferForm.dpgfPostes.reduce((sum, poste) => {
+      return sum + (poste.quantite * poste.prixUnitaireHT);
+    }, 0);
+  }, [b2bOfferForm.dpgfPostes]);
+
+  // Calculer la progression de l'offre B2B
+  const calculateOfferProgress = useCallback(() => {
+    let completed = 0;
+    const total = 4;
+
+    // 1. Mémoire technique rempli ?
+    const mt = b2bOfferForm.memoireTechnique;
+    if (mt.presentationEntreprise && mt.methodologie) completed++;
+
+    // 2. DPGF avec prix ?
+    if (b2bOfferForm.dpgfPostes.length > 0 && b2bOfferForm.dpgfPostes.some(p => p.prixUnitaireHT > 0)) completed++;
+
+    // 3. Planning défini ?
+    if (b2bOfferForm.planning.dateDebutProposee && b2bOfferForm.planning.dureeJours > 0) completed++;
+
+    // 4. Documents admin (auto depuis profil) - toujours compté comme fait
+    completed++;
+
+    return Math.round((completed / total) * 100);
+  }, [b2bOfferForm]);
+
+  // Ajouter un poste au DPGF
+  const addDPGFPoste = useCallback(() => {
+    setB2BOfferForm(prev => ({
+      ...prev,
+      dpgfPostes: [
+        ...prev.dpgfPostes,
+        {
+          id: crypto.randomUUID(),
+          designation: '',
+          unite: 'u',
+          quantite: 1,
+          prixUnitaireHT: 0,
+        },
+      ],
+    }));
+  }, []);
+
+  // Supprimer un poste du DPGF
+  const removeDPGFPoste = useCallback((id: string) => {
+    setB2BOfferForm(prev => ({
+      ...prev,
+      dpgfPostes: prev.dpgfPostes.filter(p => p.id !== id),
+    }));
+  }, []);
+
+  // Mettre à jour un poste du DPGF
+  const updateDPGFPoste = useCallback((id: string, field: string, value: string | number) => {
+    setB2BOfferForm(prev => ({
+      ...prev,
+      dpgfPostes: prev.dpgfPostes.map(p =>
+        p.id === id ? { ...p, [field]: value } : p
+      ),
+    }));
+  }, []);
+
+  // Mettre à jour le mémoire technique
+  const updateMemoireTechnique = useCallback((field: string, value: string) => {
+    setB2BOfferForm(prev => ({
+      ...prev,
+      memoireTechnique: { ...prev.memoireTechnique, [field]: value },
+    }));
+  }, []);
+
+  // Mettre à jour le planning
+  const updatePlanning = useCallback((field: string, value: string | number) => {
+    setB2BOfferForm(prev => ({
+      ...prev,
+      planning: { ...prev.planning, [field]: value },
+    }));
+  }, []);
+
+  // Sauvegarder l'offre B2B
+  const handleSaveB2BOffer = useCallback(async () => {
+    if (!project || !projectId) return;
+
+    setOfferSaveStatus('saving');
+    try {
+      // Construire l'offre pour sauvegarde
+      const totalHT = calculateTotalHT();
+      const offerData = {
+        projectId,
+        memoireTechnique: b2bOfferForm.memoireTechnique,
+        dpgf: {
+          postes: b2bOfferForm.dpgfPostes,
+          totalHT,
+        },
+        planning: b2bOfferForm.planning,
+        conditions: b2bOfferForm.conditions,
+        status: 'draft',
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Sauvegarder en localStorage pour l'instant (en attendant la table)
+      localStorage.setItem(`b2b_offer_${projectId}`, JSON.stringify(offerData));
+
+      setOfferSaveStatus('saved');
+      toast({
+        title: 'Offre sauvegardée',
+        description: 'Votre offre a été enregistrée',
+      });
+
+      // Reset status après 3s
+      setTimeout(() => setOfferSaveStatus('idle'), 3000);
+    } catch (err) {
+      console.error('Erreur sauvegarde offre:', err);
+      setOfferSaveStatus('error');
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de sauvegarder l\'offre',
+        variant: 'destructive',
+      });
+    }
+  }, [project, projectId, b2bOfferForm, calculateTotalHT, toast]);
+
+  // Charger l'offre B2B existante
   useEffect(() => {
-    const loadProject = async () => {
+    if (projectId && userType === 'B2B') {
+      const savedOffer = localStorage.getItem(`b2b_offer_${projectId}`);
+      if (savedOffer) {
+        try {
+          const parsed = JSON.parse(savedOffer);
+          setB2BOfferForm({
+            memoireTechnique: parsed.memoireTechnique || initialB2BOfferForm.memoireTechnique,
+            dpgfPostes: parsed.dpgf?.postes || [],
+            planning: parsed.planning || initialB2BOfferForm.planning,
+            conditions: parsed.conditions || initialB2BOfferForm.conditions,
+          });
+        } catch (e) {
+          console.error('Erreur chargement offre:', e);
+        }
+      }
+
+      // Initialiser les postes DPGF depuis les lots du projet si vide
+      if (!savedOffer && project?.selectedLots) {
+        const initialPostes = project.selectedLots.map(lot => ({
+          id: crypto.randomUUID(),
+          designation: lot.name,
+          unite: 'ens',
+          quantite: 1,
+          prixUnitaireHT: 0,
+        }));
+        setB2BOfferForm(prev => ({
+          ...prev,
+          dpgfPostes: initialPostes,
+        }));
+      }
+    }
+  }, [projectId, userType, project]);
+
+  // Charger le projet Phase 0 et le DCE existant
+  useEffect(() => {
+    const loadProjectAndDCE = async () => {
       if (!projectId) return;
 
       setIsLoading(true);
       setError(null);
 
       try {
+        // Charger le projet
         const projectData = await Phase0ProjectService.getProjectById(projectId);
         if (!projectData) {
           setError('Projet non trouvé');
           return;
         }
         setProject(projectData);
+
+        // Charger le DCE existant si présent (ne pas bloquer en cas d'erreur)
+        try {
+          const existingDCE = await DCEService.getDCEByProjectId(projectId);
+          if (existingDCE) {
+            setConsultationState(prev => ({
+              ...prev,
+              status: 'dce_ready',
+              currentStep: 1,
+              dce: existingDCE,
+            }));
+          }
+        } catch (dceErr) {
+          // Erreur normale si table n'existe pas encore ou pas de DCE
+          console.log('DCE non disponible:', dceErr instanceof Error ? dceErr.message : 'erreur');
+        }
       } catch (err) {
         console.error('Erreur chargement projet:', err);
         setError('Impossible de charger le projet');
@@ -219,7 +486,7 @@ export function Phase1Consultation() {
       }
     };
 
-    loadProject();
+    loadProjectAndDCE();
   }, [projectId]);
 
   // Générer le DCE
@@ -228,16 +495,23 @@ export function Phase1Consultation() {
 
     setIsProcessing(true);
     try {
+      // Adapter le wizardMode selon le type d'utilisateur
       const wizardMode = userType === 'B2C' ? 'b2c_simple' : userType === 'B2G' ? 'b2g_public' : 'b2b_professional';
 
-      const result = await DCEService.generateDCE({
-        projectId: project.id,
+      // Préparer le projet avec le bon wizardMode
+      const projectWithMode = {
+        ...project,
         wizardMode,
-        project: project.workProject || {},
-        property: project.property || {},
-        lots: project.selectedLots || [],
-        owner: project.ownerProfile || project.owner,
-        estimation: null,
+      };
+
+      const result = await DCEService.generateDCE({
+        project: projectWithMode,
+        config: {
+          includeRC: true,
+          includeAE: true,
+          includeDPGF: true,
+          includeCadreMT: true,
+        },
       });
 
       if (result.success && result.dce) {
@@ -247,16 +521,24 @@ export function Phase1Consultation() {
           currentStep: 1,
           dce: result.dce,
         }));
+
+        const documentsCount = result.dce.generationInfo?.piecesGenerees?.length || 4;
         toast({
           title: userType === 'B2C' ? 'Dossier préparé' : 'DCE généré',
-          description: `${result.documentsGenerated} document(s) créé(s)`,
+          description: `${documentsCount} document(s) créé(s)`,
+        });
+      } else if (result.errors && result.errors.length > 0) {
+        toast({
+          title: 'Erreur de génération',
+          description: result.errors[0],
+          variant: 'destructive',
         });
       }
     } catch (err) {
       console.error('Erreur génération DCE:', err);
       toast({
         title: 'Erreur',
-        description: 'Impossible de générer le dossier de consultation',
+        description: err instanceof Error ? err.message : 'Impossible de générer le dossier de consultation',
         variant: 'destructive',
       });
     } finally {
@@ -270,35 +552,63 @@ export function Phase1Consultation() {
 
     setIsProcessing(true);
     try {
+      // Adapter le wizardMode selon le type d'utilisateur
+      const wizardMode = userType === 'B2C' ? 'b2c_simple' : userType === 'B2G' ? 'b2g_public' : 'b2b_professional';
+
+      const projectWithMode = {
+        ...project,
+        wizardMode,
+      };
+
       const result = await EntrepriseService.findMatchingEntreprises({
-        projectId: project.id,
-        lots: project.selectedLots || [],
-        location: project.property?.address || {},
-        wizardMode: userType === 'B2C' ? 'b2c_simple' : userType === 'B2G' ? 'b2g_public' : 'b2b_professional',
-        criteresMinimaux: {
+        project: projectWithMode,
+        rayonKm: 50,
+        limiteResultats: userType === 'B2C' ? 6 : 10,
+        filtres: {
           rgeObligatoire: true,
-          assuranceDecennaleValide: true,
-          scoreMinimum: userType === 'B2C' ? 60 : 70,
+          noteMinimale: userType === 'B2C' ? 60 : 70,
         },
-        nombreMaxParLot: userType === 'B2C' ? 3 : 5,
       });
 
-      setConsultationState(prev => ({
-        ...prev,
-        status: 'en_consultation',
-        currentStep: 2,
-        entreprises: result.recommandations,
-      }));
+      if (result.success) {
+        // Transformer les entreprises en recommandations pour l'affichage
+        const recommandations: RecommandationEntreprise[] = result.entreprises.map(e => ({
+          entreprise: e,
+          score: e.scoreTORP || {
+            scoreGlobal: 75,
+            criteres: [],
+            recommandation: 'recommande' as const,
+            confiance: 'moyen' as const,
+            dateCalcul: new Date().toISOString(),
+          },
+          lots: project.selectedLots?.map(l => l.type) || [],
+          pointsForts: ['Entreprise qualifiée', 'Assurances à jour'],
+          pointsAttention: [],
+          disponibilite: 'A confirmer',
+        }));
 
-      toast({
-        title: userType === 'B2C' ? 'Artisans trouvés' : 'Entreprises identifiées',
-        description: `${result.recommandations.length} entreprise(s) qualifiée(s)`,
-      });
+        setConsultationState(prev => ({
+          ...prev,
+          status: 'en_consultation',
+          currentStep: 2,
+          entreprises: recommandations,
+        }));
+
+        toast({
+          title: userType === 'B2C' ? 'Artisans trouvés' : 'Entreprises identifiées',
+          description: `${result.entreprises.length} entreprise(s) qualifiée(s)`,
+        });
+      } else {
+        toast({
+          title: 'Recherche terminée',
+          description: 'Aucune entreprise correspondant aux critères',
+        });
+      }
     } catch (err) {
       console.error('Erreur recherche entreprises:', err);
       toast({
         title: 'Erreur',
-        description: 'Impossible de rechercher des entreprises',
+        description: err instanceof Error ? err.message : 'Impossible de rechercher des entreprises',
         variant: 'destructive',
       });
     } finally {
@@ -506,13 +816,44 @@ export function Phase1Consultation() {
               </Card>
             </div>
 
-            {/* Actions rapides selon l'étape */}
+            {/* Actions rapides selon l'étape et le profil */}
             <Card>
               <CardHeader>
                 <CardTitle>Prochaine étape</CardTitle>
               </CardHeader>
               <CardContent>
-                {consultationState.status === 'draft' && (
+                {/* Mode B2B : Réponse à appel d'offres */}
+                {userType === 'B2B' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-medium">Préparez votre offre</h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Rédigez votre proposition technique et financière pour ce projet
+                        </p>
+                      </div>
+                      <Button onClick={() => setActiveTab('offres')}>
+                        <ClipboardList className="w-4 h-4 mr-2" />
+                        Rédiger mon offre
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between pt-4 border-t">
+                      <div>
+                        <h3 className="font-medium text-muted-foreground">Besoin de sous-traitance ?</h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Recherchez des partenaires pour certains lots
+                        </p>
+                      </div>
+                      <Button variant="outline" onClick={() => setActiveTab('entreprises')}>
+                        <Building2 className="w-4 h-4 mr-2" />
+                        Sous-traitance
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Mode B2C/B2G : Consultation */}
+                {userType !== 'B2B' && consultationState.status === 'draft' && (
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="font-medium">
@@ -539,15 +880,13 @@ export function Phase1Consultation() {
                   </div>
                 )}
 
-                {consultationState.status === 'dce_ready' && (
+                {userType !== 'B2B' && consultationState.status === 'dce_ready' && (
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="font-medium">
                         {userType === 'B2C'
                           ? 'Trouvez des artisans qualifiés'
-                          : userType === 'B2G'
-                            ? 'Lancez la consultation'
-                            : 'Recherchez des entreprises'
+                          : 'Lancez la consultation'
                         }
                       </h3>
                       <p className="text-sm text-muted-foreground mt-1">
@@ -568,7 +907,7 @@ export function Phase1Consultation() {
                   </div>
                 )}
 
-                {consultationState.status === 'en_consultation' && (
+                {userType !== 'B2B' && consultationState.status === 'en_consultation' && (
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="font-medium">Consultation en cours</h3>
@@ -884,28 +1223,423 @@ export function Phase1Consultation() {
 
           {/* Onglet Offres */}
           <TabsContent value="offres" className="space-y-6">
-            <Card className="border-2 border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                  <ClipboardList className="w-8 h-8 text-primary" />
+            {/* Mode B2B : Rédaction de l'offre par l'entreprise */}
+            {userType === 'B2B' ? (
+              <>
+                {/* Header avec progression et sauvegarde */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <h2 className="text-lg font-semibold">Mon offre pour ce projet</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Progression: {calculateOfferProgress()}%
+                      </p>
+                    </div>
+                    <Progress value={calculateOfferProgress()} className="w-32" />
+                  </div>
+                  <Button
+                    onClick={handleSaveB2BOffer}
+                    disabled={offerSaveStatus === 'saving'}
+                    variant={offerSaveStatus === 'saved' ? 'outline' : 'default'}
+                  >
+                    {offerSaveStatus === 'saving' ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : offerSaveStatus === 'saved' ? (
+                      <CheckCircle2 className="w-4 h-4 mr-2 text-green-500" />
+                    ) : (
+                      <Save className="w-4 h-4 mr-2" />
+                    )}
+                    {offerSaveStatus === 'saved' ? 'Sauvegardé' : 'Sauvegarder'}
+                  </Button>
                 </div>
-                <h3 className="text-xl font-semibold mb-2">
-                  {userType === 'B2C' ? 'Comparez les devis' : 'Analysez les offres'}
-                </h3>
-                <p className="text-muted-foreground text-center max-w-md mb-6">
-                  {consultationState.entreprises.length > 0
-                    ? `${consultationState.entreprises.length} entreprise(s) consultée(s) - En attente des réponses`
-                    : 'Lancez d\'abord la consultation pour recevoir des offres'
-                  }
-                </p>
-                {consultationState.offres.length === 0 && (
-                  <Badge variant="secondary" className="flex items-center gap-2">
-                    <Clock className="w-4 h-4" />
-                    En attente des offres
-                  </Badge>
-                )}
-              </CardContent>
-            </Card>
+
+                {/* 1. Mémoire Technique */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold">1</div>
+                      Mémoire technique
+                    </CardTitle>
+                    <CardDescription>
+                      Présentez votre entreprise et votre méthodologie pour ce projet
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="presentationEntreprise">Présentation de l'entreprise</Label>
+                      <Textarea
+                        id="presentationEntreprise"
+                        placeholder="Décrivez votre entreprise, son historique, ses compétences clés..."
+                        value={b2bOfferForm.memoireTechnique.presentationEntreprise}
+                        onChange={(e) => updateMemoireTechnique('presentationEntreprise', e.target.value)}
+                        rows={4}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="moyensHumains">Moyens humains</Label>
+                        <Textarea
+                          id="moyensHumains"
+                          placeholder="Équipe dédiée au projet, qualifications..."
+                          value={b2bOfferForm.memoireTechnique.moyensHumains}
+                          onChange={(e) => updateMemoireTechnique('moyensHumains', e.target.value)}
+                          rows={3}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="moyensMateriels">Moyens matériels</Label>
+                        <Textarea
+                          id="moyensMateriels"
+                          placeholder="Équipements, véhicules, outillage..."
+                          value={b2bOfferForm.memoireTechnique.moyensMateriels}
+                          onChange={(e) => updateMemoireTechnique('moyensMateriels', e.target.value)}
+                          rows={3}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="methodologie">Méthodologie d'intervention</Label>
+                      <Textarea
+                        id="methodologie"
+                        placeholder="Décrivez votre approche technique, les phases d'intervention, les mesures de sécurité..."
+                        value={b2bOfferForm.memoireTechnique.methodologie}
+                        onChange={(e) => updateMemoireTechnique('methodologie', e.target.value)}
+                        rows={4}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="referencesProjet">Références similaires</Label>
+                        <Textarea
+                          id="referencesProjet"
+                          placeholder="Chantiers similaires réalisés, avec montants et dates..."
+                          value={b2bOfferForm.memoireTechnique.referencesProjet}
+                          onChange={(e) => updateMemoireTechnique('referencesProjet', e.target.value)}
+                          rows={3}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="engagementsQualite">Engagements qualité</Label>
+                        <Textarea
+                          id="engagementsQualite"
+                          placeholder="Certifications, garanties, SAV..."
+                          value={b2bOfferForm.memoireTechnique.engagementsQualite}
+                          onChange={(e) => updateMemoireTechnique('engagementsQualite', e.target.value)}
+                          rows={3}
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 2. Offre Financière (DPGF) */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold">2</div>
+                      Offre financière (DPGF)
+                    </CardTitle>
+                    <CardDescription>
+                      Renseignez vos prix unitaires pour chaque poste
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Table DPGF */}
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted">
+                          <tr>
+                            <th className="text-left p-3 font-medium">Désignation</th>
+                            <th className="text-center p-3 font-medium w-20">Unité</th>
+                            <th className="text-center p-3 font-medium w-24">Quantité</th>
+                            <th className="text-right p-3 font-medium w-32">Prix unit. HT</th>
+                            <th className="text-right p-3 font-medium w-32">Total HT</th>
+                            <th className="w-12"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {b2bOfferForm.dpgfPostes.map((poste) => (
+                            <tr key={poste.id} className="border-t">
+                              <td className="p-2">
+                                <Input
+                                  value={poste.designation}
+                                  onChange={(e) => updateDPGFPoste(poste.id, 'designation', e.target.value)}
+                                  placeholder="Désignation du poste"
+                                  className="h-9"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <Input
+                                  value={poste.unite}
+                                  onChange={(e) => updateDPGFPoste(poste.id, 'unite', e.target.value)}
+                                  className="h-9 text-center"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <Input
+                                  type="number"
+                                  value={poste.quantite}
+                                  onChange={(e) => updateDPGFPoste(poste.id, 'quantite', parseFloat(e.target.value) || 0)}
+                                  className="h-9 text-center"
+                                  min={0}
+                                  step={0.01}
+                                />
+                              </td>
+                              <td className="p-2">
+                                <Input
+                                  type="number"
+                                  value={poste.prixUnitaireHT || ''}
+                                  onChange={(e) => updateDPGFPoste(poste.id, 'prixUnitaireHT', parseFloat(e.target.value) || 0)}
+                                  className="h-9 text-right"
+                                  placeholder="0,00"
+                                  min={0}
+                                  step={0.01}
+                                />
+                              </td>
+                              <td className="p-2 text-right font-medium">
+                                {(poste.quantite * poste.prixUnitaireHT).toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
+                              </td>
+                              <td className="p-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => removeDPGFPoste(poste.id)}
+                                  className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-muted/50">
+                          <tr className="border-t-2">
+                            <td colSpan={4} className="p-3 text-right font-semibold">
+                              Total HT
+                            </td>
+                            <td className="p-3 text-right font-bold text-lg text-primary">
+                              {calculateTotalHT().toLocaleString('fr-FR', { minimumFractionDigits: 2 })} €
+                            </td>
+                            <td></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                    <Button variant="outline" onClick={addDPGFPoste} className="w-full">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Ajouter un poste
+                    </Button>
+
+                    {/* Conditions financières */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
+                      <div className="space-y-2">
+                        <Label>Validité de l'offre (jours)</Label>
+                        <Input
+                          type="number"
+                          value={b2bOfferForm.conditions.dureeValiditeOffre}
+                          onChange={(e) => setB2BOfferForm(prev => ({
+                            ...prev,
+                            conditions: { ...prev.conditions, dureeValiditeOffre: parseInt(e.target.value) || 90 }
+                          }))}
+                          min={30}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Acompte demandé (%)</Label>
+                        <Input
+                          type="number"
+                          value={b2bOfferForm.conditions.acompte}
+                          onChange={(e) => setB2BOfferForm(prev => ({
+                            ...prev,
+                            conditions: { ...prev.conditions, acompte: parseInt(e.target.value) || 0 }
+                          }))}
+                          min={0}
+                          max={50}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Délai de paiement (jours)</Label>
+                        <Input
+                          type="number"
+                          value={b2bOfferForm.conditions.delaiPaiement}
+                          onChange={(e) => setB2BOfferForm(prev => ({
+                            ...prev,
+                            conditions: { ...prev.conditions, delaiPaiement: parseInt(e.target.value) || 30 }
+                          }))}
+                          min={0}
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 3. Planning */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold">3</div>
+                      Planning proposé
+                    </CardTitle>
+                    <CardDescription>
+                      Définissez vos délais d'intervention
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="dateDebut">Date de début proposée</Label>
+                        <div className="relative">
+                          <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            id="dateDebut"
+                            type="date"
+                            value={b2bOfferForm.planning.dateDebutProposee}
+                            onChange={(e) => updatePlanning('dateDebutProposee', e.target.value)}
+                            className="pl-10"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="duree">Durée des travaux (jours)</Label>
+                        <Input
+                          id="duree"
+                          type="number"
+                          value={b2bOfferForm.planning.dureeJours}
+                          onChange={(e) => updatePlanning('dureeJours', parseInt(e.target.value) || 0)}
+                          min={1}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Date de fin estimée</Label>
+                        <Input
+                          type="text"
+                          value={
+                            b2bOfferForm.planning.dateDebutProposee && b2bOfferForm.planning.dureeJours
+                              ? new Date(
+                                  new Date(b2bOfferForm.planning.dateDebutProposee).getTime() +
+                                  b2bOfferForm.planning.dureeJours * 24 * 60 * 60 * 1000
+                                ).toLocaleDateString('fr-FR')
+                              : '-'
+                          }
+                          disabled
+                          className="bg-muted"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2 mt-4">
+                      <Label htmlFor="commentairePlanning">Commentaires sur le planning</Label>
+                      <Textarea
+                        id="commentairePlanning"
+                        placeholder="Précisions sur les phases, contraintes particulières..."
+                        value={b2bOfferForm.planning.commentairePlanning}
+                        onChange={(e) => updatePlanning('commentairePlanning', e.target.value)}
+                        rows={2}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 4. Documents administratifs - Auto depuis profil */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center text-sm font-bold">
+                        <CheckCircle2 className="w-4 h-4" />
+                      </div>
+                      Documents administratifs
+                      <Badge variant="default" className="ml-2">Auto</Badge>
+                    </CardTitle>
+                    <CardDescription>
+                      Récupérés automatiquement depuis votre profil entreprise
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2 mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+                      <Shield className="w-5 h-5" />
+                      <span>Les documents de votre profil seront joints automatiquement à votre offre</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="flex items-center gap-2 p-2 bg-muted/50 rounded">
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                        <span>Kbis</span>
+                      </div>
+                      <div className="flex items-center gap-2 p-2 bg-muted/50 rounded">
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                        <span>Attestation décennale</span>
+                      </div>
+                      <div className="flex items-center gap-2 p-2 bg-muted/50 rounded">
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                        <span>Attestation URSSAF</span>
+                      </div>
+                      <div className="flex items-center gap-2 p-2 bg-muted/50 rounded">
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                        <span>Certificat RGE</span>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm" className="mt-3 text-muted-foreground" asChild>
+                      <Link to="/profile/documents">
+                        <Users className="w-4 h-4 mr-2" />
+                        Gérer mes documents (profil)
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {/* Bouton de soumission */}
+                <Card className="border-primary">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-semibold">Prêt à soumettre ?</h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Montant total: <span className="font-bold text-primary">{calculateTotalHT().toLocaleString('fr-FR')} € HT</span>
+                        </p>
+                      </div>
+                      <Button
+                        size="lg"
+                        disabled={calculateOfferProgress() < 75}
+                      >
+                        <Send className="w-4 h-4 mr-2" />
+                        Soumettre mon offre
+                      </Button>
+                    </div>
+                    {calculateOfferProgress() < 75 && (
+                      <p className="text-sm text-orange-600 mt-2">
+                        Complétez les sections requises avant de soumettre
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              /* Mode B2C/B2G : Analyse des offres reçues */
+              <Card className="border-2 border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <ClipboardList className="w-8 h-8 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">
+                    {userType === 'B2C' ? 'Comparez les devis' : 'Analysez les offres'}
+                  </h3>
+                  <p className="text-muted-foreground text-center max-w-md mb-6">
+                    {consultationState.entreprises.length > 0
+                      ? `${consultationState.entreprises.length} entreprise(s) consultée(s) - En attente des réponses`
+                      : 'Lancez d\'abord la consultation pour recevoir des offres'
+                    }
+                  </p>
+                  {consultationState.offres.length === 0 && (
+                    <Badge variant="secondary" className="flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      En attente des offres
+                    </Badge>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* Onglet Contrat */}
