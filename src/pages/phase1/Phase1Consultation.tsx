@@ -32,6 +32,8 @@ import { B2BOffreService } from '@/services/phase1/b2b-offre.service';
 import type { DCEDocument, DCEStatus } from '@/types/phase1/dce.types';
 import type { Entreprise, RecommandationEntreprise } from '@/types/phase1/entreprise.types';
 import type { Offre, TableauComparatif } from '@/types/phase1/offre.types';
+import type { Contrat } from '@/types/phase1/contrat.types';
+import type { ChecklistFormalites, AlerteFormalite, DossierFormalites } from '@/types/phase1/formalites.types';
 import { useApp, UserType } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 import { DCEDocumentViewer } from '@/components/phase1/DCEDocumentViewer';
@@ -297,6 +299,13 @@ export function Phase1Consultation() {
   const [showContractExample, setShowContractExample] = useState<string | null>(null);
   const [selectedEntrepriseForContract, setSelectedEntrepriseForContract] = useState<string | null>(null);
   const [generatingContract, setGeneratingContract] = useState<string | null>(null);
+  const [generatedContract, setGeneratedContract] = useState<Contrat | null>(null);
+  const [signatureStep, setSignatureStep] = useState<'idle' | 'review' | 'signing' | 'signed'>('idle');
+
+  // State pour les formalités
+  const [formalitesDossier, setFormalitesDossier] = useState<DossierFormalites | null>(null);
+  const [formalitesChecklist, setFormalitesChecklist] = useState<ChecklistFormalites | null>(null);
+  const [loadingFormalites, setLoadingFormalites] = useState(false);
 
   const config = PROFILE_CONFIG[userType];
   const steps = getConsultationSteps(userType);
@@ -803,12 +812,13 @@ export function Phase1Consultation() {
 
         {/* Contenu principal */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
+          <TabsList className="mb-6 flex-wrap">
             <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
             <TabsTrigger value="dce">{config.dceLabel}</TabsTrigger>
             <TabsTrigger value="entreprises">{config.entrepriseLabel}</TabsTrigger>
             <TabsTrigger value="offres">{config.offreLabel}</TabsTrigger>
             <TabsTrigger value="contrat">{config.contractLabel}</TabsTrigger>
+            <TabsTrigger value="formalites">Formalités</TabsTrigger>
           </TabsList>
 
           {/* Vue d'ensemble */}
@@ -2040,6 +2050,298 @@ export function Phase1Consultation() {
               </Alert>
             )}
 
+            {/* Section génération et signature de contrat */}
+            {consultationState.entreprises.length > 0 && (
+              <Card className="border-2 border-primary/20">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileSignature className="w-5 h-5 text-primary" />
+                    Générer et signer le contrat
+                  </CardTitle>
+                  <CardDescription>
+                    Sélectionnez l'entreprise retenue pour générer le contrat de travaux
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Sélection entreprise */}
+                  {!generatedContract && (
+                    <div className="space-y-4">
+                      <Label>Entreprise sélectionnée</Label>
+                      <div className="grid gap-2">
+                        {consultationState.entreprises.map((entreprise) => (
+                          <div
+                            key={entreprise.id}
+                            className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                              selectedEntrepriseForContract === entreprise.id
+                                ? 'border-primary bg-primary/5'
+                                : 'hover:border-primary/50'
+                            }`}
+                            onClick={() => setSelectedEntrepriseForContract(entreprise.id)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-4 h-4 rounded-full border-2 ${
+                                  selectedEntrepriseForContract === entreprise.id
+                                    ? 'border-primary bg-primary'
+                                    : 'border-muted-foreground'
+                                }`}>
+                                  {selectedEntrepriseForContract === entreprise.id && (
+                                    <CheckCircle2 className="w-3 h-3 text-white" />
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="font-medium">{entreprise.nom}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {entreprise.specialites?.join(', ') || 'Artisan qualifié'}
+                                  </p>
+                                </div>
+                              </div>
+                              {entreprise.score && (
+                                <Badge variant="secondary">
+                                  <Star className="w-3 h-3 mr-1" />
+                                  {entreprise.score}%
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        className="w-full"
+                        disabled={!selectedEntrepriseForContract || generatingContract !== null}
+                        onClick={async () => {
+                          if (!selectedEntrepriseForContract || !project) return;
+                          setGeneratingContract('generating');
+                          try {
+                            // Simuler la génération du contrat
+                            await new Promise(resolve => setTimeout(resolve, 1500));
+
+                            const mockContrat: Contrat = {
+                              id: crypto.randomUUID(),
+                              projectId: project.id,
+                              consultationId: consultationState.dce?.id || '',
+                              offreId: '',
+                              type: 'marche_prive_b2c',
+                              mode: project.wizardMode || 'b2c_simple',
+                              parties: {
+                                maitreOuvrage: {
+                                  type: 'particulier',
+                                  nom: project.ownerProfile?.identity?.type === 'B2C'
+                                    ? `${(project.ownerProfile.identity as any).firstName || ''} ${(project.ownerProfile.identity as any).lastName || ''}`.trim()
+                                    : 'Maître d\'ouvrage',
+                                  adresse: project.ownerProfile?.contact?.address || { street: '', postalCode: '', city: '', country: 'France' },
+                                  email: project.ownerProfile?.contact?.email || '',
+                                  telephone: project.ownerProfile?.contact?.phone || '',
+                                },
+                                entreprise: {
+                                  raisonSociale: consultationState.entreprises.find(e => e.id === selectedEntrepriseForContract)?.nom || '',
+                                  formeJuridique: 'SARL',
+                                  siret: '123 456 789 00012',
+                                  adresse: { street: '', postalCode: '', city: '', country: 'France' },
+                                  representant: { nom: '', qualite: 'Gérant' },
+                                  email: '',
+                                  telephone: '',
+                                  assuranceDecennale: { compagnie: '', numeroPolice: '', validiteJusquau: '', montantGaranti: 0 },
+                                  assuranceRC: { compagnie: '', numeroPolice: '', validiteJusquau: '', montantGaranti: 0 },
+                                  qualifications: [],
+                                },
+                              },
+                              objet: {
+                                titre: project.workProject?.general?.title || 'Travaux de rénovation',
+                                description: project.workProject?.general?.description || '',
+                                adresseChantier: project.property?.address || { street: '', postalCode: '', city: '', country: 'France' },
+                                natureTravaux: project.workProject?.scope?.workType || 'renovation',
+                                lots: [],
+                              },
+                              conditionsFinancieres: {
+                                prix: { type: 'forfaitaire', montantHT: 25000, tauxTVA: 10, montantTVA: 2500, montantTTC: 27500 },
+                                revision: { applicable: false },
+                                paiement: { echeancier: [], delaiPaiement: 30, baseDelai: 'situation_validee' },
+                                retenueGarantie: { applicable: true, pourcentage: 5, duree: 12, liberation: { automatique: true, conditions: [] }, substitution: { cautionBancaire: true } },
+                                penalites: { retard: { montantParJour: '1/1000', debutDecompte: '', causesSuspension: [] } },
+                              },
+                              delais: {
+                                preparation: { duree: 2, unite: 'semaines' },
+                                execution: { duree: 60, unite: 'jours_calendaires', debutType: 'ordre_service' },
+                                reception: { delaiDemande: 15, delaiReponse: 20, delaiLeveeReserves: 30 },
+                              },
+                              garanties: {
+                                legales: {
+                                  parfaitAchevement: { duree: 1, couverture: '' },
+                                  biennale: { duree: 2, couverture: '', elementsCouverts: [] },
+                                  decennale: { duree: 10, couverture: '' },
+                                },
+                                assurancesObligatoires: { rcDecennale: true, rcProfessionnelle: true, montantMinimum: 0 },
+                                assurancesFacultatives: { dommageOuvrage: { souscrit: false }, trc: { souscrit: false } },
+                              },
+                              clauses: { obligatoires: [], particulieres: [] },
+                              annexes: [],
+                              signature: {
+                                entreprise: { signee: false, typeSignature: 'electronique_simple', cachet: true },
+                                maitreOuvrage: { signee: false, typeSignature: 'electronique_simple' },
+                              },
+                              statut: 'brouillon',
+                              metadata: { version: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), createdBy: 'system', exportFormats: ['pdf'] },
+                            };
+
+                            setGeneratedContract(mockContrat);
+                            setSignatureStep('review');
+                            toast({
+                              title: 'Contrat généré',
+                              description: 'Vérifiez les informations avant de signer',
+                            });
+                          } catch (err) {
+                            console.error('Error generating contract:', err);
+                            toast({
+                              title: 'Erreur',
+                              description: 'Impossible de générer le contrat',
+                              variant: 'destructive',
+                            });
+                          } finally {
+                            setGeneratingContract(null);
+                          }
+                        }}
+                      >
+                        {generatingContract === 'generating' ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <FileSignature className="w-4 h-4 mr-2" />
+                        )}
+                        Générer le contrat
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Workflow de signature */}
+                  {generatedContract && (
+                    <div className="space-y-4">
+                      {/* Étapes de signature */}
+                      <div className="flex items-center justify-between mb-6">
+                        <div className={`flex items-center gap-2 ${signatureStep === 'review' ? 'text-primary' : signatureStep === 'signing' || signatureStep === 'signed' ? 'text-green-600' : ''}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${signatureStep === 'review' ? 'bg-primary text-white' : signatureStep === 'signing' || signatureStep === 'signed' ? 'bg-green-600 text-white' : 'bg-muted'}`}>
+                            {signatureStep === 'signing' || signatureStep === 'signed' ? <CheckCircle2 className="w-4 h-4" /> : '1'}
+                          </div>
+                          <span className="text-sm font-medium">Vérification</span>
+                        </div>
+                        <div className="flex-1 h-px bg-muted mx-2" />
+                        <div className={`flex items-center gap-2 ${signatureStep === 'signing' ? 'text-primary' : signatureStep === 'signed' ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${signatureStep === 'signing' ? 'bg-primary text-white' : signatureStep === 'signed' ? 'bg-green-600 text-white' : 'bg-muted'}`}>
+                            {signatureStep === 'signed' ? <CheckCircle2 className="w-4 h-4" /> : '2'}
+                          </div>
+                          <span className="text-sm font-medium">Signature</span>
+                        </div>
+                        <div className="flex-1 h-px bg-muted mx-2" />
+                        <div className={`flex items-center gap-2 ${signatureStep === 'signed' ? 'text-green-600' : 'text-muted-foreground'}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${signatureStep === 'signed' ? 'bg-green-600 text-white' : 'bg-muted'}`}>
+                            {signatureStep === 'signed' ? <CheckCircle2 className="w-4 h-4" /> : '3'}
+                          </div>
+                          <span className="text-sm font-medium">Validé</span>
+                        </div>
+                      </div>
+
+                      {/* Contenu selon l'étape */}
+                      {signatureStep === 'review' && (
+                        <div className="space-y-4">
+                          <Alert>
+                            <FileText className="h-4 w-4" />
+                            <AlertDescription>
+                              <span className="font-medium">Vérifiez les informations du contrat</span>
+                              <br />
+                              Montant TTC: {generatedContract.conditionsFinancieres.prix.montantTTC.toLocaleString('fr-FR')} €
+                              <br />
+                              Durée: {generatedContract.delais.execution.duree} jours
+                            </AlertDescription>
+                          </Alert>
+                          <div className="flex gap-2">
+                            <Button variant="outline" onClick={() => { setGeneratedContract(null); setSignatureStep('idle'); }}>
+                              Modifier
+                            </Button>
+                            <Button onClick={() => setSignatureStep('signing')}>
+                              Valider et signer
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {signatureStep === 'signing' && (
+                        <div className="space-y-4">
+                          <div className="p-6 border-2 border-dashed rounded-lg text-center">
+                            <FileSignature className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                            <p className="font-medium mb-2">Signature électronique</p>
+                            <p className="text-sm text-muted-foreground mb-4">
+                              En cliquant sur "Signer", vous acceptez les termes du contrat
+                            </p>
+                            <div className="flex justify-center gap-2">
+                              <Button variant="outline" onClick={() => setSignatureStep('review')}>
+                                Retour
+                              </Button>
+                              <Button
+                                onClick={async () => {
+                                  setGeneratingContract('signing');
+                                  await new Promise(resolve => setTimeout(resolve, 1500));
+                                  setGeneratedContract({
+                                    ...generatedContract,
+                                    signature: {
+                                      ...generatedContract.signature,
+                                      maitreOuvrage: {
+                                        ...generatedContract.signature.maitreOuvrage,
+                                        signee: true,
+                                        dateSignature: new Date().toISOString(),
+                                      },
+                                    },
+                                    statut: 'signe_mo',
+                                  });
+                                  setSignatureStep('signed');
+                                  setGeneratingContract(null);
+                                  toast({
+                                    title: 'Contrat signé !',
+                                    description: 'Le contrat a été signé avec succès. L\'entreprise sera notifiée.',
+                                  });
+                                }}
+                                disabled={generatingContract === 'signing'}
+                              >
+                                {generatingContract === 'signing' ? (
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                  <FileSignature className="w-4 h-4 mr-2" />
+                                )}
+                                Signer le contrat
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {signatureStep === 'signed' && (
+                        <div className="space-y-4">
+                          <Alert className="border-green-200 bg-green-50">
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            <AlertDescription className="text-green-800">
+                              <span className="font-medium">Contrat signé avec succès !</span>
+                              <br />
+                              Signé le {new Date(generatedContract.signature.maitreOuvrage.dateSignature || '').toLocaleDateString('fr-FR')}
+                              <br />
+                              En attente de la signature de l'entreprise
+                            </AlertDescription>
+                          </Alert>
+                          <div className="flex gap-2">
+                            <Button variant="outline">
+                              <Download className="w-4 h-4 mr-2" />
+                              Télécharger PDF
+                            </Button>
+                            <Button variant="outline" onClick={() => setActiveTab('formalites')}>
+                              <ArrowRight className="w-4 h-4 mr-2" />
+                              Voir les formalités
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Modal exemple de document */}
             {showContractExample && (
               <Card className="border-2 border-primary/20 bg-primary/5">
@@ -2220,6 +2522,430 @@ export function Phase1Consultation() {
                         </div>
                       </div>
                     )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* Onglet Formalités */}
+          <TabsContent value="formalites" className="space-y-6">
+            {/* En-tête */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileCheck className="w-5 h-5 text-primary" />
+                  Formalités pré-démarrage
+                </CardTitle>
+                <CardDescription>
+                  Checklist des démarches administratives à effectuer avant le début des travaux
+                </CardDescription>
+              </CardHeader>
+            </Card>
+
+            {/* Progression globale */}
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="font-semibold">Progression des formalités</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {formalitesChecklist?.itemsCompletes || 0} / {formalitesChecklist?.itemsTotal || 16} étapes complétées
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-3xl font-bold">{formalitesChecklist?.pourcentage || 0}%</div>
+                    {formalitesChecklist?.pretPourDemarrage ? (
+                      <Badge className="bg-green-500 text-white">
+                        <CheckCircle2 className="w-3 h-3 mr-1" />
+                        Prêt
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary">En cours</Badge>
+                    )}
+                  </div>
+                </div>
+                <Progress value={formalitesChecklist?.pourcentage || 0} className="h-3" />
+              </CardContent>
+            </Card>
+
+            {/* Alertes */}
+            {formalitesDossier?.alertes && formalitesDossier.alertes.length > 0 && (
+              <div className="space-y-2">
+                {formalitesDossier.alertes.slice(0, 3).map((alerte, idx) => (
+                  <Alert key={idx} variant={alerte.severite === 'error' ? 'destructive' : 'default'}>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      <span className="font-medium">{alerte.titre}</span>
+                      <br />
+                      {alerte.message}
+                      {alerte.actionRequise && (
+                        <span className="block text-xs mt-1 text-muted-foreground">
+                          Action : {alerte.actionRequise}
+                        </span>
+                      )}
+                    </AlertDescription>
+                  </Alert>
+                ))}
+              </div>
+            )}
+
+            {/* Catégories de formalités */}
+            <div className="grid gap-4">
+              {/* Urbanisme */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-blue-600" />
+                    Autorisations d'urbanisme
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <input type="checkbox" className="w-4 h-4" disabled checked={formalitesDossier?.urbanisme?.typeAutorisation === 'aucune'} />
+                      <div>
+                        <p className="font-medium text-sm">Déclaration préalable / Permis</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formalitesDossier?.urbanisme?.typeAutorisation === 'aucune'
+                            ? 'Non requis pour ce projet'
+                            : formalitesDossier?.urbanisme?.typeAutorisation === 'declaration_prealable'
+                              ? 'Déclaration préalable requise'
+                              : 'Permis de construire requis'
+                          }
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="text-xs">
+                      {formalitesDossier?.urbanisme?.typeAutorisation === 'aucune' ? 'N/A' : 'À vérifier'}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <input type="checkbox" className="w-4 h-4" disabled />
+                      <div>
+                        <p className="font-medium text-sm">Panneau de chantier affiché</p>
+                        <p className="text-xs text-muted-foreground">Panneau réglementaire sur le terrain (80x120cm)</p>
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => setShowContractExample('panneau')}>
+                      <Eye className="w-3 h-3 mr-1" />
+                      Modèle
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Déclarations */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-purple-600" />
+                    Déclarations obligatoires
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <input type="checkbox" className="w-4 h-4" disabled />
+                      <div>
+                        <p className="font-medium text-sm">DICT - Déclaration réseaux</p>
+                        <p className="text-xs text-muted-foreground">À faire 7 jours avant le démarrage minimum</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setShowContractExample('dict')}>
+                        <Eye className="w-3 h-3 mr-1" />
+                        Voir
+                      </Button>
+                      <Button size="sm" variant="default" onClick={() => window.open('https://www.reseaux-et-canalisations.gouv.fr', '_blank')}>
+                        Effectuer
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <input type="checkbox" className="w-4 h-4" disabled />
+                      <div>
+                        <p className="font-medium text-sm">DOC - Ouverture de chantier</p>
+                        <p className="text-xs text-muted-foreground">Cerfa 13407*05 - À déposer en mairie</p>
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => setShowContractExample('doc')}>
+                      <Eye className="w-3 h-3 mr-1" />
+                      Modèle
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Sécurité */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-green-600" />
+                    Sécurité et coordination
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <input type="checkbox" className="w-4 h-4" disabled checked />
+                      <div>
+                        <p className="font-medium text-sm">Attestations assurance décennale</p>
+                        <p className="text-xs text-muted-foreground">Vérifiées pour toutes les entreprises</p>
+                      </div>
+                    </div>
+                    <Badge className="bg-green-100 text-green-800">Automatique</Badge>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <input type="checkbox" className="w-4 h-4" disabled />
+                      <div>
+                        <p className="font-medium text-sm">Coordonnateur SPS</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formalitesDossier?.securite?.coordonnateurSPS?.obligatoire
+                            ? 'Obligatoire (plusieurs entreprises)'
+                            : 'Non obligatoire pour ce projet'
+                          }
+                        </p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="text-xs">
+                      {formalitesDossier?.securite?.coordonnateurSPS?.obligatoire ? 'Requis' : 'Optionnel'}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Voirie */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <HardHat className="w-4 h-4 text-amber-600" />
+                    Voirie et voisinage
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <input type="checkbox" className="w-4 h-4" disabled />
+                      <div>
+                        <p className="font-medium text-sm">Autorisation occupation voirie</p>
+                        <p className="text-xs text-muted-foreground">Pour benne, échafaudage sur voie publique</p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="text-xs">
+                      {formalitesDossier?.voirie?.autorisationStationnement?.obligatoire ? 'Requis' : 'Si besoin'}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <input type="checkbox" className="w-4 h-4" disabled />
+                      <div>
+                        <p className="font-medium text-sm">Information voisinage</p>
+                        <p className="text-xs text-muted-foreground">Lettre de courtoisie aux voisins</p>
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => setShowContractExample('courrier_voisinage')}>
+                      <Eye className="w-3 h-3 mr-1" />
+                      Modèle
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Bouton initialiser */}
+            {!formalitesDossier && project && (
+              <Card className="border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-8">
+                  <FileCheck className="w-12 h-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground text-center mb-4">
+                    Initialisez la checklist des formalités pour votre projet
+                  </p>
+                  <Button
+                    onClick={async () => {
+                      if (!project) return;
+                      setLoadingFormalites(true);
+                      try {
+                        const result = await FormalitesService.generateDossierFormalites({
+                          project,
+                          contrat: generatedContract || undefined,
+                        });
+                        if (result.success && result.dossier) {
+                          setFormalitesDossier(result.dossier);
+                          setFormalitesChecklist(result.checklist || null);
+                          toast({
+                            title: 'Formalités initialisées',
+                            description: `${result.checklist?.itemsTotal || 0} éléments à vérifier`,
+                          });
+                        }
+                      } catch (err) {
+                        console.error('Error generating formalites:', err);
+                        toast({
+                          title: 'Erreur',
+                          description: 'Impossible de générer la checklist',
+                          variant: 'destructive',
+                        });
+                      } finally {
+                        setLoadingFormalites(false);
+                      }
+                    }}
+                    disabled={loadingFormalites}
+                  >
+                    {loadingFormalites ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <FileCheck className="w-4 h-4 mr-2" />
+                    )}
+                    Initialiser les formalités
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Exemples de documents formalités */}
+            {showContractExample && ['dict', 'doc', 'panneau', 'courrier_voisinage'].includes(showContractExample) && (
+              <Card className="border-2 border-primary/20 bg-primary/5">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <BookOpen className="w-5 h-5" />
+                      Modèle de document
+                    </CardTitle>
+                    <Button variant="ghost" size="sm" onClick={() => setShowContractExample(null)}>
+                      Fermer
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-white rounded-lg p-6 border shadow-sm max-h-96 overflow-y-auto font-mono text-xs whitespace-pre-wrap">
+                    {showContractExample === 'dict' && `======================================================================
+DÉCLARATION D'INTENTION DE COMMENCEMENT DE TRAVAUX (DICT)
+Cerfa n°14434*03
+======================================================================
+
+1. DÉCLARANT
+   Raison sociale: [Nom de l'entreprise]
+   SIRET: [Numéro SIRET]
+
+2. MAÎTRE D'OUVRAGE
+   Nom: [Votre nom]
+   Adresse: [Votre adresse]
+   Email: [Email]
+   Téléphone: [Téléphone]
+
+3. LOCALISATION DES TRAVAUX
+   Adresse: [Adresse du chantier]
+
+4. NATURE DES TRAVAUX
+   [Description des travaux]
+
+5. DATE DE COMMENCEMENT PRÉVUE
+   [Date]
+
+6. EXPLOITANTS DE RÉSEAUX CONCERNÉS
+   [ ] ENEDIS (électricité)
+   [ ] GRDF (gaz)
+   [ ] Véolia / Régie des eaux (eau)
+   [ ] Orange / SFR / Free (télécoms)
+
+----------------------------------------------------------------------
+À effectuer sur: www.reseaux-et-canalisations.gouv.fr
+Délai de réponse: 9 jours - Validité: 3 mois`}
+                    {showContractExample === 'doc' && `======================================================================
+DÉCLARATION D'OUVERTURE DE CHANTIER (DOC)
+Cerfa n°13407*05
+======================================================================
+
+1. IDENTITÉ DU DÉCLARANT
+   Nom: [Votre nom]
+   Adresse: [Votre adresse]
+
+2. TERRAIN
+   Adresse du terrain: [Adresse du chantier]
+
+3. AUTORISATION D'URBANISME
+   Type: [ ] Déclaration préalable [ ] Permis de construire
+   Numéro: _______________
+   Date de délivrance: _______________
+
+4. DATE D'OUVERTURE DU CHANTIER
+   [Date de début des travaux]
+
+5. DÉCLARATION
+   Je soussigné(e) déclare ouvrir le chantier correspondant
+   à l'autorisation ci-dessus référencée.
+
+   Fait à _______________
+   Le _______________
+   Signature: _______________
+
+----------------------------------------------------------------------
+À déposer en mairie du lieu des travaux.`}
+                    {showContractExample === 'panneau' && `============================================================
+          DÉCLARATION PRÉALABLE / PERMIS DE CONSTRUIRE
+============================================================
+
+N°: [Numéro de l'autorisation]
+Délivré le: [Date]
+
+Bénéficiaire: [Votre nom]
+
+Nature des travaux:
+[Description des travaux]
+
+Surface de plancher: [XX] m²
+Emprise au sol: [XX] m²
+
+--------------------------------------------------------------
+Droit de recours:
+Un recours gracieux ou contentieux peut être formé
+dans un délai de deux mois à compter du premier jour
+d'une période continue de deux mois d'affichage.
+
+Mairie de: [Ville]
+Le dossier peut être consulté en mairie.
+
+--------------------------------------------------------------
+Panneau réglementaire - Dimensions: 80cm x 120cm
+À installer sur le terrain, visible de la voie publique`}
+                    {showContractExample === 'courrier_voisinage' && `[Votre nom]
+[Votre adresse]
+[Code postal] [Ville]
+
+                                        [Ville], le [Date]
+
+Madame, Monsieur,
+
+Je vous informe que des travaux de rénovation vont être réalisés
+à l'adresse suivante:
+[Adresse du chantier]
+
+Nature des travaux:
+[Description des travaux prévus]
+
+Durée prévisionnelle: [XX] jours
+Horaires de chantier: 7h30 - 18h00 (du lundi au vendredi)
+                      8h00 - 12h00 (samedi, si nécessaire)
+
+Nuisances possibles:
+- Bruit (perçage, démolition)
+- Passage de véhicules de livraison
+- Présence d'une benne sur la voie publique
+
+Nous nous efforcerons de limiter ces nuisances au maximum.
+
+Pour toute question ou réclamation:
+Email: [Votre email]
+Téléphone: [Votre téléphone]
+
+En vous remerciant de votre compréhension,
+
+Cordialement,
+
+[Votre nom]`}
                   </div>
                 </CardContent>
               </Card>
