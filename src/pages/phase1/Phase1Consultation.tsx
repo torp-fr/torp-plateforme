@@ -1023,10 +1023,10 @@ export function Phase1Consultation() {
                         </div>
                         <div>
                           <div className="font-medium">Avancement de l'offre</div>
-                          <div className="text-sm text-muted-foreground">2 étapes sur 4 complétées</div>
+                          <div className="text-sm text-muted-foreground">3 étapes sur 4 complétées</div>
                         </div>
                       </div>
-                      <Progress value={50} className="w-32" />
+                      <Progress value={75} className="w-32" />
                     </div>
 
                     {/* Étape 1: Offre technique */}
@@ -1099,68 +1099,79 @@ export function Phase1Consultation() {
                       </div>
                     </div>
 
-                    {/* Étape 3: Documents administratifs */}
+                    {/* Étape 3: Documents administratifs - Auto depuis profil */}
                     <div className="border rounded-lg">
                       <div className="flex items-center justify-between p-4 border-b bg-muted/30">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-sm">
+                          <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold text-sm">
                             3
                           </div>
                           <div>
                             <div className="font-medium">Documents administratifs</div>
-                            <div className="text-sm text-muted-foreground">Pièces justificatives obligatoires</div>
+                            <div className="text-sm text-muted-foreground">
+                              Récupérés automatiquement depuis votre profil entreprise
+                            </div>
                           </div>
                         </div>
-                        <Badge variant="secondary">En cours</Badge>
+                        <Badge variant="default">Auto</Badge>
                       </div>
                       <div className="p-4">
+                        <div className="flex items-center gap-2 mb-3 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-700">
+                          <Shield className="w-4 h-4" />
+                          <span>Documents joints automatiquement depuis votre profil</span>
+                        </div>
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div className="flex items-center gap-2">
                             <CheckCircle2 className="w-4 h-4 text-green-500" />
-                            <span>Kbis (moins de 3 mois)</span>
+                            <span>Kbis · valide jusqu'au 15/03/2025</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <CheckCircle2 className="w-4 h-4 text-green-500" />
-                            <span>Attestation décennale</span>
+                            <span>Décennale · AXA n°...</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-orange-500" />
-                            <span>Attestation URSSAF</span>
+                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                            <span>URSSAF · à jour</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-orange-500" />
-                            <span>Certificat RGE</span>
+                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                            <span>RGE QualiPAC · 2024-2028</span>
                           </div>
                         </div>
-                        <Button variant="outline" size="sm" className="mt-4">
-                          <Download className="w-4 h-4 mr-2" />
-                          Téléverser documents
+                        <Button variant="ghost" size="sm" className="mt-4 text-muted-foreground" asChild>
+                          <Link to="/profile/documents">
+                            <Users className="w-4 h-4 mr-2" />
+                            Gérer mes documents (profil)
+                          </Link>
                         </Button>
                       </div>
                     </div>
 
                     {/* Étape 4: Signature et envoi */}
-                    <div className="border rounded-lg border-dashed">
-                      <div className="flex items-center justify-between p-4 border-b bg-muted/30">
+                    <div className="border rounded-lg border-primary">
+                      <div className="flex items-center justify-between p-4 border-b bg-primary/5">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground font-bold text-sm">
+                          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm">
                             4
                           </div>
                           <div>
                             <div className="font-medium">Signature et envoi</div>
-                            <div className="text-sm text-muted-foreground">Signez et soumettez votre offre</div>
+                            <div className="text-sm text-muted-foreground">Vérifiez et soumettez votre offre</div>
                           </div>
                         </div>
-                        <Badge variant="outline">À faire</Badge>
+                        <Badge variant="secondary">Prêt</Badge>
                       </div>
-                      <div className="p-4 text-center">
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Complétez les étapes précédentes pour pouvoir soumettre votre offre
-                        </p>
-                        <Button disabled>
-                          <Send className="w-4 h-4 mr-2" />
-                          Soumettre mon offre
-                        </Button>
+                      <div className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm text-muted-foreground">
+                            <p>Votre offre est complète et prête à être soumise.</p>
+                            <p className="mt-1">Une signature électronique sera requise.</p>
+                          </div>
+                          <Button className="ml-4">
+                            <Send className="w-4 h-4 mr-2" />
+                            Soumettre mon offre
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
