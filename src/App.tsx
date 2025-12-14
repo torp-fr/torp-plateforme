@@ -62,6 +62,8 @@ import { TendersPage, TenderDetailPage } from "./pages/tenders";
 import { B2BTendersPage, B2BTenderViewPage, B2BResponseFormPage } from "./pages/b2b";
 // Phase 1 Pages (Consultation & Sélection Entreprises)
 import { Phase1Consultation } from "./pages/phase1";
+// Phase 2 Pages (Préparation de Chantier)
+import { Phase2Dashboard } from "./pages/phase2";
 
 const queryClient = new QueryClient();
 
@@ -125,6 +127,9 @@ const AppContent = () => {
           {/* Routes Phase 1 - Consultation & Sélection Entreprises (protégées) */}
           <Route path="/phase1/project/:projectId" element={<ProtectedRoute><Phase1Consultation /></ProtectedRoute>} />
           <Route path="/phase1/project/:projectId/consultation" element={<ProtectedRoute><Phase1Consultation /></ProtectedRoute>} />
+          {/* Routes Phase 2 - Préparation de Chantier (protégées) */}
+          <Route path="/phase2/:projectId" element={<ProtectedRoute><Phase2Dashboard /></ProtectedRoute>} />
+          <Route path="/phase2/:projectId/dashboard" element={<ProtectedRoute><Phase2Dashboard /></ProtectedRoute>} />
           {/* Routes Appels d'Offres (MOA) */}
           <Route path="/tenders" element={<ProtectedRoute><TendersPage /></ProtectedRoute>} />
           <Route path="/tenders/:tenderId" element={<ProtectedRoute><TenderDetailPage /></ProtectedRoute>} />

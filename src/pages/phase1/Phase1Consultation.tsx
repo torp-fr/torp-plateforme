@@ -19,7 +19,8 @@ import { AppLayout } from '@/components/layout';
 import {
   ArrowLeft, FileText, Building2, ClipboardList, Scale, FileCheck,
   Loader2, AlertTriangle, CheckCircle2, Clock, Users, Euro,
-  Search, Star, Shield, Award, Send, Eye, Download, Filter, Plus, Trash2, Save, Calendar
+  Search, Star, Shield, Award, Send, Eye, Download, Filter, Plus, Trash2, Save, Calendar,
+  HardHat, ArrowRight
 } from 'lucide-react';
 import { Phase0ProjectService, Phase0Project } from '@/services/phase0';
 import { DCEService } from '@/services/phase1/dce.service';
@@ -714,7 +715,18 @@ export function Phase1Consultation() {
               Retour au projet
             </Link>
           </Button>
-          <Badge variant="outline">{config.label}</Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">{config.label}</Badge>
+            {consultationState.currentStep >= 4 && (
+              <Button asChild>
+                <Link to={`/phase2/${project.id}`}>
+                  <HardHat className="w-4 h-4 mr-2" />
+                  Phase 2 : Chantier
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Link>
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* En-tête avec progression */}
