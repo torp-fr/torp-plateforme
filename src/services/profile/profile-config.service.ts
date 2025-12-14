@@ -197,7 +197,7 @@ const B2B_CONFIG: ProfileConfig = {
     paymentLabel: 'Règlement',
     proposalLabel: 'Proposition commerciale',
     contractLabel: 'Contrat',
-    consultationLabel: 'Diffuser aux clients',
+    consultationLabel: 'Me positionner',
     newProjectLabel: 'Nouvelle affaire',
     welcomeMessage: 'Bienvenue sur TORP Pro, votre outil de gestion commerciale',
     dashboardTitle: 'Tableau de bord professionnel',
