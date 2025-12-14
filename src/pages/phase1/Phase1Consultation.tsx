@@ -1004,28 +1004,220 @@ export function Phase1Consultation() {
 
           {/* Onglet Offres */}
           <TabsContent value="offres" className="space-y-6">
-            <Card className="border-2 border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                  <ClipboardList className="w-8 h-8 text-primary" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2">
-                  {userType === 'B2C' ? 'Comparez les devis' : 'Analysez les offres'}
-                </h3>
-                <p className="text-muted-foreground text-center max-w-md mb-6">
-                  {consultationState.entreprises.length > 0
-                    ? `${consultationState.entreprises.length} entreprise(s) consultée(s) - En attente des réponses`
-                    : 'Lancez d\'abord la consultation pour recevoir des offres'
-                  }
-                </p>
-                {consultationState.offres.length === 0 && (
-                  <Badge variant="secondary" className="flex items-center gap-2">
-                    <Clock className="w-4 h-4" />
-                    En attente des offres
-                  </Badge>
-                )}
-              </CardContent>
-            </Card>
+            {/* Mode B2B : Rédaction de l'offre par l'entreprise */}
+            {userType === 'B2B' ? (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Mon offre pour ce projet</CardTitle>
+                    <CardDescription>
+                      Rédigez votre proposition technique et financière
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* Progression de l'offre */}
+                    <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                          <ClipboardList className="w-5 h-5 text-primary" />
+                        </div>
+                        <div>
+                          <div className="font-medium">Avancement de l'offre</div>
+                          <div className="text-sm text-muted-foreground">2 étapes sur 4 complétées</div>
+                        </div>
+                      </div>
+                      <Progress value={50} className="w-32" />
+                    </div>
+
+                    {/* Étape 1: Offre technique */}
+                    <div className="border rounded-lg">
+                      <div className="flex items-center justify-between p-4 border-b bg-muted/30">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold text-sm">
+                            1
+                          </div>
+                          <div>
+                            <div className="font-medium">Mémoire technique</div>
+                            <div className="text-sm text-muted-foreground">Présentation de votre entreprise et méthodologie</div>
+                          </div>
+                        </div>
+                        <Badge variant="default">Complété</Badge>
+                      </div>
+                      <div className="p-4">
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                            <span>Présentation de l'entreprise</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                            <span>Références similaires</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                            <span>Méthodologie d'intervention</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                            <span>Planning prévisionnel</span>
+                          </div>
+                        </div>
+                        <Button variant="outline" size="sm" className="mt-4">
+                          <Eye className="w-4 h-4 mr-2" />
+                          Modifier
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Étape 2: Offre financière */}
+                    <div className="border rounded-lg">
+                      <div className="flex items-center justify-between p-4 border-b bg-muted/30">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold text-sm">
+                            2
+                          </div>
+                          <div>
+                            <div className="font-medium">Offre financière (DPGF)</div>
+                            <div className="text-sm text-muted-foreground">Remplissez le bordereau de prix</div>
+                          </div>
+                        </div>
+                        <Badge variant="default">Complété</Badge>
+                      </div>
+                      <div className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-2xl font-bold text-primary">
+                              {(project?.workProject?.budget?.totalEnvelope?.min || 45000).toLocaleString('fr-FR')} € HT
+                            </div>
+                            <div className="text-sm text-muted-foreground">Montant total de votre offre</div>
+                          </div>
+                          <Button variant="outline" size="sm">
+                            <Euro className="w-4 h-4 mr-2" />
+                            Modifier les prix
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Étape 3: Documents administratifs */}
+                    <div className="border rounded-lg">
+                      <div className="flex items-center justify-between p-4 border-b bg-muted/30">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-sm">
+                            3
+                          </div>
+                          <div>
+                            <div className="font-medium">Documents administratifs</div>
+                            <div className="text-sm text-muted-foreground">Pièces justificatives obligatoires</div>
+                          </div>
+                        </div>
+                        <Badge variant="secondary">En cours</Badge>
+                      </div>
+                      <div className="p-4">
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                            <span>Kbis (moins de 3 mois)</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                            <span>Attestation décennale</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-orange-500" />
+                            <span>Attestation URSSAF</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-orange-500" />
+                            <span>Certificat RGE</span>
+                          </div>
+                        </div>
+                        <Button variant="outline" size="sm" className="mt-4">
+                          <Download className="w-4 h-4 mr-2" />
+                          Téléverser documents
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Étape 4: Signature et envoi */}
+                    <div className="border rounded-lg border-dashed">
+                      <div className="flex items-center justify-between p-4 border-b bg-muted/30">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground font-bold text-sm">
+                            4
+                          </div>
+                          <div>
+                            <div className="font-medium">Signature et envoi</div>
+                            <div className="text-sm text-muted-foreground">Signez et soumettez votre offre</div>
+                          </div>
+                        </div>
+                        <Badge variant="outline">À faire</Badge>
+                      </div>
+                      <div className="p-4 text-center">
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Complétez les étapes précédentes pour pouvoir soumettre votre offre
+                        </p>
+                        <Button disabled>
+                          <Send className="w-4 h-4 mr-2" />
+                          Soumettre mon offre
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Informations sur le projet */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Rappel du projet</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <div className="text-muted-foreground">Maître d'ouvrage</div>
+                        <div className="font-medium">{project?.workProject?.owner?.firstName} {project?.workProject?.owner?.lastName}</div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground">Lieu du chantier</div>
+                        <div className="font-medium">{project?.workProject?.property?.address?.city || 'Non défini'}</div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground">Date limite réponse</div>
+                        <div className="font-medium text-orange-600">15 janvier 2025</div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground">Lots concernés</div>
+                        <div className="font-medium">{project?.selectedLots?.length || 0} lot(s)</div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              /* Mode B2C/B2G : Analyse des offres reçues */
+              <Card className="border-2 border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                    <ClipboardList className="w-8 h-8 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">
+                    {userType === 'B2C' ? 'Comparez les devis' : 'Analysez les offres'}
+                  </h3>
+                  <p className="text-muted-foreground text-center max-w-md mb-6">
+                    {consultationState.entreprises.length > 0
+                      ? `${consultationState.entreprises.length} entreprise(s) consultée(s) - En attente des réponses`
+                      : 'Lancez d\'abord la consultation pour recevoir des offres'
+                    }
+                  </p>
+                  {consultationState.offres.length === 0 && (
+                    <Badge variant="secondary" className="flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      En attente des offres
+                    </Badge>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* Onglet Contrat */}
