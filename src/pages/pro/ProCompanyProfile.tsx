@@ -1,14 +1,15 @@
 /**
  * ProCompanyProfile Page
  * Gestion complète du profil entreprise B2B
- * - Présentation entreprise
- * - Moyens humains et matériels
+ * - Présentation entreprise (avec lookup SIRET)
+ * - Moyens humains et matériels (structurés)
  * - Certifications et qualifications
  * - Références chantiers
  * - Documents administratifs
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { ProLayout } from '@/components/pro/ProLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,15 @@ import {
 } from '@/context/AppContext';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { SiretLookupService, TextOptimizerService } from '@/services/company';
+import type { CompanyLookupResult, OptimizationType } from '@/services/company';
+import {
+  EMPLOYEE_CATEGORIES,
+  COMMON_EMPLOYEE_ROLES,
+  MATERIAL_CATEGORIES,
+  COMMON_MATERIAL_TYPES,
+} from '@/types/company.types';
+import type { EmployeeRole, MaterialResource, EmployeeCategory, MaterialCategory } from '@/types/company.types';
 import {
   Building2,
   Users,
@@ -66,6 +76,13 @@ import {
   Phone,
   Mail,
   MapPin,
+  Search,
+  Sparkles,
+  RefreshCw,
+  Truck,
+  HardHat,
+  Briefcase,
+  ExternalLink,
 } from 'lucide-react';
 
 // Types de certifications disponibles
@@ -142,6 +159,19 @@ export default function ProCompanyProfile() {
   const [documents, setDocuments] = useState<CompanyDocument[]>([]);
   const [newDocument, setNewDocument] = useState<Partial<CompanyDocument>>({});
   const [docDialogOpen, setDocDialogOpen] = useState(false);
+
+  // SIRET Lookup
+  const [siretLookupLoading, setSiretLookupLoading] = useState(false);
+  const [siretLookupResult, setSiretLookupResult] = useState<CompanyLookupResult | null>(null);
+
+  // AI Text Optimization
+  const [optimizingField, setOptimizingField] = useState<OptimizationType | null>(null);
+
+  // Structured Resources
+  const [employeeRoles, setEmployeeRoles] = useState<EmployeeRole[]>([]);
+  const [materialResources, setMaterialResources] = useState<MaterialResource[]>([]);
+  const [resourceDialogOpen, setResourceDialogOpen] = useState(false);
+  const [resourceDialogType, setResourceDialogType] = useState<'employee' | 'material'>('employee');
 
   // Charger les données du profil
   useEffect(() => {
@@ -297,6 +327,121 @@ export default function ProCompanyProfile() {
 
   const handleDeleteCertification = (index: number) => {
     setCertifications(certifications.filter((_, i) => i !== index));
+  };
+
+  // ============================================
+  // SIRET LOOKUP
+  // ============================================
+
+  const handleSiretLookup = async () => {
+    const siret = formData.company_siret.replace(/\s/g, '');
+    if (!siret || siret.length < 14) {
+      toast({
+        variant: 'destructive',
+        title: 'SIRET invalide',
+        description: 'Veuillez saisir un numéro SIRET complet (14 chiffres).',
+      });
+      return;
+    }
+
+    setSiretLookupLoading(true);
+    try {
+      const result = await SiretLookupService.lookupBySiret(siret);
+      setSiretLookupResult(result);
+
+      // Auto-remplir les champs
+      setFormData(prev => ({
+        ...prev,
+        company: result.raisonSociale || prev.company,
+        company_siret: SiretLookupService.formatSiret(siret),
+        company_code_ape: result.codeApe || prev.company_code_ape,
+        company_capital: result.capital ? result.capital.toString() : prev.company_capital,
+        company_creation_date: result.dateCreation || prev.company_creation_date,
+        company_effectif: result.effectifMax || prev.company_effectif,
+        company_address: result.adresse?.complete || prev.company_address,
+        company_rcs: result.rcs || prev.company_rcs,
+      }));
+
+      toast({
+        title: 'Informations récupérées',
+        description: `Données de ${result.raisonSociale} importées avec succès.`,
+      });
+    } catch (error: any) {
+      console.error('[SiretLookup] Error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erreur de recherche',
+        description: error.message || 'Impossible de récupérer les informations.',
+      });
+    } finally {
+      setSiretLookupLoading(false);
+    }
+  };
+
+  // ============================================
+  // AI TEXT OPTIMIZATION
+  // ============================================
+
+  const handleOptimizeText = async (field: OptimizationType) => {
+    const fieldMap: Record<OptimizationType, keyof typeof formData> = {
+      company_description: 'company_description',
+      human_resources: 'company_human_resources',
+      material_resources: 'company_material_resources',
+      methodology: 'company_methodology',
+      quality_commitments: 'company_quality_commitments',
+    };
+
+    const currentText = formData[fieldMap[field]];
+    if (!currentText || currentText.length < 20) {
+      toast({
+        variant: 'destructive',
+        title: 'Texte trop court',
+        description: 'Veuillez d\'abord rédiger un texte (minimum 20 caractères) avant de l\'optimiser.',
+      });
+      return;
+    }
+
+    setOptimizingField(field);
+    try {
+      const result = await TextOptimizerService.optimizeText(currentText, field, {
+        companyName: formData.company,
+        activity: formData.company_code_ape,
+        certifications: certifications.map(c => c.name),
+      });
+
+      setFormData(prev => ({
+        ...prev,
+        [fieldMap[field]]: result.optimizedText,
+      }));
+
+      toast({
+        title: 'Texte optimisé',
+        description: result.improvements.length > 0
+          ? `Améliorations: ${result.improvements.join(', ')}`
+          : 'Le texte a été optimisé avec succès.',
+      });
+    } catch (error: any) {
+      console.error('[TextOptimizer] Error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erreur d\'optimisation',
+        description: error.message || 'Impossible d\'optimiser le texte.',
+      });
+    } finally {
+      setOptimizingField(null);
+    }
+  };
+
+  // ============================================
+  // STRUCTURED RESOURCES
+  // ============================================
+
+  const getTotalEffectif = () => {
+    return employeeRoles.reduce((sum, role) => sum + role.count, 0);
+  };
+
+  const getTotalMaterial = () => {
+    return materialResources.reduce((sum, m) => sum + m.quantity, 0);
   };
 
   // Ajouter/Modifier une référence
@@ -464,7 +609,49 @@ export default function ProCompanyProfile() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Alert si données récupérées du SIRET */}
+                {siretLookupResult && (
+                  <Alert className="bg-green-50 border-green-200">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <AlertDescription className="text-green-700">
+                      Données importées de <strong>{siretLookupResult.raisonSociale}</strong>
+                      {siretLookupResult.estActif ? ' (Entreprise active)' : ' (Entreprise inactive)'}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* SIRET avec bouton de recherche */}
+                  <div className="md:col-span-2">
+                    <Label htmlFor="siret">SIRET *</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="siret"
+                        value={formData.company_siret}
+                        onChange={(e) => setFormData({ ...formData, company_siret: e.target.value })}
+                        placeholder="123 456 789 00012"
+                        maxLength={17}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleSiretLookup}
+                        disabled={siretLookupLoading || !formData.company_siret}
+                      >
+                        {siretLookupLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Search className="h-4 w-4" />
+                        )}
+                        <span className="ml-2 hidden sm:inline">Rechercher</span>
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Saisissez votre SIRET et cliquez sur Rechercher pour auto-compléter les informations
+                    </p>
+                  </div>
+
                   <div className="md:col-span-2">
                     <Label htmlFor="company">Raison sociale *</Label>
                     <Input
@@ -472,16 +659,6 @@ export default function ProCompanyProfile() {
                       value={formData.company}
                       onChange={(e) => setFormData({ ...formData, company: e.target.value })}
                       placeholder="Nom de l'entreprise"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="siret">SIRET *</Label>
-                    <Input
-                      id="siret"
-                      value={formData.company_siret}
-                      onChange={(e) => setFormData({ ...formData, company_siret: e.target.value })}
-                      placeholder="123 456 789 00012"
-                      maxLength={17}
                     />
                   </div>
                   <div>
@@ -555,10 +732,27 @@ export default function ProCompanyProfile() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Présentation de l'entreprise</CardTitle>
-                <CardDescription>
-                  Description détaillée pour vos mémoires techniques
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Présentation de l'entreprise</CardTitle>
+                    <CardDescription>
+                      Description détaillée pour vos mémoires techniques
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleOptimizeText('company_description')}
+                    disabled={optimizingField === 'company_description' || !formData.company_description}
+                  >
+                    {optimizingField === 'company_description' ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Sparkles className="h-4 w-4 mr-2" />
+                    )}
+                    Optimiser avec l'IA
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <Textarea
@@ -567,58 +761,178 @@ export default function ProCompanyProfile() {
                   placeholder="Décrivez votre entreprise, son historique, ses compétences clés, ses domaines d'expertise..."
                   rows={6}
                 />
+                <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                  <Sparkles className="h-3 w-3" />
+                  <span>Suggestions : historique, domaines d'expertise, zone d'intervention, valeurs, chiffres clés</span>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
 
           {/* Tab Moyens */}
           <TabsContent value="moyens" className="space-y-6 mt-6">
+            {/* Section Moyens humains avec lien vers Mon équipe */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  Moyens humains
-                </CardTitle>
-                <CardDescription>
-                  Décrivez vos équipes et leurs compétences
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <Users className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <CardTitle>Moyens humains</CardTitle>
+                      <CardDescription>
+                        Décrivez vos équipes et leurs compétences
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleOptimizeText('human_resources')}
+                      disabled={optimizingField === 'human_resources' || !formData.company_human_resources}
+                    >
+                      {optimizingField === 'human_resources' ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <Sparkles className="h-4 w-4 mr-2" />
+                      )}
+                      Optimiser
+                    </Button>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link to="/pro/team">
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Mon équipe
+                      </Link>
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                {/* Boutons rapides pour ajouter des profils types */}
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(EMPLOYEE_CATEGORIES).map(([key, config]) => (
+                    <Button
+                      key={key}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                      asChild
+                    >
+                      <Link to="/pro/team">
+                        <HardHat className="h-3 w-3 mr-1" />
+                        + {config.label}
+                      </Link>
+                    </Button>
+                  ))}
+                </div>
+
+                {/* Texte descriptif */}
                 <Textarea
                   value={formData.company_human_resources}
                   onChange={(e) => setFormData({ ...formData, company_human_resources: e.target.value })}
                   placeholder="Ex: Notre équipe se compose de 15 collaborateurs dont :&#10;- 2 conducteurs de travaux&#10;- 8 ouvriers qualifiés (électriciens, plombiers, maçons)&#10;- 3 apprentis&#10;- 2 administratifs&#10;&#10;Tous nos techniciens sont habilités et formés régulièrement..."
-                  rows={8}
+                  rows={6}
                 />
+
+                {/* Lien vers la gestion détaillée */}
+                <Alert>
+                  <Users className="h-4 w-4" />
+                  <AlertDescription className="flex items-center justify-between">
+                    <span>
+                      Gérez les fiches détaillées de vos employés dans la section "Mon équipe"
+                    </span>
+                    <Button variant="link" size="sm" asChild>
+                      <Link to="/pro/team">Gérer mon équipe →</Link>
+                    </Button>
+                  </AlertDescription>
+                </Alert>
               </CardContent>
             </Card>
 
+            {/* Section Moyens matériels */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Wrench className="h-5 w-5" />
-                  Moyens matériels
-                </CardTitle>
-                <CardDescription>
-                  Listez vos équipements et véhicules
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-amber-100 rounded-lg">
+                      <Truck className="h-5 w-5 text-amber-600" />
+                    </div>
+                    <div>
+                      <CardTitle>Moyens matériels</CardTitle>
+                      <CardDescription>
+                        Listez vos équipements et véhicules
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleOptimizeText('material_resources')}
+                    disabled={optimizingField === 'material_resources' || !formData.company_material_resources}
+                  >
+                    {optimizingField === 'material_resources' ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Sparkles className="h-4 w-4 mr-2" />
+                    )}
+                    Optimiser
+                  </Button>
+                </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                {/* Boutons rapides pour types de matériel */}
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(MATERIAL_CATEGORIES).map(([key, config]) => (
+                    <Badge key={key} variant="outline" className="text-xs cursor-pointer hover:bg-muted">
+                      + {config.label}
+                    </Badge>
+                  ))}
+                </div>
+
                 <Textarea
                   value={formData.company_material_resources}
                   onChange={(e) => setFormData({ ...formData, company_material_resources: e.target.value })}
-                  placeholder="Ex: Notre parc matériel comprend :&#10;- 5 véhicules utilitaires&#10;- 1 nacelle élévatrice&#10;- 2 mini-pelles&#10;- Outillage professionnel complet&#10;- Équipements de sécurité (EPI, balisage...)&#10;&#10;Matériel entretenu et contrôlé régulièrement..."
-                  rows={8}
+                  placeholder="Ex: Notre parc matériel comprend :&#10;- 5 véhicules utilitaires (fourgons Renault Master)&#10;- 1 nacelle élévatrice (12m)&#10;- 2 mini-pelles (3T)&#10;- Outillage professionnel complet&#10;- Équipements de sécurité (EPI, balisage...)&#10;&#10;Matériel entretenu et contrôlé régulièrement..."
+                  rows={6}
                 />
+
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Sparkles className="h-3 w-3" />
+                  <span>Détaillez: véhicules, engins, outillage, équipements spécialisés, locaux</span>
+                </div>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle>Méthodologie d'intervention</CardTitle>
-                <CardDescription>
-                  Votre approche type sur les chantiers
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-green-100 rounded-lg">
+                      <Briefcase className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div>
+                      <CardTitle>Méthodologie d'intervention</CardTitle>
+                      <CardDescription>
+                        Votre approche type sur les chantiers
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleOptimizeText('methodology')}
+                    disabled={optimizingField === 'methodology' || !formData.company_methodology}
+                  >
+                    {optimizingField === 'methodology' ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Sparkles className="h-4 w-4 mr-2" />
+                    )}
+                    Optimiser
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <Textarea
@@ -632,13 +946,32 @@ export default function ProCompanyProfile() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-5 w-5" />
-                  Engagements qualité
-                </CardTitle>
-                <CardDescription>
-                  Vos garanties et certifications qualité
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-purple-100 rounded-lg">
+                      <Shield className="h-5 w-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <CardTitle>Engagements qualité</CardTitle>
+                      <CardDescription>
+                        Vos garanties et certifications qualité
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleOptimizeText('quality_commitments')}
+                    disabled={optimizingField === 'quality_commitments' || !formData.company_quality_commitments}
+                  >
+                    {optimizingField === 'quality_commitments' ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Sparkles className="h-4 w-4 mr-2" />
+                    )}
+                    Optimiser
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <Textarea
