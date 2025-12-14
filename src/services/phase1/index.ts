@@ -22,3 +22,7 @@ export type { ContratGenerationInput, ContratGenerationResult, SimulationTresore
 // Formalités Administratives
 export { FormalitesService } from './formalites.service';
 export type { FormalitesGenerationInput, FormalitesGenerationResult, FormulaireDICTInput } from './formalites.service';
+
+// B2B Offres (Soumission d'offres par les entreprises)
+export { B2BOffreService } from './b2b-offre.service';
+export type { B2BOffreData, B2BOffreMemoireTechnique, B2BOffreDPGFPoste, B2BOffrePlanning, B2BOffreConditions } from './b2b-offre.service';

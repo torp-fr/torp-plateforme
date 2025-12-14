@@ -16,7 +16,7 @@ import {
   ArrowLeft, Edit, FileText, Download, RefreshCw, User, Building, MapPin,
   Hammer, Euro, Calendar, Clock, AlertTriangle, Loader2, CheckCircle2,
   FileCheck, FileOutput, Printer, Share2, FileSearch, ArrowRight, Send,
-  Briefcase, FileSpreadsheet, Eye, ExternalLink, Users2
+  Briefcase, FileSpreadsheet, Eye, ExternalLink, Users2, HardHat
 } from 'lucide-react';
 import {
   Phase0ProjectService,
@@ -254,11 +254,17 @@ export function Phase0ProjectPage() {
               <FileSearch className="w-4 h-4 mr-2" />
               {labels.analyzeLabel}
             </Button>
-            <Button onClick={() => navigate(`/phase1/project/${project.id}`)}>
+            <Button variant="outline" onClick={() => navigate(`/phase1/project/${project.id}`)}>
               <Users2 className="w-4 h-4 mr-2" />
               {labels.consultationLabel}
-              <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
+            {(project.status === 'in_consultation' || project.status === 'validated') && (
+              <Button onClick={() => navigate(`/phase2/${project.id}`)}>
+                <HardHat className="w-4 h-4 mr-2" />
+                Chantier
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            )}
           </div>
         </div>
 

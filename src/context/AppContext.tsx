@@ -23,7 +23,7 @@ export interface User {
   property_address?: string;
   property_energy_class?: string;
   is_owner?: boolean;
-  // B2B
+  // B2B - Identification
   company_siret?: string;
   company_activity?: string;
   company_size?: string;
@@ -31,6 +31,19 @@ export interface User {
   company_address?: string;
   company_code_ape?: string;
   company_rcs?: string;
+  company_capital?: string;
+  company_creation_date?: string;
+  company_effectif?: number;
+  company_ca_annuel?: number;
+  // B2B - Mémoire technique (profil enrichi)
+  company_description?: string;
+  company_human_resources?: string;
+  company_material_resources?: string;
+  company_methodology?: string;
+  company_quality_commitments?: string;
+  company_certifications?: CompanyCertification[];
+  company_references?: CompanyReference[];
+  company_documents?: CompanyDocument[];
   // B2G
   entity_name?: string;
   entity_type?: string;
@@ -42,6 +55,38 @@ export interface User {
   entity_strate?: string;
   entity_service_name?: string;
   entity_service_email?: string;
+}
+
+// Types pour les données B2B enrichies
+export interface CompanyCertification {
+  type: string;
+  name: string;
+  number?: string;
+  issuer?: string;
+  issue_date?: string;
+  expiry_date?: string;
+  is_valid?: boolean;
+}
+
+export interface CompanyReference {
+  project_name: string;
+  client_name?: string;
+  description?: string;
+  amount?: number;
+  year?: number;
+  duration_months?: number;
+  contact_name?: string;
+  contact_phone?: string;
+  contact_email?: string;
+}
+
+export interface CompanyDocument {
+  type: string;
+  name: string;
+  file_url?: string;
+  issue_date?: string;
+  expiry_date?: string;
+  is_valid?: boolean;
 }
 
 export interface Project {

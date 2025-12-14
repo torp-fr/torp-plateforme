@@ -45,6 +45,8 @@ import ProTicketDetail from "./pages/pro/ProTicketDetail";
 import ProSettings from "./pages/pro/ProSettings";
 import ProProjects from "./pages/pro/ProProjects";
 import ProNewProject from "./pages/pro/ProNewProject";
+import ProCompanyProfile from "./pages/pro/ProCompanyProfile";
+import ProTeam from "./pages/pro/ProTeam";
 // Phase 0 Pages
 import {
   Phase0Landing,
@@ -60,6 +62,8 @@ import { TendersPage, TenderDetailPage } from "./pages/tenders";
 import { B2BTendersPage, B2BTenderViewPage, B2BResponseFormPage } from "./pages/b2b";
 // Phase 1 Pages (Consultation & Sélection Entreprises)
 import { Phase1Consultation } from "./pages/phase1";
+// Phase 2 Pages (Préparation de Chantier)
+import { Phase2Dashboard } from "./pages/phase2";
 
 const queryClient = new QueryClient();
 
@@ -107,6 +111,8 @@ const AppContent = () => {
           <Route path="/pro/analyses" element={<ProRoute><ProAnalyses /></ProRoute>} />
           <Route path="/pro/analyses/new" element={<ProRoute><ProNewAnalysis /></ProRoute>} />
           <Route path="/pro/documents" element={<ProRoute><ProDocuments /></ProRoute>} />
+          <Route path="/pro/company" element={<ProRoute><ProCompanyProfile /></ProRoute>} />
+          <Route path="/pro/team" element={<ProRoute><ProTeam /></ProRoute>} />
           <Route path="/pro/tickets" element={<ProRoute><ProTickets /></ProRoute>} />
           <Route path="/pro/tickets/:id" element={<ProRoute><ProTicketDetail /></ProRoute>} />
           <Route path="/pro/settings" element={<ProRoute><ProSettings /></ProRoute>} />
@@ -121,6 +127,9 @@ const AppContent = () => {
           {/* Routes Phase 1 - Consultation & Sélection Entreprises (protégées) */}
           <Route path="/phase1/project/:projectId" element={<ProtectedRoute><Phase1Consultation /></ProtectedRoute>} />
           <Route path="/phase1/project/:projectId/consultation" element={<ProtectedRoute><Phase1Consultation /></ProtectedRoute>} />
+          {/* Routes Phase 2 - Préparation de Chantier (protégées) */}
+          <Route path="/phase2/:projectId" element={<ProtectedRoute><Phase2Dashboard /></ProtectedRoute>} />
+          <Route path="/phase2/:projectId/dashboard" element={<ProtectedRoute><Phase2Dashboard /></ProtectedRoute>} />
           {/* Routes Appels d'Offres (MOA) */}
           <Route path="/tenders" element={<ProtectedRoute><TendersPage /></ProtectedRoute>} />
           <Route path="/tenders/:tenderId" element={<ProtectedRoute><TenderDetailPage /></ProtectedRoute>} />
