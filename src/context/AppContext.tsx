@@ -23,7 +23,7 @@ export interface User {
   property_address?: string;
   property_energy_class?: string;
   is_owner?: boolean;
-  // B2B
+  // B2B - Basic
   company_siret?: string;
   company_activity?: string;
   company_size?: string;
@@ -31,6 +31,24 @@ export interface User {
   company_address?: string;
   company_code_ape?: string;
   company_rcs?: string;
+  // B2B - Profil entreprise enrichi (pour mémoire technique)
+  company_description?: string;
+  company_history?: string;
+  company_specialties?: string[];
+  company_certifications?: Array<{ type: string; number: string; validUntil: string }>;
+  company_human_resources?: string;
+  company_material_resources?: string;
+  company_equipment?: Array<{ name: string; quantity: number }>;
+  company_methodology?: string;
+  company_quality_commitments?: string;
+  company_warranties?: string;
+  company_references?: Array<{ project: string; client: string; amount: number; year: number; description: string }>;
+  company_documents?: {
+    kbis?: { url: string; validUntil: string };
+    decennale?: { url: string; insurer: string; validUntil: string };
+    urssaf?: { url: string; validUntil: string };
+    rge?: Array<{ type: string; url: string; validUntil: string }>;
+  };
   // B2G
   entity_name?: string;
   entity_type?: string;

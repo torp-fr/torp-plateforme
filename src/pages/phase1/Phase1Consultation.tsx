@@ -411,7 +411,7 @@ export function Phase1Consultation() {
     }
   }, [project, projectId, b2bOfferForm, calculateTotalHT, toast]);
 
-  // Charger l'offre B2B existante
+  // Charger l'offre B2B existante ou pré-remplir depuis le profil entreprise
   useEffect(() => {
     if (projectId && userType === 'B2B') {
       const savedOffer = localStorage.getItem(`b2b_offer_${projectId}`);
@@ -427,6 +427,39 @@ export function Phase1Consultation() {
         } catch (e) {
           console.error('Erreur chargement offre:', e);
         }
+      } else if (user) {
+        // Pré-remplir le mémoire technique depuis le profil entreprise
+        const companyPresentation = [
+          user.company && `**${user.company}**`,
+          user.company_description,
+          user.company_history,
+          user.company_specialties?.length && `Spécialités: ${user.company_specialties.join(', ')}`,
+        ].filter(Boolean).join('\n\n');
+
+        const humanResources = user.company_human_resources || '';
+        const materialResources = user.company_material_resources || '';
+        const methodology = user.company_methodology || '';
+        const qualityCommitments = [
+          user.company_quality_commitments,
+          user.company_warranties,
+          user.company_certifications?.map(c => `${c.type} n°${c.number}`).join(', '),
+        ].filter(Boolean).join('\n\n');
+
+        const references = user.company_references?.map(r =>
+          `• ${r.project} (${r.year}) - ${r.client} - ${r.amount?.toLocaleString('fr-FR')}€`
+        ).join('\n') || '';
+
+        setB2BOfferForm(prev => ({
+          ...prev,
+          memoireTechnique: {
+            presentationEntreprise: companyPresentation || prev.memoireTechnique.presentationEntreprise,
+            moyensHumains: humanResources || prev.memoireTechnique.moyensHumains,
+            moyensMateriels: materialResources || prev.memoireTechnique.moyensMateriels,
+            methodologie: methodology || prev.memoireTechnique.methodologie,
+            referencesProjet: references || prev.memoireTechnique.referencesProjet,
+            engagementsQualite: qualityCommitments || prev.memoireTechnique.engagementsQualite,
+          },
+        }));
       }
 
       // Initialiser les postes DPGF depuis les lots du projet si vide
@@ -444,7 +477,54 @@ export function Phase1Consultation() {
         }));
       }
     }
-  }, [projectId, userType, project]);
+  }, [projectId, userType, project, user]);
+
+  // Soumettre l'offre B2B
+  const handleSubmitB2BOffer = useCallback(async () => {
+    if (!project || !projectId || !user) return;
+
+    setIsProcessing(true);
+    try {
+      // Sauvegarder d'abord
+      await handleSaveB2BOffer();
+
+      // Marquer comme soumise
+      const totalHT = calculateTotalHT();
+      const submittedOffer = {
+        projectId,
+        userId: user.id,
+        companyName: user.company,
+        memoireTechnique: b2bOfferForm.memoireTechnique,
+        dpgf: {
+          postes: b2bOfferForm.dpgfPostes,
+          totalHT,
+        },
+        planning: b2bOfferForm.planning,
+        conditions: b2bOfferForm.conditions,
+        status: 'submitted',
+        submittedAt: new Date().toISOString(),
+      };
+
+      localStorage.setItem(`b2b_offer_${projectId}`, JSON.stringify(submittedOffer));
+
+      toast({
+        title: 'Offre soumise !',
+        description: `Votre offre de ${totalHT.toLocaleString('fr-FR')} € HT a été envoyée`,
+      });
+
+      // Passer à l'onglet suivant (sélection)
+      setActiveTab('selection');
+    } catch (err) {
+      console.error('Erreur soumission offre:', err);
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de soumettre l\'offre',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [project, projectId, user, b2bOfferForm, calculateTotalHT, handleSaveB2BOffer, toast]);
 
   // Charger le projet Phase 0 et le DCE existant
   useEffect(() => {
@@ -1601,10 +1681,15 @@ export function Phase1Consultation() {
                       </div>
                       <Button
                         size="lg"
-                        disabled={calculateOfferProgress() < 75}
+                        onClick={handleSubmitB2BOffer}
+                        disabled={calculateOfferProgress() < 75 || isProcessing}
                       >
-                        <Send className="w-4 h-4 mr-2" />
-                        Soumettre mon offre
+                        {isProcessing ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Send className="w-4 h-4 mr-2" />
+                        )}
+                        {isProcessing ? 'Envoi en cours...' : 'Soumettre mon offre'}
                       </Button>
                     </div>
                     {calculateOfferProgress() < 75 && (
