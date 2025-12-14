@@ -53,23 +53,21 @@ const NAV_ITEMS = [
 export function ProLayout({ children }: ProLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, setUser } = useApp();
+  const { user, logout } = useApp();
   const { toast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
-      await authService.logout();
-      setUser(null);
+      await logout();
       toast({
         title: 'Déconnexion réussie',
         description: 'À bientôt!',
       });
-      navigate('/login');
+      navigate('/');
     } catch (error) {
       console.error('Logout error:', error);
-      setUser(null);
-      navigate('/login');
+      navigate('/');
     }
   };
 

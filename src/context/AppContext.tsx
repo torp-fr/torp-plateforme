@@ -119,6 +119,7 @@ interface AppContextType {
   addProject: (project: Project) => void;
   updateProject: (id: string, updates: Partial<Project>) => void;
   refreshPhase0Projects: () => Promise<void>;
+  logout: () => Promise<void>; // Fonction de déconnexion centralisée
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -300,6 +301,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  // Fonction de déconnexion centralisée
+  const logout = async () => {
+    try {
+      // D'abord nettoyer l'état local pour feedback immédiat
+      setUser(null);
+      setProjects([]);
+      setPhase0Projects([]);
+      setCurrentProject(null);
+      setUserType('B2C');
+
+      // Ensuite appeler le service de déconnexion
+      await authService.logout();
+      console.log('✓ Déconnexion réussie');
+    } catch (error) {
+      console.error('⚠️ Erreur lors de la déconnexion:', error);
+      // Même en cas d'erreur, l'état est déjà nettoyé
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       user,
@@ -318,6 +338,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addProject,
       updateProject,
       refreshPhase0Projects,
+      logout,
     }}>
       {children}
     </AppContext.Provider>

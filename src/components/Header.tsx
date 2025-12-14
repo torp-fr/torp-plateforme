@@ -20,7 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 export const Header = () => {
-  const { user, setUser, userType } = useApp();
+  const { user, userType, logout } = useApp();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { toast } = useToast();
@@ -39,18 +39,15 @@ export const Header = () => {
 
   const handleLogout = async () => {
     try {
-      await authService.logout();
-      setUser(null);
+      await logout();
       toast({
         title: 'Déconnexion réussie',
         description: 'À bientôt!',
       });
-      navigate('/login');
+      navigate('/');
     } catch (error) {
       console.error('Logout error:', error);
-      // Even if logout fails, clear local user state
-      setUser(null);
-      navigate('/login');
+      navigate('/');
     }
   };
 

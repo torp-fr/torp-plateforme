@@ -35,6 +35,58 @@ import { Phase0ProjectService, Phase0Project } from '@/services/phase0';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
+// Labels adaptés par profil
+const PROFILE_LABELS = {
+  B2C: {
+    pageTitle: 'Mes Chantiers',
+    pageDescription: 'Gérez et suivez tous vos chantiers en cours',
+    totalLabel: 'Total chantiers',
+    enCoursLabel: 'En cours',
+    preparationLabel: 'Préparation',
+    alertesLabel: 'Alertes',
+    avancementLabel: 'Avancement moyen',
+    entreprisesLabel: 'artisan(s)',
+    newProjectLabel: 'Créer un projet',
+    seeProjectsLabel: 'Voir tous les projets',
+    planningLabel: 'Planning',
+    reunionsLabel: 'Réunions',
+    journalLabel: 'Journal',
+    voirChantierLabel: 'Voir le chantier',
+  },
+  B2B: {
+    pageTitle: 'Gestion des Chantiers',
+    pageDescription: 'Suivi opérationnel de vos chantiers en cours',
+    totalLabel: 'Chantiers actifs',
+    enCoursLabel: 'En exécution',
+    preparationLabel: 'En préparation',
+    alertesLabel: 'Points d\'attention',
+    avancementLabel: 'Avancement global',
+    entreprisesLabel: 'sous-traitant(s)',
+    newProjectLabel: 'Nouveau projet',
+    seeProjectsLabel: 'Portefeuille projets',
+    planningLabel: 'Gantt',
+    reunionsLabel: 'CR chantier',
+    journalLabel: 'Registre',
+    voirChantierLabel: 'Ouvrir le chantier',
+  },
+  B2G: {
+    pageTitle: 'Suivi des Marchés',
+    pageDescription: 'Tableau de bord des marchés de travaux en exécution',
+    totalLabel: 'Marchés en cours',
+    enCoursLabel: 'En exécution',
+    preparationLabel: 'Préparation OS',
+    alertesLabel: 'Points de vigilance',
+    avancementLabel: 'Avancement marché',
+    entreprisesLabel: 'titulaire(s)',
+    newProjectLabel: 'Nouveau marché',
+    seeProjectsLabel: 'Tous les marchés',
+    planningLabel: 'Planning TCE',
+    reunionsLabel: 'Comités',
+    journalLabel: 'Registre',
+    voirChantierLabel: 'Consulter le marché',
+  },
+};
+
 // Statuts de chantier
 const CHANTIER_STATUS = {
   preparation: { label: 'En préparation', color: 'bg-yellow-100 text-yellow-800', icon: Clock },
@@ -61,12 +113,15 @@ interface ChantierCard {
 
 export default function ChantiersListPage() {
   const navigate = useNavigate();
-  const { phase0Projects } = useApp();
+  const { phase0Projects, userType } = useApp();
   const [loading, setLoading] = useState(true);
   const [chantiers, setChantiers] = useState<ChantierCard[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+  // Labels adaptés au profil utilisateur
+  const labels = PROFILE_LABELS[userType as keyof typeof PROFILE_LABELS] || PROFILE_LABELS.B2C;
 
   useEffect(() => {
     loadChantiers();
@@ -147,14 +202,14 @@ export default function ChantiersListPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Mes Chantiers</h1>
+            <h1 className="text-3xl font-bold">{labels.pageTitle}</h1>
             <p className="text-muted-foreground mt-1">
-              Gérez et suivez tous vos chantiers en cours
+              {labels.pageDescription}
             </p>
           </div>
           <Button onClick={() => navigate('/phase0/dashboard')}>
             <Building2 className="h-4 w-4 mr-2" />
-            Voir tous les projets
+            {labels.seeProjectsLabel}
           </Button>
         </div>
 
@@ -164,7 +219,7 @@ export default function ChantiersListPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Total chantiers</p>
+                  <p className="text-sm text-muted-foreground">{labels.totalLabel}</p>
                   <p className="text-2xl font-bold">{stats.total}</p>
                 </div>
                 <HardHat className="h-8 w-8 text-primary opacity-50" />
@@ -175,7 +230,7 @@ export default function ChantiersListPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">En cours</p>
+                  <p className="text-sm text-muted-foreground">{labels.enCoursLabel}</p>
                   <p className="text-2xl font-bold text-green-600">{stats.enCours}</p>
                 </div>
                 <TrendingUp className="h-8 w-8 text-green-500 opacity-50" />
@@ -186,7 +241,7 @@ export default function ChantiersListPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Préparation</p>
+                  <p className="text-sm text-muted-foreground">{labels.preparationLabel}</p>
                   <p className="text-2xl font-bold text-yellow-600">{stats.preparation}</p>
                 </div>
                 <Clock className="h-8 w-8 text-yellow-500 opacity-50" />
@@ -197,7 +252,7 @@ export default function ChantiersListPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Alertes</p>
+                  <p className="text-sm text-muted-foreground">{labels.alertesLabel}</p>
                   <p className="text-2xl font-bold text-orange-600">{stats.alertes}</p>
                 </div>
                 <AlertTriangle className="h-8 w-8 text-orange-500 opacity-50" />
@@ -208,7 +263,7 @@ export default function ChantiersListPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Avancement moyen</p>
+                  <p className="text-sm text-muted-foreground">{labels.avancementLabel}</p>
                   <p className="text-2xl font-bold">{stats.avancementMoyen}%</p>
                 </div>
                 <CheckCircle2 className="h-8 w-8 text-blue-500 opacity-50" />
@@ -271,7 +326,7 @@ export default function ChantiersListPage() {
                   : 'Commencez par créer un projet et lancez la consultation'}
               </p>
               <Button onClick={() => navigate('/phase0/new')}>
-                Créer un projet
+                {labels.newProjectLabel}
               </Button>
             </CardContent>
           </Card>
@@ -312,7 +367,7 @@ export default function ChantiersListPage() {
                     <div className="grid grid-cols-2 gap-2 text-sm">
                       <div className="flex items-center gap-1 text-muted-foreground">
                         <Users className="h-4 w-4" />
-                        {chantier.entreprisesActives} entreprise(s)
+                        {chantier.entreprisesActives} {labels.entreprisesLabel}
                       </div>
                       {chantier.montant && chantier.montant > 0 && (
                         <div className="flex items-center gap-1 text-muted-foreground">
@@ -339,7 +394,7 @@ export default function ChantiersListPage() {
                         onClick={() => navigate(`/phase2/${chantier.projectId}/planning`)}
                       >
                         <Calendar className="h-3 w-3 mr-1" />
-                        Planning
+                        {labels.planningLabel}
                       </Button>
                       <Button
                         variant="outline"
@@ -348,7 +403,7 @@ export default function ChantiersListPage() {
                         onClick={() => navigate(`/phase2/${chantier.projectId}/reunions`)}
                       >
                         <Users className="h-3 w-3 mr-1" />
-                        Réunions
+                        {labels.reunionsLabel}
                       </Button>
                       <Button
                         variant="outline"
@@ -357,7 +412,7 @@ export default function ChantiersListPage() {
                         onClick={() => navigate(`/phase2/${chantier.projectId}/journal`)}
                       >
                         <ClipboardList className="h-3 w-3 mr-1" />
-                        Journal
+                        {labels.journalLabel}
                       </Button>
                     </div>
 
@@ -366,7 +421,7 @@ export default function ChantiersListPage() {
                       className="w-full"
                       onClick={() => navigate(`/phase2/${chantier.projectId}`)}
                     >
-                      Voir le chantier
+                      {labels.voirChantierLabel}
                       <ArrowRight className="h-4 w-4 ml-2" />
                     </Button>
                   </CardContent>
@@ -425,7 +480,7 @@ export default function ChantiersListPage() {
                             variant="ghost"
                             size="icon"
                             onClick={() => navigate(`/phase2/${chantier.projectId}/planning`)}
-                            title="Planning"
+                            title={labels.planningLabel}
                           >
                             <Calendar className="h-4 w-4" />
                           </Button>
@@ -433,7 +488,7 @@ export default function ChantiersListPage() {
                             variant="ghost"
                             size="icon"
                             onClick={() => navigate(`/phase2/${chantier.projectId}/reunions`)}
-                            title="Réunions"
+                            title={labels.reunionsLabel}
                           >
                             <Users className="h-4 w-4" />
                           </Button>
@@ -441,7 +496,7 @@ export default function ChantiersListPage() {
                             variant="ghost"
                             size="icon"
                             onClick={() => navigate(`/phase2/${chantier.projectId}/journal`)}
-                            title="Journal"
+                            title={labels.journalLabel}
                           >
                             <ClipboardList className="h-4 w-4" />
                           </Button>
@@ -449,6 +504,7 @@ export default function ChantiersListPage() {
                             variant="ghost"
                             size="icon"
                             onClick={() => navigate(`/phase2/${chantier.projectId}`)}
+                            title={labels.voirChantierLabel}
                           >
                             <ArrowRight className="h-4 w-4" />
                           </Button>
