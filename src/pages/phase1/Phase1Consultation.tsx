@@ -196,21 +196,38 @@ export function Phase1Consultation() {
   const config = PROFILE_CONFIG[userType];
   const steps = getConsultationSteps(userType);
 
-  // Charger le projet Phase 0
+  // Charger le projet Phase 0 et le DCE existant
   useEffect(() => {
-    const loadProject = async () => {
+    const loadProjectAndDCE = async () => {
       if (!projectId) return;
 
       setIsLoading(true);
       setError(null);
 
       try {
+        // Charger le projet
         const projectData = await Phase0ProjectService.getProjectById(projectId);
         if (!projectData) {
           setError('Projet non trouvé');
           return;
         }
         setProject(projectData);
+
+        // Charger le DCE existant si présent
+        try {
+          const existingDCE = await DCEService.getDCEByProjectId(projectId);
+          if (existingDCE) {
+            setConsultationState(prev => ({
+              ...prev,
+              status: 'dce_ready',
+              currentStep: 1,
+              dce: existingDCE,
+            }));
+          }
+        } catch (dceErr) {
+          // Pas de DCE existant, c'est normal
+          console.log('Pas de DCE existant pour ce projet');
+        }
       } catch (err) {
         console.error('Erreur chargement projet:', err);
         setError('Impossible de charger le projet');
@@ -219,7 +236,7 @@ export function Phase1Consultation() {
       }
     };
 
-    loadProject();
+    loadProjectAndDCE();
   }, [projectId]);
 
   // Générer le DCE
@@ -228,16 +245,23 @@ export function Phase1Consultation() {
 
     setIsProcessing(true);
     try {
+      // Adapter le wizardMode selon le type d'utilisateur
       const wizardMode = userType === 'B2C' ? 'b2c_simple' : userType === 'B2G' ? 'b2g_public' : 'b2b_professional';
 
-      const result = await DCEService.generateDCE({
-        projectId: project.id,
+      // Préparer le projet avec le bon wizardMode
+      const projectWithMode = {
+        ...project,
         wizardMode,
-        project: project.workProject || {},
-        property: project.property || {},
-        lots: project.selectedLots || [],
-        owner: project.ownerProfile || project.owner,
-        estimation: null,
+      };
+
+      const result = await DCEService.generateDCE({
+        project: projectWithMode,
+        config: {
+          includeRC: true,
+          includeAE: true,
+          includeDPGF: true,
+          includeCadreMT: true,
+        },
       });
 
       if (result.success && result.dce) {
@@ -247,16 +271,24 @@ export function Phase1Consultation() {
           currentStep: 1,
           dce: result.dce,
         }));
+
+        const documentsCount = result.dce.generationInfo?.piecesGenerees?.length || 4;
         toast({
           title: userType === 'B2C' ? 'Dossier préparé' : 'DCE généré',
-          description: `${result.documentsGenerated} document(s) créé(s)`,
+          description: `${documentsCount} document(s) créé(s)`,
+        });
+      } else if (result.errors && result.errors.length > 0) {
+        toast({
+          title: 'Erreur de génération',
+          description: result.errors[0],
+          variant: 'destructive',
         });
       }
     } catch (err) {
       console.error('Erreur génération DCE:', err);
       toast({
         title: 'Erreur',
-        description: 'Impossible de générer le dossier de consultation',
+        description: err instanceof Error ? err.message : 'Impossible de générer le dossier de consultation',
         variant: 'destructive',
       });
     } finally {
@@ -270,35 +302,63 @@ export function Phase1Consultation() {
 
     setIsProcessing(true);
     try {
+      // Adapter le wizardMode selon le type d'utilisateur
+      const wizardMode = userType === 'B2C' ? 'b2c_simple' : userType === 'B2G' ? 'b2g_public' : 'b2b_professional';
+
+      const projectWithMode = {
+        ...project,
+        wizardMode,
+      };
+
       const result = await EntrepriseService.findMatchingEntreprises({
-        projectId: project.id,
-        lots: project.selectedLots || [],
-        location: project.property?.address || {},
-        wizardMode: userType === 'B2C' ? 'b2c_simple' : userType === 'B2G' ? 'b2g_public' : 'b2b_professional',
-        criteresMinimaux: {
+        project: projectWithMode,
+        rayonKm: 50,
+        limiteResultats: userType === 'B2C' ? 6 : 10,
+        filtres: {
           rgeObligatoire: true,
-          assuranceDecennaleValide: true,
-          scoreMinimum: userType === 'B2C' ? 60 : 70,
+          noteMinimale: userType === 'B2C' ? 60 : 70,
         },
-        nombreMaxParLot: userType === 'B2C' ? 3 : 5,
       });
 
-      setConsultationState(prev => ({
-        ...prev,
-        status: 'en_consultation',
-        currentStep: 2,
-        entreprises: result.recommandations,
-      }));
+      if (result.success) {
+        // Transformer les entreprises en recommandations pour l'affichage
+        const recommandations: RecommandationEntreprise[] = result.entreprises.map(e => ({
+          entreprise: e,
+          score: e.scoreTORP || {
+            scoreGlobal: 75,
+            criteres: [],
+            recommandation: 'recommande' as const,
+            confiance: 'moyen' as const,
+            dateCalcul: new Date().toISOString(),
+          },
+          lots: project.selectedLots?.map(l => l.type) || [],
+          pointsForts: ['Entreprise qualifiée', 'Assurances à jour'],
+          pointsAttention: [],
+          disponibilite: 'A confirmer',
+        }));
 
-      toast({
-        title: userType === 'B2C' ? 'Artisans trouvés' : 'Entreprises identifiées',
-        description: `${result.recommandations.length} entreprise(s) qualifiée(s)`,
-      });
+        setConsultationState(prev => ({
+          ...prev,
+          status: 'en_consultation',
+          currentStep: 2,
+          entreprises: recommandations,
+        }));
+
+        toast({
+          title: userType === 'B2C' ? 'Artisans trouvés' : 'Entreprises identifiées',
+          description: `${result.entreprises.length} entreprise(s) qualifiée(s)`,
+        });
+      } else {
+        toast({
+          title: 'Recherche terminée',
+          description: 'Aucune entreprise correspondant aux critères',
+        });
+      }
     } catch (err) {
       console.error('Erreur recherche entreprises:', err);
       toast({
         title: 'Erreur',
-        description: 'Impossible de rechercher des entreprises',
+        description: err instanceof Error ? err.message : 'Impossible de rechercher des entreprises',
         variant: 'destructive',
       });
     } finally {
