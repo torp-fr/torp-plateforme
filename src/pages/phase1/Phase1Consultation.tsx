@@ -28,6 +28,8 @@ import { EntrepriseService } from '@/services/phase1/entreprise.service';
 import { OffreService } from '@/services/phase1/offre.service';
 import { ContratService } from '@/services/phase1/contrat.service';
 import { FormalitesService } from '@/services/phase1/formalites.service';
+import { UrbanismeService } from '@/services/phase1/urbanisme.service';
+import type { AnalyseUrbanistique } from '@/services/phase1/urbanisme.service';
 import { B2BOffreService } from '@/services/phase1/b2b-offre.service';
 import type { DCEDocument, DCEStatus } from '@/types/phase1/dce.types';
 import type { Entreprise, RecommandationEntreprise } from '@/types/phase1/entreprise.types';
@@ -306,6 +308,11 @@ export function Phase1Consultation() {
   const [formalitesDossier, setFormalitesDossier] = useState<DossierFormalites | null>(null);
   const [formalitesChecklist, setFormalitesChecklist] = useState<ChecklistFormalites | null>(null);
   const [loadingFormalites, setLoadingFormalites] = useState(false);
+
+  // State pour l'analyse urbanistique
+  const [analyseUrbanistique, setAnalyseUrbanistique] = useState<AnalyseUrbanistique | null>(null);
+  const [loadingUrbanisme, setLoadingUrbanisme] = useState(false);
+  const [showPrefilledDoc, setShowPrefilledDoc] = useState<string | null>(null);
 
   const config = PROFILE_CONFIG[userType];
   const steps = getConsultationSteps(userType);
@@ -2528,284 +2535,401 @@ export function Phase1Consultation() {
             )}
           </TabsContent>
 
-          {/* Onglet Formalités */}
+          {/* Onglet Formalités - Analyse Intelligente */}
           <TabsContent value="formalites" className="space-y-6">
-            {/* En-tête */}
+            {/* En-tête avec bouton d'analyse */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileCheck className="w-5 h-5 text-primary" />
-                  Formalités pré-démarrage
-                </CardTitle>
-                <CardDescription>
-                  Checklist des démarches administratives à effectuer avant le début des travaux
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileCheck className="w-5 h-5 text-primary" />
+                      Formalités pré-démarrage
+                    </CardTitle>
+                    <CardDescription>
+                      Analyse automatique des démarches administratives requises selon votre projet
+                    </CardDescription>
+                  </div>
+                  {!analyseUrbanistique && project && (
+                    <Button
+                      onClick={async () => {
+                        if (!project) return;
+                        setLoadingUrbanisme(true);
+                        try {
+                          const analyse = await UrbanismeService.analyzeProject(project);
+                          setAnalyseUrbanistique(analyse);
+
+                          // Générer aussi le dossier formalités
+                          const result = await FormalitesService.generateDossierFormalites({
+                            project,
+                            contrat: generatedContract || undefined,
+                          });
+                          if (result.success && result.dossier) {
+                            setFormalitesDossier(result.dossier);
+                            setFormalitesChecklist(result.checklist || null);
+                          }
+
+                          toast({
+                            title: 'Analyse terminée',
+                            description: `${analyse.autorisationsRequises.length} autorisation(s) détectée(s)`,
+                          });
+                        } catch (err) {
+                          console.error('Error analyzing:', err);
+                          toast({
+                            title: 'Erreur',
+                            description: 'Impossible d\'analyser le projet',
+                            variant: 'destructive',
+                          });
+                        } finally {
+                          setLoadingUrbanisme(false);
+                        }
+                      }}
+                      disabled={loadingUrbanisme}
+                    >
+                      {loadingUrbanisme ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-4 h-4 mr-2" />
+                      )}
+                      Analyser mon projet
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
             </Card>
 
-            {/* Progression globale */}
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="font-semibold">Progression des formalités</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {formalitesChecklist?.itemsCompletes || 0} / {formalitesChecklist?.itemsTotal || 16} étapes complétées
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-3xl font-bold">{formalitesChecklist?.pourcentage || 0}%</div>
-                    {formalitesChecklist?.pretPourDemarrage ? (
-                      <Badge className="bg-green-500 text-white">
-                        <CheckCircle2 className="w-3 h-3 mr-1" />
-                        Prêt
-                      </Badge>
+            {/* Résultat de l'analyse urbanistique */}
+            {analyseUrbanistique && (
+              <>
+                {/* Contexte local */}
+                <Card className="border-blue-200 bg-blue-50/50">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-blue-600" />
+                      Contexte urbanistique local
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid md:grid-cols-3 gap-4">
+                      {/* Commune */}
+                      <div className="p-3 bg-white rounded-lg border">
+                        <p className="text-xs text-muted-foreground mb-1">Commune</p>
+                        <p className="font-semibold">{analyseUrbanistique.commune.nom}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {analyseUrbanistique.commune.departement} - {analyseUrbanistique.commune.region}
+                        </p>
+                        <p className="text-xs mt-1">
+                          Document d'urbanisme: <span className="font-medium">{analyseUrbanistique.commune.typePLU}</span>
+                        </p>
+                      </div>
+
+                      {/* Zone PLU */}
+                      <div className="p-3 bg-white rounded-lg border">
+                        <p className="text-xs text-muted-foreground mb-1">Zone PLU</p>
+                        <p className="font-semibold">{analyseUrbanistique.zonePLU.code} - {analyseUrbanistique.zonePLU.designation}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {analyseUrbanistique.zonePLU.description}
+                        </p>
+                        {analyseUrbanistique.zonePLU.hauteurMax && (
+                          <p className="text-xs mt-1">
+                            Hauteur max: <span className="font-medium">{analyseUrbanistique.zonePLU.hauteurMax}m</span>
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Contact mairie */}
+                      <div className="p-3 bg-white rounded-lg border">
+                        <p className="text-xs text-muted-foreground mb-1">Service urbanisme</p>
+                        {analyseUrbanistique.commune.contactUrbanisme && (
+                          <>
+                            <p className="text-sm">{analyseUrbanistique.commune.contactUrbanisme.email}</p>
+                            <p className="text-sm">{analyseUrbanistique.commune.contactUrbanisme.telephone}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {analyseUrbanistique.commune.contactUrbanisme.horaires}
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Secteurs protégés */}
+                {analyseUrbanistique.secteursProteges.length > 0 && (
+                  <Alert variant="destructive" className="border-amber-300 bg-amber-50 text-amber-900">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription>
+                      <span className="font-semibold">Attention : Secteur protégé détecté</span>
+                      {analyseUrbanistique.secteursProteges.map((secteur, idx) => (
+                        <div key={idx} className="mt-2 p-2 bg-white/50 rounded">
+                          <p className="font-medium">{secteur.nom}</p>
+                          <p className="text-sm">{secteur.description}</p>
+                          {secteur.architecteBatimentsFrance && (
+                            <Badge className="mt-1 bg-amber-200 text-amber-800">
+                              Avis ABF obligatoire (+{secteur.delaiSupplementaire} jours)
+                            </Badge>
+                          )}
+                        </div>
+                      ))}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Autorisations requises détectées */}
+                <Card className="border-2 border-primary/20">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileSignature className="w-5 h-5 text-primary" />
+                      Autorisations détectées pour votre projet
+                    </CardTitle>
+                    <CardDescription>
+                      Basé sur l'analyse de vos travaux, voici les démarches administratives requises
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {analyseUrbanistique.autorisationsRequises.length === 0 ? (
+                      <Alert className="border-green-200 bg-green-50">
+                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        <AlertDescription className="text-green-800">
+                          <span className="font-medium">Aucune autorisation d'urbanisme requise</span>
+                          <br />
+                          Vos travaux ne nécessitent pas de déclaration préalable ni de permis.
+                        </AlertDescription>
+                      </Alert>
                     ) : (
-                      <Badge variant="secondary">En cours</Badge>
+                      analyseUrbanistique.autorisationsRequises.map((auto, idx) => (
+                        <Card key={idx} className={auto.obligatoire ? 'border-red-200' : ''}>
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <h4 className="font-semibold">
+                                    {auto.type === 'declaration_prealable' && 'Déclaration Préalable de Travaux'}
+                                    {auto.type === 'permis_construire' && 'Permis de Construire'}
+                                    {auto.type === 'permis_demolir' && 'Permis de Démolir'}
+                                    {auto.type === 'autorisation_abf' && 'Autorisation ABF'}
+                                  </h4>
+                                  {auto.obligatoire && (
+                                    <Badge variant="destructive">Obligatoire</Badge>
+                                  )}
+                                </div>
+                                <p className="text-sm text-muted-foreground mb-2">{auto.motif}</p>
+                                <div className="grid md:grid-cols-2 gap-2 text-sm">
+                                  <div>
+                                    <span className="text-muted-foreground">Formulaire:</span>{' '}
+                                    <span className="font-medium">Cerfa {auto.formulaire.cerfa}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Délai:</span>{' '}
+                                    <span className="font-medium">
+                                      {auto.delaiMajore || auto.delaiInstruction} jours
+                                      {auto.delaiMajore && ' (majoré ABF)'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Dépôt:</span>{' '}
+                                    <span className="font-medium">{auto.destination}</span>
+                                  </div>
+                                </div>
+
+                                {/* Pièces principales */}
+                                <details className="mt-3">
+                                  <summary className="text-sm font-medium cursor-pointer text-primary">
+                                    Voir les pièces à fournir ({auto.piecesPrincipales.length})
+                                  </summary>
+                                  <ul className="mt-2 ml-4 text-sm space-y-1">
+                                    {auto.piecesPrincipales.map((piece, i) => (
+                                      <li key={i} className="text-muted-foreground">• {piece}</li>
+                                    ))}
+                                  </ul>
+                                </details>
+                              </div>
+
+                              <div className="flex flex-col gap-2 ml-4">
+                                <Button
+                                  size="sm"
+                                  onClick={() => setShowPrefilledDoc(auto.type)}
+                                >
+                                  <FileText className="w-3 h-3 mr-1" />
+                                  Pré-remplir
+                                </Button>
+                                {auto.formulaire.url && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => window.open(auto.formulaire.url, '_blank')}
+                                  >
+                                    <Download className="w-3 h-3 mr-1" />
+                                    Cerfa
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))
                     )}
+                  </CardContent>
+                </Card>
+
+                {/* Recommandations */}
+                {analyseUrbanistique.recommandations.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-amber-500" />
+                        Recommandations
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {analyseUrbanistique.recommandations.map((reco, idx) => (
+                          <div key={idx} className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                            <Badge variant={reco.priorite === 'haute' ? 'destructive' : reco.priorite === 'moyenne' ? 'default' : 'secondary'} className="mt-0.5">
+                              {reco.priorite}
+                            </Badge>
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">{reco.titre}</p>
+                              <p className="text-xs text-muted-foreground">{reco.description}</p>
+                              <p className="text-xs text-primary mt-1">→ {reco.action}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Risques identifiés */}
+                {analyseUrbanistique.risques.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-red-500" />
+                        Risques identifiés
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {analyseUrbanistique.risques.map((risque, idx) => (
+                          <div key={idx} className="p-3 border rounded-lg">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant={risque.probabilite === 'haute' ? 'destructive' : risque.probabilite === 'moyenne' ? 'default' : 'secondary'}>
+                                {risque.probabilite}
+                              </Badge>
+                              <span className="font-medium text-sm capitalize">{risque.type}</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{risque.description}</p>
+                            <p className="text-xs text-green-700 mt-1">Prévention: {risque.prevention}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            )}
+
+            {/* Autres formalités obligatoires */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-purple-600" />
+                  Déclarations complémentaires
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <input type="checkbox" className="w-4 h-4" disabled />
+                    <div>
+                      <p className="font-medium text-sm">DICT - Déclaration réseaux</p>
+                      <p className="text-xs text-muted-foreground">Obligatoire 7 jours avant le démarrage</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setShowContractExample('dict')}>
+                      <Eye className="w-3 h-3 mr-1" />
+                      Voir
+                    </Button>
+                    <Button size="sm" onClick={() => window.open('https://www.reseaux-et-canalisations.gouv.fr', '_blank')}>
+                      Effectuer
+                    </Button>
                   </div>
                 </div>
-                <Progress value={formalitesChecklist?.pourcentage || 0} className="h-3" />
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <input type="checkbox" className="w-4 h-4" disabled />
+                    <div>
+                      <p className="font-medium text-sm">DOC - Ouverture de chantier</p>
+                      <p className="text-xs text-muted-foreground">À déposer en mairie après obtention de l'autorisation</p>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setShowContractExample('doc')}>
+                    <Eye className="w-3 h-3 mr-1" />
+                    Modèle
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <input type="checkbox" className="w-4 h-4" disabled />
+                    <div>
+                      <p className="font-medium text-sm">Information voisinage</p>
+                      <p className="text-xs text-muted-foreground">Courrier de courtoisie recommandé</p>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setShowContractExample('courrier_voisinage')}>
+                    <Eye className="w-3 h-3 mr-1" />
+                    Modèle
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 
-            {/* Alertes */}
-            {formalitesDossier?.alertes && formalitesDossier.alertes.length > 0 && (
-              <div className="space-y-2">
-                {formalitesDossier.alertes.slice(0, 3).map((alerte, idx) => (
-                  <Alert key={idx} variant={alerte.severite === 'error' ? 'destructive' : 'default'}>
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertDescription>
-                      <span className="font-medium">{alerte.titre}</span>
-                      <br />
-                      {alerte.message}
-                      {alerte.actionRequise && (
-                        <span className="block text-xs mt-1 text-muted-foreground">
-                          Action : {alerte.actionRequise}
-                        </span>
-                      )}
-                    </AlertDescription>
-                  </Alert>
-                ))}
-              </div>
-            )}
-
-            {/* Catégories de formalités */}
-            <div className="grid gap-4">
-              {/* Urbanisme */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-blue-600" />
-                    Autorisations d'urbanisme
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <input type="checkbox" className="w-4 h-4" disabled checked={formalitesDossier?.urbanisme?.typeAutorisation === 'aucune'} />
-                      <div>
-                        <p className="font-medium text-sm">Déclaration préalable / Permis</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formalitesDossier?.urbanisme?.typeAutorisation === 'aucune'
-                            ? 'Non requis pour ce projet'
-                            : formalitesDossier?.urbanisme?.typeAutorisation === 'declaration_prealable'
-                              ? 'Déclaration préalable requise'
-                              : 'Permis de construire requis'
-                          }
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="text-xs">
-                      {formalitesDossier?.urbanisme?.typeAutorisation === 'aucune' ? 'N/A' : 'À vérifier'}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <input type="checkbox" className="w-4 h-4" disabled />
-                      <div>
-                        <p className="font-medium text-sm">Panneau de chantier affiché</p>
-                        <p className="text-xs text-muted-foreground">Panneau réglementaire sur le terrain (80x120cm)</p>
-                      </div>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => setShowContractExample('panneau')}>
-                      <Eye className="w-3 h-3 mr-1" />
-                      Modèle
+            {/* Document pré-rempli */}
+            {showPrefilledDoc && analyseUrbanistique && project && (
+              <Card className="border-2 border-green-200 bg-green-50/50">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-green-600" />
+                      Document pré-rempli avec vos données
+                    </CardTitle>
+                    <Button variant="ghost" size="sm" onClick={() => setShowPrefilledDoc(null)}>
+                      Fermer
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
-
-              {/* Déclarations */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-purple-600" />
-                    Déclarations obligatoires
-                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <input type="checkbox" className="w-4 h-4" disabled />
-                      <div>
-                        <p className="font-medium text-sm">DICT - Déclaration réseaux</p>
-                        <p className="text-xs text-muted-foreground">À faire 7 jours avant le démarrage minimum</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setShowContractExample('dict')}>
-                        <Eye className="w-3 h-3 mr-1" />
-                        Voir
-                      </Button>
-                      <Button size="sm" variant="default" onClick={() => window.open('https://www.reseaux-et-canalisations.gouv.fr', '_blank')}>
-                        Effectuer
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <input type="checkbox" className="w-4 h-4" disabled />
-                      <div>
-                        <p className="font-medium text-sm">DOC - Ouverture de chantier</p>
-                        <p className="text-xs text-muted-foreground">Cerfa 13407*05 - À déposer en mairie</p>
-                      </div>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => setShowContractExample('doc')}>
-                      <Eye className="w-3 h-3 mr-1" />
-                      Modèle
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Sécurité */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Shield className="w-4 h-4 text-green-600" />
-                    Sécurité et coordination
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <input type="checkbox" className="w-4 h-4" disabled checked />
-                      <div>
-                        <p className="font-medium text-sm">Attestations assurance décennale</p>
-                        <p className="text-xs text-muted-foreground">Vérifiées pour toutes les entreprises</p>
-                      </div>
-                    </div>
-                    <Badge className="bg-green-100 text-green-800">Automatique</Badge>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <input type="checkbox" className="w-4 h-4" disabled />
-                      <div>
-                        <p className="font-medium text-sm">Coordonnateur SPS</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formalitesDossier?.securite?.coordonnateurSPS?.obligatoire
-                            ? 'Obligatoire (plusieurs entreprises)'
-                            : 'Non obligatoire pour ce projet'
-                          }
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="text-xs">
-                      {formalitesDossier?.securite?.coordonnateurSPS?.obligatoire ? 'Requis' : 'Optionnel'}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Voirie */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <HardHat className="w-4 h-4 text-amber-600" />
-                    Voirie et voisinage
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <input type="checkbox" className="w-4 h-4" disabled />
-                      <div>
-                        <p className="font-medium text-sm">Autorisation occupation voirie</p>
-                        <p className="text-xs text-muted-foreground">Pour benne, échafaudage sur voie publique</p>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="text-xs">
-                      {formalitesDossier?.voirie?.autorisationStationnement?.obligatoire ? 'Requis' : 'Si besoin'}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <input type="checkbox" className="w-4 h-4" disabled />
-                      <div>
-                        <p className="font-medium text-sm">Information voisinage</p>
-                        <p className="text-xs text-muted-foreground">Lettre de courtoisie aux voisins</p>
-                      </div>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => setShowContractExample('courrier_voisinage')}>
-                      <Eye className="w-3 h-3 mr-1" />
-                      Modèle
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Bouton initialiser */}
-            {!formalitesDossier && project && (
-              <Card className="border-dashed">
-                <CardContent className="flex flex-col items-center justify-center py-8">
-                  <FileCheck className="w-12 h-12 text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground text-center mb-4">
-                    Initialisez la checklist des formalités pour votre projet
-                  </p>
-                  <Button
-                    onClick={async () => {
-                      if (!project) return;
-                      setLoadingFormalites(true);
-                      try {
-                        const result = await FormalitesService.generateDossierFormalites({
-                          project,
-                          contrat: generatedContract || undefined,
-                        });
-                        if (result.success && result.dossier) {
-                          setFormalitesDossier(result.dossier);
-                          setFormalitesChecklist(result.checklist || null);
-                          toast({
-                            title: 'Formalités initialisées',
-                            description: `${result.checklist?.itemsTotal || 0} éléments à vérifier`,
-                          });
-                        }
-                      } catch (err) {
-                        console.error('Error generating formalites:', err);
-                        toast({
-                          title: 'Erreur',
-                          description: 'Impossible de générer la checklist',
-                          variant: 'destructive',
-                        });
-                      } finally {
-                        setLoadingFormalites(false);
-                      }
-                    }}
-                    disabled={loadingFormalites}
-                  >
-                    {loadingFormalites ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <FileCheck className="w-4 h-4 mr-2" />
+                <CardContent>
+                  <div className="bg-white rounded-lg p-6 border shadow-sm max-h-96 overflow-y-auto font-mono text-xs whitespace-pre-wrap">
+                    {UrbanismeService.generatePrefilledDocument(
+                      showPrefilledDoc as any,
+                      project,
+                      analyseUrbanistique
                     )}
-                    Initialiser les formalités
-                  </Button>
+                  </div>
+                  <div className="mt-4 flex gap-2">
+                    <Button variant="outline" size="sm">
+                      <Download className="w-3 h-3 mr-1" />
+                      Télécharger
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => {
+                      const text = UrbanismeService.generatePrefilledDocument(
+                        showPrefilledDoc as any,
+                        project,
+                        analyseUrbanistique
+                      );
+                      navigator.clipboard.writeText(text);
+                      toast({ title: 'Copié !', description: 'Document copié dans le presse-papier' });
+                    }}>
+                      Copier
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             )}
 
-            {/* Exemples de documents formalités */}
+            {/* Exemples de documents */}
             {showContractExample && ['dict', 'doc', 'panneau', 'courrier_voisinage'].includes(showContractExample) && (
               <Card className="border-2 border-primary/20 bg-primary/5">
                 <CardHeader className="pb-2">
@@ -2831,121 +2955,104 @@ Cerfa n°14434*03
    SIRET: [Numéro SIRET]
 
 2. MAÎTRE D'OUVRAGE
-   Nom: [Votre nom]
-   Adresse: [Votre adresse]
-   Email: [Email]
-   Téléphone: [Téléphone]
+   Nom: ${project?.ownerProfile?.identity?.type === 'B2C' ? `${(project.ownerProfile.identity as any).firstName || ''} ${(project.ownerProfile.identity as any).lastName || ''}` : '[Votre nom]'}
+   Adresse: ${project?.ownerProfile?.contact?.address?.street || '[Votre adresse]'}
+   Email: ${project?.ownerProfile?.contact?.email || '[Email]'}
+   Téléphone: ${project?.ownerProfile?.contact?.phone || '[Téléphone]'}
 
 3. LOCALISATION DES TRAVAUX
-   Adresse: [Adresse du chantier]
+   Adresse: ${project?.property?.identification?.address?.streetName || project?.property?.address?.street || '[Adresse du chantier]'}
+   ${project?.property?.identification?.address?.postalCode || project?.property?.address?.postalCode || ''} ${project?.property?.identification?.address?.city || project?.property?.address?.city || ''}
 
 4. NATURE DES TRAVAUX
-   [Description des travaux]
+   ${project?.workProject?.general?.description || '[Description des travaux]'}
 
 5. DATE DE COMMENCEMENT PRÉVUE
    [Date]
 
-6. EXPLOITANTS DE RÉSEAUX CONCERNÉS
-   [ ] ENEDIS (électricité)
-   [ ] GRDF (gaz)
-   [ ] Véolia / Régie des eaux (eau)
-   [ ] Orange / SFR / Free (télécoms)
-
 ----------------------------------------------------------------------
-À effectuer sur: www.reseaux-et-canalisations.gouv.fr
-Délai de réponse: 9 jours - Validité: 3 mois`}
+À effectuer sur: www.reseaux-et-canalisations.gouv.fr`}
                     {showContractExample === 'doc' && `======================================================================
 DÉCLARATION D'OUVERTURE DE CHANTIER (DOC)
 Cerfa n°13407*05
 ======================================================================
 
 1. IDENTITÉ DU DÉCLARANT
-   Nom: [Votre nom]
-   Adresse: [Votre adresse]
+   ${project?.ownerProfile?.identity?.type === 'B2C' ? `Nom: ${(project.ownerProfile.identity as any).firstName || ''} ${(project.ownerProfile.identity as any).lastName || ''}` : '[Votre nom]'}
+   Adresse: ${project?.ownerProfile?.contact?.address?.street || '[Adresse]'}
+   ${project?.ownerProfile?.contact?.address?.postalCode || ''} ${project?.ownerProfile?.contact?.address?.city || ''}
 
 2. TERRAIN
-   Adresse du terrain: [Adresse du chantier]
+   Adresse: ${project?.property?.identification?.address?.streetName || project?.property?.address?.street || '[Adresse du chantier]'}
+   ${project?.property?.identification?.address?.postalCode || project?.property?.address?.postalCode || ''} ${project?.property?.identification?.address?.city || project?.property?.address?.city || ''}
 
 3. AUTORISATION D'URBANISME
    Type: [ ] Déclaration préalable [ ] Permis de construire
    Numéro: _______________
-   Date de délivrance: _______________
-
-4. DATE D'OUVERTURE DU CHANTIER
-   [Date de début des travaux]
-
-5. DÉCLARATION
-   Je soussigné(e) déclare ouvrir le chantier correspondant
-   à l'autorisation ci-dessus référencée.
-
-   Fait à _______________
-   Le _______________
-   Signature: _______________
 
 ----------------------------------------------------------------------
 À déposer en mairie du lieu des travaux.`}
                     {showContractExample === 'panneau' && `============================================================
-          DÉCLARATION PRÉALABLE / PERMIS DE CONSTRUIRE
+PANNEAU D'AFFICHAGE RÉGLEMENTAIRE
 ============================================================
 
-N°: [Numéro de l'autorisation]
-Délivré le: [Date]
-
-Bénéficiaire: [Votre nom]
+Bénéficiaire: ${project?.ownerProfile?.identity?.type === 'B2C' ? `${(project.ownerProfile.identity as any).firstName || ''} ${(project.ownerProfile.identity as any).lastName || ''}` : '[Votre nom]'}
 
 Nature des travaux:
-[Description des travaux]
+${project?.workProject?.general?.description || '[Description des travaux]'}
 
-Surface de plancher: [XX] m²
-Emprise au sol: [XX] m²
-
---------------------------------------------------------------
-Droit de recours:
-Un recours gracieux ou contentieux peut être formé
-dans un délai de deux mois à compter du premier jour
-d'une période continue de deux mois d'affichage.
-
-Mairie de: [Ville]
-Le dossier peut être consulté en mairie.
+Surface de plancher: ${project?.property?.surface || '___'} m²
 
 --------------------------------------------------------------
-Panneau réglementaire - Dimensions: 80cm x 120cm
+Dimensions minimales: 80cm x 120cm
 À installer sur le terrain, visible de la voie publique`}
-                    {showContractExample === 'courrier_voisinage' && `[Votre nom]
-[Votre adresse]
-[Code postal] [Ville]
+                    {showContractExample === 'courrier_voisinage' && `${project?.ownerProfile?.identity?.type === 'B2C' ? `${(project.ownerProfile.identity as any).firstName || ''} ${(project.ownerProfile.identity as any).lastName || ''}` : '[Votre nom]'}
+${project?.ownerProfile?.contact?.address?.street || '[Votre adresse]'}
+${project?.ownerProfile?.contact?.address?.postalCode || ''} ${project?.ownerProfile?.contact?.address?.city || ''}
 
-                                        [Ville], le [Date]
+                            ${project?.property?.identification?.address?.city || project?.property?.address?.city || '[Ville]'}, le ${new Date().toLocaleDateString('fr-FR')}
 
 Madame, Monsieur,
 
-Je vous informe que des travaux de rénovation vont être réalisés
-à l'adresse suivante:
-[Adresse du chantier]
+Je vous informe que des travaux vont être réalisés à l'adresse:
+${project?.property?.identification?.address?.streetName || project?.property?.address?.street || '[Adresse du chantier]'}
 
-Nature des travaux:
-[Description des travaux prévus]
+Nature: ${project?.workProject?.general?.description || '[Description]'}
 
-Durée prévisionnelle: [XX] jours
-Horaires de chantier: 7h30 - 18h00 (du lundi au vendredi)
-                      8h00 - 12h00 (samedi, si nécessaire)
+Horaires: 7h30-18h00 (lun-ven), 8h00-12h00 (sam si nécessaire)
 
-Nuisances possibles:
-- Bruit (perçage, démolition)
-- Passage de véhicules de livraison
-- Présence d'une benne sur la voie publique
+Contact: ${project?.ownerProfile?.contact?.email || '[Email]'}
+         ${project?.ownerProfile?.contact?.phone || '[Téléphone]'}
 
-Nous nous efforcerons de limiter ces nuisances au maximum.
+Cordialement`}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-Pour toute question ou réclamation:
-Email: [Votre email]
-Téléphone: [Votre téléphone]
-
-En vous remerciant de votre compréhension,
-
-Cordialement,
-
-[Votre nom]`}
+            {/* Message si pas encore analysé */}
+            {!analyseUrbanistique && project && (
+              <Card className="border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Sparkles className="w-16 h-16 text-primary/30 mb-4" />
+                  <h3 className="text-xl font-semibold mb-2">Analyse intelligente disponible</h3>
+                  <p className="text-muted-foreground text-center max-w-md mb-6">
+                    Cliquez sur "Analyser mon projet" pour identifier automatiquement les autorisations
+                    d'urbanisme requises selon votre localisation et votre type de travaux.
+                  </p>
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      <span>Détection zone PLU</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      <span>Secteurs protégés</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      <span>Documents pré-remplis</span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

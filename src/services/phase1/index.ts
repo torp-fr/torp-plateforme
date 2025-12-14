@@ -23,6 +23,10 @@ export type { ContratGenerationInput, ContratGenerationResult, SimulationTresore
 export { FormalitesService } from './formalites.service';
 export type { FormalitesGenerationInput, FormalitesGenerationResult, FormulaireDICTInput } from './formalites.service';
 
+// Analyse Urbanistique
+export { UrbanismeService } from './urbanisme.service';
+export type { AnalyseUrbanistique, CommuneInfo, ZonePLU, SecteurProtege, ContrainteUrbanistique, AutorisationRequise, RecommandationUrbanisme, RisqueUrbanistique } from './urbanisme.service';
+
 // B2B Offres (Soumission d'offres par les entreprises)
 export { B2BOffreService } from './b2b-offre.service';
 export type { B2BOffreData, B2BOffreMemoireTechnique, B2BOffreDPGFPoste, B2BOffrePlanning, B2BOffreConditions } from './b2b-offre.service';
