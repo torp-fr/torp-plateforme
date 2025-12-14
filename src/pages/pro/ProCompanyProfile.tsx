@@ -8,7 +8,7 @@
  * - Documents administratifs
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ProLayout } from '@/components/pro/ProLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -194,7 +194,7 @@ export default function ProCompanyProfile() {
   const [recognizing, setRecognizing] = useState(false);
   const [recognitionResult, setRecognitionResult] = useState<MaterialRecognitionResult | null>(null);
   const [materialImagePreview, setMaterialImagePreview] = useState<string | null>(null);
-  const fileInputRef = useState<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Charger les données du profil
   useEffect(() => {
