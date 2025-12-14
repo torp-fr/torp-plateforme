@@ -508,11 +508,11 @@ export class ValidationService {
   static canProceedToNextStep(
     project: Partial<Phase0Project>,
     currentStep: number,
-    mode: 'b2c' | 'b2b' | 'b2b_professional' | 'b2g' | 'b2g_public' = 'b2c'
+    mode: string = 'b2c'
   ): { canProceed: boolean; blockers: string[] } {
     const blockers: string[] = [];
-    const isB2B = mode === 'b2b' || mode === 'b2b_professional';
-    const isB2G = mode === 'b2g' || mode === 'b2g_public';
+    const isB2B = mode === 'b2b' || mode === 'b2b_professional' || mode.startsWith('b2b');
+    const isB2G = mode === 'b2g' || mode === 'b2g_public' || mode.startsWith('b2g');
 
     // Accès aux données selon le mode
     const owner = project.ownerProfile || project.owner;

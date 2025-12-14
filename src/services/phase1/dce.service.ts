@@ -230,7 +230,7 @@ export class DCEService {
 
       objet: {
         description: `${project.workProject?.general?.title || 'Travaux de rénovation'}`,
-        adresseChantier: project.property?.address || {
+        adresseChantier: this.getPropertyAddress(project.property) || {
           street: '',
           postalCode: '',
           city: '',
@@ -398,7 +398,7 @@ export class DCEService {
     return {
       maitreOuvrage: {
         nom: this.getOwnerName(owner),
-        adresse: owner?.contact?.address || property?.address || {
+        adresse: owner?.contact?.address || this.getPropertyAddress(property) || {
           street: '',
           postalCode: '',
           city: '',
@@ -418,7 +418,7 @@ export class DCEService {
       },
       natureObjet: project.workProject?.scope?.workType || 'renovation',
       description: project.workProject?.general?.description || 'Travaux de rénovation',
-      adresseChantier: property?.address || {
+      adresseChantier: this.getPropertyAddress(property) || {
         street: '',
         postalCode: '',
         city: '',
@@ -643,7 +643,9 @@ export class DCEService {
     if (!project.ownerProfile) {
       errors.push('Profil du maître d\'ouvrage non renseigné');
     }
-    if (!project.property?.address) {
+    // Vérifier l'adresse au bon chemin: property.identification.address
+    const addr = this.getPropertyAddress(project.property);
+    if (!addr?.street && !addr?.streetName) {
       errors.push('Adresse du bien non renseignée');
     }
     if (!project.selectedLots || project.selectedLots.length === 0) {
@@ -653,6 +655,25 @@ export class DCEService {
     return {
       valid: errors.length === 0,
       errors,
+    };
+  }
+
+  /**
+   * Helper pour récupérer l'adresse du bien (supporte les deux structures)
+   */
+  private static getPropertyAddress(property?: any): any {
+    if (!property) return undefined;
+    // Chemin correct: property.identification.address
+    // Fallback: property.address (ancien format)
+    const addr = property.identification?.address || property.address;
+    if (!addr) return undefined;
+    return {
+      street: addr.streetName || addr.street,
+      streetName: addr.streetName || addr.street,
+      complement: addr.complement,
+      postalCode: addr.postalCode,
+      city: addr.city,
+      country: addr.country || 'France',
     };
   }
 
