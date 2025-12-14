@@ -50,6 +50,16 @@ const B2C_CONFIG: ProfileConfig = {
     canOpenDispute: true,
     canMediateDispute: false,
 
+    // Phase 4
+    canManageOPR: true,
+    canConvocateOPR: true,
+    canLeverReserves: false,
+    canSignReception: true,
+    canSignalerDesordres: true,
+    canManageDOE: false,
+    canValidateDOE: true,
+    canAccessCarnetSante: true,
+
     // Messaging
     canCreateConversation: true,
     canSendMessages: true,
@@ -161,6 +171,16 @@ const B2B_CONFIG: ProfileConfig = {
     canReceivePayments: true,
     canOpenDispute: true,
     canMediateDispute: false,
+
+    // Phase 4
+    canManageOPR: false,
+    canConvocateOPR: false,
+    canLeverReserves: true,
+    canSignReception: true,
+    canSignalerDesordres: false,
+    canManageDOE: true,
+    canValidateDOE: false,
+    canAccessCarnetSante: false,
 
     // Messaging
     canCreateConversation: true,
@@ -280,6 +300,16 @@ const B2G_CONFIG: ProfileConfig = {
     canOpenDispute: true,
     canMediateDispute: false,
 
+    // Phase 4
+    canManageOPR: true,
+    canConvocateOPR: true,
+    canLeverReserves: false,
+    canSignReception: true,
+    canSignalerDesordres: true,
+    canManageDOE: false,
+    canValidateDOE: true,
+    canAccessCarnetSante: true,
+
     // Messaging
     canCreateConversation: true,
     canSendMessages: true,
@@ -391,6 +421,16 @@ const ADMIN_CONFIG: ProfileConfig = {
     canReceivePayments: true,
     canOpenDispute: true,
     canMediateDispute: true,
+    // Phase 4
+    canManageOPR: true,
+    canConvocateOPR: true,
+    canLeverReserves: true,
+    canSignReception: true,
+    canSignalerDesordres: true,
+    canManageDOE: true,
+    canValidateDOE: true,
+    canAccessCarnetSante: true,
+    // Messaging
     canCreateConversation: true,
     canSendMessages: true,
     canSendFiles: true,

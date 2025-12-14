@@ -386,12 +386,12 @@ Génère un texte de CCTP structuré avec:
 Format: texte professionnel, précis, conforme aux DTU mentionnés.`;
 
     try {
-      const { data } = await hybridAIService.generateText(prompt, {
+      const result = await hybridAIService.generateCompletion(prompt, {
         systemPrompt: 'Tu es un expert en rédaction de Cahiers des Clauses Techniques Particulières (CCTP) pour le bâtiment. Rédige de manière professionnelle et conforme aux normes DTU.',
         temperature: 0.3
       });
 
-      return data || this.generateDefaultPrescriptions(lotCategory, dtuRefs);
+      return result.content || this.generateDefaultPrescriptions(lotCategory, dtuRefs);
     } catch (error) {
       console.error('[Knowledge] CCTP generation failed:', error);
       return this.generateDefaultPrescriptions(lotCategory, dtuRefs);

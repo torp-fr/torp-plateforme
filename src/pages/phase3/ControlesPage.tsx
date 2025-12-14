@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card,
   CardContent,
@@ -42,6 +42,7 @@ import {
   Plus,
   Eye,
   ChevronRight,
+  ArrowRight,
 } from 'lucide-react';
 
 import { ControleService } from '@/services/phase3';
@@ -97,6 +98,7 @@ const SYNTHESE_QUALITE: Record<string, { label: string; color: string }> = {
 
 export default function ControlesPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
   const chantierId = projectId || 'chantier-1'; // Fallback pour démo
 
   const [loading, setLoading] = useState(true);
@@ -171,10 +173,20 @@ export default function ControlesPage() {
             Contrôles réglementaires, certifications et qualité d'exécution
           </p>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          Nouveau contrôle
-        </Button>
+        <div className="flex gap-2">
+          <Button>
+            <Plus className="h-4 w-4 mr-2" />
+            Nouveau contrôle
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => navigate(`/phase4/${projectId}`)}
+            className="border-purple-200 text-purple-700 hover:bg-purple-50"
+          >
+            Phase 4 : Réception
+            <ArrowRight className="h-4 w-4 ml-2" />
+          </Button>
+        </div>
       </div>
 
       {/* Alertes */}

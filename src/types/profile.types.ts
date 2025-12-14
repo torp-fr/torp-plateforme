@@ -67,6 +67,16 @@ export interface ProfileFeatures {
   canOpenDispute: boolean;
   canMediateDispute: boolean;
 
+  // Phase 4
+  canManageOPR: boolean;
+  canConvocateOPR: boolean;
+  canLeverReserves: boolean;
+  canSignReception: boolean;
+  canSignalerDesordres: boolean;
+  canManageDOE: boolean;
+  canValidateDOE: boolean;
+  canAccessCarnetSante: boolean;
+
   // Messaging
   canCreateConversation: boolean;
   canSendMessages: boolean;

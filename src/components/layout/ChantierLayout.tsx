@@ -21,6 +21,10 @@ import {
   CheckCircle2,
   Clock,
   TrendingUp,
+  ClipboardCheck,
+  FileCheck,
+  Home,
+  FolderOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -69,9 +73,21 @@ const CHANTIER_NAV: NavSection[] = [
     labelB2B: 'Exécution & Suivi',
     labelB2G: 'Exécution marché',
     items: [
-      { href: '/controles', icon: Shield, label: 'Contrôles', labelB2B: 'Contrôles qualité', labelB2G: 'Contrôles réglementaires', badge: 'Nouveau', badgeColor: 'bg-green-500' },
+      { href: '/controles', icon: Shield, label: 'Contrôles', labelB2B: 'Contrôles qualité', labelB2G: 'Contrôles réglementaires' },
       { href: '/coordination', icon: MessageSquare, label: 'Coordination', labelB2B: 'Coordination équipes', labelB2G: 'Coordination entreprises' },
       { href: '/situations', icon: Receipt, label: 'Situations', labelB2B: 'Facturation', labelB2G: 'Situations & Paiements' },
+    ],
+  },
+  {
+    id: 'reception',
+    label: 'Réception',
+    labelB2B: 'Réception & Garanties',
+    labelB2G: 'Réception marché',
+    items: [
+      { href: '/phase4', icon: ClipboardCheck, label: 'OPR', labelB2B: 'Opérations préalables', labelB2G: 'OPR marché', badge: 'Phase 4', badgeColor: 'bg-purple-500' },
+      { href: '/phase4/reserves', icon: AlertTriangle, label: 'Réserves', labelB2B: 'Levée réserves', labelB2G: 'Réserves & Levées' },
+      { href: '/phase4/garanties', icon: Shield, label: 'Garanties', labelB2B: 'Suivi garanties', labelB2G: 'Garanties légales' },
+      { href: '/phase4/doe', icon: FolderOpen, label: 'DOE', labelB2B: 'DOE/DIUO', labelB2G: 'Dossier ouvrage' },
     ],
   },
 ];
@@ -128,6 +144,10 @@ export function ChantierLayout() {
 
   // Construire le lien complet
   const buildLink = (item: NavItem) => {
+    // Les items de Phase 4 vont vers /phase4/
+    if (item.href.startsWith('/phase4')) {
+      return `/phase4/${projectId}${item.href.replace('/phase4', '')}`;
+    }
     // Les items de la section "execution" vont vers /phase3/
     const isPhase3 = ['controles', 'coordination', 'situations'].some(p => item.href.includes(p));
     if (isPhase3) {
