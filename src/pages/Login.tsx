@@ -45,14 +45,20 @@ export default function Login() {
       // Attendre un petit délai pour que le contexte soit bien mis à jour
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      console.log('[Login] Redirection vers dashboard...');
+      console.log('[Login] Redirection selon le type utilisateur...');
 
-      // Vérifier si l'utilisateur est admin/super_admin
+      // Redirection selon le type d'utilisateur
       if (response.user.type === 'admin' || response.user.type === 'super_admin') {
         console.log('[Login] Admin détecté, redirection vers /admin/analytics');
         navigate('/admin/analytics');
+      } else if (response.user.type === 'B2B') {
+        console.log('[Login] Professionnel B2B détecté, redirection vers /pro');
+        navigate('/pro');
+      } else if (response.user.type === 'B2G') {
+        console.log('[Login] Collectivité B2G détectée, redirection vers /dashboard');
+        navigate('/dashboard'); // TODO: Créer un dashboard B2G dédié
       } else {
-        console.log('[Login] Utilisateur standard, redirection vers /dashboard');
+        console.log('[Login] Particulier B2C, redirection vers /dashboard');
         navigate('/dashboard');
       }
     } catch (error) {
