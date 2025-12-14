@@ -27,6 +27,7 @@ import { EntrepriseService } from '@/services/phase1/entreprise.service';
 import { OffreService } from '@/services/phase1/offre.service';
 import { ContratService } from '@/services/phase1/contrat.service';
 import { FormalitesService } from '@/services/phase1/formalites.service';
+import { B2BOffreService } from '@/services/phase1/b2b-offre.service';
 import type { DCEDocument, DCEStatus } from '@/types/phase1/dce.types';
 import type { Entreprise, RecommandationEntreprise } from '@/types/phase1/entreprise.types';
 import type { Offre, TableauComparatif } from '@/types/phase1/offre.types';
@@ -370,14 +371,13 @@ export function Phase1Consultation() {
 
   // Sauvegarder l'offre B2B
   const handleSaveB2BOffer = useCallback(async () => {
-    if (!project || !projectId) return;
+    if (!project || !projectId || !user?.id) return;
 
     setOfferSaveStatus('saving');
     try {
       // Construire l'offre pour sauvegarde
       const totalHT = calculateTotalHT();
       const offerData = {
-        projectId,
         memoireTechnique: b2bOfferForm.memoireTechnique,
         dpgf: {
           postes: b2bOfferForm.dpgfPostes,
@@ -385,18 +385,28 @@ export function Phase1Consultation() {
         },
         planning: b2bOfferForm.planning,
         conditions: b2bOfferForm.conditions,
-        status: 'draft',
-        updatedAt: new Date().toISOString(),
+        status: 'draft' as const,
       };
 
-      // Sauvegarder en localStorage pour l'instant (en attendant la table)
-      localStorage.setItem(`b2b_offer_${projectId}`, JSON.stringify(offerData));
+      // Sauvegarder via le service B2B (Supabase + localStorage fallback)
+      const result = await B2BOffreService.saveOffer(user.id, projectId, offerData, false);
 
-      setOfferSaveStatus('saved');
-      toast({
-        title: 'Offre sauvegardée',
-        description: 'Votre offre a été enregistrée',
-      });
+      if (result.success) {
+        // Backup en localStorage aussi
+        localStorage.setItem(`b2b_offer_${projectId}`, JSON.stringify({
+          ...offerData,
+          projectId,
+          updatedAt: new Date().toISOString(),
+        }));
+
+        setOfferSaveStatus('saved');
+        toast({
+          title: 'Offre sauvegardée',
+          description: 'Votre offre a été enregistrée',
+        });
+      } else {
+        throw new Error(result.error);
+      }
 
       // Reset status après 3s
       setTimeout(() => setOfferSaveStatus('idle'), 3000);
@@ -409,42 +419,77 @@ export function Phase1Consultation() {
         variant: 'destructive',
       });
     }
-  }, [project, projectId, b2bOfferForm, calculateTotalHT, toast]);
+  }, [project, projectId, user?.id, b2bOfferForm, calculateTotalHT, toast]);
 
-  // Charger l'offre B2B existante
+  // Charger l'offre B2B existante ou pré-remplir depuis le profil
   useEffect(() => {
-    if (projectId && userType === 'B2B') {
-      const savedOffer = localStorage.getItem(`b2b_offer_${projectId}`);
-      if (savedOffer) {
-        try {
-          const parsed = JSON.parse(savedOffer);
+    const loadB2BOffer = async () => {
+      if (!projectId || userType !== 'B2B' || !user?.id) return;
+
+      try {
+        // Essayer de charger depuis Supabase d'abord, puis localStorage
+        const savedOffer = await B2BOffreService.getOfferByProject(user.id, projectId);
+
+        if (savedOffer) {
           setB2BOfferForm({
-            memoireTechnique: parsed.memoireTechnique || initialB2BOfferForm.memoireTechnique,
-            dpgfPostes: parsed.dpgf?.postes || [],
-            planning: parsed.planning || initialB2BOfferForm.planning,
-            conditions: parsed.conditions || initialB2BOfferForm.conditions,
+            memoireTechnique: savedOffer.memoireTechnique || initialB2BOfferForm.memoireTechnique,
+            dpgfPostes: savedOffer.dpgf?.postes || [],
+            planning: savedOffer.planning || initialB2BOfferForm.planning,
+            conditions: savedOffer.conditions || initialB2BOfferForm.conditions,
           });
-        } catch (e) {
-          console.error('Erreur chargement offre:', e);
+        } else {
+          // Pas d'offre existante, pré-remplir depuis le profil entreprise
+          const profileData = await B2BOffreService.prefillFromProfile(user.id);
+
+          setB2BOfferForm(prev => ({
+            ...prev,
+            memoireTechnique: {
+              presentationEntreprise: profileData.presentationEntreprise || user.company_description || '',
+              moyensHumains: profileData.moyensHumains || user.company_human_resources || '',
+              moyensMateriels: profileData.moyensMateriels || user.company_material_resources || '',
+              methodologie: profileData.methodologie || user.company_methodology || '',
+              referencesProjet: profileData.referencesProjet || '',
+              engagementsQualite: profileData.engagementsQualite || user.company_quality_commitments || '',
+            },
+          }));
+
+          // Initialiser les postes DPGF depuis les lots du projet
+          if (project?.selectedLots) {
+            const initialPostes = project.selectedLots.map(lot => ({
+              id: crypto.randomUUID(),
+              designation: lot.name,
+              unite: 'ens',
+              quantite: 1,
+              prixUnitaireHT: 0,
+            }));
+            setB2BOfferForm(prev => ({
+              ...prev,
+              dpgfPostes: initialPostes,
+            }));
+          }
+        }
+      } catch (e) {
+        console.error('Erreur chargement offre B2B:', e);
+
+        // Fallback: pré-remplir depuis le contexte utilisateur
+        if (user) {
+          setB2BOfferForm(prev => ({
+            ...prev,
+            memoireTechnique: {
+              presentationEntreprise: user.company_description || '',
+              moyensHumains: user.company_human_resources || '',
+              moyensMateriels: user.company_material_resources || '',
+              methodologie: user.company_methodology || '',
+              referencesProjet: '',
+              engagementsQualite: user.company_quality_commitments || '',
+            },
+          }));
         }
       }
+    };
 
-      // Initialiser les postes DPGF depuis les lots du projet si vide
-      if (!savedOffer && project?.selectedLots) {
-        const initialPostes = project.selectedLots.map(lot => ({
-          id: crypto.randomUUID(),
-          designation: lot.name,
-          unite: 'ens',
-          quantite: 1,
-          prixUnitaireHT: 0,
-        }));
-        setB2BOfferForm(prev => ({
-          ...prev,
-          dpgfPostes: initialPostes,
-        }));
-      }
-    }
-  }, [projectId, userType, project]);
+    loadB2BOffer();
+  }, [projectId, userType, user?.id, project]);
 
   // Charger le projet Phase 0 et le DCE existant
   useEffect(() => {

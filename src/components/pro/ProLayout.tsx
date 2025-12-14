@@ -18,6 +18,7 @@ import {
   ChevronDown,
   Briefcase,
   FileText,
+  Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
@@ -42,9 +43,10 @@ interface ProLayoutProps {
 const NAV_ITEMS = [
   { href: '/pro', icon: LayoutDashboard, label: 'Tableau de bord', exact: true },
   { href: '/pro/projects', icon: Briefcase, label: 'Mes projets' },
+  { href: '/pro/company', icon: Building2, label: 'Mon entreprise' },
+  { href: '/pro/team', icon: Users, label: 'Mon équipe' },
   { href: '/pro/documents', icon: FileText, label: 'Documents' },
   { href: '/b2b/ao', icon: FolderOpen, label: 'Appels d\'offres' },
-  { href: '/pro/analyses', icon: FileSearch, label: 'Analyses devis' },
   { href: '/pro/settings', icon: Settings, label: 'Paramètres' },
 ];
 

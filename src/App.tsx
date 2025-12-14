@@ -45,6 +45,8 @@ import ProTicketDetail from "./pages/pro/ProTicketDetail";
 import ProSettings from "./pages/pro/ProSettings";
 import ProProjects from "./pages/pro/ProProjects";
 import ProNewProject from "./pages/pro/ProNewProject";
+import ProCompanyProfile from "./pages/pro/ProCompanyProfile";
+import ProTeam from "./pages/pro/ProTeam";
 // Phase 0 Pages
 import {
   Phase0Landing,
@@ -107,6 +109,8 @@ const AppContent = () => {
           <Route path="/pro/analyses" element={<ProRoute><ProAnalyses /></ProRoute>} />
           <Route path="/pro/analyses/new" element={<ProRoute><ProNewAnalysis /></ProRoute>} />
           <Route path="/pro/documents" element={<ProRoute><ProDocuments /></ProRoute>} />
+          <Route path="/pro/company" element={<ProRoute><ProCompanyProfile /></ProRoute>} />
+          <Route path="/pro/team" element={<ProRoute><ProTeam /></ProRoute>} />
           <Route path="/pro/tickets" element={<ProRoute><ProTickets /></ProRoute>} />
           <Route path="/pro/tickets/:id" element={<ProRoute><ProTicketDetail /></ProRoute>} />
           <Route path="/pro/settings" element={<ProRoute><ProSettings /></ProRoute>} />
