@@ -52,7 +52,7 @@ import {
   MATERIAL_CATEGORIES,
   COMMON_MATERIAL_TYPES,
 } from '@/types/company.types';
-import type { EmployeeRole, MaterialResource, EmployeeCategory, MaterialCategory } from '@/types/company.types';
+import type { MaterialResource, MaterialCategory } from '@/types/company.types';
 import {
   Building2,
   Users,
@@ -167,16 +167,30 @@ export default function ProCompanyProfile() {
   // AI Text Optimization
   const [optimizingField, setOptimizingField] = useState<OptimizationType | null>(null);
 
-  // Structured Resources
-  const [employeeRoles, setEmployeeRoles] = useState<EmployeeRole[]>([]);
-  const [materialResources, setMaterialResources] = useState<MaterialResource[]>([]);
-  const [resourceDialogOpen, setResourceDialogOpen] = useState(false);
-  const [resourceDialogType, setResourceDialogType] = useState<'employee' | 'material'>('employee');
+  // Structured Resources from database
+  const [companyMaterials, setCompanyMaterials] = useState<any[]>([]);
+  const [materialsLoading, setMaterialsLoading] = useState(false);
+
+  // Material dialog state
+  const [materialDialogOpen, setMaterialDialogOpen] = useState(false);
+  const [editingMaterial, setEditingMaterial] = useState<any | null>(null);
+  const [selectedMaterialCategory, setSelectedMaterialCategory] = useState<MaterialCategory>('vehicules');
+  const [newMaterial, setNewMaterial] = useState<Partial<MaterialResource>>({
+    category: 'vehicules',
+    type: '',
+    name: '',
+    brand: '',
+    model: '',
+    quantity: 1,
+    isOwned: true,
+    yearAcquisition: new Date().getFullYear(),
+  });
 
   // Charger les données du profil
   useEffect(() => {
     if (user?.id) {
       loadProfile();
+      loadMaterials();
     }
   }, [user?.id]);
 
@@ -220,6 +234,27 @@ export default function ProCompanyProfile() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Charger les matériels depuis la base
+  const loadMaterials = async () => {
+    try {
+      setMaterialsLoading(true);
+      const { data, error } = await supabase
+        .from('company_materials')
+        .select('*')
+        .eq('owner_id', user!.id)
+        .eq('is_active', true)
+        .order('category', { ascending: true });
+
+      if (error) throw error;
+      setCompanyMaterials(data || []);
+    } catch (error) {
+      console.error('[ProCompanyProfile] Erreur chargement matériels:', error);
+      // Ne pas afficher d'erreur si la table n'existe pas encore
+    } finally {
+      setMaterialsLoading(false);
     }
   };
 
@@ -517,6 +552,153 @@ export default function ProCompanyProfile() {
 
   const handleDeleteDocument = (index: number) => {
     setDocuments(documents.filter((_, i) => i !== index));
+  };
+
+  // ============================================
+  // MATERIAL MANAGEMENT
+  // ============================================
+
+  const openMaterialDialog = (category: MaterialCategory) => {
+    setSelectedMaterialCategory(category);
+    setEditingMaterial(null);
+    setNewMaterial({
+      category,
+      type: '',
+      name: '',
+      brand: '',
+      model: '',
+      quantity: 1,
+      isOwned: true,
+      yearAcquisition: new Date().getFullYear(),
+    });
+    setMaterialDialogOpen(true);
+  };
+
+  const handleEditMaterial = (material: any) => {
+    setEditingMaterial(material);
+    setSelectedMaterialCategory(material.category);
+    setNewMaterial({
+      category: material.category,
+      type: material.type,
+      name: material.name || '',
+      brand: material.brand || '',
+      model: material.model || '',
+      quantity: material.quantity || 1,
+      isOwned: material.is_owned ?? true,
+      yearAcquisition: material.year_acquisition,
+      value: material.purchase_value,
+      notes: material.notes || '',
+    });
+    setMaterialDialogOpen(true);
+  };
+
+  const handleSaveMaterial = async () => {
+    if (!newMaterial.type) {
+      toast({
+        variant: 'destructive',
+        title: 'Erreur',
+        description: 'Veuillez sélectionner un type de matériel.',
+      });
+      return;
+    }
+
+    try {
+      const materialData = {
+        category: newMaterial.category,
+        type: newMaterial.type,
+        name: newMaterial.name || null,
+        brand: newMaterial.brand || null,
+        model: newMaterial.model || null,
+        quantity: newMaterial.quantity || 1,
+        is_owned: newMaterial.isOwned ?? true,
+        year_acquisition: newMaterial.yearAcquisition || null,
+        purchase_value: newMaterial.value || null,
+        notes: newMaterial.notes || null,
+      };
+
+      if (editingMaterial) {
+        const { error } = await supabase
+          .from('company_materials')
+          .update(materialData)
+          .eq('id', editingMaterial.id);
+
+        if (error) throw error;
+        toast({
+          title: 'Matériel modifié',
+          description: `${newMaterial.type} a été mis à jour.`,
+        });
+      } else {
+        const { error } = await supabase.from('company_materials').insert({
+          ...materialData,
+          owner_id: user!.id,
+        });
+
+        if (error) throw error;
+        toast({
+          title: 'Matériel ajouté',
+          description: `${newMaterial.type} a été ajouté au parc.`,
+        });
+      }
+
+      setMaterialDialogOpen(false);
+      loadMaterials();
+    } catch (error) {
+      console.error('[ProCompanyProfile] Erreur sauvegarde matériel:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erreur',
+        description: 'Impossible de sauvegarder le matériel.',
+      });
+    }
+  };
+
+  const handleDeleteMaterial = async (material: any) => {
+    if (!confirm(`Supprimer ${material.type} ${material.name || ''} du parc ?`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('company_materials')
+        .update({ is_active: false })
+        .eq('id', material.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Matériel supprimé',
+        description: `${material.type} a été retiré du parc.`,
+      });
+
+      loadMaterials();
+    } catch (error) {
+      console.error('[ProCompanyProfile] Erreur suppression matériel:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erreur',
+        description: 'Impossible de supprimer le matériel.',
+      });
+    }
+  };
+
+  // Statistiques matériel par catégorie
+  const getMaterialStats = () => {
+    const stats: Record<MaterialCategory, number> = {
+      vehicules: 0,
+      engins: 0,
+      outillage: 0,
+      equipements: 0,
+      informatique: 0,
+      locaux: 0,
+    };
+
+    companyMaterials.forEach((m) => {
+      if (stats[m.category as MaterialCategory] !== undefined) {
+        stats[m.category as MaterialCategory] += m.quantity || 1;
+      }
+    });
+
+    return stats;
   };
 
   if (loading) {
@@ -862,7 +1044,7 @@ export default function ProCompanyProfile() {
                     <div>
                       <CardTitle>Moyens matériels</CardTitle>
                       <CardDescription>
-                        Listez vos équipements et véhicules
+                        Gérez votre parc de véhicules, engins et équipements
                       </CardDescription>
                     </div>
                   </div>
@@ -882,28 +1064,241 @@ export default function ProCompanyProfile() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Boutons rapides pour types de matériel */}
+                {/* Boutons rapides pour types de matériel - Cliquables */}
                 <div className="flex flex-wrap gap-2">
-                  {Object.entries(MATERIAL_CATEGORIES).map(([key, config]) => (
-                    <Badge key={key} variant="outline" className="text-xs cursor-pointer hover:bg-muted">
-                      + {config.label}
-                    </Badge>
-                  ))}
+                  {(Object.entries(MATERIAL_CATEGORIES) as [MaterialCategory, { label: string; color: string; icon: string }][]).map(([key, config]) => {
+                    const count = getMaterialStats()[key];
+                    return (
+                      <Button
+                        key={key}
+                        variant="outline"
+                        size="sm"
+                        className="text-xs gap-2"
+                        onClick={() => openMaterialDialog(key)}
+                      >
+                        <Plus className="h-3 w-3" />
+                        {config.label}
+                        {count > 0 && (
+                          <Badge variant="secondary" className="ml-1 text-xs px-1.5">
+                            {count}
+                          </Badge>
+                        )}
+                      </Button>
+                    );
+                  })}
                 </div>
 
-                <Textarea
-                  value={formData.company_material_resources}
-                  onChange={(e) => setFormData({ ...formData, company_material_resources: e.target.value })}
-                  placeholder="Ex: Notre parc matériel comprend :&#10;- 5 véhicules utilitaires (fourgons Renault Master)&#10;- 1 nacelle élévatrice (12m)&#10;- 2 mini-pelles (3T)&#10;- Outillage professionnel complet&#10;- Équipements de sécurité (EPI, balisage...)&#10;&#10;Matériel entretenu et contrôlé régulièrement..."
-                  rows={6}
-                />
+                {/* Liste des matériels ajoutés */}
+                {companyMaterials.length > 0 && (
+                  <div className="border rounded-lg divide-y">
+                    {companyMaterials.map((material) => (
+                      <div key={material.id} className="flex items-center justify-between p-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-${MATERIAL_CATEGORIES[material.category as MaterialCategory]?.color || 'gray'}-100`}>
+                            <Truck className={`h-4 w-4 text-${MATERIAL_CATEGORIES[material.category as MaterialCategory]?.color || 'gray'}-600`} />
+                          </div>
+                          <div>
+                            <div className="font-medium text-sm">
+                              {material.type}
+                              {material.name && ` - ${material.name}`}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {MATERIAL_CATEGORIES[material.category as MaterialCategory]?.label}
+                              {material.brand && ` • ${material.brand}`}
+                              {material.model && ` ${material.model}`}
+                              {material.quantity > 1 && ` • Qté: ${material.quantity}`}
+                              {material.is_owned === false && ' • Location'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleEditMaterial(material)}
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-500 hover:text-red-700"
+                            onClick={() => handleDeleteMaterial(material)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Sparkles className="h-3 w-3" />
-                  <span>Détaillez: véhicules, engins, outillage, équipements spécialisés, locaux</span>
+                {/* Description textuelle pour le mémoire technique */}
+                <div className="pt-2 border-t">
+                  <Label className="text-xs text-muted-foreground mb-2 block">
+                    Description pour mémoire technique (générée automatiquement ou personnalisée)
+                  </Label>
+                  <Textarea
+                    value={formData.company_material_resources}
+                    onChange={(e) => setFormData({ ...formData, company_material_resources: e.target.value })}
+                    placeholder="Ex: Notre parc matériel comprend :&#10;- 5 véhicules utilitaires (fourgons Renault Master)&#10;- 1 nacelle élévatrice (12m)&#10;- 2 mini-pelles (3T)&#10;- Outillage professionnel complet&#10;- Équipements de sécurité (EPI, balisage...)&#10;&#10;Matériel entretenu et contrôlé régulièrement..."
+                    rows={4}
+                  />
                 </div>
               </CardContent>
             </Card>
+
+            {/* Dialog ajout/modification matériel */}
+            <Dialog open={materialDialogOpen} onOpenChange={setMaterialDialogOpen}>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingMaterial ? 'Modifier le matériel' : `Ajouter - ${MATERIAL_CATEGORIES[selectedMaterialCategory]?.label}`}
+                  </DialogTitle>
+                  <DialogDescription>
+                    Renseignez les informations du matériel
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  {/* Catégorie */}
+                  <div className="space-y-2">
+                    <Label>Catégorie</Label>
+                    <Select
+                      value={newMaterial.category}
+                      onValueChange={(value) => setNewMaterial({ ...newMaterial, category: value as MaterialCategory, type: '' })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(Object.entries(MATERIAL_CATEGORIES) as [MaterialCategory, { label: string }][]).map(([key, config]) => (
+                          <SelectItem key={key} value={key}>
+                            {config.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Type de matériel */}
+                  <div className="space-y-2">
+                    <Label>Type de matériel *</Label>
+                    <Select
+                      value={newMaterial.type || ''}
+                      onValueChange={(value) => setNewMaterial({ ...newMaterial, type: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner un type..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COMMON_MATERIAL_TYPES[newMaterial.category as MaterialCategory]?.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="__custom__">Autre (personnalisé)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {newMaterial.type === '__custom__' && (
+                      <Input
+                        placeholder="Nom du matériel..."
+                        onChange={(e) => setNewMaterial({ ...newMaterial, type: e.target.value })}
+                      />
+                    )}
+                  </div>
+
+                  {/* Nom / Marque / Modèle */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-2">
+                      <Label>Nom</Label>
+                      <Input
+                        value={newMaterial.name || ''}
+                        onChange={(e) => setNewMaterial({ ...newMaterial, name: e.target.value })}
+                        placeholder="Ex: Fourgon 1"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Marque</Label>
+                      <Input
+                        value={newMaterial.brand || ''}
+                        onChange={(e) => setNewMaterial({ ...newMaterial, brand: e.target.value })}
+                        placeholder="Ex: Renault"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Modèle</Label>
+                      <Input
+                        value={newMaterial.model || ''}
+                        onChange={(e) => setNewMaterial({ ...newMaterial, model: e.target.value })}
+                        placeholder="Ex: Master"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Quantité et Propriété */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Quantité</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={newMaterial.quantity || 1}
+                        onChange={(e) => setNewMaterial({ ...newMaterial, quantity: parseInt(e.target.value) || 1 })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Propriété</Label>
+                      <Select
+                        value={newMaterial.isOwned ? 'owned' : 'rental'}
+                        onValueChange={(value) => setNewMaterial({ ...newMaterial, isOwned: value === 'owned' })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="owned">Propriété</SelectItem>
+                          <SelectItem value="rental">Location / Leasing</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Année et Valeur */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Année d'acquisition</Label>
+                      <Input
+                        type="number"
+                        min={1990}
+                        max={new Date().getFullYear()}
+                        value={newMaterial.yearAcquisition || ''}
+                        onChange={(e) => setNewMaterial({ ...newMaterial, yearAcquisition: parseInt(e.target.value) || undefined })}
+                        placeholder={new Date().getFullYear().toString()}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Valeur (€)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={newMaterial.value || ''}
+                        onChange={(e) => setNewMaterial({ ...newMaterial, value: parseFloat(e.target.value) || undefined })}
+                        placeholder="15000"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setMaterialDialogOpen(false)}>
+                    Annuler
+                  </Button>
+                  <Button onClick={handleSaveMaterial}>
+                    {editingMaterial ? 'Modifier' : 'Ajouter'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             <Card>
               <CardHeader>
