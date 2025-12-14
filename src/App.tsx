@@ -4,7 +4,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppProvider, useApp } from "@/context/AppContext";
-import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
@@ -139,11 +138,6 @@ const AppContent = () => {
           <Route path="/b2b/ao/:tenderId/response/:responseId" element={<ProRoute><B2BResponseFormPage /></ProRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
-
-        {/* 🎉 Widget de feedback pour testeurs */}
-        {(userType === 'B2C' || userType === 'B2B') && (
-          <FeedbackWidget userType={userType} />
-        )}
       </BrowserRouter>
     </>
   );

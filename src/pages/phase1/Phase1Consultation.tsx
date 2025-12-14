@@ -35,7 +35,6 @@ import type { Offre, TableauComparatif } from '@/types/phase1/offre.types';
 import { useApp, UserType } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 import { DCEDocumentViewer } from '@/components/phase1/DCEDocumentViewer';
-import { AIAssistant } from '@/components/shared/AIAssistant';
 
 // Configuration selon le type de profil
 const PROFILE_CONFIG: Record<UserType, {
@@ -1740,23 +1739,6 @@ export function Phase1Consultation() {
           </TabsContent>
         </Tabs>
 
-        {/* Assistant IA contextuel */}
-        <div className="fixed bottom-4 right-4 z-40">
-          <AIAssistant
-            context={{
-              phase: 'phase1',
-              step: activeTab,
-              userType: userType as 'B2C' | 'B2B' | 'B2G',
-              projectData: project ? {
-                selectedLots: project.selectedLots,
-                budget: project.workProject?.budget,
-              } : undefined,
-              currentPage: 'Phase1Consultation',
-            }}
-            position="floating"
-            showChat={true}
-          />
-        </div>
       </div>
 
       {/* Visualiseur de documents DCE */}
