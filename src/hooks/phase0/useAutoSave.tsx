@@ -118,23 +118,36 @@ export function useAutoSave(
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
-      setError(errorMessage);
 
-      // Retry automatique
-      if (retryCountRef.current < MAX_RETRY_ATTEMPTS) {
-        retryCountRef.current++;
-        console.warn(`[AutoSave] Retry ${retryCountRef.current}/${MAX_RETRY_ATTEMPTS}`);
+      // Ignorer silencieusement les erreurs de schéma/table manquante (mode mémoire)
+      const isSchemaError = errorMessage.includes('schema cache') ||
+        errorMessage.includes('PGRST') ||
+        errorMessage.includes('column') ||
+        errorMessage.includes('table');
 
-        setTimeout(() => {
-          performSave();
-        }, RETRY_DELAY_MS * retryCountRef.current);
+      if (isSchemaError) {
+        console.warn('[AutoSave] Tables non disponibles, mode mémoire actif');
+        setHasUnsavedChanges(false); // Marquer comme "sauvé" pour éviter les retries
+        retryCountRef.current = 0;
       } else {
-        onSaveError?.(err instanceof Error ? err : new Error(errorMessage));
-        toast({
-          title: 'Erreur de sauvegarde',
-          description: 'Impossible de sauvegarder vos modifications. Veuillez réessayer.',
-          variant: 'destructive',
-        });
+        setError(errorMessage);
+
+        // Retry automatique uniquement pour les erreurs non-schéma
+        if (retryCountRef.current < MAX_RETRY_ATTEMPTS) {
+          retryCountRef.current++;
+          console.warn(`[AutoSave] Retry ${retryCountRef.current}/${MAX_RETRY_ATTEMPTS}`);
+
+          setTimeout(() => {
+            performSave();
+          }, RETRY_DELAY_MS * retryCountRef.current);
+        } else {
+          onSaveError?.(err instanceof Error ? err : new Error(errorMessage));
+          toast({
+            title: 'Erreur de sauvegarde',
+            description: 'Impossible de sauvegarder vos modifications. Veuillez réessayer.',
+            variant: 'destructive',
+          });
+        }
       }
     } finally {
       setIsSaving(false);

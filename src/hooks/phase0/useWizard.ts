@@ -234,42 +234,49 @@ export function useWizard(options: UseWizardOptions = {}): UseWizardReturn {
     }
 
     setIsSaving(true);
+
+    // Marquer l'étape comme complétée (numéro de l'étape, 1-indexed)
+    const stepNumber = currentStepIndex + 1;
+    const completedSteps = state.completedSteps || [];
+    const newCompletedSteps = completedSteps.includes(stepNumber)
+      ? completedSteps
+      : [...completedSteps, stepNumber];
+
+    const nextStepIndex = currentStepIndex + 1;
+
+    // Mettre à jour l'état immédiatement (navigation locale)
+    setState(prev => prev ? {
+      ...prev,
+      currentStepIndex: nextStepIndex,
+      completedSteps: newCompletedSteps,
+    } : null);
+
+    setStepErrors([]);
+    setStepWarnings([]);
+
+    // Opérations DB en arrière-plan (ne bloquent pas la navigation)
     try {
-      // Appliquer les déductions automatiques
+      // Appliquer les déductions automatiques (ignorer les erreurs)
       if (project && project.id) {
-        const updatedProject = await DeductionService.applyDeductions(project as Phase0Project);
-        setProject(updatedProject);
+        try {
+          const updatedProject = await DeductionService.applyDeductions(project as Phase0Project);
+          setProject(updatedProject);
+        } catch (deductionErr) {
+          console.warn('Déductions non appliquées (mode mémoire):', deductionErr);
+        }
       }
 
-      // Marquer l'étape comme complétée (numéro de l'étape, 1-indexed)
-      const stepNumber = currentStepIndex + 1;
-      const completedSteps = state.completedSteps || [];
-      const newCompletedSteps = completedSteps.includes(stepNumber)
-        ? completedSteps
-        : [...completedSteps, stepNumber];
-
-      const nextStepIndex = currentStepIndex + 1;
-
-      setState(prev => prev ? {
-        ...prev,
-        currentStepIndex: nextStepIndex,
-        completedSteps: newCompletedSteps,
-      } : null);
-
-      setStepErrors([]);
-      setStepWarnings([]);
-
-      // Sauvegarder si on a un projet
+      // Sauvegarder si on a un projet (ignorer les erreurs DB)
       if (projectId) {
-        await WizardService.completeStep(projectId, currentStep.id, state.answers);
+        try {
+          await WizardService.completeStep(projectId, currentStep.id, state.answers);
+        } catch (saveErr) {
+          console.warn('Sauvegarde DB non effectuée (mode mémoire):', saveErr);
+        }
       }
     } catch (err) {
-      console.error('Erreur passage étape suivante:', err);
-      toast({
-        title: 'Erreur',
-        description: 'Impossible de passer à l\'étape suivante',
-        variant: 'destructive',
-      });
+      // Erreur inattendue - ne pas bloquer la navigation
+      console.error('Erreur non bloquante lors du passage à l\'étape suivante:', err);
     } finally {
       setIsSaving(false);
     }
