@@ -65,6 +65,8 @@ import { Phase1Consultation } from "./pages/phase1";
 import { Phase2Dashboard, PlanningPage, ReunionsPage, JournalPage, ChantiersListPage } from "./pages/phase2";
 // Phase 3 Pages (Exécution Chantier)
 import { ControlesPage, CoordinationPage, SituationsPage } from "./pages/phase3";
+// Layout contextuel chantier
+import ChantierLayout from "./components/layout/ChantierLayout";
 
 const queryClient = new QueryClient();
 
@@ -128,17 +130,22 @@ const AppContent = () => {
           {/* Routes Phase 1 - Consultation & Sélection Entreprises (protégées) */}
           <Route path="/phase1/project/:projectId" element={<ProtectedRoute><Phase1Consultation /></ProtectedRoute>} />
           <Route path="/phase1/project/:projectId/consultation" element={<ProtectedRoute><Phase1Consultation /></ProtectedRoute>} />
-          {/* Routes Phase 2 - Préparation de Chantier (protégées) */}
+          {/* Routes Phase 2 & 3 - Chantier avec layout contextuel */}
           <Route path="/chantiers" element={<ProtectedRoute><ChantiersListPage /></ProtectedRoute>} />
-          <Route path="/phase2/:projectId" element={<ProtectedRoute><Phase2Dashboard /></ProtectedRoute>} />
-          <Route path="/phase2/:projectId/dashboard" element={<ProtectedRoute><Phase2Dashboard /></ProtectedRoute>} />
-          <Route path="/phase2/:projectId/planning" element={<ProtectedRoute><PlanningPage /></ProtectedRoute>} />
-          <Route path="/phase2/:projectId/reunions" element={<ProtectedRoute><ReunionsPage /></ProtectedRoute>} />
-          <Route path="/phase2/:projectId/journal" element={<ProtectedRoute><JournalPage /></ProtectedRoute>} />
-          {/* Routes Phase 3 - Exécution Chantier (protégées) */}
-          <Route path="/phase3/:projectId/controles" element={<ProtectedRoute><ControlesPage /></ProtectedRoute>} />
-          <Route path="/phase3/:projectId/coordination" element={<ProtectedRoute><CoordinationPage /></ProtectedRoute>} />
-          <Route path="/phase3/:projectId/situations" element={<ProtectedRoute><SituationsPage /></ProtectedRoute>} />
+          {/* Routes Phase 2 - Préparation de Chantier (avec sidebar contextuel) */}
+          <Route path="/phase2/:projectId" element={<ProtectedRoute><ChantierLayout /></ProtectedRoute>}>
+            <Route index element={<Phase2Dashboard />} />
+            <Route path="dashboard" element={<Phase2Dashboard />} />
+            <Route path="planning" element={<PlanningPage />} />
+            <Route path="reunions" element={<ReunionsPage />} />
+            <Route path="journal" element={<JournalPage />} />
+          </Route>
+          {/* Routes Phase 3 - Exécution Chantier (avec sidebar contextuel) */}
+          <Route path="/phase3/:projectId" element={<ProtectedRoute><ChantierLayout /></ProtectedRoute>}>
+            <Route path="controles" element={<ControlesPage />} />
+            <Route path="coordination" element={<CoordinationPage />} />
+            <Route path="situations" element={<SituationsPage />} />
+          </Route>
           {/* Routes Appels d'Offres (MOA) */}
           <Route path="/tenders" element={<ProtectedRoute><TendersPage /></ProtectedRoute>} />
           <Route path="/tenders/:tenderId" element={<ProtectedRoute><TenderDetailPage /></ProtectedRoute>} />

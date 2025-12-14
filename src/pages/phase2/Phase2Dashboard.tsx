@@ -31,6 +31,10 @@ import {
   Truck,
   HardHat,
   ArrowLeft,
+  Shield,
+  MessageSquare,
+  Receipt,
+  ArrowRight,
 } from 'lucide-react';
 
 import { ChantierService, ReunionService, PlanningService, LogistiqueService } from '@/services/phase2';
@@ -275,6 +279,7 @@ export default function Phase2Dashboard() {
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
+          <TabsTrigger value="execution">Exécution</TabsTrigger>
           <TabsTrigger value="planning">Planning</TabsTrigger>
           <TabsTrigger value="logistique">Logistique</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
@@ -406,6 +411,157 @@ export default function Phase2Dashboard() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* Exécution - Phase 3 */}
+        <TabsContent value="execution" className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Contrôles */}
+            <Card className="hover:shadow-md transition-shadow border-l-4 border-l-green-500">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="h-5 w-5 text-green-600" />
+                    Contrôles
+                  </CardTitle>
+                  <Badge className="bg-green-500 text-white">Nouveau</Badge>
+                </div>
+                <CardDescription>
+                  Contrôles réglementaires, auto-contrôles et grilles qualité
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Bureau de contrôle</span>
+                    <Badge variant="outline">À planifier</Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">SPS</span>
+                    <Badge variant="outline">À planifier</Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Consuel/Qualigaz</span>
+                    <Badge variant="outline">À planifier</Badge>
+                  </div>
+                </div>
+                <Button className="w-full mt-4" asChild>
+                  <Link to={`/phase3/${projectId}/controles`}>
+                    Gérer les contrôles
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Coordination */}
+            <Card className="hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5 text-blue-600" />
+                  Coordination
+                </CardTitle>
+                <CardDescription>
+                  Planning collaboratif, carnet de liaison et chat équipes
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Conflits planning</span>
+                    <Badge variant="secondary">0</Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Messages non lus</span>
+                    <Badge variant="secondary">0</Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Fiches liaison</span>
+                    <Badge variant="secondary">0</Badge>
+                  </div>
+                </div>
+                <Button className="w-full mt-4" variant="outline" asChild>
+                  <Link to={`/phase3/${projectId}/coordination`}>
+                    Accéder à la coordination
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Situations & Budget */}
+            <Card className="hover:shadow-md transition-shadow border-l-4 border-l-purple-500">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Receipt className="h-5 w-5 text-purple-600" />
+                  Situations & Budget
+                </CardTitle>
+                <CardDescription>
+                  Facturation, suivi budget, avenants et DOE
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Situations en cours</span>
+                    <Badge variant="secondary">0</Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Budget consommé</span>
+                    <Badge variant="secondary">0%</Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Avenants</span>
+                    <Badge variant="secondary">0</Badge>
+                  </div>
+                </div>
+                <Button className="w-full mt-4" variant="outline" asChild>
+                  <Link to={`/phase3/${projectId}/situations`}>
+                    Gérer les situations
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Actions rapides Phase 3 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Wrench className="h-5 w-5" />
+                Actions rapides - Exécution
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Button variant="outline" className="h-auto py-4 flex-col" asChild>
+                  <Link to={`/phase3/${projectId}/controles`}>
+                    <Shield className="h-6 w-6 mb-2 text-green-600" />
+                    <span>Nouveau contrôle</span>
+                  </Link>
+                </Button>
+                <Button variant="outline" className="h-auto py-4 flex-col" asChild>
+                  <Link to={`/phase3/${projectId}/coordination`}>
+                    <MessageSquare className="h-6 w-6 mb-2 text-blue-600" />
+                    <span>Fiche liaison</span>
+                  </Link>
+                </Button>
+                <Button variant="outline" className="h-auto py-4 flex-col" asChild>
+                  <Link to={`/phase3/${projectId}/situations`}>
+                    <Receipt className="h-6 w-6 mb-2 text-purple-600" />
+                    <span>Situation travaux</span>
+                  </Link>
+                </Button>
+                <Button variant="outline" className="h-auto py-4 flex-col" asChild>
+                  <Link to={`/phase3/${projectId}/situations`}>
+                    <FileText className="h-6 w-6 mb-2 text-orange-600" />
+                    <span>Avenant</span>
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Planning */}
