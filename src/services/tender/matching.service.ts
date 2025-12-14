@@ -62,6 +62,28 @@ export interface CompanyProfile {
   rgeCrertified?: boolean;
   qualibatNumber?: string;
   specializations: CompanySpecialization[];
+  // Données enrichies depuis le profil utilisateur
+  certifications?: Array<{
+    type: string;
+    number?: string;
+    expirationDate?: string;
+    domains?: string[];
+  }>;
+  humanResources?: {
+    totalEmployees?: number;
+    qualifiedTechnicians?: number;
+    apprentices?: number;
+  };
+  materialResources?: string[];
+  references?: Array<{
+    projectType: string;
+    budgetRange?: string;
+    year?: number;
+    description?: string;
+  }>;
+  companyAge?: number; // Années d'expérience
+  insuranceValid?: boolean;
+  decennaleValid?: boolean;
 }
 
 // =============================================================================
@@ -69,6 +91,160 @@ export interface CompanyProfile {
 // =============================================================================
 
 export class MatchingService {
+  /**
+   * Récupère un profil entreprise enrichi avec les données utilisateur
+   */
+  static async getEnrichedCompanyProfile(userId: string): Promise<CompanyProfile | null> {
+    // Récupérer les données utilisateur + company
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select(`
+        id, email, name, phone,
+        company, company_siret, company_activity, company_size, company_role,
+        company_address, company_code_ape, company_rcs, company_description,
+        company_human_resources, company_material_resources,
+        company_methodology, company_quality_commitments
+      `)
+      .eq('id', userId)
+      .single();
+
+    if (userError || !user) {
+      console.error('[MatchingService] User not found:', userError);
+      return null;
+    }
+
+    // Récupérer les données company si existe
+    let companyData: Record<string, unknown> | null = null;
+    if (user.company_siret) {
+      const { data } = await supabase
+        .from('companies')
+        .select(`
+          *,
+          company_specializations (*),
+          company_certifications (*),
+          company_references (*)
+        `)
+        .eq('siret', user.company_siret)
+        .single();
+      companyData = data;
+    }
+
+    // Construire le profil enrichi
+    const profile: CompanyProfile = {
+      id: user.id,
+      siret: user.company_siret || '',
+      name: user.company || user.name,
+      contactEmail: user.email,
+      address: this.parseAddress(user.company_address),
+      torpScore: companyData?.torp_score as number | undefined,
+      torpGrade: companyData?.torp_grade as string | undefined,
+      rgeCrertified: companyData?.rge_certified as boolean | undefined,
+      qualibatNumber: companyData?.qualibat_number as string | undefined,
+      specializations: (companyData?.company_specializations as CompanySpecialization[]) || [],
+      certifications: this.parseCertifications(companyData?.company_certifications),
+      humanResources: this.parseHumanResources(user.company_human_resources),
+      materialResources: this.parseMaterialResources(user.company_material_resources),
+      references: this.parseReferences(companyData?.company_references),
+      insuranceValid: companyData?.insurance_valid as boolean | undefined,
+      decennaleValid: companyData?.decennale_valid as boolean | undefined,
+    };
+
+    return profile;
+  }
+
+  /**
+   * Parse l'adresse depuis le champ company_address (string ou JSONB)
+   */
+  private static parseAddress(addressData: unknown): CompanyProfile['address'] {
+    if (!addressData) return undefined;
+
+    if (typeof addressData === 'string') {
+      // Essayer d'extraire le code postal
+      const cpMatch = addressData.match(/\b(\d{5})\b/);
+      return {
+        city: addressData,
+        postalCode: cpMatch?.[1],
+        department: cpMatch?.[1]?.substring(0, 2),
+      };
+    }
+
+    if (typeof addressData === 'object') {
+      const addr = addressData as Record<string, unknown>;
+      return {
+        city: addr.city as string,
+        postalCode: addr.postalCode as string || addr.postal_code as string,
+        department: addr.department as string,
+        coordinates: addr.coordinates as { lat: number; lng: number },
+      };
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Parse les certifications
+   */
+  private static parseCertifications(data: unknown): CompanyProfile['certifications'] {
+    if (!data) return undefined;
+    if (!Array.isArray(data)) return undefined;
+
+    return data.map(cert => ({
+      type: cert.type || cert.certification_type,
+      number: cert.number || cert.certification_number,
+      expirationDate: cert.expiration_date || cert.expirationDate,
+      domains: cert.domains || [],
+    }));
+  }
+
+  /**
+   * Parse les ressources humaines
+   */
+  private static parseHumanResources(data: unknown): CompanyProfile['humanResources'] {
+    if (!data) return undefined;
+
+    if (typeof data === 'string') {
+      // Essayer d'extraire un nombre
+      const match = data.match(/(\d+)/);
+      return match ? { totalEmployees: parseInt(match[1]) } : undefined;
+    }
+
+    if (typeof data === 'object') {
+      const hr = data as Record<string, unknown>;
+      return {
+        totalEmployees: hr.totalEmployees as number || hr.total_employees as number,
+        qualifiedTechnicians: hr.qualifiedTechnicians as number || hr.qualified_technicians as number,
+        apprentices: hr.apprentices as number,
+      };
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Parse les ressources matérielles
+   */
+  private static parseMaterialResources(data: unknown): string[] | undefined {
+    if (!data) return undefined;
+    if (typeof data === 'string') return [data];
+    if (Array.isArray(data)) return data.map(String);
+    return undefined;
+  }
+
+  /**
+   * Parse les références
+   */
+  private static parseReferences(data: unknown): CompanyProfile['references'] {
+    if (!data) return undefined;
+    if (!Array.isArray(data)) return undefined;
+
+    return data.map(ref => ({
+      projectType: ref.project_type || ref.projectType || 'Autre',
+      budgetRange: ref.budget_range || ref.budgetRange,
+      year: ref.year,
+      description: ref.description,
+    }));
+  }
+
   /**
    * Trouve les entreprises correspondant à un appel d'offres
    */
@@ -424,6 +600,11 @@ export class MatchingService {
       s.certifications?.forEach(c => companyQuals.add(c.toLowerCase()));
     });
 
+    // Ajouter les certifications enrichies
+    company.certifications?.forEach(cert => {
+      companyQuals.add(cert.type.toLowerCase());
+    });
+
     const matching = required.filter(q => companyQuals.has(q.toLowerCase()));
     const matchRatio = matching.length / required.length;
 
@@ -433,6 +614,242 @@ export class MatchingService {
       score: Math.round(maxScore * matchRatio),
       maxScore,
       details: `${matching.length}/${required.length} qualifications`,
+    };
+  }
+
+  /**
+   * Matching des références (expérience sur projets similaires)
+   */
+  private static matchReferences(
+    company: CompanyProfile,
+    tender: Tender
+  ): MatchDetail {
+    const maxScore = 10;
+
+    if (!company.references || company.references.length === 0) {
+      return {
+        criterion: 'Références',
+        matched: false,
+        score: 0,
+        maxScore,
+        details: 'Aucune référence renseignée',
+      };
+    }
+
+    // Vérifier si l'entreprise a des références sur le type de projet
+    const tenderBudget = tender.estimatedBudgetMax || tender.estimatedBudgetMin || 0;
+    let relevantRefs = 0;
+    let budgetMatchRefs = 0;
+
+    for (const ref of company.references) {
+      // Vérifier le type de projet
+      const projectTypes = tender.selectedLots?.map(l => l.category) || [];
+      if (projectTypes.some(pt => ref.projectType.toLowerCase().includes(pt.toLowerCase()))) {
+        relevantRefs++;
+      }
+
+      // Vérifier la tranche budgétaire
+      if (ref.budgetRange) {
+        const budgetMatch = this.budgetRangeMatches(ref.budgetRange, tenderBudget);
+        if (budgetMatch) budgetMatchRefs++;
+      }
+    }
+
+    const totalRefs = company.references.length;
+    const relevanceRatio = totalRefs > 0 ? relevantRefs / totalRefs : 0;
+    const budgetRatio = totalRefs > 0 ? budgetMatchRefs / totalRefs : 0;
+
+    // Score basé sur la pertinence et l'expérience budgétaire
+    const score = Math.round(maxScore * (relevanceRatio * 0.6 + budgetRatio * 0.4));
+
+    return {
+      criterion: 'Références',
+      matched: relevantRefs > 0,
+      score,
+      maxScore,
+      details: `${relevantRefs} références pertinentes sur ${totalRefs}`,
+    };
+  }
+
+  /**
+   * Vérifie si une tranche budgétaire correspond
+   */
+  private static budgetRangeMatches(range: string, budget: number): boolean {
+    const ranges: Record<string, [number, number]> = {
+      'petit': [0, 50000],
+      'moyen': [50000, 200000],
+      'grand': [200000, 1000000],
+      'tres_grand': [1000000, Infinity],
+      '< 50k': [0, 50000],
+      '50k - 200k': [50000, 200000],
+      '200k - 1M': [200000, 1000000],
+      '> 1M': [1000000, Infinity],
+    };
+
+    const [min, max] = ranges[range.toLowerCase()] || [0, Infinity];
+    return budget >= min && budget <= max;
+  }
+
+  /**
+   * Matching des ressources (humaines et matérielles)
+   */
+  private static matchResources(
+    company: CompanyProfile,
+    tender: Tender
+  ): MatchDetail {
+    const maxScore = 8;
+    let score = 0;
+
+    // Score pour ressources humaines
+    if (company.humanResources?.totalEmployees) {
+      const employees = company.humanResources.totalEmployees;
+
+      // Estimer la taille requise selon le budget
+      const budget = tender.estimatedBudgetMax || tender.estimatedBudgetMin || 0;
+      const requiredSize = budget < 100000 ? 2 : budget < 500000 ? 5 : budget < 2000000 ? 15 : 30;
+
+      if (employees >= requiredSize) {
+        score += 4; // Capacité suffisante
+      } else if (employees >= requiredSize * 0.5) {
+        score += 2; // Capacité partielle
+      }
+    }
+
+    // Score pour ressources matérielles
+    if (company.materialResources && company.materialResources.length > 0) {
+      score += Math.min(4, company.materialResources.length); // Max 4 points
+    }
+
+    const hasResources = company.humanResources?.totalEmployees || (company.materialResources?.length || 0) > 0;
+
+    return {
+      criterion: 'Ressources',
+      matched: hasResources,
+      score,
+      maxScore,
+      details: company.humanResources?.totalEmployees
+        ? `${company.humanResources.totalEmployees} employés`
+        : 'Non renseigné',
+    };
+  }
+
+  /**
+   * Matching des assurances (décennale, RC)
+   */
+  private static matchInsurance(company: CompanyProfile): MatchDetail {
+    const maxScore = 5;
+    let score = 0;
+
+    if (company.insuranceValid) {
+      score += 2;
+    }
+
+    if (company.decennaleValid) {
+      score += 3;
+    }
+
+    // Vérifier les certifications d'assurance
+    const hasInsuranceCert = company.certifications?.some(c =>
+      c.type.toLowerCase().includes('assurance') ||
+      c.type.toLowerCase().includes('décennale') ||
+      c.type.toLowerCase().includes('rc')
+    );
+
+    if (hasInsuranceCert && score < maxScore) {
+      score = Math.min(maxScore, score + 2);
+    }
+
+    return {
+      criterion: 'Assurances',
+      matched: score >= 3,
+      score,
+      maxScore,
+      details: company.decennaleValid ? 'Décennale valide' : 'À vérifier',
+    };
+  }
+
+  /**
+   * Calcule le score de matching ENRICHI avec toutes les données profil
+   */
+  static calculateEnrichedMatchScore(
+    company: CompanyProfile,
+    tender: Tender,
+    criteria: MatchingCriteria
+  ): MatchingResult {
+    const details: MatchDetail[] = [];
+    let totalScore = 0;
+    let maxTotalScore = 0;
+
+    // 1. Matching géographique (25 points)
+    const geoResult = this.matchGeography(company, tender, criteria.maxDistanceKm || 100);
+    details.push(geoResult);
+    totalScore += geoResult.score;
+    maxTotalScore += geoResult.maxScore;
+
+    // 2. Matching des lots/spécialisations (30 points)
+    const lotResult = this.matchLots(company.specializations, criteria.requiredLotTypes || []);
+    details.push(lotResult);
+    totalScore += lotResult.score;
+    maxTotalScore += lotResult.maxScore;
+
+    // 3. Références et expérience (10 points)
+    const refResult = this.matchReferences(company, tender);
+    details.push(refResult);
+    totalScore += refResult.score;
+    maxTotalScore += refResult.maxScore;
+
+    // 4. Ressources (8 points)
+    const resResult = this.matchResources(company, tender);
+    details.push(resResult);
+    totalScore += resResult.score;
+    maxTotalScore += resResult.maxScore;
+
+    // 5. Certifications RGE (12 points si requis)
+    if (tender.requirements?.rgeRequired) {
+      const rgeResult = this.matchRGE(company, tender);
+      details.push(rgeResult);
+      totalScore += rgeResult.score;
+      maxTotalScore += rgeResult.maxScore;
+    }
+
+    // 6. Score TORP entreprise (8 points)
+    const torpResult = this.matchTorpScore(company, criteria.minTorpScore);
+    details.push(torpResult);
+    totalScore += torpResult.score;
+    maxTotalScore += torpResult.maxScore;
+
+    // 7. Assurances (5 points)
+    const insuranceResult = this.matchInsurance(company);
+    details.push(insuranceResult);
+    totalScore += insuranceResult.score;
+    maxTotalScore += insuranceResult.maxScore;
+
+    // 8. Qualifications spécifiques (2 points)
+    if (criteria.requiredQualifications?.length) {
+      const qualResult = this.matchQualifications(company, criteria.requiredQualifications);
+      details.push(qualResult);
+      totalScore += qualResult.score;
+      maxTotalScore += qualResult.maxScore;
+    }
+
+    // Calculer le score final (0-100)
+    const matchScore = maxTotalScore > 0 ? Math.round((totalScore / maxTotalScore) * 100) : 0;
+
+    // Identifier les spécialisations pertinentes
+    const relevantSpecs = company.specializations.filter(s =>
+      criteria.requiredLotTypes?.includes(s.lotType)
+    );
+
+    return {
+      companyId: company.id,
+      companyName: company.name,
+      companySiret: company.siret,
+      matchScore,
+      matchDetails: details,
+      relevantSpecializations: relevantSpecs,
+      contactEmail: company.contactEmail,
+      torpScore: company.torpScore,
+      torpGrade: company.torpGrade,
     };
   }
 

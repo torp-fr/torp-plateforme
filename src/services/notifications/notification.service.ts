@@ -1,10 +1,14 @@
 /**
  * Notification Service
  * Service de gestion des notifications in-app et email
+ *
+ * IMPORTANT: Ce service respecte les préférences utilisateur
+ * avant d'envoyer des emails ou notifications.
  */
 
 import { supabase } from '@/lib/supabase';
 import { emailService } from '@/services/email/email.service';
+import { userPreferencesService } from './user-preferences.service';
 
 export interface Notification {
   id: string;
@@ -29,6 +33,7 @@ export type NotificationType =
 class NotificationService {
   /**
    * Crée une notification et envoie l'email si configuré
+   * RESPECTE les préférences utilisateur pour l'envoi d'email
    */
   async create(params: {
     userId: string;
@@ -58,15 +63,23 @@ class NotificationService {
         return null;
       }
 
-      // Envoi email si demandé
+      // Envoi email si demandé ET si l'utilisateur l'accepte
       if (params.sendEmail && params.emailParams) {
-        const emailResult = await this.sendEmailForType(params.type, params.emailParams);
+        // Mapper le type de notification vers le type de préférence email
+        const emailPreferenceType = this.mapTypeToPreference(params.type);
+        const canSend = await userPreferencesService.canSendEmail(params.userId, emailPreferenceType);
 
-        if (emailResult.success) {
-          await supabase
-            .from('notifications')
-            .update({ email_sent: true })
-            .eq('id', data.id);
+        if (canSend) {
+          const emailResult = await this.sendEmailForType(params.type, params.emailParams);
+
+          if (emailResult.success) {
+            await supabase
+              .from('notifications')
+              .update({ email_sent: true })
+              .eq('id', data.id);
+          }
+        } else {
+          console.log(`[NotificationService] Email non envoyé - préférence utilisateur (${params.type})`);
         }
       }
 
@@ -74,6 +87,24 @@ class NotificationService {
     } catch (err) {
       console.error('[NotificationService] Exception:', err);
       return null;
+    }
+  }
+
+  /**
+   * Mappe le type de notification vers le type de préférence email
+   */
+  private mapTypeToPreference(type: NotificationType): 'analyse' | 'documents' | 'projets' | 'marketing' {
+    switch (type) {
+      case 'analysis_complete':
+      case 'comparison_complete':
+        return 'analyse';
+      case 'document_expiring':
+      case 'ticket_generated':
+        return 'documents';
+      case 'welcome':
+        return 'projets';
+      default:
+        return 'projets';
     }
   }
 

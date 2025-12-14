@@ -30,6 +30,7 @@ import type {
 } from '@/types/tender';
 import { HybridAIService } from '@/services/ai/hybrid-ai.service';
 import { KnowledgeService } from '@/services/rag/knowledge.service';
+import { MatchingService, type CompanyProfile } from './matching.service';
 
 // =============================================================================
 // RESPONSE SERVICE
@@ -610,6 +611,491 @@ Engagement environnemental :
     }
 
     return memo;
+  }
+
+  /**
+   * Génère un mémoire technique ENRICHI avec IA et données profil
+   * Utilise le profil entreprise complet pour personnaliser le contenu
+   */
+  static async generateEnrichedTechnicalMemo(
+    tender: Tender,
+    userId: string
+  ): Promise<TechnicalMemo> {
+    // 1. Récupérer le profil enrichi de l'entreprise
+    const companyProfile = await MatchingService.getEnrichedCompanyProfile(userId);
+
+    if (!companyProfile) {
+      // Fallback vers la méthode basique
+      return this.generateTechnicalMemo(tender, { name: 'Entreprise' }, []);
+    }
+
+    // 2. Récupérer les DTU applicables
+    const relevantDTUs = new Set<string>();
+    tender.selectedLots?.forEach(lot => {
+      lot.applicableDTUs?.forEach(dtu => relevantDTUs.add(dtu));
+    });
+
+    let dtuContext = '';
+    if (relevantDTUs.size > 0) {
+      try {
+        const knowledgeResults = await KnowledgeService.search(
+          [...relevantDTUs].join(' '),
+          { limit: 5 }
+        );
+        dtuContext = knowledgeResults.map(r => r.content).join('\n');
+      } catch {
+        console.log('[ResponseService] Knowledge search unavailable');
+      }
+    }
+
+    // 3. Construire le mémoire technique personnalisé
+    const memo: TechnicalMemo = {
+      companyPresentation: this.generateCompanyPresentation(companyProfile, tender),
+      humanResources: this.generateHumanResourcesSection(companyProfile, tender),
+      materialResources: this.generateMaterialResourcesSection(companyProfile),
+      methodology: this.generateMethodologySection(tender, dtuContext, relevantDTUs),
+      qualityApproach: this.generateQualitySection(companyProfile),
+      safetyPlan: this.generateSafetySection(tender),
+      environmentalApproach: this.generateEnvironmentalSection(companyProfile),
+      strengths: this.identifyStrengths(companyProfile, tender),
+    };
+
+    // 4. Ajouter les références pertinentes
+    if (companyProfile.references?.length) {
+      memo.technicalAnnexes = [
+        `Références : ${companyProfile.references.length} projets similaires réalisés`,
+        ...companyProfile.references.slice(0, 3).map(ref =>
+          `- ${ref.projectType}${ref.year ? ` (${ref.year})` : ''}${ref.budgetRange ? ` - ${ref.budgetRange}` : ''}`
+        ),
+      ];
+    }
+
+    return memo;
+  }
+
+  /**
+   * Génère la présentation de l'entreprise personnalisée
+   */
+  private static generateCompanyPresentation(profile: CompanyProfile, tender: Tender): string {
+    const parts: string[] = [];
+
+    parts.push(`**${profile.name}** est une entreprise spécialisée dans les travaux du bâtiment.`);
+
+    if (profile.humanResources?.totalEmployees) {
+      parts.push(`Notre équipe compte **${profile.humanResources.totalEmployees} collaborateurs** qualifiés.`);
+    }
+
+    // Certifications
+    const certs: string[] = [];
+    if (profile.rgeCrertified) certs.push('RGE');
+    if (profile.qualibatNumber) certs.push('Qualibat');
+    profile.certifications?.forEach(c => {
+      if (!certs.includes(c.type)) certs.push(c.type);
+    });
+
+    if (certs.length > 0) {
+      parts.push(`Nous disposons des certifications : **${certs.join(', ')}**.`);
+    }
+
+    // Assurances
+    if (profile.decennaleValid || profile.insuranceValid) {
+      parts.push('Nos assurances (décennale et RC professionnelle) sont à jour.');
+    }
+
+    // Spécialisations pertinentes pour ce projet
+    const relevantLots = tender.selectedLots?.map(l => l.lotType) || [];
+    const matchingSpecs = profile.specializations.filter(s =>
+      relevantLots.includes(s.lotType)
+    );
+
+    if (matchingSpecs.length > 0) {
+      parts.push(`Nous sommes spécialisés dans : ${matchingSpecs.map(s => s.lotType).join(', ')}.`);
+    }
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Génère la section ressources humaines
+   */
+  private static generateHumanResourcesSection(profile: CompanyProfile, tender: Tender): string {
+    const parts: string[] = ['**Équipe affectée au chantier :**'];
+
+    if (profile.humanResources) {
+      const hr = profile.humanResources;
+      if (hr.totalEmployees) {
+        parts.push(`- Effectif total : ${hr.totalEmployees} collaborateurs`);
+      }
+      if (hr.qualifiedTechnicians) {
+        parts.push(`- Dont ${hr.qualifiedTechnicians} techniciens qualifiés`);
+      }
+      if (hr.apprentices) {
+        parts.push(`- Formation : ${hr.apprentices} apprenti(s)`);
+      }
+    }
+
+    // Estimation de l'équipe pour ce projet
+    const estimatedDays = tender.estimatedDurationDays || 30;
+    const budget = tender.estimatedBudgetMax || 100000;
+    const teamSize = Math.max(2, Math.ceil(budget / 50000));
+
+    parts.push('');
+    parts.push('**Équipe projet proposée :**');
+    parts.push('- 1 conducteur de travaux (supervision et coordination)');
+    parts.push('- 1 chef d\'équipe qualifié');
+    parts.push(`- ${teamSize} compagnons selon les phases de travaux`);
+    parts.push('');
+    parts.push('Nos équipes sont formées aux dernières techniques et respectent les normes en vigueur.');
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Génère la section ressources matérielles
+   */
+  private static generateMaterialResourcesSection(profile: CompanyProfile): string {
+    const parts: string[] = ['**Moyens matériels :**'];
+
+    if (profile.materialResources && profile.materialResources.length > 0) {
+      profile.materialResources.forEach(resource => {
+        parts.push(`- ${resource}`);
+      });
+    } else {
+      parts.push('- Outillage professionnel complet');
+      parts.push('- Échafaudages et équipements de sécurité');
+      parts.push('- Véhicules de chantier');
+    }
+
+    parts.push('');
+    parts.push('Tout le matériel est régulièrement contrôlé et conforme aux normes de sécurité.');
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Génère la méthodologie adaptée au projet
+   */
+  private static generateMethodologySection(
+    tender: Tender,
+    dtuContext: string,
+    relevantDTUs: Set<string>
+  ): string {
+    const parts: string[] = ['**Méthodologie d\'intervention :**'];
+
+    parts.push('');
+    parts.push('**1. PRÉPARATION**');
+    parts.push('   - Visite préalable du site et état des lieux');
+    parts.push('   - Installation de chantier et signalétique');
+    parts.push('   - Protection des ouvrages existants et accès');
+
+    parts.push('');
+    parts.push('**2. EXÉCUTION**');
+    parts.push('   - Respect strict du planning établi');
+    parts.push('   - Points d\'arrêt et contrôles qualité à chaque étape');
+    parts.push('   - Coordination avec les autres corps d\'état');
+    parts.push('   - Réunions de chantier hebdomadaires');
+
+    parts.push('');
+    parts.push('**3. FINITIONS ET LIVRAISON**');
+    parts.push('   - Auto-contrôle systématique avant réception');
+    parts.push('   - Nettoyage complet du chantier');
+    parts.push('   - Levée des réserves sous 15 jours');
+
+    if (relevantDTUs.size > 0) {
+      parts.push('');
+      parts.push('**Normes et DTU applicables :**');
+      [...relevantDTUs].forEach(dtu => {
+        parts.push(`- ${dtu}`);
+      });
+    }
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Génère la section qualité
+   */
+  private static generateQualitySection(profile: CompanyProfile): string {
+    const parts: string[] = ['**Démarche qualité :**'];
+
+    parts.push('- Respect strict des DTU et normes en vigueur');
+    parts.push('- Utilisation exclusive de matériaux certifiés');
+    parts.push('- Traçabilité complète des approvisionnements');
+    parts.push('- Fiches de contrôle à chaque étape clé');
+
+    if (profile.qualibatNumber) {
+      parts.push(`- Entreprise qualifiée Qualibat n°${profile.qualibatNumber}`);
+    }
+
+    if (profile.rgeCrertified) {
+      parts.push('- Certification RGE garantissant la qualité des travaux énergétiques');
+    }
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Génère le plan de sécurité
+   */
+  private static generateSafetySection(tender: Tender): string {
+    const parts: string[] = ['**Plan de sécurité :**'];
+
+    parts.push('- Évaluation des risques avant démarrage (PPSPS)');
+    parts.push('- Port des EPI obligatoire sur le chantier');
+    parts.push('- Formation sécurité de toutes les équipes');
+    parts.push('- Plan de prévention en cas de co-activité');
+    parts.push('- Signalisation et balisage des zones de travail');
+
+    if (tender.selectedLots?.some(l => l.lotType.includes('electricite') || l.lotType.includes('courants'))) {
+      parts.push('- Habilitations électriques du personnel');
+    }
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Génère la section environnementale
+   */
+  private static generateEnvironmentalSection(profile: CompanyProfile): string {
+    const parts: string[] = ['**Engagement environnemental :**'];
+
+    parts.push('- Tri sélectif et valorisation des déchets de chantier');
+    parts.push('- Limitation des nuisances (bruit, poussières)');
+    parts.push('- Optimisation des déplacements et approvisionnements');
+    parts.push('- Choix de matériaux éco-responsables quand possible');
+
+    if (profile.rgeCrertified) {
+      parts.push('- Entreprise RGE engagée dans la transition énergétique');
+    }
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Identifie les points forts de l'entreprise pour ce projet
+   */
+  private static identifyStrengths(profile: CompanyProfile, tender: Tender): string[] {
+    const strengths: string[] = [];
+
+    // Expérience
+    if (profile.references && profile.references.length >= 3) {
+      strengths.push(`${profile.references.length} références sur des projets similaires`);
+    }
+
+    // Certifications pertinentes
+    if (tender.requirements?.rgeRequired && profile.rgeCrertified) {
+      strengths.push('Certification RGE attestant notre expertise énergétique');
+    }
+
+    if (profile.qualibatNumber) {
+      strengths.push('Qualification Qualibat garantissant notre savoir-faire');
+    }
+
+    // Ressources
+    if (profile.humanResources?.totalEmployees && profile.humanResources.totalEmployees >= 5) {
+      strengths.push('Équipe structurée permettant de tenir les délais');
+    }
+
+    if (profile.decennaleValid) {
+      strengths.push('Assurance décennale valide');
+    }
+
+    // Valeurs par défaut
+    if (strengths.length < 3) {
+      strengths.push('Équipe qualifiée et expérimentée');
+      strengths.push('Respect des délais d\'exécution');
+      strengths.push('Qualité d\'exécution et réactivité');
+    }
+
+    return strengths.slice(0, 5);
+  }
+
+  /**
+   * Génère un DPGF ENRICHI avec données profil et prix du marché
+   */
+  static async generateEnrichedDPGF(
+    tender: Tender,
+    userId: string
+  ): Promise<DPGFData> {
+    // Récupérer le profil pour les taux de marge personnalisés
+    const profile = await MatchingService.getEnrichedCompanyProfile(userId);
+
+    // Utiliser les paramètres de l'entreprise ou des valeurs par défaut
+    const markupPercentage = 25; // Pourrait venir du profil
+    const hourlyRate = 45; // Pourrait venir du profil
+
+    const lots: DPGFData['lots'] = [];
+    let totalHT = 0;
+
+    for (const lot of (tender.selectedLots || [])) {
+      const items: DPGFData['lots'][0]['items'] = [];
+      let lotTotal = 0;
+
+      // Générer les items avec prix estimés
+      const estimatedItems = await this.estimateLotItemsEnriched(lot, markupPercentage, hourlyRate);
+
+      estimatedItems.forEach(item => {
+        items.push(item);
+        lotTotal += item.totalHT;
+      });
+
+      lots.push({
+        lotNumber: lot.lotNumber,
+        lotName: lot.lotName,
+        items,
+        totalHT: lotTotal,
+      });
+
+      totalHT += lotTotal;
+    }
+
+    // Appliquer TVA rénovation si applicable
+    const vatRate = this.determineVATRate(tender);
+    const vatAmount = totalHT * (vatRate / 100);
+
+    return {
+      lots,
+      totalHT,
+      totalTTC: totalHT + vatAmount,
+      vatBreakdown: [{
+        rate: vatRate,
+        baseAmount: totalHT,
+        vatAmount,
+      }],
+    };
+  }
+
+  /**
+   * Détermine le taux de TVA applicable
+   */
+  private static determineVATRate(tender: Tender): number {
+    // TVA réduite pour travaux de rénovation sur logements > 2 ans
+    const isRenovation = tender.selectedLots?.some(l =>
+      ['renovation', 'amenagement', 'rehabilitation'].some(k =>
+        l.category?.toLowerCase().includes(k)
+      )
+    );
+
+    if (isRenovation) {
+      return 10; // TVA intermédiaire
+    }
+
+    // TVA réduite pour travaux d'amélioration énergétique
+    const isEnergy = tender.selectedLots?.some(l =>
+      ['isolation', 'chauffage', 'ventilation', 'energie'].some(k =>
+        l.lotType?.toLowerCase().includes(k)
+      )
+    );
+
+    if (isEnergy && tender.requirements?.rgeRequired) {
+      return 5.5; // TVA réduite pour travaux énergétiques
+    }
+
+    return 20; // TVA standard
+  }
+
+  /**
+   * Estime les items d'un lot avec prix enrichis
+   */
+  private static async estimateLotItemsEnriched(
+    lot: {
+      lotType: string;
+      lotName: string;
+      estimatedPriceMin?: number;
+      estimatedPriceMax?: number;
+      prestations?: string[];
+    },
+    markupPercentage: number,
+    hourlyRate: number
+  ): Promise<DPGFData['lots'][0]['items']> {
+    // Prix de référence par type de lot (prix moyens du marché BTP 2024)
+    const marketPricesBase: Record<string, Array<{ designation: string; unit: string; priceMin: number; priceMax: number }>> = {
+      demolition: [
+        { designation: 'Dépose soigneuse revêtements', unit: 'm²', priceMin: 8, priceMax: 15 },
+        { designation: 'Démolition cloisons', unit: 'm²', priceMin: 15, priceMax: 35 },
+        { designation: 'Évacuation gravats', unit: 'm³', priceMin: 45, priceMax: 80 },
+      ],
+      platrerie: [
+        { designation: 'Cloison plaque de plâtre BA13', unit: 'm²', priceMin: 35, priceMax: 55 },
+        { designation: 'Doublage isolant', unit: 'm²', priceMin: 40, priceMax: 65 },
+        { designation: 'Faux-plafond suspendu', unit: 'm²', priceMin: 45, priceMax: 75 },
+      ],
+      courants_forts: [
+        { designation: 'Tableau électrique', unit: 'U', priceMin: 800, priceMax: 2500 },
+        { designation: 'Point lumineux', unit: 'U', priceMin: 80, priceMax: 150 },
+        { designation: 'Prise de courant', unit: 'U', priceMin: 45, priceMax: 85 },
+      ],
+      plomberie: [
+        { designation: 'Alimentation eau', unit: 'ml', priceMin: 35, priceMax: 65 },
+        { designation: 'Évacuation PVC', unit: 'ml', priceMin: 25, priceMax: 50 },
+        { designation: 'Pose sanitaire', unit: 'U', priceMin: 150, priceMax: 350 },
+      ],
+      carrelage: [
+        { designation: 'Carrelage sol pose droite', unit: 'm²', priceMin: 45, priceMax: 85 },
+        { designation: 'Faïence murale', unit: 'm²', priceMin: 50, priceMax: 95 },
+        { designation: 'Plinthe carrelage', unit: 'ml', priceMin: 12, priceMax: 25 },
+      ],
+      peinture: [
+        { designation: 'Peinture murs (2 couches)', unit: 'm²', priceMin: 15, priceMax: 28 },
+        { designation: 'Peinture plafonds', unit: 'm²', priceMin: 18, priceMax: 32 },
+        { designation: 'Préparation supports', unit: 'm²', priceMin: 8, priceMax: 15 },
+      ],
+      menuiserie: [
+        { designation: 'Porte intérieure', unit: 'U', priceMin: 250, priceMax: 550 },
+        { designation: 'Parquet flottant', unit: 'm²', priceMin: 35, priceMax: 75 },
+        { designation: 'Plinthes bois', unit: 'ml', priceMin: 12, priceMax: 25 },
+      ],
+      chauffage: [
+        { designation: 'Radiateur', unit: 'U', priceMin: 350, priceMax: 850 },
+        { designation: 'Chaudière gaz', unit: 'U', priceMin: 3500, priceMax: 8000 },
+        { designation: 'Plancher chauffant', unit: 'm²', priceMin: 65, priceMax: 120 },
+      ],
+    };
+
+    const items: DPGFData['lots'][0]['items'] = [];
+    const lotType = lot.lotType.toLowerCase();
+
+    // Trouver les prix de référence pour ce type de lot
+    const baseItems = marketPricesBase[lotType] ||
+      Object.values(marketPricesBase).flat().slice(0, 3);
+
+    if (lot.prestations?.length) {
+      // Utiliser les prestations définies
+      lot.prestations.forEach((prestation, i) => {
+        const basePrice = (lot.estimatedPriceMin || 5000) / lot.prestations!.length;
+        const unitPrice = Math.round(basePrice * (1 + markupPercentage / 100));
+
+        items.push({
+          reference: `${lot.lotType.substring(0, 3).toUpperCase()}.${(i + 1).toString().padStart(2, '0')}`,
+          designation: prestation,
+          unit: 'Ens',
+          quantity: 1,
+          unitPriceHT: unitPrice,
+          totalHT: unitPrice,
+        });
+      });
+    } else {
+      // Utiliser les items de référence du marché
+      baseItems.forEach((item, i) => {
+        const avgPrice = (item.priceMin + item.priceMax) / 2;
+        const adjustedPrice = Math.round(avgPrice * (1 + markupPercentage / 100));
+
+        // Estimer une quantité basée sur le budget estimé
+        const lotBudget = lot.estimatedPriceMin || 5000;
+        const estimatedQty = Math.max(1, Math.round(lotBudget / (avgPrice * baseItems.length)));
+
+        items.push({
+          reference: `${lot.lotType.substring(0, 3).toUpperCase()}.${(i + 1).toString().padStart(2, '0')}`,
+          designation: item.designation,
+          unit: item.unit,
+          quantity: estimatedQty,
+          unitPriceHT: adjustedPrice,
+          totalHT: adjustedPrice * estimatedQty,
+        });
+      });
+    }
+
+    return items;
   }
 
   /**
