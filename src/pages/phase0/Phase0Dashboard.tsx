@@ -25,12 +25,14 @@ import {
 import { Phase0ProjectService, Phase0Summary, Phase0Status, PHASE0_STATUS_CONFIG } from '@/services/phase0';
 import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
+import { useProfile } from '@/hooks/useProfile';
 import { AppLayout } from '@/components/layout';
 
 export function Phase0Dashboard() {
   const navigate = useNavigate();
   const { user } = useApp();
   const { toast } = useToast();
+  const { labels, getLabel, dashboard } = useProfile();
 
   const [projects, setProjects] = useState<Phase0Summary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -138,14 +140,14 @@ export function Phase0Dashboard() {
         {/* En-tête */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-3xl font-bold">Mes projets</h1>
+            <h1 className="text-3xl font-bold">{labels.projectNamePlural}</h1>
             <p className="text-muted-foreground">
-              Gérez vos projets de travaux Phase 0
+              Gérez vos {labels.projectNamePlural.toLowerCase()} Phase 0
             </p>
           </div>
           <Button onClick={() => navigate('/phase0')}>
             <Plus className="w-4 h-4 mr-2" />
-            Nouveau projet
+            {labels.newProjectLabel}
           </Button>
         </div>
 
@@ -190,15 +192,15 @@ export function Phase0Dashboard() {
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <FolderOpen className="w-12 h-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Aucun projet</h3>
+              <h3 className="text-lg font-semibold mb-2">Aucun {labels.projectName.toLowerCase()}</h3>
               <p className="text-muted-foreground mb-4">
                 {searchQuery || statusFilter !== 'all'
-                  ? 'Aucun projet ne correspond à vos critères'
-                  : 'Créez votre premier projet de travaux'}
+                  ? `Aucun ${labels.projectName.toLowerCase()} ne correspond à vos critères`
+                  : labels.emptyStateMessage}
               </p>
               <Button onClick={() => navigate('/phase0')}>
                 <Plus className="w-4 h-4 mr-2" />
-                Créer un projet
+                {labels.createProjectLabel}
               </Button>
             </CardContent>
           </Card>

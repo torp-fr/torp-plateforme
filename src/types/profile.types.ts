@@ -114,6 +114,10 @@ export interface ProfileLabels {
   proposalLabel: string;        // "Devis" / "Proposition commerciale" / "Offre"
   contractLabel: string;        // "Contrat" / "Marché" / "Marché public"
 
+  // Navigation Phase
+  consultationLabel: string;    // "Consultation entreprises" / "Diffuser aux clients" / "Lancer la consultation"
+  newProjectLabel: string;      // "Nouveau projet" / "Nouvelle affaire" / "Nouvelle opération"
+
   // Spécifiques
   welcomeMessage: string;
   dashboardTitle: string;

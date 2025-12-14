@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { authService } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
+import { useProfile } from '@/hooks/useProfile';
 import torpLogo from '@/assets/torp-logo-red.png';
 
 interface AppLayoutProps {
@@ -133,11 +134,29 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const { user, userType, setUser } = useApp();
   const { toast } = useToast();
+  const { labels, mainRoutes, defaultRoute, profileName, profileColor } = useProfile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Déterminer la configuration selon le type d'utilisateur
   const config = USER_TYPE_CONFIG[userType as keyof typeof USER_TYPE_CONFIG] || USER_TYPE_CONFIG.B2C;
-  const navItems = config.navItems;
+
+  // Utiliser les labels dynamiques du profil
+  const newProjectLabel = labels.newProjectLabel;
+
+  // Adapter les labels de navigation selon le profil
+  const navItems = config.navItems.map(item => {
+    // Remplacer les labels génériques par ceux du profil
+    if (item.href === '/phase0/dashboard') {
+      return { ...item, label: labels.projectNamePlural };
+    }
+    if (item.href === '/analyze') {
+      return { ...item, label: labels.analyzeLabel };
+    }
+    if (item.href === '/pro/projects') {
+      return { ...item, label: labels.projectNamePlural };
+    }
+    return item;
+  });
 
   const handleLogout = async () => {
     try {
@@ -278,7 +297,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <div className="p-4 border-t mt-4">
             <Button className="w-full" onClick={() => navigate(config.newProjectLink)}>
               <PlusCircle className="h-4 w-4 mr-2" />
-              {config.newProjectLabel}
+              {newProjectLabel}
             </Button>
           </div>
         </aside>
@@ -325,7 +344,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   }}
                 >
                   <PlusCircle className="h-4 w-4 mr-2" />
-                  {config.newProjectLabel}
+                  {newProjectLabel}
                 </Button>
               </div>
             </aside>

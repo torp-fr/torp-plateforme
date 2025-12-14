@@ -35,11 +35,13 @@ import { DCEGeneratorService } from '@/services/tender/dce-generator.service';
 import type { Tender, TenderDocument as TenderDoc } from '@/types/tender';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { useProfile } from '@/hooks/useProfile';
 
 export function Phase0ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { labels } = useProfile();
 
   const [project, setProject] = useState<Phase0Project | null>(null);
   const [documents, setDocuments] = useState<GeneratedDocument[]>([]);
@@ -236,7 +238,7 @@ export function Phase0ProjectPage() {
           <Button variant="ghost" asChild>
             <Link to="/phase0/dashboard">
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Mes projets
+              {labels.projectNamePlural}
             </Link>
           </Button>
           <div className="flex items-center gap-2">
@@ -250,11 +252,11 @@ export function Phase0ProjectPage() {
             </Button>
             <Button variant="outline" onClick={() => navigate(`/phase0/project/${project.id}/analyze`)}>
               <FileSearch className="w-4 h-4 mr-2" />
-              Analyser un devis
+              {labels.analyzeLabel}
             </Button>
             <Button onClick={() => navigate(`/phase1/project/${project.id}`)}>
               <Users2 className="w-4 h-4 mr-2" />
-              Consultation entreprises
+              {labels.consultationLabel}
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           </div>
@@ -552,7 +554,7 @@ export function Phase0ProjectPage() {
               <CardHeader>
                 <CardTitle>Générer des documents</CardTitle>
                 <CardDescription>
-                  Créez les documents nécessaires pour votre consultation d'entreprises
+                  Créez les documents nécessaires pour votre {labels.consultationLabel.toLowerCase()}
                 </CardDescription>
               </CardHeader>
               <CardContent>
