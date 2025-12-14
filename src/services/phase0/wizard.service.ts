@@ -415,12 +415,21 @@ export class WizardService {
       currentStepIndex: 0,
       completedSteps: [],
       answers: {},
-      metadata: {},
+      aiDeductions: [],
       validationErrors: [],
-      deductionsPending: [],
-      startedAt: new Date().toISOString(),
-      lastUpdatedAt: new Date().toISOString(),
-      totalTimeSpent: 0,
+      alerts: [],
+      progress: {
+        overallPercentage: 0,
+        stepProgress: [],
+        estimatedTimeRemaining: 30,
+        lastSaved: new Date().toISOString(),
+        autoSaveEnabled: false, // Désactivé en mode mémoire
+      },
+      metadata: {
+        startedAt: new Date().toISOString(),
+        lastUpdatedAt: new Date().toISOString(),
+        totalTimeSpent: 0,
+      },
     };
   }
 

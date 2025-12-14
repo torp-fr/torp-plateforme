@@ -136,76 +136,44 @@ CREATE TRIGGER trigger_deductions_updated_at
 ALTER TABLE phase0_wizard_progress ENABLE ROW LEVEL SECURITY;
 ALTER TABLE phase0_deductions ENABLE ROW LEVEL SECURITY;
 
--- Policies pour phase0_wizard_progress
--- Les utilisateurs peuvent voir/modifier leur propre progression
-CREATE POLICY "Users can view own wizard progress"
+-- Supprimer les policies existantes si elles existent
+DROP POLICY IF EXISTS "Users can view own wizard progress" ON phase0_wizard_progress;
+DROP POLICY IF EXISTS "Users can insert own wizard progress" ON phase0_wizard_progress;
+DROP POLICY IF EXISTS "Users can update own wizard progress" ON phase0_wizard_progress;
+DROP POLICY IF EXISTS "Users can delete own wizard progress" ON phase0_wizard_progress;
+DROP POLICY IF EXISTS "Users can manage own wizard progress" ON phase0_wizard_progress;
+
+DROP POLICY IF EXISTS "Users can view own deductions" ON phase0_deductions;
+DROP POLICY IF EXISTS "Users can insert own deductions" ON phase0_deductions;
+DROP POLICY IF EXISTS "Users can update own deductions" ON phase0_deductions;
+DROP POLICY IF EXISTS "Users can delete own deductions" ON phase0_deductions;
+DROP POLICY IF EXISTS "Users can manage own deductions" ON phase0_deductions;
+
+-- Policies pour phase0_wizard_progress (policy unique pour toutes les opérations)
+CREATE POLICY "Users can manage own wizard progress"
   ON phase0_wizard_progress
-  FOR SELECT
+  FOR ALL
   USING (
     project_id IN (
       SELECT id FROM phase0_projects WHERE user_id = auth.uid()
     )
-  );
-
-CREATE POLICY "Users can insert own wizard progress"
-  ON phase0_wizard_progress
-  FOR INSERT
+  )
   WITH CHECK (
     project_id IN (
       SELECT id FROM phase0_projects WHERE user_id = auth.uid()
     )
   );
 
-CREATE POLICY "Users can update own wizard progress"
-  ON phase0_wizard_progress
-  FOR UPDATE
-  USING (
-    project_id IN (
-      SELECT id FROM phase0_projects WHERE user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "Users can delete own wizard progress"
-  ON phase0_wizard_progress
-  FOR DELETE
-  USING (
-    project_id IN (
-      SELECT id FROM phase0_projects WHERE user_id = auth.uid()
-    )
-  );
-
--- Policies pour phase0_deductions
-CREATE POLICY "Users can view own deductions"
+-- Policies pour phase0_deductions (policy unique pour toutes les opérations)
+CREATE POLICY "Users can manage own deductions"
   ON phase0_deductions
-  FOR SELECT
+  FOR ALL
   USING (
     project_id IN (
       SELECT id FROM phase0_projects WHERE user_id = auth.uid()
     )
-  );
-
-CREATE POLICY "Users can insert own deductions"
-  ON phase0_deductions
-  FOR INSERT
+  )
   WITH CHECK (
-    project_id IN (
-      SELECT id FROM phase0_projects WHERE user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "Users can update own deductions"
-  ON phase0_deductions
-  FOR UPDATE
-  USING (
-    project_id IN (
-      SELECT id FROM phase0_projects WHERE user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "Users can delete own deductions"
-  ON phase0_deductions
-  FOR DELETE
-  USING (
     project_id IN (
       SELECT id FROM phase0_projects WHERE user_id = auth.uid()
     )
