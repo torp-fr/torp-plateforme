@@ -18,3 +18,7 @@ export type { PlanningStats } from './planning.service';
 // Logistique et Installation
 export { LogistiqueService } from './logistique.service';
 export type { DocumentFilters } from './logistique.service';
+
+// Export Planning (PDF, Excel, MS Project)
+export { planningExportService, PlanningExportService } from './planning-export.service';
+export type { ExportOptions, PlanningExportData } from './planning-export.service';

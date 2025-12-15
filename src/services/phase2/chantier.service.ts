@@ -394,4 +394,254 @@ export class ChantierService {
       updatedAt: data.updated_at as string,
     };
   }
+
+  // ============================================
+  // INTÉGRATION PHASE 1 → PHASE 2
+  // ============================================
+
+  /**
+   * Vérifie si un chantier peut être créé depuis un contrat Phase 1
+   */
+  static async canCreateChantier(contratId: string): Promise<{
+    canCreate: boolean;
+    reason?: string;
+  }> {
+    // Vérifier que le contrat existe
+    const { data: contrat, error: contratError } = await supabase
+      .from('phase1_contrats')
+      .select('statut, project_id')
+      .eq('id', contratId)
+      .single();
+
+    if (contratError || !contrat) {
+      return { canCreate: false, reason: 'Contrat non trouvé' };
+    }
+
+    // Vérifier que le contrat est signé
+    const validStatuts = ['signe_mo', 'signe_entreprise', 'notifie', 'valide'];
+    if (!validStatuts.includes(contrat.statut)) {
+      return { canCreate: false, reason: `Contrat non signé (statut: ${contrat.statut})` };
+    }
+
+    // Vérifier qu'un chantier n'existe pas déjà pour ce contrat
+    const { data: existingChantier } = await supabase
+      .from('phase2_chantiers')
+      .select('id')
+      .eq('contrat_id', contratId)
+      .single();
+
+    if (existingChantier) {
+      return { canCreate: false, reason: 'Un chantier existe déjà pour ce contrat' };
+    }
+
+    return { canCreate: true };
+  }
+
+  /**
+   * Créer un chantier automatiquement depuis un contrat Phase 1 signé
+   * Import automatique des données du contrat et du projet Phase 0
+   */
+  static async createFromPhase1(contratId: string): Promise<Chantier> {
+    // 1. Vérifier que le chantier peut être créé
+    const { canCreate, reason } = await this.canCreateChantier(contratId);
+    if (!canCreate) {
+      throw new Error(reason || 'Impossible de créer le chantier');
+    }
+
+    // 2. Récupérer le contrat avec ses données liées
+    const { data: contrat, error: contratError } = await supabase
+      .from('phase1_contrats')
+      .select('*')
+      .eq('id', contratId)
+      .single();
+
+    if (contratError || !contrat) {
+      throw new Error('Contrat non trouvé');
+    }
+
+    // 3. Récupérer le projet Phase 0
+    const { data: project, error: projectError } = await supabase
+      .from('phase0_projects')
+      .select('*')
+      .eq('id', contrat.project_id)
+      .single();
+
+    if (projectError || !project) {
+      throw new Error('Projet Phase 0 non trouvé');
+    }
+
+    // 4. Extraire les données du contrat
+    const conditionsFinancieres = contrat.conditions_financieres as {
+      prix?: { montantHT?: number };
+    } | undefined;
+    const delais = contrat.delais as {
+      dateDebut?: string;
+      dateFin?: string;
+      execution?: { duree?: number };
+    } | undefined;
+    const parties = contrat.parties as {
+      entreprise?: { raisonSociale?: string; siret?: string };
+    } | undefined;
+    const objet = contrat.objet as {
+      titre?: string;
+      lots?: Array<{ numero: string; designation: string; montantHT?: number }>;
+    } | undefined;
+
+    // 5. Extraire l'adresse depuis le projet Phase 0
+    const propertyData = project.property as {
+      address?: {
+        street?: string;
+        streetName?: string;
+        postalCode?: string;
+        city?: string;
+      };
+      identification?: {
+        address?: {
+          street?: string;
+          streetName?: string;
+          postalCode?: string;
+          city?: string;
+        };
+      };
+    } | undefined;
+
+    const address = propertyData?.identification?.address || propertyData?.address;
+
+    // 6. Créer le chantier avec les données pré-remplies
+    const chantierInput: CreateChantierInput = {
+      projectId: contrat.project_id,
+      contratId: contratId,
+      nom: objet?.titre || project.work_project?.general?.title || `Chantier ${project.reference}`,
+      reference: `CH-${project.reference}`,
+      dateDebutPrevue: delais?.dateDebut,
+      dateFinPrevue: delais?.dateFin,
+      montantMarcheHT: conditionsFinancieres?.prix?.montantHT,
+      config: {
+        ...this.getDefaultConfig(),
+        adresseChantier: address ? {
+          street: address.streetName || address.street || '',
+          postalCode: address.postalCode || '',
+          city: address.city || '',
+        } : undefined,
+        entreprisePrincipale: parties?.entreprise ? {
+          nom: parties.entreprise.raisonSociale,
+          siret: parties.entreprise.siret,
+        } : undefined,
+        dureeMarcheJours: delais?.execution?.duree,
+      },
+    };
+
+    const chantier = await this.createChantier(chantierInput);
+
+    // 7. Importer les lots depuis le contrat vers le planning
+    if (objet?.lots && objet.lots.length > 0) {
+      const { PlanningService } = await import('./planning.service');
+
+      for (let i = 0; i < objet.lots.length; i++) {
+        const lot = objet.lots[i];
+        await PlanningService.createLot({
+          chantierId: chantier.id,
+          code: lot.numero || `LOT${i + 1}`,
+          nom: lot.designation,
+          ordre: i + 1,
+          montantHT: lot.montantHT,
+        });
+      }
+    }
+
+    // 8. Initialiser la checklist de démarrage
+    const { LogistiqueService } = await import('./logistique.service');
+    await LogistiqueService.createChecklist(chantier.id);
+
+    // 9. Créer l'OS de démarrage en brouillon
+    if (delais?.dateDebut) {
+      await this.createOrdreService({
+        chantierId: chantier.id,
+        type: 'demarrage',
+        objet: 'Ordre de service de démarrage des travaux',
+        dateEffet: delais.dateDebut,
+      });
+    }
+
+    return chantier;
+  }
+
+  // ============================================
+  // MISE À JOUR OS
+  // ============================================
+
+  /**
+   * Mettre à jour un ordre de service
+   */
+  static async updateOrdreService(osId: string, updates: Partial<OrdreService>): Promise<OrdreService> {
+    const dbUpdates: Record<string, unknown> = {};
+
+    if (updates.objet !== undefined) dbUpdates.objet = updates.objet;
+    if (updates.description !== undefined) dbUpdates.description = updates.description;
+    if (updates.dateEffet !== undefined) dbUpdates.date_effet = updates.dateEffet;
+    if (updates.impactDelaiJours !== undefined) dbUpdates.impact_delai_jours = updates.impactDelaiJours;
+    if (updates.impactFinancierHT !== undefined) dbUpdates.impact_financier_ht = updates.impactFinancierHT;
+    if (updates.statut !== undefined) dbUpdates.statut = updates.statut;
+
+    dbUpdates.updated_at = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from('phase2_ordres_service')
+      .update(dbUpdates)
+      .eq('id', osId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return this.mapToOrdreService(data);
+  }
+
+  /**
+   * Valider un ordre de service
+   */
+  static async validerOrdreService(osId: string): Promise<OrdreService> {
+    const { data: os, error: osError } = await supabase
+      .from('phase2_ordres_service')
+      .select('*, chantier_id')
+      .eq('id', osId)
+      .single();
+
+    if (osError || !os) {
+      throw new Error('Ordre de service non trouvé');
+    }
+
+    // Mettre à jour le statut
+    const updated = await this.updateOSStatut(osId, 'valide');
+
+    // Si OS de démarrage validé, mettre à jour le chantier
+    if (os.type === 'demarrage') {
+      await this.updateChantier(os.chantier_id, {
+        statut: 'en_cours',
+        dateDebutEffective: os.date_effet,
+      });
+    }
+
+    // Si OS de suspension, mettre à jour le chantier
+    if (os.type === 'suspension') {
+      await this.updateChantier(os.chantier_id, {
+        statut: 'suspendu',
+      });
+    }
+
+    // Si OS de reprise, mettre à jour le chantier
+    if (os.type === 'reprise') {
+      await this.updateChantier(os.chantier_id, {
+        statut: 'en_cours',
+      });
+    }
+
+    return updated;
+  }
+
+  /**
+   * Annuler un ordre de service
+   */
+  static async annulerOrdreService(osId: string): Promise<OrdreService> {
+    return this.updateOSStatut(osId, 'annule' as StatutOrdreService);
+  }
 }
