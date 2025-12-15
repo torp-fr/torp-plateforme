@@ -26,6 +26,14 @@ import {
   identifyApplicableDTU,
   type KnowledgeSearchResult
 } from './knowledge-search.ts';
+import {
+  createCompanySearchService,
+  type CompanyDataResult
+} from './company-search.service.ts';
+import {
+  extractCompanyInfo,
+  type SiretExtractionResult
+} from './siret-extractor.ts';
 
 // ============================================
 // TYPES & INTERFACES
@@ -66,7 +74,7 @@ export interface DevisExtractedData {
 }
 
 export interface RAGContext {
-  // Données entreprise enrichies
+  // Données entreprise enrichies (avec cache intelligent)
   entreprise: {
     identite: any;
     certifications: {
@@ -81,6 +89,13 @@ export interface RAGContext {
     annoncesLegales: any[];
     score: number;
     alertes: string[];
+    // Métadonnées du cache
+    cached?: boolean;
+    cacheAge?: number;
+    dataSource?: string;
+    qualityScore?: number;
+    dataCompleteness?: number;
+    riskLevel?: 'low' | 'medium' | 'high' | 'critical';
   };
   // Référentiels prix
   prixMarche: {
@@ -295,48 +310,62 @@ export async function orchestrateRAG(query: RAGQuery): Promise<RAGContext> {
   // 2. Détection des catégories de travaux
   const categories = detectCategories(extractedData.travaux);
 
-  // 3. Requêtes parallèles vers les sources de données
+  // 3. Extraction SIRET/SIREN si non fourni (nouveau service)
+  let siretExtraction: SiretExtractionResult | null = null;
+  if (!extractedData.entreprise.siret) {
+    const claudeApiKey = Deno.env.get('CLAUDE_API_KEY');
+    try {
+      siretExtraction = await extractCompanyInfo(query.devisText, claudeApiKey);
+      if (siretExtraction.success) {
+        extractedData.entreprise.siret = siretExtraction.siret;
+        extractedData.entreprise.siren = siretExtraction.siren;
+        extractedData.entreprise.nom = extractedData.entreprise.nom || siretExtraction.companyName;
+        sources.push('Extraction SIRET intelligente');
+      }
+    } catch (e) {
+      console.error('SIRET extraction failed:', e);
+    }
+  }
+
+  // 4. Recherche entreprise avec cache intelligent (nouveau service)
+  let companyData: CompanyDataResult | null = null;
+  if (extractedData.entreprise.siret || extractedData.entreprise.nom) {
+    try {
+      const companySearchService = createCompanySearchService();
+      companyData = await companySearchService.searchCompany({
+        siret: extractedData.entreprise.siret,
+        siren: extractedData.entreprise.siren,
+        companyName: extractedData.entreprise.nom,
+        usePappers: true,
+        includeFinances: true,
+        includeRepresentants: true,
+        includeProcedures: true,
+      });
+
+      if (companyData.success) {
+        if (companyData.cached) {
+          sources.push(`Cache entreprise (${companyData.cacheAge}j)`);
+        } else {
+          sources.push(`API: ${companyData.dataSource}`);
+        }
+      }
+    } catch (e) {
+      console.error('Company search failed:', e);
+    }
+  }
+
+  // 5. Requêtes parallèles vers les sources de données complémentaires
   const promises: Promise<any>[] = [];
   const promiseLabels: string[] = [];
 
-  // 3.1 Recherche entreprise
-  if (extractedData.entreprise.siret || extractedData.entreprise.nom) {
-    promises.push(
-      searchEntreprise({
-        siret: extractedData.entreprise.siret,
-        q: extractedData.entreprise.nom
-      }).catch(() => null)
-    );
-    promiseLabels.push('entreprise');
-  }
-
-  // 3.2 Certifications RGE
-  if (extractedData.entreprise.siret || extractedData.entreprise.nom) {
-    promises.push(
-      getRGECertifications({
-        siret: extractedData.entreprise.siret,
-        nom: extractedData.entreprise.nom
-      }).catch(() => [])
-    );
-    promiseLabels.push('rge');
-  }
-
-  // 3.3 BODACC
-  const siren = extractedData.entreprise.siren ||
-    extractedData.entreprise.siret?.substring(0, 9);
-  if (siren) {
-    promises.push(getBODACCAnnonces(siren).catch(() => []));
-    promiseLabels.push('bodacc');
-  }
-
-  // 3.4 Indices BTP
+  // 5.1 Indices BTP
   promises.push(getIndicesBTP().catch(() => null));
   promiseLabels.push('indices');
 
   // Exécution parallèle
   const results = await Promise.all(promises);
 
-  // 4. Agrégation des résultats
+  // 6. Agrégation des résultats
   const resultMap: Record<string, any> = {};
   promiseLabels.forEach((label, i) => {
     resultMap[label] = results[i];
@@ -345,17 +374,28 @@ export async function orchestrateRAG(query: RAGQuery): Promise<RAGContext> {
     }
   });
 
-  // 5. Construction du contexte entreprise
-  const entrepriseData = resultMap['entreprise'];
-  const rgeData = resultMap['rge'] || [];
-  const bodaccData = resultMap['bodacc'] || [];
+  // 7. Construction du contexte entreprise (avec données du cache)
+  const cachedCompanyData = companyData?.data || {};
+  const rgeData = cachedCompanyData.rge_certifications ||
+                  cachedCompanyData.recherche_entreprises?.siege?.liste_rge || [];
+  const bodaccData = cachedCompanyData.bodacc_annonces || [];
 
   context.entreprise = {
-    identite: entrepriseData?.results?.[0] || extractedData.entreprise,
+    identite: companyData?.success
+      ? {
+          ...extractedData.entreprise,
+          ...cachedCompanyData.recherche_entreprises,
+          ...cachedCompanyData,
+          siret: companyData.siret,
+          siren: companyData.siren,
+          nom: companyData.companyName,
+          legal_name: companyData.legalName,
+        }
+      : extractedData.entreprise,
     certifications: {
-      rge: rgeData,
-      qualibat: null,
-      qualifelec: null
+      rge: Array.isArray(rgeData) ? rgeData : [],
+      qualibat: cachedCompanyData.qualibat || null,
+      qualifelec: cachedCompanyData.qualifelec || null
     },
     conformite: {
       urssaf: null,
@@ -363,16 +403,26 @@ export async function orchestrateRAG(query: RAGQuery): Promise<RAGContext> {
     },
     annoncesLegales: bodaccData,
     score: 0,
-    alertes: []
+    alertes: [],
+    // Métadonnées du cache
+    cached: companyData?.cached,
+    cacheAge: companyData?.cacheAge,
+    dataSource: companyData?.dataSource,
+    qualityScore: companyData?.qualityScore,
+    dataCompleteness: companyData?.dataCompleteness,
+    riskLevel: companyData?.riskLevel,
   };
 
-  // 5.1 Calcul du score entreprise
+  // 8. Calcul du score entreprise (enrichi avec les données du cache)
   context.entreprise.score = calculateEnterpriseScore(context.entreprise, categories);
 
-  // 5.2 Génération des alertes
-  context.entreprise.alertes = generateEnterpriseAlerts(context.entreprise, categories);
+  // 9. Génération des alertes (incluant celles du cache)
+  context.entreprise.alertes = [
+    ...(companyData?.alerts || []),
+    ...generateEnterpriseAlerts(context.entreprise, categories)
+  ];
 
-  // 6. Construction du contexte prix
+  // 10. Construction du contexte prix
   const indicesData = resultMap['indices'];
   context.prixMarche = {
     references: [],
@@ -380,21 +430,21 @@ export async function orchestrateRAG(query: RAGQuery): Promise<RAGContext> {
     comparaison: compareWithMarketPrices(extractedData.travaux, categories)
   };
 
-  // 7. Construction du contexte aides
+  // 11. Construction du contexte aides
   context.aides = {
     eligibles: getEligibleAids(categories),
     montantEstime: estimateAidsAmount(extractedData.montants.ttc, categories),
     conditions: getAidsConditions(categories)
   };
 
-  // 8. Construction du contexte réglementations
+  // 12. Construction du contexte réglementations
   context.reglementations = {
     applicables: getApplicableRegulations(categories),
     conformite: checkRegulationsCompliance(extractedData, context.entreprise),
     alertes: []
   };
 
-  // 9. Recherche dans la base de connaissances (DTU, normes, guides)
+  // 13. Recherche dans la base de connaissances (DTU, normes, guides)
   try {
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
     const supabaseUrl = Deno.env.get('SUPABASE_URL');

@@ -9,6 +9,7 @@ import { DevisData, TorpAnalysisResult } from '@/types/torp';
 import type { Database } from '@/types/supabase';
 import { pdfExtractorService } from '@/services/pdf/pdf-extractor.service';
 import { torpAnalyzerService } from '@/services/ai/torp-analyzer.service';
+import { notificationService } from '@/services/notifications/notification.service';
 
 type DbDevis = Database['public']['Tables']['devis']['Row'];
 type DbDevisInsert = Database['public']['Tables']['devis']['Insert'];
@@ -20,6 +21,7 @@ function mapDbDevisToAppDevis(dbDevis: DbDevis): DevisData {
   return {
     id: dbDevis.id,
     projectId: dbDevis.project_id,
+    projectName: dbDevis.nom_projet || undefined,
     companyId: dbDevis.company_id || undefined,
     devisNumber: dbDevis.devis_number || undefined,
     status: dbDevis.status,
@@ -64,6 +66,7 @@ export class SupabaseDevisService {
       delaiSouhaite?: string;
       urgence?: string;
       contraintes?: string;
+      userType?: 'B2B' | 'B2C' | 'admin';
     }
   ): Promise<{ id: string; status: string }> {
     console.log('[DevisService] uploadDevis called with userId:', userId);
@@ -225,7 +228,7 @@ export class SupabaseDevisService {
   /**
    * Analyze a devis file using AI (TORP methodology)
    */
-  async analyzeDevisById(devisId: string, file?: File, metadata?: { region?: string; typeTravaux?: string }): Promise<void> {
+  async analyzeDevisById(devisId: string, file?: File, metadata?: { region?: string; typeTravaux?: string; userType?: 'B2B' | 'B2C' | 'admin' }): Promise<void> {
     const startTime = Date.now();
 
     try {
@@ -262,8 +265,11 @@ export class SupabaseDevisService {
       const devisText = await pdfExtractorService.extractText(devisFile);
 
       // Step 2: Run TORP analysis
-      console.log(`[Devis] Running TORP analysis...`);
-      const analysis = await torpAnalyzerService.analyzeDevis(devisText, metadata);
+      console.log(`[Devis] Running TORP analysis... (userType: ${metadata?.userType || 'B2C'})`);
+      const analysis = await torpAnalyzerService.analyzeDevis(devisText, {
+        ...metadata,
+        userType: metadata?.userType || 'B2C',
+      });
 
       // Step 3: Save results to database
       console.log(`[Devis] Saving analysis results...`);
@@ -303,7 +309,17 @@ export class SupabaseDevisService {
           score_completude: analysis.scoreCompletude,
           score_conformite: analysis.scoreConformite,
           score_delais: analysis.scoreDelais,
-          recommendations: analysis.recommandations,
+          score_innovation_durable: analysis.scoreInnovationDurable || null,
+          score_transparence: analysis.scoreTransparence || null,
+          recommendations: {
+            ...analysis.recommandations,
+            budgetRealEstime: analysis.budgetRealEstime || 0,
+            margeNegociation: analysis.margeNegociation,
+          },
+          // Sauvegarder les données extraites pour enrichissement et géocodage
+          extracted_data: analysis.extractedData || null,
+          // Sauvegarder l'adresse du chantier directement
+          adresse_chantier: analysis.extractedData?.travaux?.adresseChantier || null,
           detected_overcosts: analysis.surcoutsDetectes,
           potential_savings: analysis.scorePrix.economiesPotentielles || 0,
           updated_at: new Date().toISOString(),
@@ -317,6 +333,41 @@ export class SupabaseDevisService {
       }
 
       console.log('[DevisService] Analysis results saved successfully');
+
+      // Envoyer notification à l'utilisateur
+      try {
+        // Récupérer les infos du devis et de l'utilisateur
+        const { data: devisInfo } = await supabase
+          .from('devis')
+          .select('user_id, nom_projet')
+          .eq('id', devisId)
+          .single();
+
+        if (devisInfo?.user_id) {
+          const { data: userInfo } = await supabase
+            .from('users')
+            .select('email, name')
+            .eq('id', devisInfo.user_id)
+            .single();
+
+          if (userInfo) {
+            await notificationService.notifyAnalysisComplete({
+              userId: devisInfo.user_id,
+              userEmail: userInfo.email || '',
+              userName: userInfo.name || 'Utilisateur',
+              projectName: devisInfo.nom_projet || 'Projet sans nom',
+              entrepriseName: 'Entreprise', // TODO: extract from analysis if available
+              grade: analysis.grade,
+              score: analysis.scoreGlobal,
+              analysisId: devisId,
+            });
+            console.log('[DevisService] Notification envoyée à l\'utilisateur');
+          }
+        }
+      } catch (notifError) {
+        // Ne pas bloquer l'analyse si la notification échoue
+        console.error('[DevisService] Erreur envoi notification:', notifError);
+      }
 
       const totalDuration = Math.round((Date.now() - startTime) / 1000);
       console.log(`[Devis] Analysis complete for ${devisId} - ${totalDuration}s total - Score: ${analysis.scoreGlobal}/1000 (${analysis.grade})`);
@@ -430,10 +481,10 @@ export class SupabaseDevisService {
       recommandations: (data.recommendations as any) || [],
 
       surcoutsDetectes: data.detected_overcosts || 0,
-      budgetRealEstime: data.amount,
-      margeNegociation: {
-        min: data.amount * 0.95,
-        max: data.amount * 1.05,
+      budgetRealEstime: (data.recommendations as any)?.budgetRealEstime || data.amount || 0,
+      margeNegociation: (data.recommendations as any)?.margeNegociation || {
+        min: data.amount ? data.amount * 0.95 : 0,
+        max: data.amount ? data.amount * 1.05 : 0,
       },
 
       dateAnalyse: data.analyzed_at ? new Date(data.analyzed_at) : new Date(),
@@ -444,37 +495,68 @@ export class SupabaseDevisService {
   }
 
   /**
-   * Get all devis for a user (via projects)
+   * Get all devis for a user - FIXED
+   * Récupère directement par user_id au lieu de passer par projects
    */
   async getUserDevis(userId: string): Promise<DevisData[]> {
-    // First get user's projects
-    const { data: projects, error: projectsError } = await supabase
-      .from('projects')
-      .select('id')
-      .eq('user_id', userId);
-
-    if (projectsError) {
-      throw new Error(`Failed to fetch user projects: ${projectsError.message}`);
-    }
-
-    if (!projects || projects.length === 0) {
-      return [];
-    }
-
-    const projectIds = projects.map(p => p.id);
-
-    // Get all devis for these projects
     const { data: devisList, error: devisError } = await supabase
       .from('devis')
       .select('*')
-      .in('project_id', projectIds)
-      .order('created_at', { ascending: false });
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false});
 
     if (devisError) {
       throw new Error(`Failed to fetch devis: ${devisError.message}`);
     }
 
-    return devisList.map(mapDbDevisToAppDevis);
+    return (devisList || []).map(mapDbDevisToAppDevis);
+  }
+
+  /**
+   * Get count of user devis - NEW
+   * Pour afficher le compteur dans le dashboard
+   */
+  async getUserDevisCount(userId: string): Promise<{
+    total: number;
+    analyzed: number;
+    analyzing: number;
+  }> {
+    const { data, error } = await supabase
+      .from('devis')
+      .select('status')
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('[DevisService] Error counting devis:', error);
+      return { total: 0, analyzed: 0, analyzing: 0 };
+    }
+
+    const total = (data || []).length;
+    const analyzed = (data || []).filter(d => d.status === 'analyzed').length;
+    const analyzing = (data || []).filter(d => d.status === 'analyzing').length;
+
+    return { total, analyzed, analyzing };
+  }
+
+  /**
+   * Get recent analyzed devis - NEW
+   * Pour la page "Mes analyses"
+   */
+  async getUserAnalyzedDevis(userId: string, limit: number = 10): Promise<DevisData[]> {
+    const { data, error } = await supabase
+      .from('devis')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'analyzed')
+      .order('analyzed_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('[DevisService] Error fetching analyzed devis:', error);
+      throw new Error(`Failed to fetch analyzed devis: ${error.message}`);
+    }
+
+    return (data || []).map(mapDbDevisToAppDevis);
   }
 
   /**

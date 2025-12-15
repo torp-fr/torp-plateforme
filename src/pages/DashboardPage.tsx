@@ -4,21 +4,35 @@ import { Badge } from '@/components/ui/badge';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
 import { BackButton } from '@/components/BackButton';
-import { AdvancedAnalytics } from '@/components/AdvancedAnalytics';
-import { ActiveAssistant } from '@/components/ActiveAssistant';
-import { FileText, TrendingUp, PiggyBank, Hammer, Eye, Plus, BarChart3, Users, Building, Clock, Activity, Target, Calendar, Download, Home } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import {
+  FileText, PiggyBank, Hammer, Eye, Plus, BarChart3, MoreVertical, Trash2, Filter,
+  MapPin, Calendar, Euro, FolderOpen, Edit, Copy, FileSearch, Loader2
+} from 'lucide-react';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { devisService } from '@/services/api';
+import { toast } from 'sonner';
+import { Phase0ProjectService, PHASE0_STATUS_CONFIG, Phase0Status } from '@/services/phase0';
 
 export default function DashboardPage() {
-  const { user, userType, projects } = useApp();
+  const { user, userType, projects, phase0Projects, setProjects, refreshPhase0Projects } = useApp();
+  const navigate = useNavigate();
 
-  const completedProjects = projects.filter(p => p.status === 'completed');
-  const avgScore = completedProjects.length > 0
-    ? Math.round(completedProjects.reduce((sum, p) => sum + (p.score || 0), 0) / completedProjects.length)
-    : 0;
+  // Redirection automatique des B2B vers /pro
+  if (userType === 'B2B') {
+    return <Navigate to="/pro" replace />;
+  }
+
+  const completedAnalyses = projects.filter(p => p.status === 'completed');
 
   // Calculate total savings from completed projects based on price comparisons
-  const totalSavings = completedProjects.reduce((sum, p) => {
+  const totalSavings = completedAnalyses.reduce((sum, p) => {
     if (p.analysisResult?.priceComparison) {
       const current = p.analysisResult.priceComparison.current;
       const high = p.analysisResult.priceComparison.high;
@@ -27,34 +41,65 @@ export default function DashboardPage() {
     return sum;
   }, 0);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'bg-success text-success-foreground';
-      case 'analyzing': return 'bg-warning text-warning-foreground';
-      case 'draft': return 'bg-muted text-muted-foreground';
-      default: return 'bg-muted text-muted-foreground';
+  // Projets Phase0 actifs (non archivés/annulés)
+  const activePhase0Projects = phase0Projects.filter(
+    p => p.status !== 'archived' && p.status !== 'cancelled'
+  );
+
+  const handleDeleteDevis = async (projectId: string, projectName: string) => {
+    const confirmed = window.confirm(`Êtes-vous sûr de vouloir supprimer "${projectName}" ? Cette action est irréversible.`);
+
+    if (!confirmed) return;
+
+    try {
+      await devisService.deleteDevis(projectId);
+      // Update local state
+      setProjects(projects.filter(p => p.id !== projectId));
+      toast.success('Devis supprimé avec succès');
+    } catch (error) {
+      console.error('Error deleting devis:', error);
+      toast.error('Erreur lors de la suppression du devis');
     }
   };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'completed': return 'Terminé';
-      case 'analyzing': return 'En cours';
-      case 'draft': return 'Brouillon';
-      default: return 'Inconnu';
+  const handleDeletePhase0Project = async (projectId: string, projectTitle: string) => {
+    const confirmed = window.confirm(`Êtes-vous sûr de vouloir supprimer "${projectTitle}" ? Cette action est irréversible.`);
+
+    if (!confirmed) return;
+
+    try {
+      await Phase0ProjectService.deleteProject(projectId);
+      await refreshPhase0Projects();
+      toast.success('Projet supprimé avec succès');
+    } catch (error) {
+      console.error('Error deleting phase0 project:', error);
+      toast.error('Erreur lors de la suppression du projet');
     }
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-success';
-    if (score >= 60) return 'text-warning';
-    return 'text-destructive';
+  // Rendu du statut Phase0
+  const renderPhase0Status = (status: Phase0Status) => {
+    const config = PHASE0_STATUS_CONFIG[status];
+    const variants: Record<Phase0Status, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+      draft: 'secondary',
+      in_progress: 'default',
+      pending_validation: 'outline',
+      validated: 'default',
+      archived: 'secondary',
+      cancelled: 'destructive',
+    };
+
+    return (
+      <Badge variant={variants[status]}>
+        {config.label}
+      </Badge>
+    );
   };
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
+
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto">
           {/* En-tête avec salutation */}
@@ -62,319 +107,286 @@ export default function DashboardPage() {
             <div className="flex items-center gap-4">
               <BackButton />
               <div>
-                {userType === 'B2C' ? (
-                  <>
-                    <h1 className="text-3xl font-bold text-foreground">
-                      Tableau de bord
-                    </h1>
-                    <p className="text-muted-foreground mt-2">
-                      {user ? `Bonjour ${user.name}` : 'Bienvenue sur TORP'}
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <h1 className="text-3xl font-bold text-foreground">
-                      Espace Professionnel
-                    </h1>
-                    <p className="text-muted-foreground mt-2">
-                      {user ? `Bonjour ${user.name}` : 'Bienvenue sur TORP'}
-                      {(userType === 'B2B' || userType === 'B2B2C') && user?.company && ` - ${user.company}`}
-                    </p>
-                  </>
-                )}
+                <h1 className="text-3xl font-bold text-foreground">
+                  Tableau de bord
+                </h1>
+                <p className="text-muted-foreground mt-2">
+                  {user ? `Bonjour ${user.name}` : 'Bienvenue sur TORP'}
+                </p>
               </div>
             </div>
-            {userType === 'B2B' ? (
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm">
-                  <Download className="h-4 w-4 mr-2" />
-                  Exporter
-                </Button>
-                <Link to="/improved-b2b-dashboard">
-                  <Button size="sm">
-                    <BarChart3 className="h-4 w-4 mr-2" />
-                    Dashboard Avancé
-                  </Button>
-                </Link>
-              </div>
-            ) : (
-              <Link to="/analyze">
-                <Button size="lg">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Analyser un devis
+            <div className="flex items-center gap-2">
+              <Link to="/phase0">
+                <Button size="sm" className="bg-primary hover:bg-primary/90">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Définir un projet
                 </Button>
               </Link>
-            )}
+            </div>
           </div>
 
           {/* Statistiques principales */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {/* Métriques spécifiques pour entreprises */}
-            {(userType === 'B2B' || userType === 'B2B2C') && (
-              <>
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Chiffre d'affaires</p>
-                        <p className="text-2xl font-bold text-foreground">€142.5K</p>
-                        <p className="text-xs text-success">+12% ce mois</p>
-                      </div>
-                      <div className="w-12 h-12 bg-success/10 rounded-full flex items-center justify-center">
-                        <TrendingUp className="w-6 h-6 text-success" />
-                      </div>
+            {/* Projets en cours de définition */}
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Projets en définition</p>
+                    <p className="text-2xl font-bold text-foreground">
+                      {activePhase0Projects.length}
+                    </p>
+                  </div>
+                  <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
+                    <Hammer className="w-6 h-6 text-primary" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Analyses réalisées */}
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Devis analysés</p>
+                    <p className="text-2xl font-bold text-foreground">
+                      {completedAnalyses.length}
+                    </p>
+                  </div>
+                  <div className="w-12 h-12 bg-blue-500/10 rounded-full flex items-center justify-center">
+                    <FileSearch className="w-6 h-6 text-blue-500" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Économies détectées */}
+            {totalSavings > 0 && (
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Économies détectées</p>
+                      <p className="text-2xl font-bold text-success">
+                        {Math.round(totalSavings).toLocaleString()}€
+                      </p>
                     </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Taux conversion</p>
-                        <p className="text-2xl font-bold text-foreground">73%</p>
-                        <p className="text-xs text-success">+5% ce mois</p>
-                      </div>
-                      <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                        <Target className="w-6 h-6 text-primary" />
-                      </div>
+                    <div className="w-12 h-12 bg-success/10 rounded-full flex items-center justify-center">
+                      <PiggyBank className="w-6 h-6 text-success" />
                     </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Délai moyen réponse</p>
-                        <p className="text-2xl font-bold text-foreground">2.3j</p>
-                        <p className="text-xs text-warning">Objectif: 2j</p>
-                      </div>
-                      <div className="w-12 h-12 bg-warning/10 rounded-full flex items-center justify-center">
-                        <Clock className="w-6 h-6 text-warning" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Projets actifs</p>
-                        <p className="text-2xl font-bold text-foreground">18</p>
-                        <p className="text-xs text-info">6 en cours</p>
-                      </div>
-                      <div className="w-12 h-12 bg-info/10 rounded-full flex items-center justify-center">
-                        <Activity className="w-6 h-6 text-info" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
-            )}
-
-            {/* Métriques simplifiées pour particuliers B2C */}
-            {userType === 'B2C' && (
-              <>
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Devis analysés</p>
-                        <p className="text-2xl font-bold text-foreground">{completedProjects.length}</p>
-                      </div>
-                      <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                        <FileText className="w-6 h-6 text-primary" />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {completedProjects.length > 0 && (
-                  <>
-                    <Card>
-                      <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm text-muted-foreground">Score moyen</p>
-                            <p className={`text-2xl font-bold ${getScoreColor(avgScore)}`}>
-                              {avgScore}/100
-                            </p>
-                          </div>
-                          <div className="w-12 h-12 bg-success/10 rounded-full flex items-center justify-center">
-                            <TrendingUp className="w-6 h-6 text-success" />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {totalSavings > 0 && (
-                      <Card>
-                        <CardContent className="p-6">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-sm text-muted-foreground">Économies détectées</p>
-                              <p className="text-2xl font-bold text-primary">
-                                {Math.round(totalSavings).toLocaleString()}€
-                              </p>
-                            </div>
-                            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                              <PiggyBank className="w-6 h-6 text-primary" />
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-                  </>
-                )}
-
-                {projects.filter(p => p.status === 'analyzing' || p.status === 'draft').length > 0 && (
-                  <Card>
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-muted-foreground">Projets en cours</p>
-                          <p className="text-2xl font-bold text-foreground">
-                            {projects.filter(p => p.status === 'analyzing' || p.status === 'draft').length}
-                          </p>
-                        </div>
-                        <div className="w-12 h-12 bg-warning/10 rounded-full flex items-center justify-center">
-                          <Hammer className="w-6 h-6 text-warning" />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </>
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </div>
 
-          {/* Redirection vers dashboard spécialisé pour B2B */}
-          {userType === 'B2B' && (
-            <div className="mb-8">
-              <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10">
-                <CardHeader>
+          {/* Section principale : Mes Projets Phase0 */}
+          <div className="mb-8">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
-                    <Building className="h-5 w-5 text-primary" />
-                    Dashboard Entreprise Avancé
+                    <FolderOpen className="w-5 h-5" />
+                    Mes projets de travaux
                   </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground mb-4">
-                    Accédez à votre dashboard professionnel avec analytics avancés, gestion d'équipe et suivi commercial.
-                  </p>
-                  <Link to="/improved-b2b-dashboard">
-                    <Button>
-                      <BarChart3 className="w-4 h-4 mr-2" />
-                      Accéder au dashboard avancé
+                  <Link to="/phase0">
+                    <Button size="sm" variant="outline">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Nouveau projet
                     </Button>
                   </Link>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {/* Redirection vers dashboard spécialisé pour B2G */}
-          {userType === 'B2G' && (
-            <div className="mb-8">
-              <Card className="border-success/20 bg-gradient-to-r from-success/5 to-success/10">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    🏛️
-                    Dashboard Collectivités
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground mb-4">
-                    Gestion intelligente de votre patrimoine immobilier avec maintenance prédictive et optimisation énergétique.
-                  </p>
-                  <Link to="/collectivites-dashboard">
-                    <Button className="bg-success hover:bg-success/90">
-                      <Building className="w-4 h-4 mr-2" />
-                      Accéder au dashboard patrimoine
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {/* Redirection vers dashboard spécialisé pour B2B2C */}
-          {userType === 'B2B2C' && (
-            <div className="mb-8">
-              <Card className="border-warning/20 bg-gradient-to-r from-warning/5 to-warning/10">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    🎯
-                    Dashboard Prescripteurs
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground mb-4">
-                    Certifiez la qualité des entreprises que vous recommandez avec les analyses TORP illimitées.
-                  </p>
-                  <Link to="/prescripteurs-dashboard">
-                    <Button className="bg-warning hover:bg-warning/90 text-warning-foreground">
-                      <Target className="w-4 h-4 mr-2" />
-                      Accéder au dashboard prescripteur
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          <div className="grid lg:grid-cols-3 gap-8">
-            {/* Historique des analyses */}
-            <div className="lg:col-span-2">
-              <Card>
-                <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <CardTitle className="flex items-center gap-2">
-                      <BarChart3 className="w-5 h-5" />
-                      {userType === 'B2C' ? 'Mes analyses' : 'Analyses clients'}
-                    </CardTitle>
-                    <Link to="/projects">
-                      <Button variant="outline" size="sm">
-                        Voir tout
+                </div>
+              </CardHeader>
+              <CardContent>
+                {activePhase0Projects.length === 0 ? (
+                  <div className="text-center py-12">
+                    <FolderOpen className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-foreground mb-2">
+                      Commencez par définir votre projet
+                    </h3>
+                    <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                      Avant d'analyser un devis, décrivez votre projet de travaux.
+                      TORP vous aidera à cadrer professionnellement votre besoin
+                      pour une analyse plus pertinente.
+                    </p>
+                    <Link to="/phase0">
+                      <Button>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Définir mon projet
                       </Button>
                     </Link>
                   </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {activePhase0Projects.map((project) => (
+                      <div
+                        key={project.projectId}
+                        className="border rounded-lg p-4 hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              {renderPhase0Status(project.status)}
+                            </div>
+                            <h3 className="font-semibold truncate">{project.projectName}</h3>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => navigate(`/phase0/project/${project.projectId}`)}>
+                                <Eye className="w-4 h-4 mr-2" />
+                                Voir le projet
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => navigate(`/phase0/wizard/${project.projectId}`)}>
+                                <Edit className="w-4 h-4 mr-2" />
+                                Modifier
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={() => handleDeletePhase0Project(project.projectId, project.projectName)}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Supprimer
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+
+                        {/* Adresse */}
+                        {project.propertyAddress && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                            <MapPin className="w-4 h-4" />
+                            {project.propertyAddress}
+                          </div>
+                        )}
+
+                        {/* Infos */}
+                        <div className="flex items-center gap-4 text-sm mb-3">
+                          {project.estimatedBudget && (
+                            <div className="flex items-center gap-1">
+                              <Euro className="w-4 h-4 text-muted-foreground" />
+                              <span>
+                                {project.estimatedBudget.min?.toLocaleString('fr-FR')} - {project.estimatedBudget.max?.toLocaleString('fr-FR')} €
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1">
+                            <FileText className="w-4 h-4 text-muted-foreground" />
+                            <span>{project.selectedLotsCount} lot(s)</span>
+                          </div>
+                        </div>
+
+                        {/* Progression */}
+                        <div className="space-y-1 mb-4">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">Complétude</span>
+                            <span>{project.completeness}%</span>
+                          </div>
+                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-primary transition-all"
+                              style={{ width: `${project.completeness}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1"
+                            onClick={() => navigate(`/phase0/project/${project.projectId}`)}
+                          >
+                            <Eye className="w-4 h-4 mr-2" />
+                            Voir
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => navigate(`/analyze?projectId=${project.projectId}`)}
+                          >
+                            <FileSearch className="w-4 h-4 mr-2" />
+                            Analyser un devis
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Section secondaire : Mes Analyses */}
+          <div className="grid lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5" />
+                    Mes analyses de devis
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     {projects.slice(0, 5).map(project => (
-                      <div key={project.id} 
-                           className="flex items-center justify-between p-4 border border-border rounded-lg hover:shadow-soft transition-shadow">
-                        <div className="flex items-center space-x-4">
-                          <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold
-                                         ${project.score && project.score >= 80 ? 'bg-success' : 
-                                           project.score && project.score >= 60 ? 'bg-warning' : 
-                                           project.score ? 'bg-destructive' : 'bg-muted'}`}>
-                            {project.grade || '?'}
+                      <div key={project.id} className="relative group">
+                        <Link to={`/results?devisId=${project.id}`} className="block">
+                          <div className="flex items-center justify-between p-4 pr-14 border border-border rounded-lg hover:shadow-soft hover:border-primary/50 transition-all cursor-pointer">
+                            <div className="flex items-center space-x-4">
+                              <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg
+                                             ${project.score && project.score >= 800 ? 'bg-success text-white' :
+                                project.score && project.score >= 600 ? 'bg-warning text-white' :
+                                  project.score && project.score > 0 ? 'bg-destructive text-white' : 'bg-muted text-muted-foreground'}`}>
+                                {project.grade}
+                              </div>
+                              <div>
+                                <h3 className="font-semibold text-foreground">{project.name}</h3>
+                                <p className="text-sm text-muted-foreground">
+                                  {project.company || 'Entreprise'} • {new Date(project.createdAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-4">
+                              <span className="text-lg font-semibold text-foreground">{project.amount}</span>
+                            </div>
                           </div>
-                          <div>
-                            <h3 className="font-semibold text-foreground">{project.name}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              {project.company} • {new Date(project.createdAt).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                          <Badge className={getStatusColor(project.status)}>
-                            {getStatusText(project.status)}
-                          </Badge>
-                          <span className="text-lg font-semibold text-foreground">{project.amount}</span>
-                          {project.status === 'completed' && (
-                            <Button variant="outline" size="sm">
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                          )}
+                        </Link>
+
+                        {/* Menu contextuel */}
+                        <div className="absolute top-4 right-4" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => navigate(`/results?devisId=${project.id}`)}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                Voir l'analyse
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={() => handleDeleteDevis(project.id, project.name)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Supprimer
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
                     ))}
-                    
+
                     {projects.length === 0 && (
                       <div className="text-center py-8">
                         <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
@@ -382,14 +394,10 @@ export default function DashboardPage() {
                           Aucune analyse pour le moment
                         </h3>
                         <p className="text-muted-foreground mb-4">
-                          Commencez par analyser votre premier devis
+                          {activePhase0Projects.length > 0
+                            ? 'Sélectionnez un projet ci-dessus et analysez un devis'
+                            : 'Définissez d\'abord votre projet, puis analysez vos devis'}
                         </p>
-                        <Link to="/analyze">
-                          <Button>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Analyser un devis
-                          </Button>
-                        </Link>
                       </div>
                     )}
                   </div>
@@ -397,96 +405,44 @@ export default function DashboardPage() {
               </Card>
             </div>
 
-            {/* Panneau latéral */}
+            {/* Panneau latéral - Conseils */}
             <div className="space-y-6">
-              {/* Actions rapides */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Actions rapides</CardTitle>
+                  <CardTitle className="text-sm">Comment ça marche ?</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <Link to="/analyze" className="block">
-                    <Button className="w-full justify-start">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Nouvelle analyse
-                    </Button>
-                  </Link>
-                  <Link to="/projects" className="block">
-                    <Button variant="outline" className="w-full justify-start">
-                      <FileText className="w-4 h-4 mr-2" />
-                      Mes projets
-                    </Button>
-                  </Link>
-                  <Link to="/pricing" className="block">
-                    <Button variant="outline" className="w-full justify-start">
-                      <TrendingUp className="w-4 h-4 mr-2" />
-                      Voir les tarifs
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-
-              {/* Recommandations */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recommandations</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {userType === 'B2C' ? (
-                    <>
-                      <div className="p-3 bg-info/10 rounded-lg">
-                        <p className="text-sm font-medium text-info">Conseil du jour</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Toujours demander 3 devis pour comparer les offres
-                        </p>
-                      </div>
-                      <div className="p-3 bg-warning/10 rounded-lg">
-                        <p className="text-sm font-medium text-warning">Attention</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Méfiez-vous des acomptes supérieurs à 30%
-                        </p>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="p-3 bg-success/10 rounded-lg">
-                        <p className="text-sm font-medium text-success">Optimisation</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Vos devis obtiennent une note moyenne de A
-                        </p>
-                      </div>
-                      <div className="p-3 bg-info/10 rounded-lg">
-                        <p className="text-sm font-medium text-info">Suggestion</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Précisez davantage les délais pour améliorer vos scores
-                        </p>
-                      </div>
-                    </>
-                  )}
+                <CardContent className="space-y-4 text-sm">
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <span className="text-primary font-bold">1</span>
+                    </div>
+                    <div>
+                      <p className="font-medium">Définissez votre projet</p>
+                      <p className="text-muted-foreground">Décrivez vos travaux, votre bien, vos contraintes</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <span className="text-primary font-bold">2</span>
+                    </div>
+                    <div>
+                      <p className="font-medium">Recevez des devis</p>
+                      <p className="text-muted-foreground">Sollicitez des artisans pour votre projet</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <span className="text-primary font-bold">3</span>
+                    </div>
+                    <div>
+                      <p className="font-medium">Analysez vos devis</p>
+                      <p className="text-muted-foreground">TORP analyse et compare vos devis en contexte</p>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </div>
-
-            {/* Analytics avancés pour B2B */}
-            {userType === 'B2B' && (
-              <div className="lg:col-span-3 mt-8">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <BarChart3 className="h-5 w-5" />
-                      Analytics Commercial - Aperçu
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <AdvancedAnalytics userType="B2B" />
-                  </CardContent>
-                </Card>
-              </div>
-            )}
           </div>
-
-          {/* Assistant IA actif */}
-          {userType !== 'admin' && <ActiveAssistant userType={userType as 'B2C' | 'B2B' | 'B2G' | 'B2B2C'} />}
         </div>
       </div>
     </div>

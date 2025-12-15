@@ -5,7 +5,7 @@ export interface UserData {
   location?: LocationData;
   scoreInitial?: number;
   source?: TrafficSource;
-  profileType: 'B2B' | 'B2C' | 'B2G' | 'B2B2C';
+  profileType: 'B2B' | 'B2C';
 }
 
 export interface ParcelData {
@@ -223,14 +223,149 @@ export interface TorpAnalysisResult {
     planningDetaille: boolean;
     penalitesRetard: boolean;
   };
-  
+
+  // Innovation & Développement Durable (50 points)
+  scoreInnovationDurable?: {
+    scoreTotal: number;
+    pourcentage: number;
+    grade: 'A' | 'B' | 'C' | 'D' | 'F';
+    sousAxes: {
+      performanceEnvironnementale: {
+        total: number;
+        details: {
+          materiauxBasCarbone: number;
+          economiesEnergetiques: number;
+          gestionDechets: number;
+          circuitsCourts: number;
+        };
+        elementsDetectes: string[];
+      };
+      innovationTechnique: {
+        total: number;
+        details: {
+          solutionsInnovantes: number;
+          outilsNumeriques: number;
+          certificationsInnovation: number;
+        };
+        elementsDetectes: string[];
+      };
+    };
+    recommandations: string[];
+    pointsForts: string[];
+  };
+
+  // Transparence Documentation (100 points)
+  scoreTransparence?: {
+    scoreTotal: number;
+    niveau: 'Excellent' | 'Bon' | 'Acceptable' | 'Insuffisant' | 'Critique';
+    criteres: {
+      mentionsLegales: TransparenceCritereScore;
+      detailPrestations: TransparenceCritereScore;
+      decompositionPrix: TransparenceCritereScore;
+      conditionsGenerales: TransparenceCritereScore;
+      planningPrevisionnel: TransparenceCritereScore;
+      referencesTechniques: TransparenceCritereScore;
+      elementsVisuels: TransparenceCritereScore;
+      certificationDevis: TransparenceCritereScore;
+    };
+    pointsForts: string[];
+    pointsFaibles: string[];
+    recommandations: string[];
+  };
+
   recommandations: Recommendation[];
   surcoutsDetectes: number;
   budgetRealEstime: number;
   margeNegociation: { min: number; max: number };
-  
+
+  // Données extraites du devis (pour enrichissement et géocodage)
+  extractedData?: {
+    entreprise: {
+      nom: string;
+      siret: string | null;
+      siretVerification?: {
+        source: 'document' | 'pappers_lookup' | 'non_trouve';
+        confidence: 'high' | 'medium' | 'low';
+        verified: boolean;
+        message: string;
+        pappersMatch?: {
+          nomEntreprise: string;
+          adresse: string;
+          siret: string;
+          matchScore: number;
+        };
+      };
+      adresse: string | null;
+      telephone: string | null;
+      email: string | null;
+      certifications: string[];
+    };
+    client?: {
+      nom: string | null;
+      adresse: string | null;
+    };
+    travaux?: {
+      type: string;
+      adresseChantier: string | null;
+    };
+    devis?: {
+      montantTotal: number;
+      montantHT: number | null;
+    };
+    // Données RGE ADEME (vérification externe)
+    rge?: RGEVerificationData;
+  };
+
   dateAnalyse: Date;
   dureeAnalyse: number; // en secondes
+}
+
+// Types pour les données RGE ADEME
+export interface RGEVerificationData {
+  estRGE: boolean;
+  scoreRGE: number;
+  nombreQualificationsActives: number;
+  nombreQualificationsTotales: number;
+  domainesActifs: string[];
+  metaDomainesActifs: string[];
+  organismesCertificateurs: string[];
+  qualificationsActives: RGEQualificationData[];
+  prochaineExpiration: {
+    qualification: string;
+    dateFin: string;
+    joursRestants: number;
+  } | null;
+  alertes: RGEAlerte[];
+  lastUpdate: string;
+  source: 'ademe_rge';
+}
+
+export interface RGEQualificationData {
+  nomQualification: string;
+  codeQualification: string;
+  domaine: string;
+  metaDomaine: string;
+  organisme: string;
+  dateFin: string;
+  joursRestants: number;
+}
+
+export interface RGEAlerte {
+  type: 'expiration_proche' | 'qualification_expiree' | 'aucune_qualification';
+  message: string;
+  qualification?: string;
+  dateFin?: string;
+}
+
+// Types pour la transparence documentation
+export interface TransparenceCritereScore {
+  nom: string;
+  score: number;
+  scoreMax: number;
+  pourcentage: number;
+  niveau: 'Complet' | 'Partiel' | 'Absent';
+  elementsPresents: string[];
+  elementsManquants: string[];
 }
 
 export interface Recommendation {

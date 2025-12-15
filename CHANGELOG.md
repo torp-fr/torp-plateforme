@@ -2,6 +2,120 @@
 
 Toutes les modifications notables du projet seront documentées dans ce fichier.
 
+## [1.1.0] - 2025-11-26
+
+### 🎯 Optimisation Pragmatique MVP
+
+**Phase 1: Cleanup pragmatique (B2G/B2B2C/Marketplace)**
+
+#### ❌ Supprimé (23 fichiers, -8737 lignes)
+- **B2G Modules** (5 fichiers): CollectivitesDashboard, CitizenDashboard, TerritorialMap, ParticipationManager, B2GPricing
+- **B2B2C Modules** (2 fichiers): B2B2CDashboard, B2B2CPricing
+- **Marketplace** (7 fichiers): Marketplace.tsx, marketplace/ directory, types, mock data
+- **Complex B2B Features** (4 fichiers): TeamScheduler, ClientPortfolio, MultiProjectManagement, FinancingPlatform
+- **Obsolete Files** (7 fichiers): *.old.tsx, *.optimized.tsx, App.improved.tsx
+
+#### ✏️ Modifié
+- `App.tsx`: Supprimé routes B2G/B2B2C/Marketplace/Financing
+- `Pricing.tsx`: Simplifié à B2C + B2B uniquement
+- `ImprovedB2BDashboard.tsx`: Supprimé onglets marketplace/projects/planning
+- `Index.tsx`: Corrigé imports Header/Hero
+
+---
+
+**Phase 2: Configuration Mode Gratuit**
+
+#### ✨ Ajouté
+- `.env`: Configuration mode gratuit avec 999999 crédits illimités
+- `src/config/env.ts`: Section freeMode avec helpers `isFreeMode()`, `getDefaultCredits()`
+- `src/components/dashboard/TesterBadge.tsx`: Badge animé pour testeurs
+- `.env.example`: Documentation complète du mode gratuit
+
+#### 🎉 Fonctionnalités Mode Gratuit
+- Flag `VITE_FREE_MODE=true` pour activer/désactiver gratuité
+- Crédits illimités (999999) pour tous les testeurs
+- Message personnalisable: "🎉 TORP est gratuit pendant la phase de test !"
+- Code Stripe conservé mais inactif
+- Activation paiements en 1 variable (quand prêt)
+
+---
+
+**Phase 3: Documentation B2B**
+
+#### 📚 Documentation créée
+- `docs/B2B_ASSISTANT_SCOPE.md` (2300+ lignes): Documentation complète B2B
+  - Vision: B2B aide pros à optimiser LEURS devis avant envoi
+  - Différences B2C vs B2B clarifiées
+  - 5 fonctionnalités B2B MVP détaillées
+  - Cas d'usage concrets avec workflows
+  - Architecture technique
+  - Roadmap post-MVP
+
+#### 📝 Documentation mise à jour
+- `README.md`:
+  - Sections B2C/B2B séparées avec features spécifiques
+  - Supprimé mentions B2G/B2B2C
+  - Ajouté mention phase test gratuit
+  - Structure documentation enrichie
+  - Lien vers B2B_ASSISTANT_SCOPE.md
+
+---
+
+**Phase 4: Tests & Finalisation**
+
+#### ✅ Validation
+- Tests automatiques: 5/5 passés (env.test.ts)
+- Build production: ✓ Succès (13.33s, 2866 modules)
+- TypeScript: ✓ Compilation sans erreurs
+- Git: 3 commits + push sur branch claude/improve-work-structure-01XUREhVCGFQpEmMmAFeNUY5
+
+---
+
+### 📊 Statistiques Globales
+
+- **Fichiers supprimés**: 23 fichiers
+- **Lignes supprimées**: -8737 lignes
+- **Fichiers créés**: 4 fichiers (.env, TesterBadge, B2B_ASSISTANT_SCOPE, changelog)
+- **Lignes ajoutées**: +431 lignes (config + docs)
+- **Reduction nette**: -8306 lignes (-90% du code supprimé)
+- **Modules conservés**: B2C + B2B core (analytics, assistant, payment)
+- **Build size**: 1.75 MB (JavaScript), 93 KB (CSS)
+
+---
+
+### 🎯 Scope Final MVP
+
+#### ✅ Conservé
+- **B2C**: Analyse devis reçus + aide décision
+- **B2B**: Optimisation devis avant envoi + certification TORP
+- **Core features**: CCTP, DOE, Analytics, Assistant IA, Payment
+- **Architecture**: Vite + React + Supabase
+
+#### ❌ Supprimé
+- B2G (Collectivités)
+- B2B2C (Prescripteurs)
+- Marketplace matériaux
+- Gestion d'équipe
+- Multi-projets complexes
+- Financement de projets
+
+---
+
+### 🔄 Migration Notes
+
+**Breaking Changes:**
+- Routes supprimées: `/collectivites-dashboard`, `/prescripteurs-dashboard`, `/marketplace`, `/financing`
+- Types supprimés: `B2G`, `B2B2C` user types
+- Features désactivées: `marketplaceEnabled=false`, `paymentEnabled=false` (mode gratuit)
+
+**Upgrade Path:**
+1. Mettre à jour .env avec `VITE_FREE_MODE=true`
+2. Vérifier qu'aucun code ne référence les modules supprimés
+3. Utiliser les nouvelles routes B2C/B2B uniquement
+4. Consulter `docs/B2B_ASSISTANT_SCOPE.md` pour scope B2B clarifié
+
+---
+
 ## [Unreleased] - 2025-11-18
 
 ### 🎉 Phase 2 - Backend Integration Supabase (NOUVEAU)

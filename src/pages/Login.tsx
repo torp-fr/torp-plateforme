@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApp, UserType } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
-import { Building, Users, ArrowLeft } from 'lucide-react';
+import { Building, Users, ArrowLeft, Landmark } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import torpLogo from '@/assets/torp-logo-red.png';
 import { authService } from '@/services/api';
@@ -25,11 +25,15 @@ export default function Login() {
     setIsLoading(true);
 
     try {
+      console.log('[Login] Tentative de connexion avec:', email);
+
       // Login using real Supabase auth service
       const response = await authService.login({
         email,
         password,
       });
+
+      console.log('[Login] Connexion réussie, utilisateur:', response.user.email, 'Type:', response.user.type);
 
       setUser(response.user);
 
@@ -38,9 +42,27 @@ export default function Login() {
         description: `Bienvenue ${response.user.name || response.user.email}!`,
       });
 
-      navigate('/dashboard');
+      // Attendre un petit délai pour que le contexte soit bien mis à jour
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      console.log('[Login] Redirection selon le type utilisateur...');
+
+      // Redirection selon le type d'utilisateur
+      if (response.user.type === 'admin' || response.user.type === 'super_admin') {
+        console.log('[Login] Admin détecté, redirection vers /admin/analytics');
+        navigate('/admin/analytics');
+      } else if (response.user.type === 'B2B') {
+        console.log('[Login] Professionnel B2B détecté, redirection vers /pro');
+        navigate('/pro');
+      } else if (response.user.type === 'B2G') {
+        console.log('[Login] Collectivité B2G détectée, redirection vers /dashboard');
+        navigate('/dashboard'); // TODO: Créer un dashboard B2G dédié
+      } else {
+        console.log('[Login] Particulier B2C, redirection vers /dashboard');
+        navigate('/dashboard');
+      }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('[Login] Erreur de connexion:', error);
       toast({
         title: 'Erreur de connexion',
         description: error instanceof Error ? error.message : 'Email ou mot de passe incorrect',
@@ -74,22 +96,21 @@ export default function Login() {
 
           <CardContent>
             <Tabs defaultValue={userType} onValueChange={(value) => setUserType(value as UserType)}>
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="B2C" className="flex items-center gap-2">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="B2C" className="flex items-center gap-1 text-xs sm:text-sm">
                   <Users className="w-4 h-4" />
-                  B2C
+                  <span className="hidden sm:inline">Particulier</span>
+                  <span className="sm:hidden">Partic.</span>
                 </TabsTrigger>
-                <TabsTrigger value="B2B" className="flex items-center gap-2">
+                <TabsTrigger value="B2B" className="flex items-center gap-1 text-xs sm:text-sm">
                   <Building className="w-4 h-4" />
-                  B2B
+                  <span className="hidden sm:inline">Professionnel</span>
+                  <span className="sm:hidden">Pro</span>
                 </TabsTrigger>
-                <TabsTrigger value="B2G" className="flex items-center gap-2">
-                  <Building className="w-4 h-4" />
-                  B2G
-                </TabsTrigger>
-                <TabsTrigger value="B2B2C" className="flex items-center gap-2">
-                  <Building className="w-4 h-4" />
-                  B2B2C
+                <TabsTrigger value="B2G" className="flex items-center gap-1 text-xs sm:text-sm">
+                  <Landmark className="w-4 h-4" />
+                  <span className="hidden sm:inline">Collectivité</span>
+                  <span className="sm:hidden">Public</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -117,13 +138,21 @@ export default function Login() {
                       required
                     />
                   </div>
-                  <Button 
-                    type="submit" 
-                    className="w-full" 
+                  <Button
+                    type="submit"
+                    className="w-full"
                     disabled={isLoading}
                   >
                     {isLoading ? 'Connexion...' : 'Se connecter'}
                   </Button>
+
+                  <div className="text-center">
+                    <Link to="/forgot-password">
+                      <Button variant="link" className="text-sm text-muted-foreground">
+                        Mot de passe oublié ?
+                      </Button>
+                    </Link>
+                  </div>
                 </form>
               </TabsContent>
 
@@ -151,20 +180,28 @@ export default function Login() {
                       required
                     />
                   </div>
-                  <Button 
-                    type="submit" 
-                    className="w-full" 
+                  <Button
+                    type="submit"
+                    className="w-full"
                     disabled={isLoading}
                   >
-                    {isLoading ? 'Connexion...' : 'Accéder à mon espace pro'}
+                    {isLoading ? 'Connexion...' : 'Accéder à mon espace professionnel'}
                   </Button>
+
+                  <div className="text-center">
+                    <Link to="/forgot-password">
+                      <Button variant="link" className="text-sm text-muted-foreground">
+                        Mot de passe oublié ?
+                      </Button>
+                    </Link>
+                  </div>
                 </form>
               </TabsContent>
 
               <TabsContent value="B2G" className="space-y-4 mt-6">
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email-b2g">Email collectivité</Label>
+                    <Label htmlFor="email-b2g">Email professionnel</Label>
                     <Input
                       id="email-b2g"
                       type="email"
@@ -185,47 +222,21 @@ export default function Login() {
                       required
                     />
                   </div>
-                  <Button 
-                    type="submit" 
-                    className="w-full" 
+                  <Button
+                    type="submit"
+                    className="w-full bg-purple-600 hover:bg-purple-700"
                     disabled={isLoading}
                   >
-                    {isLoading ? 'Connexion...' : 'Accéder à l\'observatoire'}
+                    {isLoading ? 'Connexion...' : 'Accéder à mon espace collectivité'}
                   </Button>
-                </form>
-              </TabsContent>
 
-              <TabsContent value="B2B2C" className="space-y-4 mt-6">
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email-b2b2c">Email prescripteur</Label>
-                    <Input
-                      id="email-b2b2c"
-                      type="email"
-                      placeholder="contact@cabinet-archi.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
+                  <div className="text-center">
+                    <Link to="/forgot-password">
+                      <Button variant="link" className="text-sm text-muted-foreground">
+                        Mot de passe oublié ?
+                      </Button>
+                    </Link>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password-b2b2c">Mot de passe</Label>
-                    <Input
-                      id="password-b2b2c"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <Button 
-                    type="submit" 
-                    className="w-full" 
-                    disabled={isLoading}
-                  >
-                    {isLoading ? 'Connexion...' : 'Dashboard Prescripteur'}
-                  </Button>
                 </form>
               </TabsContent>
             </Tabs>

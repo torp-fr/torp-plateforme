@@ -42,6 +42,13 @@ interface EnvConfig {
     analyticsEnabled: boolean;
   };
 
+  // Free Mode Configuration (for testing phase)
+  freeMode: {
+    enabled: boolean;
+    defaultCredits: number;
+    message: string;
+  };
+
   // AI / LLM Configuration
   ai: {
     openai?: {
@@ -134,6 +141,12 @@ export const env: EnvConfig = {
     analyticsEnabled: getBoolEnv('VITE_FEATURE_ANALYTICS_ENABLED', false),
   },
 
+  freeMode: {
+    enabled: getBoolEnv('VITE_FREE_MODE', false),
+    defaultCredits: getNumEnv('VITE_DEFAULT_CREDITS', 999999),
+    message: getEnv('VITE_FREE_MODE_MESSAGE', '🎉 TORP est gratuit pendant la phase de test !'),
+  },
+
   ai: {
     openai: getEnv('VITE_OPENAI_API_KEY') ? {
       apiKey: getEnv('VITE_OPENAI_API_KEY'),
@@ -141,7 +154,7 @@ export const env: EnvConfig = {
     anthropic: getEnv('VITE_ANTHROPIC_API_KEY') ? {
       apiKey: getEnv('VITE_ANTHROPIC_API_KEY'),
     } : undefined,
-    primaryProvider: (getEnv('VITE_AI_PRIMARY_PROVIDER', 'claude') as 'openai' | 'claude'),
+    primaryProvider: (getEnv('VITE_AI_PRIMARY_PROVIDER', 'openai') as 'openai' | 'claude'),
     fallbackEnabled: getBoolEnv('VITE_AI_FALLBACK_ENABLED', true),
   },
 
@@ -202,9 +215,16 @@ export const logEnvInfo = (): void => {
     console.log(`   API: ${env.api.baseUrl}`);
     console.log(`   Auth Provider: ${env.auth.provider}`);
     console.log(`   Mock API: ${env.api.useMock ? 'Yes' : 'No'}`);
+    console.log(`   Free Mode: ${env.freeMode.enabled ? 'Yes' : 'No'}${env.freeMode.enabled ? ` (${env.freeMode.defaultCredits} credits)` : ''}`);
     console.log(`   Features: Payment=${env.features.paymentEnabled}, AI=${env.features.chatAIEnabled}, Marketplace=${env.features.marketplaceEnabled}`);
   }
 };
+
+/**
+ * Convenience helpers
+ */
+export const isFreeMode = (): boolean => env.freeMode.enabled;
+export const getDefaultCredits = (): number => env.freeMode.enabled ? env.freeMode.defaultCredits : 0;
 
 // Auto-validate on import (only in production)
 if (env.app.env === 'production') {

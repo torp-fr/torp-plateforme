@@ -6,6 +6,7 @@
 import { supabase } from '@/lib/supabase';
 import { User, UserType } from '@/context/AppContext';
 import type { Database } from '@/types/supabase';
+import { analyticsService } from '@/services/analytics/analyticsService';
 
 export interface LoginCredentials {
   email: string;
@@ -19,6 +20,10 @@ export interface RegisterData {
   type: UserType;
   company?: string;
   phone?: string;
+  // B2G specific fields
+  entityName?: string;
+  siret?: string;
+  entityType?: 'commune' | 'departement' | 'region' | 'epci' | 'other';
 }
 
 export interface AuthResponse {
@@ -30,7 +35,7 @@ export interface AuthResponse {
 type DbUser = Database['public']['Tables']['users']['Row'];
 
 /**
- * Convert Supabase user to app User format
+ * Convert Supabase user to app User format with all profile fields
  */
 function mapDbUserToAppUser(dbUser: DbUser): User {
   return {
@@ -38,11 +43,37 @@ function mapDbUserToAppUser(dbUser: DbUser): User {
     email: dbUser.email,
     name: dbUser.name || undefined,
     type: dbUser.user_type,
-    company: dbUser.company || undefined,
     phone: dbUser.phone || undefined,
-    avatarUrl: dbUser.avatar_url || undefined,
-    subscriptionPlan: dbUser.subscription_plan || undefined,
-    subscriptionStatus: dbUser.subscription_status || undefined,
+    city: (dbUser as Record<string, unknown>).city as string || undefined,
+    postal_code: (dbUser as Record<string, unknown>).postal_code as string || undefined,
+    // B2C
+    company: dbUser.company || undefined,
+    property_type: (dbUser as Record<string, unknown>).property_type as string || undefined,
+    property_surface: (dbUser as Record<string, unknown>).property_surface as number || undefined,
+    property_year: (dbUser as Record<string, unknown>).property_year as number || undefined,
+    property_rooms: (dbUser as Record<string, unknown>).property_rooms as number || undefined,
+    property_address: (dbUser as Record<string, unknown>).property_address as string || undefined,
+    property_energy_class: (dbUser as Record<string, unknown>).property_energy_class as string || undefined,
+    is_owner: (dbUser as Record<string, unknown>).is_owner as boolean ?? undefined,
+    // B2B
+    company_siret: (dbUser as Record<string, unknown>).company_siret as string || undefined,
+    company_activity: (dbUser as Record<string, unknown>).company_activity as string || undefined,
+    company_size: (dbUser as Record<string, unknown>).company_size as string || undefined,
+    company_role: (dbUser as Record<string, unknown>).company_role as string || undefined,
+    company_address: (dbUser as Record<string, unknown>).company_address as string || undefined,
+    company_code_ape: (dbUser as Record<string, unknown>).company_code_ape as string || undefined,
+    company_rcs: (dbUser as Record<string, unknown>).company_rcs as string || undefined,
+    // B2G
+    entity_name: (dbUser as Record<string, unknown>).entity_name as string || undefined,
+    entity_type: (dbUser as Record<string, unknown>).entity_type as string || undefined,
+    entity_address: (dbUser as Record<string, unknown>).entity_address as string || undefined,
+    siret: (dbUser as Record<string, unknown>).siret as string || undefined,
+    entity_function: (dbUser as Record<string, unknown>).entity_function as string || undefined,
+    entity_code_insee: (dbUser as Record<string, unknown>).entity_code_insee as string || undefined,
+    entity_code_ape: (dbUser as Record<string, unknown>).entity_code_ape as string || undefined,
+    entity_strate: (dbUser as Record<string, unknown>).entity_strate as string || undefined,
+    entity_service_name: (dbUser as Record<string, unknown>).entity_service_name as string || undefined,
+    entity_service_email: (dbUser as Record<string, unknown>).entity_service_email as string || undefined,
   };
 }
 
@@ -70,7 +101,7 @@ export class SupabaseAuthService {
       throw new Error('Authentication failed');
     }
 
-    // Fetch user profile from users table
+    // Fetch user profile from users table (all columns for profile pre-fill)
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('*')
@@ -81,8 +112,19 @@ export class SupabaseAuthService {
       throw new Error('Failed to fetch user profile');
     }
 
+    const mappedUser = mapDbUserToAppUser(userData);
+
+    // Track login event
+    try {
+      await analyticsService.trackLogin(mappedUser.type === 'admin' ? 'B2C' : mappedUser.type);
+    } catch (trackError) {
+      console.warn('Failed to track login event:', trackError);
+    }
+
+    console.log('✓ Login réussi:', mappedUser.email, '- Type:', mappedUser.type);
+
     return {
-      user: mapDbUserToAppUser(userData),
+      user: mappedUser,
       token: authData.session?.access_token || '',
       refreshToken: authData.session?.refresh_token,
     };
@@ -112,6 +154,10 @@ export class SupabaseAuthService {
           user_type: data.type,
           company: data.company,
           phone: data.phone,
+          // B2G specific metadata
+          entity_name: data.entityName,
+          siret: data.siret,
+          entity_type: data.entityType,
         },
       },
     });
@@ -124,36 +170,47 @@ export class SupabaseAuthService {
       throw new Error('Registration failed');
     }
 
-    // Wait a moment for the trigger to create the profile
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Create user profile using RPC function (bypasses RLS timing issues)
+    // This works even without an active session, which is the case when email confirmation is required
+    const { data: userData, error: userError } = await supabase.rpc('create_user_profile', {
+      p_user_id: authData.user.id,
+      p_email: data.email,
+      p_name: data.name,
+      p_user_type: data.type,
+      p_company: data.company || null,
+      p_phone: data.phone || null,
+    });
 
-    // Fetch the created profile (created automatically by database trigger)
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', authData.user.id)
-      .single();
+    if (userError || !userData) {
+      console.error('Failed to create user profile after registration:', userError);
+      // Fallback: return a basic user object based on auth data
+      const user = {
+        id: authData.user.id,
+        email: data.email,
+        name: data.name,
+        type: data.type,
+        company: data.company,
+        phone: data.phone,
+      };
 
-    if (userError) {
-      console.error('Failed to fetch user profile after registration:', userError);
-      // Profile might not exist yet if trigger failed, but user was created
-      // Return a basic user object based on auth data
+      // Track signup event
+      await analyticsService.trackSignup(data.type === 'admin' ? 'B2C' : data.type);
+
       return {
-        user: {
-          id: authData.user.id,
-          email: data.email,
-          name: data.name,
-          type: data.type,
-          company: data.company,
-          phone: data.phone,
-        },
+        user,
         token: authData.session?.access_token || '',
         refreshToken: authData.session?.refresh_token,
       };
     }
 
+    // RPC now returns JSONB object directly (not an array)
+    const mappedUser = mapDbUserToAppUser(userData as DbUser);
+
+    // Track signup event
+    await analyticsService.trackSignup(mappedUser.type === 'admin' ? 'B2C' : mappedUser.type);
+
     return {
-      user: mapDbUserToAppUser(userData),
+      user: mappedUser,
       token: authData.session?.access_token || '',
       refreshToken: authData.session?.refresh_token,
     };
@@ -173,25 +230,46 @@ export class SupabaseAuthService {
    * Get current user
    */
   async getCurrentUser(): Promise<User | null> {
-    // Get current session
-    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+    try {
+      // Get current session
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
 
-    if (authError || !authUser) {
+      if (authError) {
+        console.error('[getCurrentUser] Auth error:', authError);
+        return null;
+      }
+
+      if (!authUser) {
+        console.log('[getCurrentUser] No auth user found');
+        return null;
+      }
+
+      console.log('[getCurrentUser] Auth user found:', authUser.email);
+
+      // Fetch user profile (all columns for profile pre-fill)
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authUser.id)
+        .single();
+
+      if (userError) {
+        console.error('[getCurrentUser] Error fetching user profile:', userError);
+        return null;
+      }
+
+      if (!userData) {
+        console.warn('[getCurrentUser] No user profile found for auth user');
+        return null;
+      }
+
+      const mappedUser = mapDbUserToAppUser(userData);
+      console.log('[getCurrentUser] User profile loaded:', mappedUser.email, 'Type:', mappedUser.type);
+      return mappedUser;
+    } catch (error) {
+      console.error('[getCurrentUser] Exception:', error);
       return null;
     }
-
-    // Fetch user profile
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', authUser.id)
-      .single();
-
-    if (userError || !userData) {
-      return null;
-    }
-
-    return mapDbUserToAppUser(userData);
   }
 
   /**
@@ -291,15 +369,36 @@ export class SupabaseAuthService {
    */
   onAuthStateChange(callback: (user: User | null) => void) {
     return supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        const { data } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
+      console.log('[Auth State Change] Event:', event, 'Session:', !!session);
 
-        callback(data ? mapDbUserToAppUser(data) : null);
+      if (session?.user) {
+        try {
+          const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          if (error) {
+            console.error('[Auth State Change] Error fetching user profile:', error);
+            callback(null);
+            return;
+          }
+
+          if (data) {
+            const mappedUser = mapDbUserToAppUser(data);
+            console.log('[Auth State Change] User profile loaded:', mappedUser.email);
+            callback(mappedUser);
+          } else {
+            console.warn('[Auth State Change] No user profile found for session');
+            callback(null);
+          }
+        } catch (error) {
+          console.error('[Auth State Change] Exception:', error);
+          callback(null);
+        }
       } else {
+        console.log('[Auth State Change] No session, calling callback with null');
         callback(null);
       }
     });

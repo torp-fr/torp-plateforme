@@ -3,7 +3,7 @@
  * Simplified navigation with clear user journey
  */
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import { Menu, X, ChevronDown } from "lucide-react";
@@ -17,36 +17,37 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { authService } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 export const Header = () => {
-  const { user, setUser } = useApp();
+  const { user, userType, logout } = useApp();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { toast } = useToast();
 
-  const handleAnalyzeClick = () => {
-    if (user) {
-      navigate('/analyze');
-    } else {
-      // Pour les non-connectés, on propose le parcours découverte
-      navigate('/discovery');
-    }
-  };
+  // Détermine les liens dashboard selon le type d'utilisateur
+  const isB2B = userType === 'B2B';
+  const isB2G = userType === 'B2G';
+
+  // Dashboard et labels adaptés au segment
+  const dashboardLink = isB2B ? '/pro' : '/dashboard';
+  const dashboardLabel = isB2G
+    ? 'Mes Marchés'
+    : isB2B
+      ? 'Mes Projets'
+      : 'Mes Analyses';
 
   const handleLogout = async () => {
     try {
-      await authService.logout();
-      setUser(null);
+      await logout();
       toast({
         title: 'Déconnexion réussie',
         description: 'À bientôt!',
       });
-      navigate('/login');
+      navigate('/');
     } catch (error) {
       console.error('Logout error:', error);
-      // Even if logout fails, clear local user state
-      setUser(null);
-      navigate('/login');
+      navigate('/');
     }
   };
 
@@ -77,41 +78,48 @@ export const Header = () => {
                 Solutions
                 <ChevronDown className="h-4 w-4" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuItem onClick={() => navigate('/b2c-dashboard')}>
+              <DropdownMenuContent align="start" className="w-64">
+                <DropdownMenuItem onClick={() => navigate('/phase0')}>
+                  <div>
+                    <div className="font-medium">📝 Définir mon projet</div>
+                    <div className="text-xs text-muted-foreground">
+                      Créez votre cahier des charges en quelques clics
+                    </div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/analyze')}>
+                  <div>
+                    <div className="font-medium">📊 Analyser un devis</div>
+                    <div className="text-xs text-muted-foreground">
+                      Comprenez et validez vos devis de travaux
+                    </div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/register')}>
                   <div>
                     <div className="font-medium">👤 Particuliers</div>
                     <div className="text-xs text-muted-foreground">
-                      Analysez vos devis de travaux
+                      Accompagnement personnalisé
                     </div>
                   </div>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/improved-b2b-dashboard')}>
+                <DropdownMenuItem onClick={() => navigate('/pro')}>
                   <div>
-                    <div className="font-medium">🏢 Entreprises BTP</div>
+                    <div className="font-medium">🏢 Professionnels BTP</div>
                     <div className="text-xs text-muted-foreground">
-                      Valorisez votre expertise
-                    </div>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/collectivites-dashboard')}>
-                  <div>
-                    <div className="font-medium">🏛️ Collectivités</div>
-                    <div className="text-xs text-muted-foreground">
-                      Observatoire des marchés publics
-                    </div>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/prescripteurs-dashboard')}>
-                  <div>
-                    <div className="font-medium">🎯 Prescripteurs</div>
-                    <div className="text-xs text-muted-foreground">
-                      Accompagnez vos clients
+                      Espace dédié aux pros
                     </div>
                   </div>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            <Link
+              to="/phase0"
+              className="text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+            >
+              Définir mon projet
+            </Link>
 
             <Link
               to="/pricing"
@@ -120,19 +128,12 @@ export const Header = () => {
               Tarifs
             </Link>
 
-            <Link
-              to="/demo"
-              className="text-sm font-medium text-foreground hover:text-primary transition-colors"
-            >
-              Démo
-            </Link>
-
             {user && (
               <Link
-                to="/projects"
+                to={dashboardLink}
                 className="text-sm font-medium text-foreground hover:text-primary transition-colors"
               >
-                Mes Projets
+                {dashboardLabel}
               </Link>
             )}
           </nav>
@@ -141,14 +142,7 @@ export const Header = () => {
           <div className="hidden lg:flex items-center gap-3">
             {user ? (
               <>
-                <Button
-                  onClick={handleAnalyzeClick}
-                  variant="default"
-                  size="sm"
-                  className="bg-primary hover:bg-primary/90"
-                >
-                  Analyser un devis
-                </Button>
+                <NotificationBell />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm">
@@ -157,11 +151,8 @@ export const Header = () => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem onClick={() => navigate('/dashboard')}>
-                      📊 Dashboard
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/projects')}>
-                      📁 Mes Projets
+                    <DropdownMenuItem onClick={() => navigate(dashboardLink)}>
+                      📊 {isB2G ? 'Espace Collectivité' : isB2B ? 'Espace Pro' : 'Dashboard'}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/profile')}>
                       👤 Mon Profil
@@ -187,14 +178,6 @@ export const Header = () => {
                     Inscription
                   </Button>
                 </Link>
-                <Button
-                  onClick={handleAnalyzeClick}
-                  variant="default"
-                  size="sm"
-                  className="bg-primary hover:bg-primary/90"
-                >
-                  Essayer gratuitement
-                </Button>
               </>
             )}
           </div>
@@ -216,37 +199,39 @@ export const Header = () => {
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
           <nav className="lg:hidden mt-4 pb-4 space-y-3 border-t pt-4">
+            {/* Phase 0 - Définir mon projet (CTA principal) */}
+            <Link
+              to="/phase0"
+              className="block px-3 py-3 text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 rounded-lg transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              📝 Définir mon projet
+            </Link>
+
             <div className="space-y-2">
               <div className="text-sm font-semibold text-muted-foreground px-2">
                 Solutions
               </div>
               <Link
-                to="/b2c-dashboard"
+                to="/analyze"
+                className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                📊 Analyser un devis
+              </Link>
+              <Link
+                to="/register"
                 className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 👤 Particuliers
               </Link>
               <Link
-                to="/improved-b2b-dashboard"
+                to="/pro"
                 className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                🏢 Entreprises BTP
-              </Link>
-              <Link
-                to="/collectivites-dashboard"
-                className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                🏛️ Collectivités
-              </Link>
-              <Link
-                to="/prescripteurs-dashboard"
-                className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                🎯 Prescripteurs
+                🏢 Professionnels BTP
               </Link>
             </div>
 
@@ -258,21 +243,13 @@ export const Header = () => {
               Tarifs
             </Link>
 
-            <Link
-              to="/demo"
-              className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Démo
-            </Link>
-
             {user && (
               <Link
-                to="/projects"
+                to={dashboardLink}
                 className="block px-2 py-2 text-sm text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Mes Projets
+                {dashboardLabel}
               </Link>
             )}
 
@@ -282,27 +259,16 @@ export const Header = () => {
                   <div className="px-2 py-2 text-sm font-medium text-muted-foreground border-b mb-2">
                     {user.name || user.email}
                   </div>
-                  <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
+                  <Link to={dashboardLink} onClick={() => setMobileMenuOpen(false)}>
                     <Button variant="outline" size="sm" className="w-full justify-start">
-                      📊 Dashboard
+                      📊 {isB2G ? 'Espace Collectivité' : isB2B ? 'Espace Pro' : 'Dashboard'}
                     </Button>
                   </Link>
-                  <Link to="/projects" onClick={() => setMobileMenuOpen(false)}>
+                  <Link to="/profile" onClick={() => setMobileMenuOpen(false)}>
                     <Button variant="outline" size="sm" className="w-full justify-start">
-                      📁 Mes Projets
+                      👤 Mon Profil
                     </Button>
                   </Link>
-                  <Button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      handleAnalyzeClick();
-                    }}
-                    variant="default"
-                    size="sm"
-                    className="w-full bg-primary hover:bg-primary/90"
-                  >
-                    Analyser un devis
-                  </Button>
                   <Button
                     onClick={() => {
                       setMobileMenuOpen(false);
@@ -327,17 +293,6 @@ export const Header = () => {
                       Inscription
                     </Button>
                   </Link>
-                  <Button
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      handleAnalyzeClick();
-                    }}
-                    variant="default"
-                    size="sm"
-                    className="w-full bg-primary hover:bg-primary/90"
-                  >
-                    Essayer gratuitement
-                  </Button>
                 </>
               )}
             </div>

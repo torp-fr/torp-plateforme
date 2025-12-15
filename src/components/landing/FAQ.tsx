@@ -1,6 +1,6 @@
 /**
- * FAQ Section
- * Frequently asked questions
+ * FAQ Section - Refonte
+ * Questions honnêtes sans faux chiffres
  */
 
 import {
@@ -13,44 +13,44 @@ import {
 export const FAQ = () => {
   const faqs = [
     {
-      question: "TORP est-il vraiment gratuit ?",
+      question: "Comment fonctionne l'analyse de devis ?",
       answer:
-        "Oui ! L'analyse de votre premier devis est entièrement gratuite, sans carte bancaire ni engagement. Pour les particuliers, nous proposons également des formules premium avec fonctionnalités avancées (suivi de chantier, paiements sécurisés, etc.).",
-    },
-    {
-      question: "Comment l'IA analyse-t-elle mon devis ?",
-      answer:
-        "Notre algorithme vérifie plus de 150 critères : cohérence des prix avec le marché local, fiabilité de l'entreprise (SIRET, assurances, litiges), conformité technique aux normes, délais réalistes, et détection d'anomalies ou surcoûts cachés. Tout est basé sur notre base de données de +500K devis analysés.",
+        "TORP analyse votre devis selon plusieurs critères : cohérence des prix, informations de l'entreprise (SIRET, assurances), conformité technique, et détection de points d'attention. Notre objectif est de vous donner une vision claire et transparente pour prendre votre décision en toute confiance.",
     },
     {
       question: "Mes données sont-elles sécurisées ?",
       answer:
-        "Absolument. Vos documents sont chiffrés de bout en bout (AES-256), hébergés sur des serveurs européens certifiés ISO 27001, et conformes au RGPD. Vous pouvez supprimer vos données à tout moment depuis votre compte. Nous ne vendons jamais vos données à des tiers.",
+        "Absolument. Vos documents sont chiffrés, hébergés sur des serveurs européens, et conformes au RGPD. Vous gardez le contrôle total de vos données et pouvez les supprimer à tout moment depuis votre compte. Nous ne vendons jamais vos données à des tiers.",
     },
     {
-      question: "Quels types de travaux pouvez-vous analyser ?",
+      question: "Quels types de travaux peut-on analyser ?",
       answer:
-        "Nous analysons tous types de travaux : rénovation (salle de bain, cuisine), construction neuve, extension, électricité, plomberie, chauffage, toiture, isolation, menuiserie, peinture, carrelage, etc. Du particulier aux marchés publics.",
+        "Nous analysons tous types de travaux : rénovation (salle de bain, cuisine), construction neuve, extension, électricité, plomberie, chauffage, toiture, isolation, menuiserie, peinture, carrelage, etc. Notre solution s'adapte aussi bien aux particuliers qu'aux professionnels.",
     },
     {
       question: "L'analyse remplace-t-elle un expert ?",
       answer:
-        "TORP est un outil d'aide à la décision très puissant, mais ne remplace pas un conseil juridique ou technique personnalisé. Pour des projets complexes (+100K€) ou situations particulières, nous recommandons de consulter également un architecte ou maître d'œuvre.",
+        "TORP est un outil d'aide à la décision, mais ne remplace pas un conseil juridique ou technique personnalisé. Pour des projets complexes ou situations particulières, nous recommandons de consulter également un architecte ou maître d'œuvre.",
     },
     {
-      question: "Puis-je analyser plusieurs devis et les comparer ?",
+      question: "Puis-je comparer plusieurs devis ?",
       answer:
-        "Oui ! Notre outil de comparaison multi-devis est disponible dès le plan gratuit. Vous pouvez uploader jusqu'à 5 devis simultanément et obtenir un tableau comparatif détaillé avec recommandations.",
+        "Oui ! Notre outil permet de comparer plusieurs devis côte à côte pour vous aider à identifier le meilleur rapport qualité-prix et prendre une décision éclairée.",
     },
     {
-      question: "Que faire si l'entreprise refuse mon contre-devis ?",
+      question: "Comment les professionnels peuvent-ils utiliser TORP ?",
       answer:
-        "Nos conseils de négociation sont basés sur des données de marché réelles. Si une entreprise refuse systématiquement de justifier ses tarifs, c'est souvent un signal d'alerte. Nous pouvons vous mettre en relation avec notre réseau d'artisans certifiés TORP.",
+        "Les professionnels du BTP peuvent créer un compte professionnel pour bénéficier de fonctionnalités dédiées : certification de devis, badge de confiance, et outils de valorisation de leur expertise. Cela leur permet de se démarquer et de rassurer leurs clients.",
     },
     {
-      question: "Comment devenir artisan/entreprise certifié(e) TORP ?",
+      question: "TORP est-il accessible à tous ?",
       answer:
-        "Il suffit de créer un compte professionnel B2B. Après vérification de vos certifications et assurances, vous recevrez votre badge de confiance TORP. L'abonnement démarre à 49€/mois avec génération illimitée de devis certifiés.",
+        "Oui, notre mission est de rendre la transparence accessible à tous les acteurs du BTP. Nous proposons différentes formules adaptées aux particuliers comme aux professionnels. Consultez notre page Tarifs pour plus de détails.",
+    },
+    {
+      question: "Comment puis-je contacter le support ?",
+      answer:
+        "Notre équipe support est disponible par email à support@torp.app. Nous nous efforçons de répondre rapidement à toutes vos questions pour vous accompagner au mieux dans votre projet.",
     },
   ];
 
@@ -93,7 +93,7 @@ export const FAQ = () => {
             Vous avez une autre question ?
           </p>
           <a
-            href="mailto:support@torp.app"
+            href="mailto:support@torp.fr"
             className="text-primary font-semibold hover:underline"
           >
             Contactez notre support →

@@ -9,8 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, FileText, Clock, Shield, CheckCircle, Home, Zap, Droplet, Paintbrush, Download, Loader2 } from 'lucide-react';
-import { Header } from '@/components/Header';
-import { BackButton } from '@/components/BackButton';
+import { AppLayout } from '@/components/layout';
 import { devisService } from '@/services/api/supabase/devis.service';
 
 const projectTypes = [
@@ -40,7 +39,7 @@ export default function Analyze() {
   const [analysisProgress, setAnalysisProgress] = useState<string[]>([]);
   const [currentDevisId, setCurrentDevisId] = useState<string | null>(null);
 
-  const { user, addProject, setCurrentProject } = useApp();
+  const { user, addProject, setCurrentProject, userType } = useApp();
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -71,10 +70,7 @@ export default function Analyze() {
       }
 
       setUploadedFile(file);
-      toast({
-        title: 'Fichier uploadé',
-        description: `${file.name} a été ajouté avec succès.`,
-      });
+      // Toast supprimé pour une meilleure UX - l'affichage du fichier est suffisant
     }
   }, [toast]);
 
@@ -138,6 +134,7 @@ export default function Analyze() {
           delaiSouhaite: projectData.startDate,
           urgence: projectData.urgency,
           contraintes: projectData.constraints,
+          userType: userType, // Pass user type for differentiated analysis
         }
       );
 
@@ -190,16 +187,42 @@ export default function Analyze() {
         }
       };
 
-      // Poll every 3 seconds
+      // Poll every 3 seconds with error tracking
+      let pollErrorCount = 0;
+      let analyzedConfirmCount = 0;
+      let pollIntervalCleared = false;
+
       const pollInterval = setInterval(async () => {
+        if (pollIntervalCleared) return;
+
         const devisData = await checkAnalysisStatus();
 
-        if (!devisData) return;
+        if (!devisData) {
+          pollErrorCount++;
+          console.warn(`[Analyze] Polling error ${pollErrorCount}/10`);
 
-        console.log('[Analyze] Polling status:', devisData.status);
+          // After 10 consecutive errors (30 seconds), show warning but continue polling
+          if (pollErrorCount >= 10 && pollErrorCount % 10 === 0) {
+            console.error('[Analyze] Multiple polling errors, checking if still analyzing...');
+            setAnalysisProgress(prev => {
+              const errMsg = 'Vérification du statut en cours...';
+              if (!prev.includes(errMsg)) {
+                return [...prev, errMsg];
+              }
+              return prev;
+            });
+          }
+          return;
+        }
+
+        // Reset error count on successful poll
+        pollErrorCount = 0;
+
+        console.log('[Analyze] Polling status:', devisData.status, '| Score:', devisData.score_total);
 
         // Update progress based on status
         if (devisData.status === 'analyzing') {
+          analyzedConfirmCount = 0; // Reset confirmation count
           // Show random progress step
           const steps = [
             'Extraction des données du devis...',
@@ -218,20 +241,29 @@ export default function Analyze() {
             return prev;
           });
         } else if (devisData.status === 'analyzed') {
-          console.log('[Analyze] Analysis complete! Navigating to results...');
-          clearInterval(pollInterval);
-          setAnalysisProgress(prev => [...prev, 'Analyse terminée !']);
+          analyzedConfirmCount++;
+          console.log(`[Analyze] Status is 'analyzed' (confirmation ${analyzedConfirmCount}/2)`);
 
-          // Navigate directly to results page - let it load the data
-          setIsAnalyzing(false);
+          // Wait for 2 confirmations to avoid race conditions
+          if (analyzedConfirmCount >= 2) {
+            console.log('[Analyze] Analysis CONFIRMED complete! Navigating to results...');
+            pollIntervalCleared = true;
+            clearInterval(pollInterval);
+            setAnalysisProgress(prev => [...prev, 'Analyse terminée !']);
 
-          toast({
-            title: 'Analyse terminée !',
-            description: `Score TORP: ${devisData.score_total}/1000 (${devisData.grade})`,
-          });
+            // Navigate directly to results page - let it load the data
+            setIsAnalyzing(false);
 
-          navigate(`/results?devisId=${devis.id}`);
+            // Toast supprimé - la navigation vers les résultats est suffisante
+
+            // Use a small delay to ensure state is updated
+            setTimeout(() => {
+              console.log('[Analyze] Navigating NOW to /results?devisId=' + devis.id);
+              navigate(`/results?devisId=${devis.id}`);
+            }, 100);
+          }
         } else if (devisData.status === 'uploaded') {
+          analyzedConfirmCount = 0;
           // Still waiting for analysis to start
           setAnalysisProgress(prev => {
             const lastMsg = 'En attente de traitement...';
@@ -243,10 +275,11 @@ export default function Analyze() {
         }
       }, 3000);
 
-      // Timeout after 5 minutes
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        if (isAnalyzing) {
+      // Timeout after 10 minutes (analysis can take 6+ minutes)
+      const timeoutId = setTimeout(() => {
+        if (!pollIntervalCleared) {
+          pollIntervalCleared = true;
+          clearInterval(pollInterval);
           setIsAnalyzing(false);
           toast({
             title: 'Délai d\'analyse dépassé',
@@ -255,7 +288,14 @@ export default function Analyze() {
           });
           navigate('/dashboard');
         }
-      }, 300000);
+      }, 600000); // 10 minutes instead of 5
+
+      // Store cleanup function
+      (window as any).__analyzeCleanup = () => {
+        pollIntervalCleared = true;
+        clearInterval(pollInterval);
+        clearTimeout(timeoutId);
+      };
 
     } catch (error) {
       console.error('[Analyze] ===== CATCH BLOCK REACHED =====');
@@ -313,22 +353,16 @@ export default function Analyze() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      
-      <div className="container mx-auto px-4 py-12">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center gap-4 mb-8">
-            <BackButton />
-            <div>
-              <h1 className="text-4xl font-bold text-foreground">
-                Analyser votre devis BTP
-              </h1>
-              <p className="text-xl text-muted-foreground">
-                Obtenez un score de confiance en quelques clics
-              </p>
-            </div>
-          </div>
+    <AppLayout>
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-foreground">
+            Analyser votre devis BTP
+          </h1>
+          <p className="text-xl text-muted-foreground">
+            Obtenez un score de confiance en quelques clics
+          </p>
+        </div>
 
           {step === 1 && (
             <Card>
@@ -371,25 +405,6 @@ export default function Analyze() {
                         <p className="text-sm text-muted-foreground mb-4">
                           Formats acceptés : PDF, JPG, PNG (max 10MB)
                         </p>
-                        <div className="mt-4">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              // Simuler l'upload d'un devis exemple
-                              const mockFile = new File(['mock content'], 'devis-exemple-salle-de-bain.pdf', { type: 'application/pdf' });
-                              Object.defineProperty(mockFile, 'size', { value: 2548736 }); // 2.5MB
-                              setUploadedFile(mockFile);
-                              toast({
-                                title: 'Devis exemple chargé',
-                                description: 'Vous pouvez maintenant tester l\'analyse.',
-                              });
-                            }}
-                            className="text-sm text-primary hover:text-primary/80 underline"
-                          >
-                            Ou essayez avec notre devis d'exemple
-                          </button>
-                        </div>
                       </div>
                     </div>
                   )}
@@ -563,9 +578,8 @@ export default function Analyze() {
                 </div>
               </CardContent>
             </Card>
-          )}
-        </div>
+        )}
       </div>
-    </div>
+    </AppLayout>
   );
 }

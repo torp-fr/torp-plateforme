@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 interface AnalyticsProps {
-  userType: 'B2B' | 'B2C' | 'B2G' | 'B2B2C';
+  userType: 'B2B' | 'B2C';
 }
 
 export function AdvancedAnalytics({ userType }: AnalyticsProps) {
@@ -381,32 +381,6 @@ export function AdvancedAnalytics({ userType }: AnalyticsProps) {
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">Analytics spécialisés pour les particuliers à développer</p>
-            </CardContent>
-          </Card>
-        </div>
-      );
-    case 'B2G':
-      return (
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Analytics B2G</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">Analytics pour collectivités disponibles dans le dashboard dédié</p>
-            </CardContent>
-          </Card>
-        </div>
-      );
-    case 'B2B2C':
-      return (
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Analytics B2B2C</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">Analytics pour prescripteurs disponibles dans le dashboard dédié</p>
             </CardContent>
           </Card>
         </div>

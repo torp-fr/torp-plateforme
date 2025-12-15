@@ -5,11 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
-import ChatAI from '@/components/ChatAI';
 import { PaymentManager } from '@/components/PaymentManager';
 import { ProjectComparison } from '@/components/ProjectComparison';
 import { CCTPGenerator } from '@/components/CCTPGenerator';
-import { ArrowLeft, MessageSquare, CreditCard, BarChart3, FileText } from 'lucide-react';
+import { ArrowLeft, CreditCard, BarChart3, FileText } from 'lucide-react';
 
 export default function ResultsInteractive() {
   const { currentProject, userType } = useApp();
@@ -38,16 +37,12 @@ export default function ResultsInteractive() {
               Accompagnement personnalisé
             </h1>
             <p className="text-lg text-muted-foreground">
-              Posez vos questions, gérez les paiements, comparez vos devis et générez votre CCTP
+              Gérez les paiements, comparez vos devis et générez votre CCTP
             </p>
           </div>
 
-          <Tabs defaultValue="chat" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="chat" className="flex items-center gap-2">
-                <MessageSquare className="w-4 h-4" />
-                Assistant IA
-              </TabsTrigger>
+          <Tabs defaultValue="cctp" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="cctp" className="flex items-center gap-2">
                 <FileText className="w-4 h-4" />
                 CCTP
@@ -61,13 +56,6 @@ export default function ResultsInteractive() {
                 Comparaison
               </TabsTrigger>
             </TabsList>
-
-            <TabsContent value="chat">
-              <ChatAI 
-                projectId={currentProject.id} 
-                analysisResult={currentProject.analysisResult} 
-              />
-            </TabsContent>
 
             <TabsContent value="cctp">
               <CCTPGenerator />

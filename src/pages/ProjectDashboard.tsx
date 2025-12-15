@@ -7,7 +7,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
 import { BackButton } from '@/components/BackButton';
-import ChatAI from '@/components/ChatAI';
 import {
   Calendar,
   Clock,
@@ -25,7 +24,6 @@ import {
   Shield,
   Truck,
   ClipboardCheck,
-  Brain,
   Plus,
   Edit,
   Download,
@@ -125,7 +123,7 @@ export default function ProjectDashboard() {
           {/* En-tête du projet */}
           <div className="mb-8">
             <div className="flex items-center gap-4 mb-4">
-              <BackButton to="/projects" label="Mes projets" />
+              <BackButton to="/dashboard" label="Mes analyses" />
               <div className="flex-1">
                 <h1 className="text-3xl font-bold text-foreground">{project.name}</h1>
                 <div className="flex items-center gap-4 mt-2">
@@ -188,10 +186,6 @@ export default function ProjectDashboard() {
               <TabsTrigger value="documents" className="flex items-center gap-2">
                 <FileText className="w-4 h-4" />
                 Documents
-              </TabsTrigger>
-              <TabsTrigger value="assistant" className="flex items-center gap-2">
-                <Brain className="w-4 h-4" />
-                Assistant IA
               </TabsTrigger>
             </TabsList>
 
@@ -486,28 +480,6 @@ export default function ProjectDashboard() {
                       </div>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Assistant IA */}
-            <TabsContent value="assistant" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Brain className="w-5 h-5 text-primary" />
-                    Assistant Maître d'Œuvre IA
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Posez vos questions sur votre projet, obtenez des conseils d'expert et des recommandations personnalisées
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <ChatAI 
-                    projectId={project.id}
-                    analysisResult={project.analysisResult}
-                    context="project"
-                  />
                 </CardContent>
               </Card>
             </TabsContent>
