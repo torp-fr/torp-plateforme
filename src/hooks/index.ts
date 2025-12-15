@@ -93,3 +93,12 @@ export type {
   ChantierStats,
   ChantierStatus,
 } from './useChantiers';
+
+// Phase 1 - Consultation entreprises
+export { useTenders } from './phase1';
+export type {
+  Tender,
+  TenderResponse,
+  TenderStats,
+  CreateTenderData,
+} from './phase1';
