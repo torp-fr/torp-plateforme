@@ -111,7 +111,7 @@ CREATE POLICY "Users can view project documents"
   TO authenticated
   USING (
     project_id IN (
-      SELECT id FROM public.projects WHERE owner_id = auth.uid()
+      SELECT id FROM public.projects WHERE user_id = auth.uid()
     )
   );
 
