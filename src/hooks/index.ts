@@ -102,3 +102,11 @@ export type {
   TenderStats,
   CreateTenderData,
 } from './phase1';
+
+// Phase 3 - Exécution des travaux
+export {
+  useQualityControls,
+  useSituations,
+  useCoordination,
+  useProgressReport,
+} from './phase3';
