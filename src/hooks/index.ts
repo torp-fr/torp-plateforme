@@ -62,3 +62,34 @@ export {
   useDesordre,
   useDOE,
 } from './phase4';
+
+// Analyse de parcelles et risques
+export { useParcelAnalysis } from './useParcelAnalysis';
+export type {
+  ParcelAnalysisData,
+  RiskAnalysisData,
+  ParcelData,
+  RiskAnalysis,
+  RiskItem,
+  GeocodingResult,
+} from './useParcelAnalysis';
+
+// Détails projet
+export { useProjectDetails } from './useProjectDetails';
+export type {
+  ProjectDetails,
+  ProjectPhase,
+  ProjectBudget,
+  BudgetItem,
+  TeamMember,
+  ProjectAlert,
+  ProjectDocument,
+} from './useProjectDetails';
+
+// Gestion des chantiers
+export { useChantiers } from './useChantiers';
+export type {
+  ChantierCard,
+  ChantierStats,
+  ChantierStatus,
+} from './useChantiers';
