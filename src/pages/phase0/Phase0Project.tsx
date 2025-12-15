@@ -30,6 +30,7 @@ import {
   PDFExportService,
 } from '@/services/phase0';
 import { DocumentViewer } from '@/components/phase0';
+import { NextStepsCard } from '@/components/phase0/NextStepsCard';
 import { TenderService } from '@/services/tender/tender.service';
 import { DCEGeneratorService } from '@/services/tender/dce-generator.service';
 import type { Tender, TenderDocument as TenderDoc } from '@/types/tender';
@@ -297,6 +298,15 @@ export function Phase0ProjectPage() {
             </div>
           </CardHeader>
         </Card>
+
+        {/* Prochaines étapes - Guide l'utilisateur selon son profil */}
+        <div className="mb-6">
+          <NextStepsCard
+            project={project}
+            hasTender={!!tender}
+            hasDocuments={documents.length > 0}
+          />
+        </div>
 
         {/* Contenu principal */}
         <Tabs defaultValue="summary">

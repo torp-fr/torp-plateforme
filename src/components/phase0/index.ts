@@ -3,3 +3,4 @@
  */
 
 export { DocumentViewer } from './DocumentViewer';
+export { NextStepsCard } from './NextStepsCard';
