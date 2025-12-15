@@ -163,9 +163,9 @@ CREATE INDEX IF NOT EXISTS idx_companies_score ON public.companies(score_torp DE
 CREATE INDEX IF NOT EXISTS idx_companies_specialites ON public.companies USING GIN(specialites);
 CREATE INDEX IF NOT EXISTS idx_companies_qualifications ON public.companies USING GIN(qualifications);
 
--- Index fulltext sur le nom (utiliser la colonne 'name' existante)
+-- Index fulltext sur la dénomination
 DROP INDEX IF EXISTS idx_companies_name_search;
-CREATE INDEX idx_companies_name_search ON public.companies USING GIN(to_tsvector('french', COALESCE(name, '')));
+CREATE INDEX idx_companies_name_search ON public.companies USING GIN(to_tsvector('french', COALESCE(denomination, '')));
 
 -- Trigger updated_at
 CREATE OR REPLACE FUNCTION update_companies_updated_at()
@@ -206,7 +206,7 @@ CREATE POLICY "Companies can be updated by authenticated users"
   TO authenticated
   USING (true);
 
--- Fonction de recherche fulltext (utilise 'name' au lieu de 'denomination')
+-- Fonction de recherche fulltext
 CREATE OR REPLACE FUNCTION search_companies(
   search_query TEXT,
   p_departement VARCHAR DEFAULT NULL,
@@ -221,9 +221,9 @@ BEGIN
   SELECT c.*
   FROM public.companies c
   WHERE
-    -- Recherche fulltext sur nom
+    -- Recherche fulltext sur dénomination
     (search_query IS NULL OR search_query = '' OR
-     to_tsvector('french', COALESCE(c.name, '')) @@ plainto_tsquery('french', search_query))
+     to_tsvector('french', COALESCE(c.denomination, '')) @@ plainto_tsquery('french', search_query))
     -- Filtre département
     AND (p_departement IS NULL OR c.departement = p_departement)
     -- Filtre spécialités
@@ -231,7 +231,7 @@ BEGIN
     -- Filtre score minimum
     AND (p_min_score IS NULL OR c.score_torp >= p_min_score)
     -- Filtre RGE
-    AND (NOT p_rge_required OR c.rge_certified = true OR EXISTS (
+    AND (NOT p_rge_required OR EXISTS (
       SELECT 1 FROM jsonb_array_elements(c.certifications_jsonb) cert
       WHERE cert->>'type' = 'RGE'
     ))
