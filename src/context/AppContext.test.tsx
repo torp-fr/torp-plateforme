@@ -2,8 +2,42 @@
  * Tests for AppContext
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+
+// Mock supabase before importing AppContext
+vi.mock('@/lib/supabase', () => ({
+  supabase: {
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+      onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
+    },
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({ data: [], error: null }),
+    }),
+  },
+}));
+
+// Mock PDF-related services to avoid pdfjs DOM issues
+vi.mock('@/services/pdf/pdf-extractor.service', () => ({
+  PdfExtractorService: { extractText: vi.fn() },
+}));
+
+vi.mock('@/services/document/smart-pdf-processor', () => ({
+  SmartPdfProcessor: { process: vi.fn() },
+}));
+
+// Mock auth services
+vi.mock('@/services/api/supabase/auth.service', () => ({
+  supabaseAuthService: {
+    login: vi.fn(),
+    logout: vi.fn(),
+    getCurrentUser: vi.fn(),
+  },
+}));
+
 import { AppProvider, useApp } from './AppContext';
 
 describe('AppContext', () => {
@@ -80,21 +114,29 @@ describe('AppContext', () => {
       wrapper: AppProvider,
     });
 
-    // Use an existing project ID from mock data
-    const existingProjectId = result.current.projects[0]?.id;
-
-    if (!existingProjectId) {
-      throw new Error('No projects in initial state');
-    }
+    // First add a project to update
+    const newProject = {
+      id: 'update-test-1',
+      name: 'Project to Update',
+      type: 'Test',
+      status: 'draft' as const,
+      amount: '1000€',
+      createdAt: '2024-01-01',
+    };
 
     act(() => {
-      result.current.updateProject(existingProjectId, {
+      result.current.addProject(newProject);
+    });
+
+    // Now update it
+    act(() => {
+      result.current.updateProject('update-test-1', {
         status: 'completed',
         score: 90,
       });
     });
 
-    const updatedProject = result.current.projects.find(p => p.id === existingProjectId);
+    const updatedProject = result.current.projects.find(p => p.id === 'update-test-1');
     expect(updatedProject?.status).toBe('completed');
     expect(updatedProject?.score).toBe(90);
   });
