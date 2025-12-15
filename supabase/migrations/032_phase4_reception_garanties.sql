@@ -670,45 +670,45 @@ ALTER TABLE visites_levee_reserves ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can view their OPR sessions" ON opr_sessions;
 CREATE POLICY "Users can view their OPR sessions"
   ON opr_sessions FOR SELECT
-  USING (created_by = auth.uid() OR auth.uid() IN (
-    SELECT user_id FROM user_profiles WHERE role = 'admin'
+  USING (created_by = auth.uid() OR EXISTS (
+    SELECT 1 FROM users WHERE id = auth.uid() AND user_type IN ('admin', 'super_admin')
   ));
 
 DROP POLICY IF EXISTS "Users can manage their OPR sessions" ON opr_sessions;
 CREATE POLICY "Users can manage their OPR sessions"
   ON opr_sessions FOR ALL
-  USING (created_by = auth.uid() OR auth.uid() IN (
-    SELECT user_id FROM user_profiles WHERE role = 'admin'
+  USING (created_by = auth.uid() OR EXISTS (
+    SELECT 1 FROM users WHERE id = auth.uid() AND user_type IN ('admin', 'super_admin')
   ));
 
 -- Policies pour reserves
 DROP POLICY IF EXISTS "Users can view their reserves" ON reserves;
 CREATE POLICY "Users can view their reserves"
   ON reserves FOR SELECT
-  USING (created_by = auth.uid() OR auth.uid() IN (
-    SELECT user_id FROM user_profiles WHERE role = 'admin'
+  USING (created_by = auth.uid() OR EXISTS (
+    SELECT 1 FROM users WHERE id = auth.uid() AND user_type IN ('admin', 'super_admin')
   ));
 
 DROP POLICY IF EXISTS "Users can manage their reserves" ON reserves;
 CREATE POLICY "Users can manage their reserves"
   ON reserves FOR ALL
-  USING (created_by = auth.uid() OR auth.uid() IN (
-    SELECT user_id FROM user_profiles WHERE role = 'admin'
+  USING (created_by = auth.uid() OR EXISTS (
+    SELECT 1 FROM users WHERE id = auth.uid() AND user_type IN ('admin', 'super_admin')
   ));
 
 -- Policies pour receptions
 DROP POLICY IF EXISTS "Users can view their receptions" ON receptions;
 CREATE POLICY "Users can view their receptions"
   ON receptions FOR SELECT
-  USING (created_by = auth.uid() OR auth.uid() IN (
-    SELECT user_id FROM user_profiles WHERE role = 'admin'
+  USING (created_by = auth.uid() OR EXISTS (
+    SELECT 1 FROM users WHERE id = auth.uid() AND user_type IN ('admin', 'super_admin')
   ));
 
 DROP POLICY IF EXISTS "Users can manage their receptions" ON receptions;
 CREATE POLICY "Users can manage their receptions"
   ON receptions FOR ALL
-  USING (created_by = auth.uid() OR auth.uid() IN (
-    SELECT user_id FROM user_profiles WHERE role = 'admin'
+  USING (created_by = auth.uid() OR EXISTS (
+    SELECT 1 FROM users WHERE id = auth.uid() AND user_type IN ('admin', 'super_admin')
   ));
 
 -- Policies pour garanties
@@ -720,23 +720,23 @@ CREATE POLICY "Users can view their garanties"
 DROP POLICY IF EXISTS "Users can manage their garanties" ON garanties;
 CREATE POLICY "Users can manage their garanties"
   ON garanties FOR ALL
-  USING (auth.uid() IN (
-    SELECT user_id FROM user_profiles WHERE role = 'admin'
+  USING (EXISTS (
+    SELECT 1 FROM users WHERE id = auth.uid() AND user_type IN ('admin', 'super_admin')
   ) OR auth.uid() IS NOT NULL);
 
 -- Policies pour desordres
 DROP POLICY IF EXISTS "Users can view their desordres" ON desordres;
 CREATE POLICY "Users can view their desordres"
   ON desordres FOR SELECT
-  USING (created_by = auth.uid() OR auth.uid() IN (
-    SELECT user_id FROM user_profiles WHERE role = 'admin'
+  USING (created_by = auth.uid() OR EXISTS (
+    SELECT 1 FROM users WHERE id = auth.uid() AND user_type IN ('admin', 'super_admin')
   ));
 
 DROP POLICY IF EXISTS "Users can manage their desordres" ON desordres;
 CREATE POLICY "Users can manage their desordres"
   ON desordres FOR ALL
-  USING (created_by = auth.uid() OR auth.uid() IN (
-    SELECT user_id FROM user_profiles WHERE role = 'admin'
+  USING (created_by = auth.uid() OR EXISTS (
+    SELECT 1 FROM users WHERE id = auth.uid() AND user_type IN ('admin', 'super_admin')
   ));
 
 -- Policies pour doe
