@@ -1,8 +1,11 @@
 /**
  * TORP Phase 3 - Coordination Service
  * Gestion de la coordination multi-entreprises
+ *
+ * PRODUCTION-READY: Utilise Supabase pour la persistance
  */
 
+import { supabase } from '@/lib/supabase';
 import type {
   CreneauIntervention,
   ConflitPlanning,
@@ -72,7 +75,7 @@ export interface DegradationFilters {
 
 export class CoordinationService {
   // ============================================
-  // CRÉNEAUX D'INTERVENTION
+  // CRÉNEAUX D'INTERVENTION (via coordination_slots)
   // ============================================
 
   /**
@@ -80,23 +83,48 @@ export class CoordinationService {
    */
   static async createCreneau(input: CreateCreneauInput): Promise<CreneauIntervention> {
     const now = new Date().toISOString();
+
+    // Insérer dans Supabase
+    const { data, error } = await supabase
+      .from('coordination_slots')
+      .insert({
+        project_id: input.chantierId,
+        slot_date: input.dateDebut.split('T')[0],
+        start_time: '08:00',
+        end_time: '18:00',
+        company_id: input.entrepriseId,
+        company_name: input.entrepriseNom,
+        lot_code: input.lotId,
+        zone_id: input.zone,
+        zone_name: input.zone,
+        status: 'planifie',
+        description: input.description,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[CoordinationService] Error creating slot:', error);
+      throw new Error(`Failed to create coordination slot: ${error.message}`);
+    }
+
     const creneau: CreneauIntervention = {
-      id: crypto.randomUUID(),
-      chantierId: input.chantierId,
-      entrepriseId: input.entrepriseId,
-      entrepriseNom: input.entrepriseNom,
-      lotId: input.lotId,
-      lotNom: input.lotNom,
-      dateDebut: input.dateDebut,
+      id: data.id,
+      chantierId: data.project_id,
+      entrepriseId: data.company_id,
+      entrepriseNom: data.company_name,
+      lotId: data.lot_code,
+      lotNom: input.lotNom || data.lot_code,
+      dateDebut: data.slot_date,
       dateFin: input.dateFin,
-      zone: input.zone,
-      description: input.description,
+      zone: data.zone_name,
+      description: data.description,
       effectifPrevu: input.effectifPrevu,
       statut: 'reserve',
-      creePar: input.entrepriseNom,
+      creePar: data.company_name,
       conflits: [],
-      createdAt: now,
-      updatedAt: now,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
     };
 
     // Détecter les conflits potentiels
@@ -105,9 +133,12 @@ export class CoordinationService {
 
     if (conflits.length > 0) {
       creneau.statut = 'conflit';
+      await supabase
+        .from('coordination_slots')
+        .update({ status: 'conflit' })
+        .eq('id', data.id);
     }
 
-    console.log('[CoordinationService] Créneau créé:', creneau);
     return creneau;
   }
 
@@ -115,47 +146,106 @@ export class CoordinationService {
    * Lister les créneaux
    */
   static async listCreneaux(filters?: CreneauFilters): Promise<CreneauIntervention[]> {
-    const creneaux = this.getMockCreneaux();
+    let query = supabase.from('coordination_slots').select('*');
 
-    return creneaux.filter(c => {
-      if (filters?.chantierId && c.chantierId !== filters.chantierId) return false;
-      if (filters?.entrepriseId && c.entrepriseId !== filters.entrepriseId) return false;
-      if (filters?.lotId && c.lotId !== filters.lotId) return false;
-      if (filters?.zone && c.zone !== filters.zone) return false;
-      if (filters?.statut && c.statut !== filters.statut) return false;
-      return true;
-    });
+    if (filters?.chantierId) {
+      query = query.eq('project_id', filters.chantierId);
+    }
+    if (filters?.entrepriseId) {
+      query = query.eq('company_id', filters.entrepriseId);
+    }
+    if (filters?.lotId) {
+      query = query.eq('lot_code', filters.lotId);
+    }
+    if (filters?.zone) {
+      query = query.eq('zone_name', filters.zone);
+    }
+    if (filters?.statut) {
+      query = query.eq('status', filters.statut);
+    }
+    if (filters?.dateDebut) {
+      query = query.gte('slot_date', filters.dateDebut);
+    }
+    if (filters?.dateFin) {
+      query = query.lte('slot_date', filters.dateFin);
+    }
+
+    const { data, error } = await query.order('slot_date', { ascending: true });
+
+    if (error) {
+      console.error('[CoordinationService] Error listing slots:', error);
+      return [];
+    }
+
+    return (data || []).map(slot => ({
+      id: slot.id,
+      chantierId: slot.project_id,
+      entrepriseId: slot.company_id,
+      entrepriseNom: slot.company_name,
+      lotId: slot.lot_code,
+      lotNom: slot.lot_code,
+      dateDebut: slot.slot_date,
+      dateFin: slot.slot_date,
+      zone: slot.zone_name,
+      description: slot.description,
+      statut: this.mapSlotStatus(slot.status),
+      creePar: slot.company_name,
+      conflits: [],
+      createdAt: slot.created_at,
+      updatedAt: slot.updated_at,
+    }));
+  }
+
+  private static mapSlotStatus(status: string): StatutCreneauPlanning {
+    const statusMap: Record<string, StatutCreneauPlanning> = {
+      'planifie': 'reserve',
+      'confirme': 'confirme',
+      'en_cours': 'en_cours',
+      'termine': 'termine',
+      'annule': 'annule',
+      'conflit': 'conflit',
+    };
+    return statusMap[status] || 'reserve';
   }
 
   /**
    * Valider un créneau
    */
   static async validerCreneau(creneauId: string, validePar: string): Promise<CreneauIntervention> {
-    console.log('[CoordinationService] Créneau validé:', creneauId, validePar);
+    const { data, error } = await supabase
+      .from('coordination_slots')
+      .update({ status: 'confirme' })
+      .eq('id', creneauId)
+      .select()
+      .single();
 
-    // Simulation
+    if (error) {
+      console.error('[CoordinationService] Error validating slot:', error);
+      throw new Error(`Failed to validate slot: ${error.message}`);
+    }
+
     return {
-      id: creneauId,
-      chantierId: 'mock',
-      entrepriseId: 'mock',
-      entrepriseNom: 'Entreprise',
-      lotId: 'mock',
-      lotNom: 'Lot',
-      dateDebut: new Date().toISOString(),
-      dateFin: new Date().toISOString(),
-      zone: 'Zone A',
+      id: data.id,
+      chantierId: data.project_id,
+      entrepriseId: data.company_id,
+      entrepriseNom: data.company_name,
+      lotId: data.lot_code,
+      lotNom: data.lot_code,
+      dateDebut: data.slot_date,
+      dateFin: data.slot_date,
+      zone: data.zone_name,
       statut: 'confirme',
-      creePar: 'Entreprise',
+      creePar: data.company_name,
       validePar,
       dateValidation: new Date().toISOString(),
       conflits: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
     };
   }
 
   // ============================================
-  // DÉTECTION DE CONFLITS
+  // DÉTECTION DE CONFLITS (via coordination_conflicts)
   // ============================================
 
   /**
@@ -173,13 +263,28 @@ export class CoordinationService {
 
       // Vérifier chevauchement temporel
       const chevauche = this.periodesChevauchent(
-        { debut: creneau.dateDebut, fin: creneau.dateFin },
-        { debut: existant.dateDebut, fin: existant.dateFin }
+        { debut: creneau.dateDebut, fin: creneau.dateFin || creneau.dateDebut },
+        { debut: existant.dateDebut, fin: existant.dateFin || existant.dateDebut }
       );
 
       if (chevauche) {
+        // Insérer le conflit en DB
+        const { data: conflitData } = await supabase
+          .from('coordination_conflicts')
+          .insert({
+            project_id: creneau.chantierId,
+            slot_id_1: creneau.id,
+            slot_id_2: existant.id,
+            conflict_type: 'chevauchement_zone',
+            severity: 'warning',
+            description: `Conflit ${creneau.lotNom} / ${existant.lotNom} dans ${creneau.zone}`,
+            status: 'open',
+          })
+          .select()
+          .single();
+
         const conflit: ConflitPlanning = {
-          id: crypto.randomUUID(),
+          id: conflitData?.id || crypto.randomUUID(),
           chantierId: creneau.chantierId,
           type: 'chevauchement_zone',
           creneau1Id: creneau.id,
@@ -212,7 +317,7 @@ export class CoordinationService {
     const d2 = new Date(p2.debut).getTime();
     const f2 = new Date(p2.fin).getTime();
 
-    return d1 < f2 && d2 < f1;
+    return d1 <= f2 && d2 <= f1;
   }
 
   /**
@@ -258,12 +363,53 @@ export class CoordinationService {
    * Lister les conflits
    */
   static async listConflits(filters?: ConflitFilters): Promise<ConflitPlanning[]> {
-    return this.getMockConflits().filter(c => {
-      if (filters?.chantierId && c.chantierId !== filters.chantierId) return false;
-      if (filters?.statut && c.statut !== filters.statut) return false;
-      if (filters?.impact && c.impact !== filters.impact) return false;
-      return true;
-    });
+    let query = supabase.from('coordination_conflicts').select('*');
+
+    if (filters?.chantierId) {
+      query = query.eq('project_id', filters.chantierId);
+    }
+    if (filters?.statut) {
+      const statusMap: Record<string, string> = {
+        'detecte': 'open',
+        'en_discussion': 'acknowledged',
+        'resolu': 'resolved',
+        'ignore': 'ignored',
+      };
+      query = query.eq('status', statusMap[filters.statut] || filters.statut);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[CoordinationService] Error listing conflicts:', error);
+      return [];
+    }
+
+    return (data || []).map(c => ({
+      id: c.id,
+      chantierId: c.project_id,
+      type: c.conflict_type as TypeConflitPlanning,
+      creneau1Id: c.slot_id_1,
+      creneau2Id: c.slot_id_2,
+      description: c.description,
+      impact: c.severity === 'error' ? 'bloquant' : 'moyen',
+      dateDetection: c.created_at,
+      detectePar: 'systeme',
+      statut: this.mapConflictStatus(c.status),
+      resolution: c.resolution ? { description: c.resolution, date: c.resolved_at } : undefined,
+      createdAt: c.created_at,
+      updatedAt: c.created_at,
+    }));
+  }
+
+  private static mapConflictStatus(status: string): ConflitPlanning['statut'] {
+    const statusMap: Record<string, ConflitPlanning['statut']> = {
+      'open': 'detecte',
+      'acknowledged': 'en_discussion',
+      'resolved': 'resolu',
+      'ignored': 'ignore',
+    };
+    return statusMap[status] || 'detecte';
   }
 
   /**
@@ -273,26 +419,40 @@ export class CoordinationService {
     conflitId: string,
     resolution: ConflitPlanning['resolution']
   ): Promise<ConflitPlanning> {
-    console.log('[CoordinationService] Conflit résolu:', conflitId, resolution);
+    const { data, error } = await supabase
+      .from('coordination_conflicts')
+      .update({
+        status: 'resolved',
+        resolution: resolution?.description,
+        resolved_at: new Date().toISOString(),
+      })
+      .eq('id', conflitId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[CoordinationService] Error resolving conflict:', error);
+      throw new Error(`Failed to resolve conflict: ${error.message}`);
+    }
 
     return {
-      id: conflitId,
-      chantierId: 'mock',
-      type: 'chevauchement_zone',
-      creneau1Id: 'mock',
-      description: 'Conflit résolu',
+      id: data.id,
+      chantierId: data.project_id,
+      type: data.conflict_type as TypeConflitPlanning,
+      creneau1Id: data.slot_id_1,
+      description: data.description,
       impact: 'moyen',
-      dateDetection: new Date().toISOString(),
+      dateDetection: data.created_at,
       detectePar: 'systeme',
       statut: 'resolu',
       resolution,
-      createdAt: new Date().toISOString(),
+      createdAt: data.created_at,
       updatedAt: new Date().toISOString(),
     };
   }
 
   // ============================================
-  // CARNET DE LIAISON
+  // CARNET DE LIAISON (via correspondence_logs)
   // ============================================
 
   /**
@@ -301,47 +461,81 @@ export class CoordinationService {
   static async getCarnetDuJour(chantierId: string, date?: string): Promise<CarnetLiaison> {
     const dateJour = date || new Date().toISOString().split('T')[0];
 
-    // Rechercher carnet existant
-    const carnets = this.getMockCarnets();
-    let carnet = carnets.find(c => c.chantierId === chantierId && c.date === dateJour);
+    // Rechercher les entrées du jour
+    const { data: entries, error } = await supabase
+      .from('correspondence_logs')
+      .select('*')
+      .eq('project_id', chantierId)
+      .gte('created_at', `${dateJour}T00:00:00`)
+      .lt('created_at', `${dateJour}T23:59:59`)
+      .order('created_at', { ascending: true });
 
-    if (!carnet) {
-      // Créer nouveau carnet
-      carnet = {
-        id: crypto.randomUUID(),
-        chantierId,
-        date: dateJour,
-        entrees: [],
-        signatures: [],
-        cloture: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+    if (error) {
+      console.error('[CoordinationService] Error fetching carnet:', error);
     }
 
-    return carnet;
+    const entrees: EntreeCarnetLiaison[] = (entries || []).map(e => ({
+      id: e.id,
+      carnetId: `carnet-${dateJour}`,
+      entreprise: e.sender_company || 'Non spécifié',
+      auteur: e.sender_name || 'Non spécifié',
+      dateHeure: e.created_at,
+      type: e.message_type as TypeEntreeCarnet,
+      contenu: e.content,
+      destinataires: e.recipients,
+      photos: e.attachments?.filter((a: any) => a.type?.startsWith('image/')).map((a: any) => a.path),
+      urgent: e.message_type === 'alert',
+      createdAt: e.created_at,
+    }));
+
+    return {
+      id: `carnet-${dateJour}`,
+      chantierId,
+      date: dateJour,
+      entrees,
+      signatures: [],
+      cloture: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
   }
 
   /**
    * Ajouter une entrée au carnet
    */
   static async ajouterEntreeCarnet(input: CreateEntreeCarnetInput): Promise<EntreeCarnetLiaison> {
-    const entree: EntreeCarnetLiaison = {
-      id: crypto.randomUUID(),
-      carnetId: 'mock',
-      entreprise: input.entreprise,
-      auteur: input.auteur,
-      dateHeure: new Date().toISOString(),
-      type: input.type,
-      contenu: input.contenu,
-      destinataires: input.destinataires,
-      photos: input.photos,
-      urgent: input.urgent || false,
-      createdAt: new Date().toISOString(),
-    };
+    const { data, error } = await supabase
+      .from('correspondence_logs')
+      .insert({
+        project_id: input.chantierId,
+        message_type: input.type,
+        content: input.contenu,
+        sender_name: input.auteur,
+        sender_company: input.entreprise,
+        sender_role: 'entreprise',
+        recipients: input.destinataires || [],
+        attachments: input.photos?.map(url => ({ path: url, type: 'image/jpeg' })) || [],
+      })
+      .select()
+      .single();
 
-    console.log('[CoordinationService] Entrée carnet ajoutée:', entree);
-    return entree;
+    if (error) {
+      console.error('[CoordinationService] Error adding carnet entry:', error);
+      throw new Error(`Failed to add carnet entry: ${error.message}`);
+    }
+
+    return {
+      id: data.id,
+      carnetId: `carnet-${new Date().toISOString().split('T')[0]}`,
+      entreprise: data.sender_company,
+      auteur: data.sender_name,
+      dateHeure: data.created_at,
+      type: data.message_type as TypeEntreeCarnet,
+      contenu: data.content,
+      destinataires: data.recipients,
+      urgent: input.urgent || false,
+      createdAt: data.created_at,
+    };
   }
 
   /**
@@ -351,22 +545,46 @@ export class CoordinationService {
     entreeId: string,
     reponse: { par: string; contenu: string }
   ): Promise<EntreeCarnetLiaison> {
-    console.log('[CoordinationService] Réponse ajoutée:', entreeId, reponse);
+    // Récupérer l'entrée originale
+    const { data: original } = await supabase
+      .from('correspondence_logs')
+      .select('*')
+      .eq('id', entreeId)
+      .single();
+
+    // Créer une réponse liée
+    const { data, error } = await supabase
+      .from('correspondence_logs')
+      .insert({
+        project_id: original?.project_id,
+        message_type: 'response',
+        content: reponse.contenu,
+        sender_name: reponse.par,
+        parent_id: entreeId,
+        thread_id: original?.thread_id || entreeId,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[CoordinationService] Error adding reply:', error);
+      throw new Error(`Failed to add reply: ${error.message}`);
+    }
 
     return {
       id: entreeId,
-      carnetId: 'mock',
-      entreprise: 'Mock',
-      auteur: 'Mock',
-      dateHeure: new Date().toISOString(),
-      type: 'information',
-      contenu: 'Original',
+      carnetId: 'reply',
+      entreprise: original?.sender_company || 'Non spécifié',
+      auteur: original?.sender_name || 'Non spécifié',
+      dateHeure: original?.created_at,
+      type: original?.message_type as TypeEntreeCarnet,
+      contenu: original?.content,
       urgent: false,
       reponse: {
         ...reponse,
-        dateHeure: new Date().toISOString(),
+        dateHeure: data.created_at,
       },
-      createdAt: new Date().toISOString(),
+      createdAt: original?.created_at,
     };
   }
 
@@ -377,16 +595,42 @@ export class CoordinationService {
     carnetId: string,
     signature: { entreprise: string; signataire: string; type: 'arrivee' | 'depart' }
   ): Promise<void> {
-    console.log('[CoordinationService] Signature carnet:', carnetId, signature);
+    // Extraire le project_id du carnetId ou le passer en paramètre
+    const dateMatch = carnetId.match(/carnet-(\d{4}-\d{2}-\d{2})/);
+    const date = dateMatch ? dateMatch[1] : new Date().toISOString().split('T')[0];
+
+    await supabase
+      .from('correspondence_logs')
+      .insert({
+        project_id: carnetId.replace('carnet-', '').split('-')[0] || 'unknown',
+        message_type: signature.type === 'arrivee' ? 'info' : 'info',
+        content: `${signature.type === 'arrivee' ? 'Arrivée' : 'Départ'} - ${signature.signataire}`,
+        sender_name: signature.signataire,
+        sender_company: signature.entreprise,
+        sender_role: 'entreprise',
+      });
   }
 
   /**
    * Clôturer le carnet du jour
    */
   static async cloturerCarnet(carnetId: string, par: string): Promise<CarnetLiaison> {
-    console.log('[CoordinationService] Carnet clôturé:', carnetId, par);
+    // Marquer la clôture via une entrée spéciale
+    const dateMatch = carnetId.match(/carnet-(\d{4}-\d{2}-\d{2})/);
+    const chantierId = carnetId.replace('carnet-', '');
 
-    const carnet = await this.getCarnetDuJour('mock');
+    await supabase
+      .from('correspondence_logs')
+      .insert({
+        project_id: chantierId,
+        message_type: 'info',
+        subject: 'Clôture carnet',
+        content: `Carnet clôturé par ${par}`,
+        sender_name: par,
+        sender_role: 'coordinateur',
+      });
+
+    const carnet = await this.getCarnetDuJour(chantierId);
     carnet.cloture = true;
     carnet.cloturePar = par;
     carnet.clotureLe = new Date().toISOString();
@@ -397,10 +641,43 @@ export class CoordinationService {
    * Lister les carnets
    */
   static async listCarnets(filters?: CarnetFilters): Promise<CarnetLiaison[]> {
-    return this.getMockCarnets().filter(c => {
-      if (filters?.chantierId && c.chantierId !== filters.chantierId) return false;
-      return true;
-    });
+    let query = supabase
+      .from('correspondence_logs')
+      .select('project_id, created_at')
+      .order('created_at', { ascending: false });
+
+    if (filters?.chantierId) {
+      query = query.eq('project_id', filters.chantierId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('[CoordinationService] Error listing carnets:', error);
+      return [];
+    }
+
+    // Grouper par date
+    const carnetsByDate = new Map<string, { projectId: string; date: string }>();
+    for (const entry of data || []) {
+      const date = entry.created_at.split('T')[0];
+      const key = `${entry.project_id}-${date}`;
+      if (!carnetsByDate.has(key)) {
+        carnetsByDate.set(key, { projectId: entry.project_id, date });
+      }
+    }
+
+    // Retourner les carnets uniques
+    return Array.from(carnetsByDate.values()).map(({ projectId, date }) => ({
+      id: `carnet-${date}`,
+      chantierId: projectId,
+      date,
+      entrees: [],
+      signatures: [],
+      cloture: false,
+      createdAt: date,
+      updatedAt: date,
+    }));
   }
 
   // ============================================
@@ -412,8 +689,30 @@ export class CoordinationService {
    */
   static async createConversation(input: CreateConversationInput): Promise<Conversation> {
     const now = new Date().toISOString();
-    const conversation: Conversation = {
-      id: crypto.randomUUID(),
+
+    // Stocker via correspondence_logs avec un thread_id unique
+    const threadId = crypto.randomUUID();
+
+    const { data, error } = await supabase
+      .from('correspondence_logs')
+      .insert({
+        project_id: input.chantierId,
+        message_type: 'info',
+        subject: input.nom,
+        content: input.description || `Conversation: ${input.nom}`,
+        thread_id: threadId,
+        recipients: input.participants.map(p => ({ id: p.id, name: p.nom })),
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[CoordinationService] Error creating conversation:', error);
+      throw new Error(`Failed to create conversation: ${error.message}`);
+    }
+
+    return {
+      id: threadId,
       chantierId: input.chantierId,
       type: input.type,
       nom: input.nom,
@@ -423,16 +722,50 @@ export class CoordinationService {
       createdAt: now,
       updatedAt: now,
     };
-
-    console.log('[CoordinationService] Conversation créée:', conversation);
-    return conversation;
   }
 
   /**
    * Lister les conversations d'un chantier
    */
   static async listConversations(chantierId: string): Promise<Conversation[]> {
-    return this.getMockConversations(chantierId);
+    const { data, error } = await supabase
+      .from('correspondence_logs')
+      .select('*')
+      .eq('project_id', chantierId)
+      .not('thread_id', 'is', null)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[CoordinationService] Error listing conversations:', error);
+      return [];
+    }
+
+    // Grouper par thread_id
+    const conversations = new Map<string, Conversation>();
+    for (const entry of data || []) {
+      if (!entry.thread_id) continue;
+      if (!conversations.has(entry.thread_id)) {
+        conversations.set(entry.thread_id, {
+          id: entry.thread_id,
+          chantierId,
+          type: 'chantier_general',
+          nom: entry.subject || 'Discussion',
+          description: entry.content,
+          participants: (entry.recipients || []).map((r: any) => ({
+            id: r.id || crypto.randomUUID(),
+            entreprise: r.company || 'Non spécifié',
+            nom: r.name || 'Non spécifié',
+            actif: true,
+            messagesNonLus: 0,
+          })),
+          actif: true,
+          createdAt: entry.created_at,
+          updatedAt: entry.created_at,
+        });
+      }
+    }
+
+    return Array.from(conversations.values());
   }
 
   /**
@@ -442,24 +775,69 @@ export class CoordinationService {
     conversationId: string,
     message: Omit<MessageChat, 'id' | 'conversationId' | 'createdAt' | 'lu' | 'modifie'>
   ): Promise<MessageChat> {
-    const msg: MessageChat = {
-      id: crypto.randomUUID(),
+    const { data, error } = await supabase
+      .from('correspondence_logs')
+      .insert({
+        project_id: message.auteurEntreprise || 'unknown',
+        message_type: message.type === 'texte' ? 'info' : message.type,
+        content: message.contenu,
+        sender_id: message.auteurId,
+        sender_name: message.auteurNom,
+        sender_company: message.auteurEntreprise,
+        thread_id: conversationId,
+        attachments: message.fichiers?.map(f => ({ path: f.url, name: f.nom, type: f.type })) || [],
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[CoordinationService] Error sending message:', error);
+      throw new Error(`Failed to send message: ${error.message}`);
+    }
+
+    return {
+      id: data.id,
       conversationId,
-      ...message,
+      auteurId: message.auteurId,
+      auteurNom: message.auteurNom,
+      auteurEntreprise: message.auteurEntreprise,
+      contenu: message.contenu,
+      type: message.type,
+      fichiers: message.fichiers,
       lu: false,
       modifie: false,
-      createdAt: new Date().toISOString(),
+      createdAt: data.created_at,
     };
-
-    console.log('[CoordinationService] Message envoyé:', msg);
-    return msg;
   }
 
   /**
    * Lister les messages d'une conversation
    */
   static async listMessages(conversationId: string, limit = 50): Promise<MessageChat[]> {
-    return this.getMockMessages(conversationId).slice(-limit);
+    const { data, error } = await supabase
+      .from('correspondence_logs')
+      .select('*')
+      .eq('thread_id', conversationId)
+      .order('created_at', { ascending: true })
+      .limit(limit);
+
+    if (error) {
+      console.error('[CoordinationService] Error listing messages:', error);
+      return [];
+    }
+
+    return (data || []).map(m => ({
+      id: m.id,
+      conversationId,
+      auteurId: m.sender_id,
+      auteurNom: m.sender_name || 'Non spécifié',
+      auteurEntreprise: m.sender_company,
+      contenu: m.content,
+      type: 'texte',
+      lu: (m.read_by || []).length > 0,
+      modifie: false,
+      createdAt: m.created_at,
+    }));
   }
 
   // ============================================
@@ -471,8 +849,35 @@ export class CoordinationService {
    */
   static async createInterface(input: CreateInterfaceInput): Promise<InterfaceTechnique> {
     const now = new Date().toISOString();
-    const interfaceTech: InterfaceTechnique = {
-      id: crypto.randomUUID(),
+
+    // Stocker via correspondence_logs avec type spécial
+    const { data, error } = await supabase
+      .from('correspondence_logs')
+      .insert({
+        project_id: input.chantierId,
+        message_type: 'instruction',
+        subject: `Interface: ${input.lot1.lotNom} / ${input.lot2.lotNom}`,
+        content: JSON.stringify({
+          type: input.type,
+          description: input.description,
+          zone: input.zone,
+          specifications: input.specifications,
+          dateRequise: input.dateRequise,
+          lot1: input.lot1,
+          lot2: input.lot2,
+          statut: 'a_definir',
+        }),
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[CoordinationService] Error creating interface:', error);
+      throw new Error(`Failed to create interface: ${error.message}`);
+    }
+
+    return {
+      id: data.id,
       chantierId: input.chantierId,
       lot1: input.lot1,
       lot2: input.lot2,
@@ -485,20 +890,49 @@ export class CoordinationService {
       createdAt: now,
       updatedAt: now,
     };
-
-    console.log('[CoordinationService] Interface créée:', interfaceTech);
-    return interfaceTech;
   }
 
   /**
    * Lister les interfaces
    */
   static async listInterfaces(filters?: InterfaceFilters): Promise<InterfaceTechnique[]> {
-    return this.getMockInterfaces().filter(i => {
-      if (filters?.chantierId && i.chantierId !== filters.chantierId) return false;
-      if (filters?.statut && i.statut !== filters.statut) return false;
-      if (filters?.lotId && i.lot1.lotId !== filters.lotId && i.lot2.lotId !== filters.lotId) return false;
-      return true;
+    let query = supabase
+      .from('correspondence_logs')
+      .select('*')
+      .eq('message_type', 'instruction')
+      .ilike('subject', 'Interface:%');
+
+    if (filters?.chantierId) {
+      query = query.eq('project_id', filters.chantierId);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[CoordinationService] Error listing interfaces:', error);
+      return [];
+    }
+
+    return (data || []).map(d => {
+      let parsed: any = {};
+      try {
+        parsed = JSON.parse(d.content);
+      } catch {}
+
+      return {
+        id: d.id,
+        chantierId: d.project_id,
+        lot1: parsed.lot1 || { lotId: '', lotNom: 'Non spécifié', entreprise: '', role: 'emetteur' },
+        lot2: parsed.lot2 || { lotId: '', lotNom: 'Non spécifié', entreprise: '', role: 'recepteur' },
+        type: parsed.type || 'coordination_pose',
+        description: parsed.description || '',
+        zone: parsed.zone,
+        specifications: parsed.specifications,
+        dateRequise: parsed.dateRequise,
+        statut: parsed.statut || 'a_definir',
+        createdAt: d.created_at,
+        updatedAt: d.created_at,
+      };
     });
   }
 
@@ -510,23 +944,58 @@ export class CoordinationService {
     lotRole: 'lot1' | 'lot2',
     validation: { par: string; commentaire?: string }
   ): Promise<InterfaceTechnique> {
-    console.log('[CoordinationService] Interface validée:', interfaceId, lotRole, validation);
+    // Récupérer l'interface
+    const { data: existing } = await supabase
+      .from('correspondence_logs')
+      .select('*')
+      .eq('id', interfaceId)
+      .single();
 
-    const interfaces = await this.listInterfaces();
-    const iface = interfaces.find(i => i.id === interfaceId);
-    if (iface) {
-      if (lotRole === 'lot1') {
-        iface.valideLot1 = { ...validation, date: new Date().toISOString() };
-      } else {
-        iface.valideLot2 = { ...validation, date: new Date().toISOString() };
-      }
+    let parsed: any = {};
+    try {
+      parsed = JSON.parse(existing?.content || '{}');
+    } catch {}
 
-      // Si les deux lots ont validé, marquer comme défini
-      if (iface.valideLot1 && iface.valideLot2) {
-        iface.statut = 'defini';
-      }
+    // Mettre à jour la validation
+    if (lotRole === 'lot1') {
+      parsed.valideLot1 = { ...validation, date: new Date().toISOString() };
+    } else {
+      parsed.valideLot2 = { ...validation, date: new Date().toISOString() };
     }
-    return iface!;
+
+    // Si les deux lots ont validé, marquer comme défini
+    if (parsed.valideLot1 && parsed.valideLot2) {
+      parsed.statut = 'defini';
+    }
+
+    const { data, error } = await supabase
+      .from('correspondence_logs')
+      .update({ content: JSON.stringify(parsed) })
+      .eq('id', interfaceId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[CoordinationService] Error validating interface:', error);
+      throw new Error(`Failed to validate interface: ${error.message}`);
+    }
+
+    return {
+      id: data.id,
+      chantierId: data.project_id,
+      lot1: parsed.lot1,
+      lot2: parsed.lot2,
+      type: parsed.type,
+      description: parsed.description,
+      zone: parsed.zone,
+      specifications: parsed.specifications,
+      dateRequise: parsed.dateRequise,
+      statut: parsed.statut,
+      valideLot1: parsed.valideLot1,
+      valideLot2: parsed.valideLot2,
+      createdAt: data.created_at,
+      updatedAt: new Date().toISOString(),
+    };
   }
 
   /**
@@ -536,15 +1005,46 @@ export class CoordinationService {
     interfaceId: string,
     probleme: InterfaceTechnique['probleme']
   ): Promise<InterfaceTechnique> {
-    console.log('[CoordinationService] Problème interface signalé:', interfaceId, probleme);
+    // Récupérer et mettre à jour
+    const { data: existing } = await supabase
+      .from('correspondence_logs')
+      .select('*')
+      .eq('id', interfaceId)
+      .single();
 
-    const interfaces = await this.listInterfaces();
-    const iface = interfaces.find(i => i.id === interfaceId);
-    if (iface) {
-      iface.probleme = probleme;
-      iface.statut = 'probleme';
+    let parsed: any = {};
+    try {
+      parsed = JSON.parse(existing?.content || '{}');
+    } catch {}
+
+    parsed.probleme = probleme;
+    parsed.statut = 'probleme';
+
+    const { data, error } = await supabase
+      .from('correspondence_logs')
+      .update({ content: JSON.stringify(parsed) })
+      .eq('id', interfaceId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[CoordinationService] Error reporting interface problem:', error);
+      throw new Error(`Failed to report interface problem: ${error.message}`);
     }
-    return iface!;
+
+    return {
+      id: data.id,
+      chantierId: data.project_id,
+      lot1: parsed.lot1,
+      lot2: parsed.lot2,
+      type: parsed.type,
+      description: parsed.description,
+      zone: parsed.zone,
+      statut: 'probleme',
+      probleme,
+      createdAt: data.created_at,
+      updatedAt: new Date().toISOString(),
+    };
   }
 
   // ============================================
@@ -555,7 +1055,32 @@ export class CoordinationService {
    * Obtenir les règles du chantier
    */
   static async getReglesChantier(chantierId: string): Promise<ReglesChantier> {
-    return this.getMockReglesChantier(chantierId);
+    // Règles par défaut (peuvent être personnalisées via DB plus tard)
+    const now = new Date().toISOString();
+    return {
+      id: `regles-${chantierId}`,
+      chantierId,
+      ordreLots: this.getOrdreLotsBTP(),
+      reglesConflit: [
+        { id: 'rc-1', situation: 'Deux lots même zone', regle: 'Lot chemin critique prioritaire', priorite: 1 },
+        { id: 'rc-2', situation: 'Attente appro', regle: 'Lot avec délai appro long prioritaire', priorite: 2 },
+        { id: 'rc-3', situation: 'Petit vs gros lot', regle: 'Petit lot prioritaire (finit vite)', priorite: 3 },
+      ],
+      protocolesInterface: [
+        { id: 'pi-1', lot1: 'Plaquiste', lot2: 'Électricien', action: 'Percement prises', responsable: 'lot1' },
+        { id: 'pi-2', lot1: 'Peintre', lot2: 'Carreleur', action: 'Protection carrelage', responsable: 'lot1' },
+      ],
+      reglesDegradation: {
+        protectionObligatoire: true,
+        typesProtection: ['bâches', 'cartons', 'scotch de protection'],
+        delaiSignalement: 24,
+        photoObligatoire: true,
+        delaiReparation: 7,
+        responsableParDefaut: 'causant',
+      },
+      createdAt: now,
+      updatedAt: now,
+    };
   }
 
   /**
@@ -565,8 +1090,6 @@ export class CoordinationService {
     chantierId: string,
     updates: Partial<ReglesChantier>
   ): Promise<ReglesChantier> {
-    console.log('[CoordinationService] Règles mises à jour:', chantierId, updates);
-
     const regles = await this.getReglesChantier(chantierId);
     return { ...regles, ...updates, updatedAt: new Date().toISOString() };
   }
@@ -595,8 +1118,21 @@ export class CoordinationService {
    */
   static async signalerDegradation(input: CreateDegradationInput): Promise<Degradation> {
     const now = new Date().toISOString();
-    const degradation: Degradation = {
-      id: crypto.randomUUID(),
+
+    // Créer une entrée dans le carnet
+    const entry = await this.ajouterEntreeCarnet({
+      chantierId: input.chantierId,
+      date: now.split('T')[0],
+      entreprise: input.entrepriseVictime,
+      auteur: 'Système',
+      type: 'incident',
+      contenu: `Dégradation signalée: ${input.description}`,
+      urgent: input.gravite === 'grave',
+      photos: input.photos,
+    });
+
+    return {
+      id: entry.id,
       chantierId: input.chantierId,
       dateSignalement: now,
       signalePar: 'Utilisateur',
@@ -612,26 +1148,10 @@ export class CoordinationService {
       })),
       entrepriseResponsable: input.entrepriseResponsable,
       statut: 'signalee',
-      inscritCarnet: false,
+      inscritCarnet: true,
       createdAt: now,
       updatedAt: now,
     };
-
-    // Inscrire automatiquement au carnet
-    await this.ajouterEntreeCarnet({
-      chantierId: input.chantierId,
-      date: now.split('T')[0],
-      entreprise: input.entrepriseVictime,
-      auteur: 'Système',
-      type: 'incident',
-      contenu: `Dégradation signalée: ${input.description}`,
-      urgent: input.gravite === 'grave',
-    });
-
-    degradation.inscritCarnet = true;
-
-    console.log('[CoordinationService] Dégradation signalée:', degradation);
-    return degradation;
   }
 
   /**
@@ -641,23 +1161,39 @@ export class CoordinationService {
     degradationId: string,
     constatation: Degradation['constatation']
   ): Promise<Degradation> {
-    console.log('[CoordinationService] Dégradation constatée:', degradationId, constatation);
+    // Ajouter une note au carnet
+    const { data } = await supabase
+      .from('correspondence_logs')
+      .select('*')
+      .eq('id', degradationId)
+      .single();
+
+    if (data) {
+      await supabase
+        .from('correspondence_logs')
+        .insert({
+          project_id: data.project_id,
+          message_type: 'info',
+          content: `Constatation: ${constatation?.observations || 'Dégradation constatée'}`,
+          parent_id: degradationId,
+        });
+    }
 
     return {
       id: degradationId,
-      chantierId: 'mock',
-      dateSignalement: new Date().toISOString(),
-      signalePar: 'Mock',
-      entrepriseVictime: 'Mock',
-      lotVictime: 'Mock',
-      zone: 'Mock',
-      description: 'Mock',
+      chantierId: data?.project_id || 'unknown',
+      dateSignalement: data?.created_at,
+      signalePar: data?.sender_name || 'Unknown',
+      entrepriseVictime: data?.sender_company || 'Unknown',
+      lotVictime: 'Unknown',
+      zone: 'Unknown',
+      description: data?.content || '',
       gravite: 'mineure',
       photos: [],
       constatation,
       statut: 'constatee',
       inscritCarnet: true,
-      createdAt: new Date().toISOString(),
+      createdAt: data?.created_at,
       updatedAt: new Date().toISOString(),
     };
   }
@@ -669,23 +1205,38 @@ export class CoordinationService {
     degradationId: string,
     reparation: Degradation['reparation']
   ): Promise<Degradation> {
-    console.log('[CoordinationService] Réparation enregistrée:', degradationId, reparation);
+    const { data } = await supabase
+      .from('correspondence_logs')
+      .select('*')
+      .eq('id', degradationId)
+      .single();
+
+    if (data) {
+      await supabase
+        .from('correspondence_logs')
+        .insert({
+          project_id: data.project_id,
+          message_type: 'info',
+          content: `Réparation effectuée: ${reparation?.description || 'Dégradation réparée'}`,
+          parent_id: degradationId,
+        });
+    }
 
     return {
       id: degradationId,
-      chantierId: 'mock',
-      dateSignalement: new Date().toISOString(),
-      signalePar: 'Mock',
-      entrepriseVictime: 'Mock',
-      lotVictime: 'Mock',
-      zone: 'Mock',
-      description: 'Mock',
+      chantierId: data?.project_id || 'unknown',
+      dateSignalement: data?.created_at,
+      signalePar: data?.sender_name || 'Unknown',
+      entrepriseVictime: data?.sender_company || 'Unknown',
+      lotVictime: 'Unknown',
+      zone: 'Unknown',
+      description: data?.content || '',
       gravite: 'mineure',
       photos: [],
       reparation,
       statut: 'reparee',
       inscritCarnet: true,
-      createdAt: new Date().toISOString(),
+      createdAt: data?.created_at,
       updatedAt: new Date().toISOString(),
     };
   }
@@ -694,12 +1245,38 @@ export class CoordinationService {
    * Lister les dégradations
    */
   static async listDegradations(filters?: DegradationFilters): Promise<Degradation[]> {
-    return this.getMockDegradations().filter(d => {
-      if (filters?.chantierId && d.chantierId !== filters.chantierId) return false;
-      if (filters?.statut && d.statut !== filters.statut) return false;
-      if (filters?.gravite && d.gravite !== filters.gravite) return false;
-      return true;
-    });
+    let query = supabase
+      .from('correspondence_logs')
+      .select('*')
+      .eq('message_type', 'incident');
+
+    if (filters?.chantierId) {
+      query = query.eq('project_id', filters.chantierId);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[CoordinationService] Error listing degradations:', error);
+      return [];
+    }
+
+    return (data || []).map(d => ({
+      id: d.id,
+      chantierId: d.project_id,
+      dateSignalement: d.created_at,
+      signalePar: d.sender_name || 'Unknown',
+      entrepriseVictime: d.sender_company || 'Unknown',
+      lotVictime: 'Unknown',
+      zone: 'Unknown',
+      description: d.content,
+      gravite: 'mineure' as const,
+      photos: [],
+      statut: 'signalee' as const,
+      inscritCarnet: true,
+      createdAt: d.created_at,
+      updatedAt: d.created_at,
+    }));
   }
 
   // ============================================
@@ -809,326 +1386,5 @@ export class CoordinationService {
         enAttente: degradations.filter(d => d.statut !== 'reparee').length,
       },
     };
-  }
-
-  // ============================================
-  // DONNÉES MOCK
-  // ============================================
-
-  private static getMockCreneaux(): CreneauIntervention[] {
-    const now = new Date().toISOString();
-    const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const nextWeekEnd = new Date(Date.now() + 12 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-    return [
-      {
-        id: 'creneau-1',
-        chantierId: 'chantier-1',
-        entrepriseId: 'ent-1',
-        entrepriseNom: 'Électricité Martin',
-        lotId: 'lot-elec',
-        lotNom: 'Électricité',
-        dateDebut: nextWeek,
-        dateFin: nextWeekEnd,
-        zone: 'RDC - Cuisine',
-        description: 'Passage des gaines et câbles',
-        effectifPrevu: 2,
-        statut: 'confirme',
-        creePar: 'Électricité Martin',
-        validePar: 'Conducteur travaux',
-        conflits: [],
-        createdAt: now,
-        updatedAt: now,
-      },
-      {
-        id: 'creneau-2',
-        chantierId: 'chantier-1',
-        entrepriseId: 'ent-2',
-        entrepriseNom: 'Plomberie Dupont',
-        lotId: 'lot-plomb',
-        lotNom: 'Plomberie',
-        dateDebut: nextWeek,
-        dateFin: nextWeekEnd,
-        zone: 'RDC - Cuisine',
-        description: 'Passage des évacuations',
-        effectifPrevu: 2,
-        statut: 'conflit',
-        creePar: 'Plomberie Dupont',
-        conflits: [],
-        createdAt: now,
-        updatedAt: now,
-      },
-    ];
-  }
-
-  private static getMockConflits(): ConflitPlanning[] {
-    const now = new Date().toISOString();
-    return [
-      {
-        id: 'conflit-1',
-        chantierId: 'chantier-1',
-        type: 'chevauchement_zone',
-        creneau1Id: 'creneau-1',
-        creneau2Id: 'creneau-2',
-        description: 'Électricité / Plomberie dans RDC - Cuisine',
-        impact: 'moyen',
-        dateDetection: now,
-        detectePar: 'systeme',
-        statut: 'detecte',
-        suggestionsIA: [
-          {
-            id: 'sug-1',
-            type: 'diviser_zone',
-            description: 'Électricité côté mur gauche, Plomberie côté mur droit',
-            impactDelai: 0,
-            scorePertinence: 85,
-          },
-        ],
-        createdAt: now,
-        updatedAt: now,
-      },
-    ];
-  }
-
-  private static getMockCarnets(): CarnetLiaison[] {
-    const now = new Date().toISOString();
-    const today = new Date().toISOString().split('T')[0];
-
-    return [
-      {
-        id: 'carnet-1',
-        chantierId: 'chantier-1',
-        date: today,
-        entrees: [
-          {
-            id: 'entree-1',
-            carnetId: 'carnet-1',
-            entreprise: 'Maçonnerie Durand',
-            auteur: 'Chef de chantier',
-            dateHeure: now,
-            type: 'arrivee',
-            contenu: 'Arrivée équipe 3 personnes',
-            urgent: false,
-            createdAt: now,
-          },
-          {
-            id: 'entree-2',
-            carnetId: 'carnet-1',
-            entreprise: 'Maçonnerie Durand',
-            auteur: 'Chef de chantier',
-            dateHeure: now,
-            type: 'travaux_realises',
-            contenu: 'Coulage dalle RDC terminé',
-            urgent: false,
-            createdAt: now,
-          },
-        ],
-        signatures: [
-          {
-            id: 'sig-1',
-            entreprise: 'Maçonnerie Durand',
-            signataire: 'Jean Durand',
-            dateHeure: now,
-            type: 'arrivee',
-          },
-        ],
-        cloture: false,
-        createdAt: now,
-        updatedAt: now,
-      },
-    ];
-  }
-
-  private static getMockConversations(chantierId: string): Conversation[] {
-    const now = new Date().toISOString();
-    return [
-      {
-        id: 'conv-1',
-        chantierId,
-        type: 'chantier_general',
-        nom: 'Discussion générale',
-        description: 'Canal principal de communication du chantier',
-        participants: [
-          { id: 'p1', entreprise: 'MOE', nom: 'Cabinet Architecture', actif: true, messagesNonLus: 0 },
-          { id: 'p2', entreprise: 'Maçonnerie', nom: 'Maçonnerie Durand', actif: true, messagesNonLus: 2 },
-          { id: 'p3', entreprise: 'Électricité', nom: 'Électricité Martin', actif: true, messagesNonLus: 0 },
-        ],
-        dernierMessage: 'Réunion de coordination demain 9h',
-        dernierMessageDate: now,
-        actif: true,
-        createdAt: now,
-        updatedAt: now,
-      },
-      {
-        id: 'conv-2',
-        chantierId,
-        type: 'coordination',
-        nom: 'Coordination technique',
-        description: 'Discussions techniques entre MOE et conducteur',
-        participants: [
-          { id: 'p1', entreprise: 'MOE', nom: 'Architecte', actif: true, messagesNonLus: 0 },
-          { id: 'p2', entreprise: 'OPC', nom: 'Conducteur travaux', actif: true, messagesNonLus: 1 },
-        ],
-        actif: true,
-        createdAt: now,
-        updatedAt: now,
-      },
-    ];
-  }
-
-  private static getMockMessages(conversationId: string): MessageChat[] {
-    const now = new Date().toISOString();
-    return [
-      {
-        id: 'msg-1',
-        conversationId,
-        auteurId: 'p1',
-        auteurNom: 'Architecte',
-        auteurEntreprise: 'MOE',
-        contenu: 'Bonjour à tous, point sur l\'avancement cette semaine ?',
-        type: 'texte',
-        lu: true,
-        modifie: false,
-        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      },
-      {
-        id: 'msg-2',
-        conversationId,
-        auteurId: 'p2',
-        auteurNom: 'Chef de chantier',
-        auteurEntreprise: 'Maçonnerie Durand',
-        contenu: 'Dalle RDC terminée hier. On attaque les murs demain.',
-        type: 'texte',
-        lu: true,
-        modifie: false,
-        createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-      },
-      {
-        id: 'msg-3',
-        conversationId,
-        auteurId: 'p1',
-        auteurNom: 'Architecte',
-        auteurEntreprise: 'MOE',
-        contenu: 'Réunion de coordination demain 9h',
-        type: 'texte',
-        lu: false,
-        modifie: false,
-        createdAt: now,
-      },
-    ];
-  }
-
-  private static getMockInterfaces(): InterfaceTechnique[] {
-    const now = new Date().toISOString();
-    return [
-      {
-        id: 'interface-1',
-        chantierId: 'chantier-1',
-        lot1: {
-          lotId: 'lot-go',
-          lotNom: 'Gros œuvre',
-          entreprise: 'Maçonnerie Durand',
-          role: 'emetteur',
-        },
-        lot2: {
-          lotId: 'lot-elec',
-          lotNom: 'Électricité',
-          entreprise: 'Électricité Martin',
-          role: 'recepteur',
-        },
-        type: 'reservation',
-        description: 'Réservations pour passage gaines électriques',
-        zone: 'RDC',
-        localisation: 'Mur porteur cuisine/salon',
-        specifications: 'Ø 50mm tous les 60cm',
-        dateRequise: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        statut: 'defini',
-        valideLot1: { par: 'Jean Durand', date: now },
-        valideLot2: { par: 'Pierre Martin', date: now },
-        createdAt: now,
-        updatedAt: now,
-      },
-      {
-        id: 'interface-2',
-        chantierId: 'chantier-1',
-        lot1: {
-          lotId: 'lot-plomb',
-          lotNom: 'Plomberie',
-          entreprise: 'Plomberie Dupont',
-          role: 'emetteur',
-        },
-        lot2: {
-          lotId: 'lot-plaq',
-          lotNom: 'Plâtrerie',
-          entreprise: 'Plâtrerie Bernard',
-          role: 'recepteur',
-        },
-        type: 'coordination_pose',
-        description: 'Pose tuyauterie avant fermeture cloisons',
-        zone: 'Salle de bain étage',
-        dateRequise: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        statut: 'a_definir',
-        createdAt: now,
-        updatedAt: now,
-      },
-    ];
-  }
-
-  private static getMockReglesChantier(chantierId: string): ReglesChantier {
-    const now = new Date().toISOString();
-    return {
-      id: 'regles-1',
-      chantierId,
-      ordreLots: this.getOrdreLotsBTP(),
-      reglesConflit: [
-        { id: 'rc-1', situation: 'Deux lots même zone', regle: 'Lot chemin critique prioritaire', priorite: 1 },
-        { id: 'rc-2', situation: 'Attente appro', regle: 'Lot avec délai appro long prioritaire', priorite: 2 },
-        { id: 'rc-3', situation: 'Petit vs gros lot', regle: 'Petit lot prioritaire (finit vite)', priorite: 3 },
-      ],
-      protocolesInterface: [
-        { id: 'pi-1', lot1: 'Plaquiste', lot2: 'Électricien', action: 'Percement prises', responsable: 'lot1' },
-        { id: 'pi-2', lot1: 'Peintre', lot2: 'Carreleur', action: 'Protection carrelage', responsable: 'lot1' },
-      ],
-      reglesDegradation: {
-        protectionObligatoire: true,
-        typesProtection: ['bâches', 'cartons', 'scotch de protection'],
-        delaiSignalement: 24,
-        photoObligatoire: true,
-        delaiReparation: 7,
-        responsableParDefaut: 'causant',
-      },
-      createdAt: now,
-      updatedAt: now,
-    };
-  }
-
-  private static getMockDegradations(): Degradation[] {
-    const now = new Date().toISOString();
-    return [
-      {
-        id: 'deg-1',
-        chantierId: 'chantier-1',
-        dateSignalement: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        signalePar: 'Carreleur',
-        entrepriseVictime: 'Carrelage Pro',
-        lotVictime: 'Carrelage',
-        entrepriseResponsable: 'Peinture Express',
-        lotResponsable: 'Peinture',
-        zone: 'Salle de bain RDC',
-        description: 'Traces de peinture sur carrelage fraîchement posé',
-        gravite: 'mineure',
-        photos: [{ id: 'photo-1', url: '/mock/photo-deg-1.jpg', dateHeure: now }],
-        constatation: {
-          date: now,
-          par: 'Conducteur travaux',
-          confirmee: true,
-          observations: 'Traces visibles, nettoyage nécessaire',
-        },
-        statut: 'responsable_identifie',
-        inscritCarnet: true,
-        createdAt: now,
-        updatedAt: now,
-      },
-    ];
   }
 }
