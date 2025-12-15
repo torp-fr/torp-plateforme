@@ -8,6 +8,16 @@ import { env } from '@/config/env';
 export { apiClient, ApiClient } from './client';
 export type { ApiError, ApiResponse } from './client';
 
+// Export external API services
+export { gpuService } from './gpu.service';
+export type {
+  GPUZoneUrba,
+  GPUPrescription,
+  GPUDocument,
+  GPUServitude,
+  PLUAnalysisResult,
+} from './gpu.service';
+
 // Import mock services
 import { MockAuthService } from './mock/auth.service';
 import { MockDevisService } from './mock/devis.service';

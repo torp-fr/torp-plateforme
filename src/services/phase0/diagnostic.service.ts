@@ -4,6 +4,11 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import {
+  visionService,
+  type DiagnosticPhotoAnalysis,
+  type BatchAnalysisResult,
+} from '@/services/ai/vision.service';
 import type {
   DiagnosticReport,
   DiagnosticUrgency,
@@ -532,6 +537,146 @@ export class DiagnosticService {
     }
 
     return this.mapRowToReport(data);
+  }
+
+  // =============================================================================
+  // PHOTO ANALYSIS METHODS (Computer Vision)
+  // =============================================================================
+
+  /**
+   * Analyzes building photos using AI Vision to detect pathologies
+   * Uses GPT-4 Vision via Edge Function
+   */
+  static async analyzePhotos(
+    photoUrls: string[],
+    buildingInfo?: { yearBuilt?: number; type?: string }
+  ): Promise<DiagnosticPhotoAnalysis[]> {
+    const results: DiagnosticPhotoAnalysis[] = [];
+
+    for (const url of photoUrls) {
+      try {
+        const analysis = await visionService.analyzeDiagnosticPhoto(url, buildingInfo);
+        results.push(analysis);
+      } catch (error) {
+        console.error(`Failed to analyze photo ${url}:`, error);
+        // Continue with other photos
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Analyzes multiple photos in batch with summary
+   */
+  static async analyzePhotosBatch(
+    photos: Array<{ id: string; url: string }>,
+    buildingInfo?: { yearBuilt?: number; type?: string }
+  ): Promise<BatchAnalysisResult> {
+    return visionService.analyzePhotosBatch(photos, 'diagnostic', buildingInfo);
+  }
+
+  /**
+   * Converts photo analysis results to BuildingPathology format
+   */
+  static photoAnalysisToPathologies(
+    photoAnalyses: DiagnosticPhotoAnalysis[]
+  ): BuildingPathology[] {
+    const pathologies: BuildingPathology[] = [];
+
+    photoAnalyses.forEach((analysis, photoIndex) => {
+      analysis.pathologies.forEach((pathology, pathologyIndex) => {
+        pathologies.push({
+          id: `photo_${photoIndex}_pathology_${pathologyIndex}`,
+          title: pathology.type,
+          description: pathology.description,
+          severity: this.severityToGrade(pathology.severity),
+          location: pathology.location,
+          possibleCauses: pathology.possibleCauses,
+          recommendations: pathology.recommendedActions,
+          repairCost: pathology.estimatedRepairCost,
+          detectedBy: 'ai_vision',
+          detectedAt: analysis.analysisDate,
+          relatedLots: this.pathologyToRelatedLots(pathology.type),
+        });
+      });
+    });
+
+    return pathologies;
+  }
+
+  /**
+   * Updates diagnostic report with photo analysis results
+   */
+  static async updateReportWithPhotoAnalysis(
+    reportId: string,
+    photoAnalyses: DiagnosticPhotoAnalysis[]
+  ): Promise<DiagnosticReport> {
+    const pathologies = this.photoAnalysisToPathologies(photoAnalyses);
+
+    // Calculate overall condition from photo analyses
+    const conditionScores = { 'critique': 4, 'dégradé': 3, 'moyen': 2, 'bon': 1 };
+    const avgScore = photoAnalyses.reduce(
+      (sum, a) => sum + (conditionScores[a.overallCondition] || 0),
+      0
+    ) / photoAnalyses.length;
+
+    const photographicSurvey = {
+      photosAnalyzed: photoAnalyses.length,
+      pathologiesDetected: pathologies.length,
+      overallCondition: avgScore >= 3.5 ? 'critique' :
+                        avgScore >= 2.5 ? 'dégradé' :
+                        avgScore >= 1.5 ? 'moyen' : 'bon',
+      urgentAttention: photoAnalyses.some(a => a.urgentAttention),
+      totalEstimatedRepairCost: photoAnalyses.reduce((sum, a) => ({
+        min: sum.min + (a.estimatedRepairCost?.min || 0),
+        max: sum.max + (a.estimatedRepairCost?.max || 0),
+      }), { min: 0, max: 0 }),
+      analysisDate: new Date().toISOString(),
+    };
+
+    return this.updateDiagnosticReport(reportId, {
+      pathologies,
+      photographicSurvey,
+    });
+  }
+
+  /**
+   * Converts severity number (1-5) to ConditionGrade
+   */
+  private static severityToGrade(severity: number): 'critical' | 'major' | 'minor' | 'informational' {
+    if (severity >= 5) return 'critical';
+    if (severity >= 4) return 'critical';
+    if (severity >= 3) return 'major';
+    if (severity >= 2) return 'minor';
+    return 'informational';
+  }
+
+  /**
+   * Maps pathology type to related work lots
+   */
+  private static pathologyToRelatedLots(pathologyType: string): string[] {
+    const mapping: Record<string, string[]> = {
+      'fissure': ['gros_oeuvre', 'maconnerie', 'facades'],
+      'humidité': ['etancheite', 'plomberie', 'drainage'],
+      'moisissure': ['ventilation', 'isolation_thermique'],
+      'décollement': ['peinture', 'revetements'],
+      'efflorescence': ['maconnerie', 'facades'],
+      'infiltration': ['couverture', 'etancheite', 'zinguerie'],
+      'corrosion': ['charpente_metal', 'serrurerie'],
+      'pourriture': ['charpente', 'menuiseries'],
+      'termites': ['charpente', 'gros_oeuvre'],
+      'amiante': ['demolition', 'desamiantage'],
+      'plomb': ['peinture', 'plomberie'],
+    };
+
+    const lowerType = pathologyType.toLowerCase();
+    for (const [key, lots] of Object.entries(mapping)) {
+      if (lowerType.includes(key)) {
+        return lots;
+      }
+    }
+    return ['general'];
   }
 
   // =============================================================================
