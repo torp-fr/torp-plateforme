@@ -724,6 +724,468 @@ Voir l'analyse : ${APP_URL}/results?devisId=${params.analysisId}
     return this.sendSMS({ to: params.to, message });
   }
 
+  // =====================================================
+  // EMAILS PHASE 4 - RÉCEPTION & GARANTIES
+  // =====================================================
+
+  /**
+   * Email : Rappel d'entretien (Phase 4)
+   */
+  async sendRappelEntretien(params: {
+    to: string;
+    userName: string;
+    projectName: string;
+    equipement: string;
+    typeEntretien: string;
+    datePreconisee: string;
+    frequence: string;
+    prestataireSuggere?: string;
+    chantierId: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const dateFormatted = new Date(params.datePreconisee).toLocaleDateString('fr-FR');
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Rappel d'entretien - TORP</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+
+  <div style="text-align: center; margin-bottom: 30px;">
+    <h1 style="color: #DC2626; margin: 0;">TORP</h1>
+    <p style="color: #666; margin: 5px 0 0 0;">Suivi de garanties & entretien</p>
+  </div>
+
+  <div style="background: #fefce8; border: 1px solid #facc15; border-radius: 12px; padding: 30px; margin-bottom: 20px;">
+    <h2 style="margin: 0 0 15px 0;">Rappel d'entretien prévu</h2>
+
+    <p>Bonjour ${params.userName || ''},</p>
+
+    <p>Un entretien est à prévoir pour maintenir vos garanties sur le projet <strong>${params.projectName}</strong> :</p>
+
+    <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0;">
+      <p style="margin: 0 0 10px 0;"><strong>Équipement :</strong> ${params.equipement}</p>
+      <p style="margin: 0 0 10px 0;"><strong>Type d'entretien :</strong> ${params.typeEntretien}</p>
+      <p style="margin: 0 0 10px 0;"><strong>Date préconisée :</strong> ${dateFormatted}</p>
+      <p style="margin: 0;"><strong>Fréquence :</strong> ${params.frequence}</p>
+      ${params.prestataireSuggere ? `<p style="margin: 10px 0 0 0;"><strong>Prestataire suggéré :</strong> ${params.prestataireSuggere}</p>` : ''}
+    </div>
+
+    <p style="color: #92400e;">Important : Le défaut d'entretien peut entraîner la déchéance de certaines garanties.</p>
+
+    <div style="text-align: center; margin-top: 25px;">
+      <a href="${APP_URL}/chantiers/${params.chantierId}/carnet-sante"
+         style="display: inline-block; background: #DC2626; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600;">
+        Voir le carnet de santé
+      </a>
+    </div>
+  </div>
+
+  <div style="text-align: center; color: #999; font-size: 12px;">
+    <p>Ce rappel est généré automatiquement par TORP pour préserver vos garanties.</p>
+  </div>
+
+</body>
+</html>
+    `;
+
+    const text = `
+Bonjour ${params.userName || ''},
+
+Rappel d'entretien pour le projet "${params.projectName}" :
+
+- Équipement : ${params.equipement}
+- Type d'entretien : ${params.typeEntretien}
+- Date préconisée : ${dateFormatted}
+- Fréquence : ${params.frequence}
+${params.prestataireSuggere ? `- Prestataire suggéré : ${params.prestataireSuggere}` : ''}
+
+Important : Le défaut d'entretien peut entraîner la déchéance de certaines garanties.
+
+Voir le carnet de santé : ${APP_URL}/chantiers/${params.chantierId}/carnet-sante
+
+© ${new Date().getFullYear()} TORP
+    `;
+
+    return this.send({
+      to: params.to,
+      subject: `Rappel entretien : ${params.equipement} - ${params.projectName}`,
+      html,
+      text,
+    });
+  }
+
+  /**
+   * Email : DOE remis (Phase 4)
+   */
+  async sendDOERemis(params: {
+    to: string;
+    userName: string;
+    projectName: string;
+    documentsCount: number;
+    documentsManquants: string[];
+    dateReception: string;
+    chantierId: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const dateFormatted = new Date(params.dateReception).toLocaleDateString('fr-FR');
+    const manquantsHtml = params.documentsManquants.length > 0
+      ? `<div style="background: #fef2f2; border-radius: 8px; padding: 15px; margin: 15px 0;">
+          <p style="margin: 0 0 10px 0; color: #b91c1c;"><strong>Documents manquants (${params.documentsManquants.length}) :</strong></p>
+          <ul style="margin: 0; padding-left: 20px;">
+            ${params.documentsManquants.map(d => `<li>${d}</li>`).join('')}
+          </ul>
+        </div>`
+      : '';
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>DOE Remis - TORP</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+
+  <div style="text-align: center; margin-bottom: 30px;">
+    <h1 style="color: #DC2626; margin: 0;">TORP</h1>
+    <p style="color: #666; margin: 5px 0 0 0;">Dossier des Ouvrages Exécutés</p>
+  </div>
+
+  <div style="background: #f0fdf4; border: 1px solid #22c55e; border-radius: 12px; padding: 30px; margin-bottom: 20px;">
+    <h2 style="margin: 0 0 15px 0; color: #166534;">DOE reçu pour votre projet</h2>
+
+    <p>Bonjour ${params.userName || ''},</p>
+
+    <p>Le Dossier des Ouvrages Exécutés (DOE) pour le projet <strong>${params.projectName}</strong> a été remis.</p>
+
+    <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center;">
+      <p style="margin: 0 0 10px 0; color: #666;">Documents reçus</p>
+      <p style="font-size: 36px; font-weight: bold; margin: 0; color: #22c55e;">${params.documentsCount}</p>
+      <p style="margin: 10px 0 0 0; color: #666;">Réception le ${dateFormatted}</p>
+    </div>
+
+    ${manquantsHtml}
+
+    <p><strong>Le DOE contient :</strong></p>
+    <ul>
+      <li>Plans de recollement</li>
+      <li>Notices techniques des équipements</li>
+      <li>Certificats de conformité</li>
+      <li>Garanties fabricants</li>
+    </ul>
+
+    <div style="text-align: center; margin-top: 25px;">
+      <a href="${APP_URL}/chantiers/${params.chantierId}/doe"
+         style="display: inline-block; background: #DC2626; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600;">
+        Consulter le DOE complet
+      </a>
+    </div>
+  </div>
+
+  <div style="text-align: center; color: #999; font-size: 12px;">
+    <p>Conservez précieusement ce dossier pour toute la durée des garanties.</p>
+  </div>
+
+</body>
+</html>
+    `;
+
+    return this.send({
+      to: params.to,
+      subject: `DOE reçu : ${params.documentsCount} documents - ${params.projectName}`,
+      html,
+    });
+  }
+
+  /**
+   * Email : Relance réserve (Phase 4)
+   */
+  async sendReserveRelance(params: {
+    to: string;
+    userName: string;
+    projectName: string;
+    reserveDescription: string;
+    lot: string;
+    dateLevee: string;
+    joursRetard: number;
+    entreprise: string;
+    chantierId: string;
+    reserveId: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const dateFormatted = new Date(params.dateLevee).toLocaleDateString('fr-FR');
+    const urgencyColor = params.joursRetard > 15 ? '#b91c1c' : params.joursRetard > 7 ? '#d97706' : '#ca8a04';
+    const urgencyLabel = params.joursRetard > 15 ? 'URGENT' : params.joursRetard > 7 ? 'Important' : 'Rappel';
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Relance Réserve - TORP</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+
+  <div style="text-align: center; margin-bottom: 30px;">
+    <h1 style="color: #DC2626; margin: 0;">TORP</h1>
+    <p style="color: #666; margin: 5px 0 0 0;">Suivi des réserves</p>
+  </div>
+
+  <div style="background: #fefce8; border: 2px solid ${urgencyColor}; border-radius: 12px; padding: 30px; margin-bottom: 20px;">
+    <h2 style="margin: 0 0 15px 0; color: ${urgencyColor};">${urgencyLabel} : Réserve non levée</h2>
+
+    <p>Bonjour ${params.userName || ''},</p>
+
+    <p>Une réserve du projet <strong>${params.projectName}</strong> n'a pas encore été levée :</p>
+
+    <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0;">
+      <p style="margin: 0 0 10px 0;"><strong>Description :</strong> ${params.reserveDescription}</p>
+      <p style="margin: 0 0 10px 0;"><strong>Lot concerné :</strong> ${params.lot}</p>
+      <p style="margin: 0 0 10px 0;"><strong>Entreprise responsable :</strong> ${params.entreprise}</p>
+      <p style="margin: 0 0 10px 0;"><strong>Date de levée prévue :</strong> ${dateFormatted}</p>
+      <p style="margin: 0; color: ${urgencyColor};"><strong>Retard :</strong> ${params.joursRetard} jour(s)</p>
+    </div>
+
+    <p><strong>Actions recommandées :</strong></p>
+    <ul>
+      <li>Contacter l'entreprise ${params.entreprise} pour obtenir une date d'intervention</li>
+      <li>Documenter tout échange concernant cette réserve</li>
+      ${params.joursRetard > 15 ? '<li style="color: #b91c1c;">Envisager une mise en demeure si pas de réponse</li>' : ''}
+    </ul>
+
+    <div style="text-align: center; margin-top: 25px;">
+      <a href="${APP_URL}/chantiers/${params.chantierId}/reserves/${params.reserveId}"
+         style="display: inline-block; background: #DC2626; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600;">
+        Voir la réserve
+      </a>
+    </div>
+  </div>
+
+  <div style="text-align: center; color: #999; font-size: 12px;">
+    <p>La retenue de garantie ne pourra être libérée qu'après levée de toutes les réserves.</p>
+  </div>
+
+</body>
+</html>
+    `;
+
+    return this.send({
+      to: params.to,
+      subject: `${urgencyLabel} : Réserve non levée (${params.joursRetard}j) - ${params.projectName}`,
+      html,
+    });
+  }
+
+  /**
+   * Email : Expiration de garantie (Phase 4)
+   */
+  async sendGarantieExpiration(params: {
+    to: string;
+    userName: string;
+    projectName: string;
+    typeGarantie: string;
+    dateExpiration: string;
+    joursRestants: number;
+    lotsConcernes: string[];
+    chantierId: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const dateFormatted = new Date(params.dateExpiration).toLocaleDateString('fr-FR');
+    const urgencyColor = params.joursRestants <= 30 ? '#b91c1c' : params.joursRestants <= 90 ? '#d97706' : '#2563eb';
+    const urgencyLabel = params.joursRestants <= 30 ? 'URGENT' : params.joursRestants <= 90 ? 'Attention' : 'Information';
+
+    const garantieLabels: Record<string, string> = {
+      parfait_achevement: 'Garantie de Parfait Achèvement (1 an)',
+      biennale: 'Garantie Biennale (2 ans)',
+      decennale: 'Garantie Décennale (10 ans)',
+    };
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Expiration de Garantie - TORP</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+
+  <div style="text-align: center; margin-bottom: 30px;">
+    <h1 style="color: #DC2626; margin: 0;">TORP</h1>
+    <p style="color: #666; margin: 5px 0 0 0;">Suivi des garanties</p>
+  </div>
+
+  <div style="background: #fef2f2; border: 2px solid ${urgencyColor}; border-radius: 12px; padding: 30px; margin-bottom: 20px;">
+    <h2 style="margin: 0 0 15px 0; color: ${urgencyColor};">${urgencyLabel} : Garantie bientôt expirée</h2>
+
+    <p>Bonjour ${params.userName || ''},</p>
+
+    <p>Une garantie du projet <strong>${params.projectName}</strong> expire bientôt :</p>
+
+    <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center;">
+      <p style="margin: 0 0 10px 0; font-size: 18px; font-weight: bold;">${garantieLabels[params.typeGarantie] || params.typeGarantie}</p>
+      <p style="margin: 0 0 15px 0; color: #666;">Expire le <strong>${dateFormatted}</strong></p>
+      <div style="display: inline-block; background: ${urgencyColor}; color: white; padding: 10px 25px; border-radius: 8px; font-size: 24px; font-weight: bold;">
+        ${params.joursRestants} jour(s) restants
+      </div>
+    </div>
+
+    <p><strong>Lots concernés :</strong></p>
+    <ul>
+      ${params.lotsConcernes.map(lot => `<li>${lot}</li>`).join('')}
+    </ul>
+
+    <p><strong>Actions recommandées avant expiration :</strong></p>
+    <ul>
+      <li>Inspecter les ouvrages concernés</li>
+      <li>Signaler tout désordre ou malfaçon identifié</li>
+      <li>Documenter l'état actuel avec photos</li>
+      ${params.typeGarantie === 'parfait_achevement' ? '<li>Vérifier que toutes les réserves ont été levées</li>' : ''}
+    </ul>
+
+    <div style="text-align: center; margin-top: 25px;">
+      <a href="${APP_URL}/chantiers/${params.chantierId}/garanties"
+         style="display: inline-block; background: #DC2626; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600;">
+        Voir mes garanties
+      </a>
+    </div>
+  </div>
+
+  <div style="text-align: center; color: #999; font-size: 12px;">
+    <p>Passé la date d'expiration, les désordres ne pourront plus être couverts par cette garantie.</p>
+  </div>
+
+</body>
+</html>
+    `;
+
+    return this.send({
+      to: params.to,
+      subject: `${urgencyLabel} : ${garantieLabels[params.typeGarantie] || params.typeGarantie} expire dans ${params.joursRestants}j`,
+      html,
+    });
+  }
+
+  /**
+   * Email : Sinistre déclaré (Phase 4)
+   */
+  async sendSinistreDeclare(params: {
+    to: string;
+    userName: string;
+    projectName: string;
+    sinistreReference: string;
+    description: string;
+    dateConstat: string;
+    garantieApplicable: string;
+    entrepriseResponsable: string;
+    prochainEtape: string;
+    chantierId: string;
+    sinistreId: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const dateFormatted = new Date(params.dateConstat).toLocaleDateString('fr-FR');
+
+    const garantieLabels: Record<string, string> = {
+      parfait_achevement: 'Garantie de Parfait Achèvement',
+      biennale: 'Garantie Biennale',
+      decennale: 'Garantie Décennale',
+      hors_garantie: 'Hors garantie',
+    };
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Sinistre Déclaré - TORP</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+
+  <div style="text-align: center; margin-bottom: 30px;">
+    <h1 style="color: #DC2626; margin: 0;">TORP</h1>
+    <p style="color: #666; margin: 5px 0 0 0;">Gestion des sinistres</p>
+  </div>
+
+  <div style="background: #f9fafb; border-radius: 12px; padding: 30px; margin-bottom: 20px;">
+    <h2 style="margin: 0 0 15px 0;">Confirmation de déclaration de sinistre</h2>
+
+    <p>Bonjour ${params.userName || ''},</p>
+
+    <p>Votre déclaration de sinistre pour le projet <strong>${params.projectName}</strong> a bien été enregistrée.</p>
+
+    <div style="background: white; border-radius: 8px; padding: 20px; margin: 20px 0;">
+      <p style="margin: 0 0 10px 0;"><strong>Référence :</strong> ${params.sinistreReference}</p>
+      <p style="margin: 0 0 10px 0;"><strong>Description :</strong> ${params.description}</p>
+      <p style="margin: 0 0 10px 0;"><strong>Date de constat :</strong> ${dateFormatted}</p>
+      <p style="margin: 0 0 10px 0;"><strong>Garantie applicable :</strong> ${garantieLabels[params.garantieApplicable] || params.garantieApplicable}</p>
+      <p style="margin: 0;"><strong>Entreprise responsable :</strong> ${params.entrepriseResponsable}</p>
+    </div>
+
+    <div style="background: #dbeafe; border-radius: 8px; padding: 15px; margin: 20px 0;">
+      <p style="margin: 0;"><strong>Prochaine étape :</strong> ${params.prochainEtape}</p>
+    </div>
+
+    <p><strong>Documents à conserver :</strong></p>
+    <ul>
+      <li>Photos des désordres constatés</li>
+      <li>Copie des échanges avec l'entreprise</li>
+      <li>Devis de réparation si disponible</li>
+      <li>Rapports d'expertise éventuels</li>
+    </ul>
+
+    <div style="text-align: center; margin-top: 25px;">
+      <a href="${APP_URL}/chantiers/${params.chantierId}/sinistres/${params.sinistreId}"
+         style="display: inline-block; background: #DC2626; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600;">
+        Suivre mon sinistre
+      </a>
+    </div>
+  </div>
+
+  <div style="text-align: center; color: #999; font-size: 12px;">
+    <p>TORP vous accompagne dans la gestion de vos sinistres et garanties.</p>
+  </div>
+
+</body>
+</html>
+    `;
+
+    return this.send({
+      to: params.to,
+      subject: `Sinistre enregistré : ${params.sinistreReference} - ${params.projectName}`,
+      html,
+    });
+  }
+
+  /**
+   * SMS : Rappel d'entretien (Phase 4)
+   */
+  async sendRappelEntretienSMS(params: {
+    to: string;
+    equipement: string;
+    projectName: string;
+    datePreconisee: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    const dateFormatted = new Date(params.datePreconisee).toLocaleDateString('fr-FR');
+    const message = `[TORP] Rappel entretien : ${params.equipement} sur "${params.projectName}" prévu le ${dateFormatted}. Maintenez vos garanties !`;
+    return this.sendSMS({ to: params.to, message });
+  }
+
+  /**
+   * SMS : Expiration garantie (Phase 4)
+   */
+  async sendGarantieExpirationSMS(params: {
+    to: string;
+    typeGarantie: string;
+    projectName: string;
+    joursRestants: number;
+  }): Promise<{ success: boolean; error?: string }> {
+    const garantieLabels: Record<string, string> = {
+      parfait_achevement: 'Parfait Achèvement',
+      biennale: 'Biennale',
+      decennale: 'Décennale',
+    };
+    const message = `[TORP] ALERTE : Garantie ${garantieLabels[params.typeGarantie] || params.typeGarantie} expire dans ${params.joursRestants}j sur "${params.projectName}". Vérifiez vos ouvrages !`;
+    return this.sendSMS({ to: params.to, message });
+  }
+
   // Helpers
   private getGradeEmoji(grade: string): string {
     switch (grade) {
