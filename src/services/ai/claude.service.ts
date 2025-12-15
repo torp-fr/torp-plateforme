@@ -2,26 +2,36 @@
  * Anthropic Claude Service
  * Wrapper for Anthropic Claude API calls
  *
- * Modèles disponibles (2025):
- * - claude-sonnet-4-20250514 (recommandé - bon rapport qualité/coût)
- * - claude-opus-4-20250514 (premium - meilleure qualité)
- * - claude-3-5-sonnet-20241022 (legacy - compatible)
+ * Modèles disponibles et stables:
+ * - claude-sonnet-4-20250514 (Claude 4 Sonnet - rapide, efficace)
+ * - claude-3-5-sonnet-20241022 (Claude 3.5 Sonnet - stable, performant)
+ * - claude-3-5-haiku-20241022 (Claude 3.5 Haiku - économique)
+ *
+ * Fallback automatique en cas d'erreur 404 sur un modèle
  */
 
 import Anthropic from '@anthropic-ai/sdk';
 import { env } from '@/config/env';
 
-// Modèles Claude valides
+// Modèles Claude valides avec ordre de priorité
 export const CLAUDE_MODELS = {
-  // Nouveaux modèles 2025
+  // Modèle principal recommandé (stable et performant)
   SONNET_4: 'claude-sonnet-4-20250514',
-  OPUS_4: 'claude-opus-4-20250514',
-  // Modèle legacy compatible
+  // Modèle de fallback (très stable)
   SONNET_35: 'claude-3-5-sonnet-20241022',
+  // Modèle économique
+  HAIKU_35: 'claude-3-5-haiku-20241022',
 } as const;
 
-// Modèle par défaut (bon rapport qualité/coût)
-const DEFAULT_MODEL = CLAUDE_MODELS.SONNET_4;
+// Ordre de fallback des modèles
+const MODEL_FALLBACK_ORDER = [
+  CLAUDE_MODELS.SONNET_4,
+  CLAUDE_MODELS.SONNET_35,
+  CLAUDE_MODELS.HAIKU_35,
+];
+
+// Modèle par défaut (le plus stable)
+const DEFAULT_MODEL = CLAUDE_MODELS.SONNET_35;
 
 export class ClaudeService {
   private client: Anthropic | null = null;
@@ -43,7 +53,7 @@ export class ClaudeService {
   }
 
   /**
-   * Generate completion with Claude
+   * Generate completion with Claude (with automatic model fallback)
    */
   async generateCompletion(
     prompt: string,
@@ -65,30 +75,54 @@ export class ClaudeService {
       systemPrompt = 'You are a helpful assistant specialized in construction and renovation project analysis.',
     } = options || {};
 
-    try {
-      const message = await this.client.messages.create({
-        model,
-        max_tokens: maxTokens,
-        temperature,
-        system: systemPrompt,
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-      });
+    // Build list of models to try (requested model first, then fallbacks)
+    const modelsToTry = [model, ...MODEL_FALLBACK_ORDER.filter(m => m !== model)];
 
-      const textBlock = message.content.find((block) => block.type === 'text');
-      return textBlock && textBlock.type === 'text' ? textBlock.text : '';
-    } catch (error) {
-      console.error('Claude API Error:', error);
-      throw new Error(`Claude API call failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    let lastError: Error | null = null;
+
+    for (const currentModel of modelsToTry) {
+      try {
+        if (env.app.debugMode) {
+          console.log(`[Claude] Trying model: ${currentModel}`);
+        }
+
+        const message = await this.client.messages.create({
+          model: currentModel,
+          max_tokens: maxTokens,
+          temperature,
+          system: systemPrompt,
+          messages: [
+            {
+              role: 'user',
+              content: prompt,
+            },
+          ],
+        });
+
+        const textBlock = message.content.find((block) => block.type === 'text');
+        return textBlock && textBlock.type === 'text' ? textBlock.text : '';
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        const errorMessage = lastError.message.toLowerCase();
+
+        // If it's a model not found error (404), try next model
+        if (errorMessage.includes('404') || errorMessage.includes('model') || errorMessage.includes('not found')) {
+          console.warn(`[Claude] Model ${currentModel} not available, trying fallback...`);
+          continue;
+        }
+
+        // For other errors, throw immediately
+        throw lastError;
+      }
     }
+
+    // All models failed
+    console.error('Claude API Error: All models failed');
+    throw new Error(`Claude API call failed: ${lastError?.message || 'All models unavailable'}`);
   }
 
   /**
-   * Generate structured JSON output
+   * Generate structured JSON output (with automatic model fallback)
    */
   async generateJSON<T>(
     prompt: string,
@@ -110,60 +144,79 @@ export class ClaudeService {
       systemPrompt = 'You are a JSON-generating assistant. Always respond with valid JSON only.',
     } = options || {};
 
-    try {
-      const message = await this.client.messages.create({
-        model,
-        max_tokens: maxTokens,
-        temperature,
-        system: systemPrompt + ' Return only valid JSON, no markdown or explanations. IMPORTANT: Complete the entire JSON structure - do not truncate.',
-        messages: [
-          {
-            role: 'user',
-            content: prompt + '\n\nIMPORTANT: Return ONLY valid JSON without any markdown formatting, code blocks, or explanations. Ensure the JSON is COMPLETE.',
-          },
-        ],
-      });
+    // Build list of models to try (requested model first, then fallbacks)
+    const modelsToTry = [model, ...MODEL_FALLBACK_ORDER.filter(m => m !== model)];
 
-      const textBlock = message.content.find((block) => block.type === 'text');
-      const content = textBlock && textBlock.type === 'text' ? textBlock.text : '{}';
+    let lastError: Error | null = null;
 
-      // Enhanced JSON cleaning - remove ALL markdown formatting
-      let cleanedContent = content
-        // Remove markdown code blocks
-        .replace(/```json\n?/gi, '')
-        .replace(/```javascript\n?/gi, '')
-        .replace(/```\n?/g, '')
-        // Remove any leading/trailing text before/after JSON
-        .trim();
-
-      // Try to extract JSON if surrounded by text
-      const jsonMatch = cleanedContent.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        cleanedContent = jsonMatch[0];
-      }
-
-      // Attempt to parse with error recovery
+    for (const currentModel of modelsToTry) {
       try {
-        return JSON.parse(cleanedContent) as T;
-      } catch (parseError) {
-        // Try to fix common JSON errors
-        console.warn('[Claude] Initial JSON parse failed, attempting cleanup...', parseError);
+        if (env.app.debugMode) {
+          console.log(`[Claude] Trying model for JSON: ${currentModel}`);
+        }
 
-        // Remove trailing commas (common issue)
-        cleanedContent = cleanedContent.replace(/,(\s*[}\]])/g, '$1');
+        const message = await this.client.messages.create({
+          model: currentModel,
+          max_tokens: maxTokens,
+          temperature,
+          system: systemPrompt + ' Return only valid JSON, no markdown or explanations. IMPORTANT: Complete the entire JSON structure - do not truncate.',
+          messages: [
+            {
+              role: 'user',
+              content: prompt + '\n\nIMPORTANT: Return ONLY valid JSON without any markdown formatting, code blocks, or explanations. Ensure the JSON is COMPLETE.',
+            },
+          ],
+        });
 
-        // Try parsing again
+        const textBlock = message.content.find((block) => block.type === 'text');
+        const content = textBlock && textBlock.type === 'text' ? textBlock.text : '{}';
+
+        // Enhanced JSON cleaning - remove ALL markdown formatting
+        let cleanedContent = content
+          // Remove markdown code blocks
+          .replace(/```json\n?/gi, '')
+          .replace(/```javascript\n?/gi, '')
+          .replace(/```\n?/g, '')
+          // Remove any leading/trailing text before/after JSON
+          .trim();
+
+        // Try to extract JSON if surrounded by text
+        const jsonMatch = cleanedContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          cleanedContent = jsonMatch[0];
+        }
+
+        // Attempt to parse with error recovery
         try {
           return JSON.parse(cleanedContent) as T;
-        } catch (secondError) {
-          console.error('[Claude] JSON parse failed after cleanup. Content:', cleanedContent);
-          throw new Error(`Failed to parse Claude JSON response: ${secondError instanceof Error ? secondError.message : 'Invalid JSON'}`);
+        } catch (parseError) {
+          // Try to fix common JSON errors
+          console.warn('[Claude] Initial JSON parse failed, attempting cleanup...', parseError);
+
+          // Remove trailing commas (common issue)
+          cleanedContent = cleanedContent.replace(/,(\s*[}\]])/g, '$1');
+
+          // Try parsing again
+          return JSON.parse(cleanedContent) as T;
         }
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        const errorMessage = lastError.message.toLowerCase();
+
+        // If it's a model not found error (404), try next model
+        if (errorMessage.includes('404') || errorMessage.includes('model') || errorMessage.includes('not found')) {
+          console.warn(`[Claude] Model ${currentModel} not available for JSON, trying fallback...`);
+          continue;
+        }
+
+        // For other errors, throw immediately
+        throw lastError;
       }
-    } catch (error) {
-      console.error('Claude JSON Generation Error:', error);
-      throw new Error(`Claude JSON generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+
+    // All models failed
+    console.error('Claude JSON Generation Error: All models failed');
+    throw new Error(`Claude JSON generation failed: ${lastError?.message || 'All models unavailable'}`);
   }
 }
 

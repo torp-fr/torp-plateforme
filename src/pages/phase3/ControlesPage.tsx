@@ -161,30 +161,31 @@ export default function ControlesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* En-tête */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 md:space-y-6 px-2 md:px-0">
+      {/* En-tête - Mobile optimized */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Shield className="h-6 w-6" />
+          <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
+            <Shield className="h-5 w-5 md:h-6 md:w-6" />
             Contrôles & Qualité
           </h1>
-          <p className="text-muted-foreground">
-            Contrôles réglementaires, certifications et qualité d'exécution
+          <p className="text-sm text-muted-foreground">
+            Contrôles, certifications et qualité
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Nouveau contrôle
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" className="flex-1 sm:flex-none">
+            <Plus className="h-4 w-4 mr-1 md:mr-2" />
+            <span className="hidden sm:inline">Nouveau </span>contrôle
           </Button>
           <Button
             variant="outline"
+            size="sm"
             onClick={() => navigate(`/phase4/${projectId}`)}
-            className="border-purple-200 text-purple-700 hover:bg-purple-50"
+            className="flex-1 sm:flex-none border-purple-200 text-purple-700 hover:bg-purple-50"
           >
-            Phase 4 : Réception
-            <ArrowRight className="h-4 w-4 ml-2" />
+            <span className="hidden sm:inline">Phase 4 : </span>Réception
+            <ArrowRight className="h-4 w-4 ml-1 md:ml-2" />
           </Button>
         </div>
       </div>
@@ -200,74 +201,95 @@ export default function ControlesPage() {
         </Alert>
       )}
 
-      {/* Statistiques */}
+      {/* Statistiques - Mobile optimized */}
       {statistiques && (
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Organismes</CardTitle>
-              <Building2 className="h-4 w-4 text-muted-foreground" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:pb-2">
+              <CardTitle className="text-xs md:text-sm font-medium">Organismes</CardTitle>
+              <Building2 className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{statistiques.organismes.actifs}</div>
-              <p className="text-xs text-muted-foreground">
+            <CardContent className="p-3 pt-0">
+              <div className="text-xl md:text-2xl font-bold">{statistiques.organismes.actifs}</div>
+              <p className="text-xs text-muted-foreground truncate">
                 sur {statistiques.organismes.total} total
               </p>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Réserves</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:pb-2">
+              <CardTitle className="text-xs md:text-sm font-medium">Réserves</CardTitle>
+              <AlertTriangle className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-600">
+            <CardContent className="p-3 pt-0">
+              <div className="text-xl md:text-2xl font-bold text-orange-600">
                 {statistiques.reserves.enAttente}
               </div>
-              <p className="text-xs text-muted-foreground">
-                {statistiques.reserves.levees} levées sur {statistiques.reserves.total}
+              <p className="text-xs text-muted-foreground truncate">
+                {statistiques.reserves.levees} levées
               </p>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Certifications</CardTitle>
-              <FileCheck className="h-4 w-4 text-muted-foreground" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:pb-2">
+              <CardTitle className="text-xs md:text-sm font-medium">Certifs</CardTitle>
+              <FileCheck className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">
+            <CardContent className="p-3 pt-0">
+              <div className="text-xl md:text-2xl font-bold text-green-600">
                 {statistiques.certifications.obtenues}
               </div>
-              <p className="text-xs text-muted-foreground">
-                sur {statistiques.certifications.total} requises
+              <p className="text-xs text-muted-foreground truncate">
+                sur {statistiques.certifications.total} req.
               </p>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Conformité</CardTitle>
-              <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:pb-2">
+              <CardTitle className="text-xs md:text-sm font-medium">Conformité</CardTitle>
+              <ClipboardCheck className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{statistiques.qualite.conformiteMoyenne}%</div>
-              <Progress value={statistiques.qualite.conformiteMoyenne} className="mt-2" />
+            <CardContent className="p-3 pt-0">
+              <div className="text-xl md:text-2xl font-bold">{statistiques.qualite.conformiteMoyenne}%</div>
+              <Progress value={statistiques.qualite.conformiteMoyenne} className="mt-1 md:mt-2" />
             </CardContent>
           </Card>
         </div>
       )}
 
-      {/* Onglets */}
+      {/* Onglets - Mobile scrollable */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="organismes">Organismes</TabsTrigger>
-          <TabsTrigger value="certifications">Certifications</TabsTrigger>
-          <TabsTrigger value="sps">SPS</TabsTrigger>
-          <TabsTrigger value="autocontroles">Auto-contrôles</TabsTrigger>
-          <TabsTrigger value="qualite">Grilles qualité</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-2 px-2">
+          <TabsList className="inline-flex w-auto min-w-full md:grid md:w-full md:grid-cols-5">
+            <TabsTrigger value="organismes" className="text-xs md:text-sm whitespace-nowrap">
+              <Building2 className="h-3 w-3 mr-1 md:hidden" />
+              <span className="hidden sm:inline">Organismes</span>
+              <span className="sm:hidden">Org.</span>
+            </TabsTrigger>
+            <TabsTrigger value="certifications" className="text-xs md:text-sm whitespace-nowrap">
+              <FileCheck className="h-3 w-3 mr-1 md:hidden" />
+              <span className="hidden sm:inline">Certifications</span>
+              <span className="sm:hidden">Certifs</span>
+            </TabsTrigger>
+            <TabsTrigger value="sps" className="text-xs md:text-sm whitespace-nowrap">
+              <HardHat className="h-3 w-3 mr-1 md:hidden" />
+              SPS
+            </TabsTrigger>
+            <TabsTrigger value="autocontroles" className="text-xs md:text-sm whitespace-nowrap">
+              <ClipboardCheck className="h-3 w-3 mr-1 md:hidden" />
+              <span className="hidden sm:inline">Auto-contrôles</span>
+              <span className="sm:hidden">Auto</span>
+            </TabsTrigger>
+            <TabsTrigger value="qualite" className="text-xs md:text-sm whitespace-nowrap">
+              <Shield className="h-3 w-3 mr-1 md:hidden" />
+              <span className="hidden sm:inline">Grilles qualité</span>
+              <span className="sm:hidden">Qualité</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Organismes de contrôle */}
         <TabsContent value="organismes" className="space-y-4">
@@ -513,55 +535,99 @@ export default function ControlesPage() {
                   Aucune fiche d'auto-contrôle
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Entreprise</TableHead>
-                      <TableHead>Lot</TableHead>
-                      <TableHead>Objet</TableHead>
-                      <TableHead>Zone</TableHead>
-                      <TableHead>Résultat</TableHead>
-                      <TableHead>Validation MOE</TableHead>
-                      <TableHead></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <>
+                  {/* Mobile card view */}
+                  <div className="md:hidden space-y-3">
                     {fichesAutoControle.map(fiche => {
                       const resultatInfo = RESULTAT_AUTOCONTROLE[fiche.resultat];
                       return (
-                        <TableRow key={fiche.id}>
-                          <TableCell>
-                            {new Date(fiche.dateControle).toLocaleDateString('fr-FR')}
-                          </TableCell>
-                          <TableCell className="font-medium">{fiche.entreprise}</TableCell>
-                          <TableCell>{fiche.lot}</TableCell>
-                          <TableCell>{fiche.objet}</TableCell>
-                          <TableCell>{fiche.zone || '-'}</TableCell>
-                          <TableCell>
-                            <Badge className={resultatInfo.color}>
-                              {resultatInfo.emoji} {resultatInfo.label}
+                        <div key={fiche.id} className="border rounded-lg p-3 space-y-2">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <div className="font-medium text-sm">{fiche.entreprise}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {fiche.lot} • {fiche.zone || 'N/A'}
+                              </div>
+                            </div>
+                            <Badge className={`${resultatInfo.color} text-xs`}>
+                              {resultatInfo.emoji}
                             </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {fiche.validationMOE ? (
-                              <Badge variant={fiche.validationMOE.avis === 'valide' ? 'default' : 'destructive'}>
-                                {fiche.validationMOE.avis}
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline">En attente</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Button variant="ghost" size="sm">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
+                          </div>
+                          <div className="text-sm">{fiche.objet}</div>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">
+                              {new Date(fiche.dateControle).toLocaleDateString('fr-FR')}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {fiche.validationMOE ? (
+                                <Badge variant={fiche.validationMOE.avis === 'valide' ? 'default' : 'destructive'} className="text-xs">
+                                  {fiche.validationMOE.avis}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs">En attente</Badge>
+                              )}
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                                <Eye className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
                       );
                     })}
-                  </TableBody>
-                </Table>
+                  </div>
+                  {/* Desktop table view */}
+                  <div className="hidden md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Entreprise</TableHead>
+                          <TableHead>Lot</TableHead>
+                          <TableHead>Objet</TableHead>
+                          <TableHead>Zone</TableHead>
+                          <TableHead>Résultat</TableHead>
+                          <TableHead>Validation MOE</TableHead>
+                          <TableHead></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {fichesAutoControle.map(fiche => {
+                          const resultatInfo = RESULTAT_AUTOCONTROLE[fiche.resultat];
+                          return (
+                            <TableRow key={fiche.id}>
+                              <TableCell>
+                                {new Date(fiche.dateControle).toLocaleDateString('fr-FR')}
+                              </TableCell>
+                              <TableCell className="font-medium">{fiche.entreprise}</TableCell>
+                              <TableCell>{fiche.lot}</TableCell>
+                              <TableCell>{fiche.objet}</TableCell>
+                              <TableCell>{fiche.zone || '-'}</TableCell>
+                              <TableCell>
+                                <Badge className={resultatInfo.color}>
+                                  {resultatInfo.emoji} {resultatInfo.label}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {fiche.validationMOE ? (
+                                  <Badge variant={fiche.validationMOE.avis === 'valide' ? 'default' : 'destructive'}>
+                                    {fiche.validationMOE.avis}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline">En attente</Badge>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Button variant="ghost" size="sm">
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
