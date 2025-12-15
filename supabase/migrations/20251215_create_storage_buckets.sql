@@ -1,5 +1,6 @@
 -- Migration: create_storage_buckets.sql
 -- Crée les buckets Storage pour les documents TORP
+-- Version idempotente (DROP IF EXISTS avant CREATE)
 
 -- Bucket 'documents' - Documents privés (devis, contrats, etc.)
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -38,7 +39,7 @@ ON CONFLICT (id) DO NOTHING;
 -- RLS Policies pour bucket 'documents'
 -- =====================================================
 
--- Policy SELECT: Users can view their own documents
+DROP POLICY IF EXISTS "Users can view own documents" ON storage.objects;
 CREATE POLICY "Users can view own documents"
 ON storage.objects FOR SELECT
 TO authenticated
@@ -47,7 +48,7 @@ USING (
   AND (storage.foldername(name))[1] = auth.uid()::text
 );
 
--- Policy INSERT: Users can upload to their own folder
+DROP POLICY IF EXISTS "Users can upload own documents" ON storage.objects;
 CREATE POLICY "Users can upload own documents"
 ON storage.objects FOR INSERT
 TO authenticated
@@ -56,7 +57,7 @@ WITH CHECK (
   AND (storage.foldername(name))[1] = auth.uid()::text
 );
 
--- Policy UPDATE: Users can update their own documents
+DROP POLICY IF EXISTS "Users can update own documents" ON storage.objects;
 CREATE POLICY "Users can update own documents"
 ON storage.objects FOR UPDATE
 TO authenticated
@@ -65,7 +66,7 @@ USING (
   AND (storage.foldername(name))[1] = auth.uid()::text
 );
 
--- Policy DELETE: Users can delete their own documents
+DROP POLICY IF EXISTS "Users can delete own documents" ON storage.objects;
 CREATE POLICY "Users can delete own documents"
 ON storage.objects FOR DELETE
 TO authenticated
@@ -78,6 +79,7 @@ USING (
 -- RLS Policies pour bucket 'photos'
 -- =====================================================
 
+DROP POLICY IF EXISTS "Users can view own photos" ON storage.objects;
 CREATE POLICY "Users can view own photos"
 ON storage.objects FOR SELECT
 TO authenticated
@@ -86,6 +88,7 @@ USING (
   AND (storage.foldername(name))[1] = auth.uid()::text
 );
 
+DROP POLICY IF EXISTS "Users can upload own photos" ON storage.objects;
 CREATE POLICY "Users can upload own photos"
 ON storage.objects FOR INSERT
 TO authenticated
@@ -94,6 +97,7 @@ WITH CHECK (
   AND (storage.foldername(name))[1] = auth.uid()::text
 );
 
+DROP POLICY IF EXISTS "Users can update own photos" ON storage.objects;
 CREATE POLICY "Users can update own photos"
 ON storage.objects FOR UPDATE
 TO authenticated
@@ -102,6 +106,7 @@ USING (
   AND (storage.foldername(name))[1] = auth.uid()::text
 );
 
+DROP POLICY IF EXISTS "Users can delete own photos" ON storage.objects;
 CREATE POLICY "Users can delete own photos"
 ON storage.objects FOR DELETE
 TO authenticated
@@ -114,16 +119,19 @@ USING (
 -- RLS Policies pour bucket 'public' (accès public en lecture)
 -- =====================================================
 
+DROP POLICY IF EXISTS "Public files are viewable by everyone" ON storage.objects;
 CREATE POLICY "Public files are viewable by everyone"
 ON storage.objects FOR SELECT
 TO public
 USING (bucket_id = 'public');
 
+DROP POLICY IF EXISTS "Authenticated users can upload public files" ON storage.objects;
 CREATE POLICY "Authenticated users can upload public files"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (bucket_id = 'public');
 
+DROP POLICY IF EXISTS "Users can update their public files" ON storage.objects;
 CREATE POLICY "Users can update their public files"
 ON storage.objects FOR UPDATE
 TO authenticated
@@ -132,6 +140,7 @@ USING (
   AND (storage.foldername(name))[1] = auth.uid()::text
 );
 
+DROP POLICY IF EXISTS "Users can delete their public files" ON storage.objects;
 CREATE POLICY "Users can delete their public files"
 ON storage.objects FOR DELETE
 TO authenticated
