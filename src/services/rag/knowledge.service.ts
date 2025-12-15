@@ -6,6 +6,12 @@
 
 import { supabase } from '@/lib/supabase';
 import { hybridAIService } from '@/services/ai/hybrid-ai.service';
+import {
+  DTU_CATALOG_ENRICHED,
+  getDTUsForCategory,
+  getDTUByCode,
+  type DTUReferenceEnriched,
+} from './dtu-catalog';
 
 // =============================================================================
 // TYPES
@@ -294,6 +300,7 @@ export class KnowledgeService {
 
   /**
    * Génère les prescriptions techniques par lot
+   * Utilise le catalogue DTU enrichi comme source principale
    */
   private static async generatePrescriptions(
     lotCategories: string[],
@@ -302,22 +309,39 @@ export class KnowledgeService {
     const prescriptions: CCTPPrescription[] = [];
 
     for (const category of lotCategories) {
-      const dtuRefs = DTU_CATALOG[category.toLowerCase()] || [];
+      // Utiliser les DTU enrichis en priorité
+      const enrichedDTUs = getDTUsForCategory(category);
+      const basicDTUs = DTU_CATALOG[category.toLowerCase()] || [];
+      const dtuRefs = enrichedDTUs.length > 0 ? enrichedDTUs : basicDTUs;
+
       const relevantDTU = context.dtu.filter(d =>
         d.category?.toLowerCase() === category.toLowerCase() ||
         dtuRefs.some(ref => d.codeReference?.includes(ref.code))
       );
 
-      // Extraire les exigences des résultats de recherche
+      // Extraire les exigences depuis le catalogue enrichi
       const requirements: string[] = [];
       const materials: string[] = [];
       const execution: string[] = [];
       const controls: string[] = [];
 
+      // D'abord, ajouter les données du catalogue enrichi
+      enrichedDTUs.forEach(dtu => {
+        if (dtu.keyRequirements) {
+          requirements.push(...dtu.keyRequirements);
+        }
+        if (dtu.materials) {
+          materials.push(...dtu.materials);
+        }
+        if (dtu.controls) {
+          controls.push(...dtu.controls);
+        }
+      });
+
+      // Ensuite, enrichir avec les résultats de recherche
       relevantDTU.forEach(dtu => {
         const content = dtu.content.toLowerCase();
 
-        // Classifier le contenu
         if (content.includes('doit') || content.includes('obligatoire') || content.includes('exigence')) {
           requirements.push(dtu.content.substring(0, 300));
         }
@@ -335,10 +359,10 @@ export class KnowledgeService {
       prescriptions.push({
         lotCategory: category,
         dtuReferences: dtuRefs.map(d => d.code),
-        requirements: requirements.slice(0, 5),
-        materials: materials.slice(0, 3),
-        execution: execution.slice(0, 5),
-        controls: controls.slice(0, 3)
+        requirements: [...new Set(requirements)].slice(0, 8),
+        materials: [...new Set(materials)].slice(0, 5),
+        execution: [...new Set(execution)].slice(0, 5),
+        controls: [...new Set(controls)].slice(0, 5)
       });
     }
 
@@ -347,21 +371,40 @@ export class KnowledgeService {
 
   /**
    * Génère un texte de prescriptions pour un lot de CCTP
+   * Utilise le catalogue DTU enrichi pour des prescriptions détaillées
    */
   static async generateCCTPLotText(
     lotCategory: string,
     lotDescription: string,
     projectContext: { type: string; location?: string; surface?: number }
   ): Promise<string> {
-    // Récupérer les DTU applicables
-    const dtuRefs = DTU_CATALOG[lotCategory.toLowerCase()] || [];
+    // Récupérer les DTU applicables (enrichis)
+    const enrichedDTUs = getDTUsForCategory(lotCategory);
+    const basicDTUs = DTU_CATALOG[lotCategory.toLowerCase()] || [];
+
+    // Combiner les sources
+    const allDTUs = enrichedDTUs.length > 0 ? enrichedDTUs : basicDTUs.map(d => ({
+      ...d,
+      keyRequirements: [],
+      materials: [],
+      controls: [],
+    }));
 
     // Rechercher le contexte technique
     const searchQuery = `Prescriptions CCTP ${lotCategory} ${lotDescription}`;
     const results = await this.search({ query: searchQuery, limit: 5 });
 
-    // Construire le prompt pour génération IA
-    const dtuContext = dtuRefs.map(d => `- ${d.code}: ${d.title}`).join('\n');
+    // Construire le prompt avec les données enrichies
+    const dtuContext = allDTUs.map(d => {
+      let ctx = `- ${d.code}: ${d.title}`;
+      if ('keyRequirements' in d && d.keyRequirements && d.keyRequirements.length > 0) {
+        ctx += `\n  Exigences: ${d.keyRequirements.slice(0, 3).join('; ')}`;
+      }
+      if ('materials' in d && d.materials && d.materials.length > 0) {
+        ctx += `\n  Matériaux: ${d.materials.slice(0, 2).join('; ')}`;
+      }
+      return ctx;
+    }).join('\n');
     const knowledgeContext = results.map(r => r.content.substring(0, 500)).join('\n---\n');
 
     const prompt = `Tu es un expert en rédaction de CCTP BTP. Génère les prescriptions techniques pour le lot "${lotCategory}" dans le cadre d'un projet de ${projectContext.type}.

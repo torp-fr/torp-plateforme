@@ -12,3 +12,13 @@ export {
   type CCTPEnrichmentContext,
   type CCTPPrescription,
 } from './knowledge.service';
+
+// Catalogue DTU enrichi avec prescriptions détaillées
+export {
+  DTU_CATALOG_ENRICHED,
+  getDTUsForCategory,
+  getDTUByCode,
+  getAllCategories,
+  getTotalDTUCount,
+  type DTUReferenceEnriched,
+} from './dtu-catalog';
