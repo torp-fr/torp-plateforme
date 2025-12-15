@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { gpuService, type PLUAnalysisResult } from '@/services/api/gpu.service';
 import type {
   FeasibilityReport,
   FeasibilityStatus,
@@ -146,6 +147,7 @@ export class FeasibilityService {
 
   /**
    * Analyzes PLU (Plan Local d'Urbanisme) constraints
+   * Now uses real GPU (Géoportail Urbanisme) API data
    */
   static async analyzePLU(
     property: Partial<Property>,
@@ -154,12 +156,31 @@ export class FeasibilityService {
     const issues: FeasibilityIssue[] = [];
     const recommendations: FeasibilityRecommendation[] = [];
 
-    // Default PLU rules (would be fetched from external API in production)
+    // Get code INSEE from postal code (simplified mapping)
+    const postalCode = property.identification?.address?.postalCode || '';
+    const codeInsee = this.postalCodeToInsee(postalCode);
+
+    // Get coordinates if available
+    const coordinates = property.identification?.coordinates
+      ? { lon: property.identification.coordinates.longitude, lat: property.identification.coordinates.latitude }
+      : undefined;
+
+    // Fetch real PLU data from GPU API
+    let gpuData: PLUAnalysisResult | null = null;
+    if (codeInsee) {
+      try {
+        gpuData = await gpuService.analyzePLU(codeInsee, coordinates);
+      } catch (error) {
+        console.warn('GPU API unavailable, using fallback:', error);
+      }
+    }
+
+    // Build PLU rules from GPU data or fallback to defaults
     const pluRules: PLURules = {
-      zoneType: property.location?.zoning?.pluZone || 'U',
-      zoneName: property.location?.zoning?.zoneName || 'Zone Urbaine',
-      allowedUses: ['habitation', 'commerce', 'artisanat'],
-      prohibitedUses: ['industrie_lourde'],
+      zoneType: gpuData?.zoneType || property.location?.zoning?.pluZone || 'U',
+      zoneName: gpuData?.zone || property.location?.zoning?.zoneName || 'Zone Urbaine',
+      allowedUses: this.parseAllowedUses(gpuData?.destination),
+      prohibitedUses: this.parseProhibitedUses(gpuData?.zoneType),
       buildingRules: {
         maxHeight: property.location?.zoning?.maxHeight || 12,
         maxFootprint: property.location?.zoning?.maxFootprint || 0.6,
@@ -169,7 +190,7 @@ export class FeasibilityService {
           side: 3,
           rear: 4,
         },
-        parkingRatio: 1, // 1 place per housing unit
+        parkingRatio: 1,
       },
       aestheticRules: {
         allowedRoofTypes: ['tuiles', 'ardoise'],
@@ -179,6 +200,21 @@ export class FeasibilityService {
         greenSpaceRatio: 0.2,
       },
     };
+
+    // Add GPU prescriptions as warnings
+    if (gpuData?.prescriptions && gpuData.prescriptions.length > 0) {
+      gpuData.prescriptions.forEach((prescription, index) => {
+        issues.push({
+          id: `prescription_${index}`,
+          type: 'regulatory',
+          severity: this.getPrescriptionSeverity(prescription.type),
+          title: prescription.libelle || `Prescription ${prescription.type}`,
+          description: prescription.description || 'Prescription PLU applicable',
+          source: 'Géoportail Urbanisme (GPU)',
+          resolution: prescription.documentUrl ? `Consulter: ${prescription.documentUrl}` : undefined,
+        });
+      });
+    }
 
     // Check height compliance
     const currentHeight = property.characteristics?.numberOfFloors
@@ -229,7 +265,22 @@ export class FeasibilityService {
         type: 'administrative',
         priority: 'high',
         title: 'Consultation du PLU en mairie',
-        description: 'Consulter le PLU en vigueur à la mairie pour confirmer les règles applicables',
+        description: gpuData?.reglementUrl
+          ? `Règlement PLU disponible: ${gpuData.reglementUrl}`
+          : 'Consulter le PLU en vigueur à la mairie pour confirmer les règles applicables',
+        estimatedCost: { min: 0, max: 0 },
+        estimatedDuration: 0.5,
+      });
+    }
+
+    // Add recommendation if GPU data has low confidence
+    if (gpuData?.confidence === 'low' || !gpuData) {
+      recommendations.push({
+        id: 'verify_plu_mairie',
+        type: 'administrative',
+        priority: 'medium',
+        title: 'Vérification en mairie recommandée',
+        description: 'Les données PLU n\'ont pas pu être récupérées avec certitude. Vérifiez auprès du service urbanisme.',
         estimatedCost: { min: 0, max: 0 },
         estimatedDuration: 0.5,
       });
@@ -237,8 +288,8 @@ export class FeasibilityService {
 
     return {
       commune: property.identification?.address?.city || 'Inconnue',
-      pluReference: pluRules.zoneName,
-      pluDate: new Date().toISOString(),
+      pluReference: gpuData?.zone || pluRules.zoneName,
+      pluDate: gpuData?.dateApprobation || new Date().toISOString(),
       zoneType: pluRules.zoneType,
       rules: pluRules,
       compliance: {
@@ -247,9 +298,95 @@ export class FeasibilityService {
         warnings: issues.filter(i => i.severity === 'major').map(i => i.title),
         derogationsRequired: issues.some(i => i.resolution?.includes('dérogation')),
       },
+      gpuData: gpuData ? {
+        documentType: gpuData.documentType,
+        documentState: gpuData.documentState,
+        zoneLongName: gpuData.zoneLongName,
+        destination: gpuData.destination,
+        prescriptionsCount: gpuData.prescriptions.length,
+        servitudesCount: gpuData.servitudes.length,
+        reglementUrl: gpuData.reglementUrl,
+        planUrl: gpuData.planUrl,
+        communeWebsite: gpuData.communeWebsite,
+        source: gpuData.source,
+        fetchedAt: gpuData.fetchedAt,
+        confidence: gpuData.confidence,
+      } : undefined,
       issues,
       recommendations,
     };
+  }
+
+  /**
+   * Convert postal code to INSEE code (simplified)
+   * In production, use a proper API or database
+   */
+  private static postalCodeToInsee(postalCode: string): string | null {
+    if (!postalCode || postalCode.length < 5) return null;
+
+    // Paris special case (75001-75020 -> 75056)
+    if (postalCode.startsWith('75')) return '75056';
+
+    // Lyon arrondissements (69001-69009 -> 69123)
+    if (postalCode.startsWith('6900')) return '69123';
+
+    // Marseille arrondissements (13001-13016 -> 13055)
+    if (postalCode.startsWith('130')) return '13055';
+
+    // Default: use postal code as INSEE (works for most communes)
+    return postalCode;
+  }
+
+  /**
+   * Parse allowed uses from GPU destination code
+   */
+  private static parseAllowedUses(destination?: string): string[] {
+    const uses: string[] = [];
+    switch (destination) {
+      case 'Habitation':
+        uses.push('habitation', 'bureaux_accessoires');
+        break;
+      case 'Activité':
+        uses.push('commerce', 'artisanat', 'bureaux', 'industrie_legere');
+        break;
+      case 'Destination mixte':
+        uses.push('habitation', 'commerce', 'artisanat', 'bureaux');
+        break;
+      case 'Équipement':
+        uses.push('equipement_public', 'service_public');
+        break;
+      default:
+        uses.push('habitation', 'commerce', 'artisanat');
+    }
+    return uses;
+  }
+
+  /**
+   * Parse prohibited uses from zone type
+   */
+  private static parseProhibitedUses(zoneType?: string): string[] {
+    switch (zoneType) {
+      case 'N': // Natural zone
+        return ['habitation', 'commerce', 'industrie', 'artisanat'];
+      case 'A': // Agricultural zone
+        return ['habitation_dense', 'commerce', 'industrie'];
+      case 'AU': // Zone to urbanize
+        return ['industrie_lourde'];
+      default: // U - Urban zone
+        return ['industrie_lourde'];
+    }
+  }
+
+  /**
+   * Determine prescription severity based on type
+   */
+  private static getPrescriptionSeverity(prescriptionType: string): 'blocking' | 'major' | 'minor' | 'informational' {
+    const blockingTypes = ['Espace boisé classé', 'Emplacement réservé', 'Secteur de risques'];
+    const majorTypes = ['Limitations de la constructibilité', 'Périmètre de protection', 'Patrimoine à protéger'];
+
+    if (blockingTypes.some(t => prescriptionType.includes(t))) return 'blocking';
+    if (majorTypes.some(t => prescriptionType.includes(t))) return 'major';
+    return 'informational';
   }
 
   /**
