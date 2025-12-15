@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,23 +8,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { 
-  CheckCircle, 
-  Crown, 
-  Eye, 
-  Settings, 
-  UserCheck, 
-  Users, 
-  Plus, 
-  MapPin, 
-  Calendar, 
-  Edit, 
-  Trash2, 
-  Lock, 
-  Shield, 
-  Unlock, 
-  Building, 
-  Download 
+import { Skeleton } from '@/components/ui/skeleton';
+import { useProjectUsers } from '@/hooks/useProjectUsers';
+import {
+  CheckCircle,
+  Crown,
+  Eye,
+  Settings,
+  UserCheck,
+  Users,
+  Plus,
+  MapPin,
+  Calendar,
+  Edit,
+  Trash2,
+  Lock,
+  Shield,
+  Unlock,
+  Building,
+  Download,
+  Loader2
 } from 'lucide-react';
 
 interface User {
@@ -45,82 +48,46 @@ interface User {
   };
 }
 
-const UserPermissionsManager = () => {
+interface UserPermissionsManagerProps {
+  projectId?: string;
+}
+
+const UserPermissionsManager = ({ projectId }: UserPermissionsManagerProps) => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
-  const mockUsers: User[] = [
-    {
-      id: '1',
-      name: 'Marie Dubois',
-      email: 'marie.dubois@departement44.fr',
-      role: 'super-admin',
-      territory: 'Loire-Atlantique',
-      lastLogin: '2024-03-20 14:30',
-      status: 'active',
-      permissions: {
-        viewDashboard: true,
-        viewDetails: true,
-        exportData: true,
-        manageBudget: true,
-        manageUsers: true,
-        apiAccess: true
-      }
-    },
-    {
-      id: '2',
-      name: 'Pierre Martin',
-      email: 'p.martin@nantesmetropole.fr',
-      role: 'analyste',
-      territory: 'Nantes Métropole',
-      lastLogin: '2024-03-22 09:15',
-      status: 'active',
-      permissions: {
-        viewDashboard: true,
-        viewDetails: true,
-        exportData: true,
-        manageBudget: false,
-        manageUsers: false,
-        apiAccess: false
-      }
-    },
-    {
-      id: '3',
-      name: 'Sophie Bernard',
-      email: 'sophie.bernard@ville-nantes.fr',
-      role: 'gestionnaire-budget',
-      territory: 'Nantes',
-      lastLogin: '2024-03-19 16:45',
-      status: 'active',
-      permissions: {
-        viewDashboard: true,
-        viewDetails: false,
-        exportData: false,
-        manageBudget: true,
-        manageUsers: false,
-        apiAccess: false
-      }
-    },
-    {
-      id: '4',
-      name: 'Jean Moreau',
-      email: 'j.moreau@consultant.com',
-      role: 'invite',
-      territory: 'Loire-Atlantique',
-      lastLogin: '2024-03-18 11:20',
-      status: 'active',
-      permissions: {
-        viewDashboard: true,
-        viewDetails: false,
-        exportData: false,
-        manageBudget: false,
-        manageUsers: false,
-        apiAccess: false
-      }
-    }
-  ];
+  // Hook pour les données réelles depuis Supabase (si projectId fourni)
+  const {
+    users: dbUsers,
+    isLoading,
+    updateRole,
+    removeUser,
+    isUpdatingRole,
+    isRemoving,
+    canManageUsers,
+  } = useProjectUsers({
+    projectId: projectId || 'default', // Utilise un projectId par défaut si non fourni
+    enabled: !!projectId,
+  });
 
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  // Mapper les données DB vers le format UI local
+  const users = useMemo<User[]>(() => {
+    if (!projectId || dbUsers.length === 0) {
+      // Pas de projectId ou pas de données en base - afficher message vide
+      return [];
+    }
+
+    return dbUsers.map(u => ({
+      id: u.id,
+      name: u.display_name,
+      email: u.email,
+      role: mapRole(u.role),
+      territory: u.company_name || 'Non spécifié',
+      lastLogin: u.last_active_at ? new Date(u.last_active_at).toLocaleString('fr-FR') : 'Jamais',
+      status: mapStatus(u.status),
+      permissions: mapPermissions(u.role),
+    }));
+  }, [dbUsers, projectId]);
 
   const getRoleIcon = (role: string) => {
     const icons = {
@@ -152,11 +119,22 @@ const UserPermissionsManager = () => {
   };
 
   const updateUserPermission = (userId: string, permission: keyof User['permissions'], value: boolean) => {
-    setUsers(prev => prev.map(user => 
-      user.id === userId 
-        ? { ...user, permissions: { ...user.permissions, [permission]: value } }
-        : user
-    ));
+    // Note: Les permissions sont basées sur le rôle dans le système actuel
+    // Pour modifier les permissions individuelles, il faudrait étendre le schéma DB
+    console.log('[UserPermissionsManager] Permission update requested:', { userId, permission, value });
+  };
+
+  const handleRemoveUser = (userId: string) => {
+    if (projectId) {
+      const user = users.find(u => u.id === userId);
+      if (user) {
+        // Trouver le user_id depuis dbUsers
+        const dbUser = dbUsers.find(u => u.id === userId);
+        if (dbUser) {
+          removeUser(dbUser.user_id);
+        }
+      }
+    }
   };
 
   const rolePermissionsPresets = {
@@ -193,6 +171,37 @@ const UserPermissionsManager = () => {
       apiAccess: false
     }
   };
+
+  // État de chargement
+  if (isLoading && projectId) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-64" />
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-4 w-96" />
+              <Skeleton className="h-10 w-40" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="space-y-4">
+              {[...Array(4)].map((_, i) => (
+                <Skeleton key={i} className="h-24 w-full rounded-lg" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Message si aucune donnée et projectId fourni
+  const hasData = users.length > 0;
 
   return (
     <div className="space-y-6">
@@ -690,5 +699,76 @@ const UserPermissionsManager = () => {
     </div>
   );
 };
+
+// =============================================================================
+// HELPERS - Mapping entre format DB et format UI
+// =============================================================================
+
+function mapRole(role: string): User['role'] {
+  const roleMap: Record<string, User['role']> = {
+    'owner': 'super-admin',
+    'admin': 'super-admin',
+    'manager': 'gestionnaire-budget',
+    'collaborator': 'analyste',
+    'viewer': 'invite',
+  };
+  return roleMap[role] || 'invite';
+}
+
+function mapStatus(status: string): User['status'] {
+  const statusMap: Record<string, User['status']> = {
+    'active': 'active',
+    'inactive': 'inactive',
+    'pending': 'pending',
+    'suspended': 'inactive',
+  };
+  return statusMap[status] || 'pending';
+}
+
+function mapPermissions(role: string): User['permissions'] {
+  const permissionsByRole: Record<string, User['permissions']> = {
+    'owner': {
+      viewDashboard: true,
+      viewDetails: true,
+      exportData: true,
+      manageBudget: true,
+      manageUsers: true,
+      apiAccess: true,
+    },
+    'admin': {
+      viewDashboard: true,
+      viewDetails: true,
+      exportData: true,
+      manageBudget: true,
+      manageUsers: true,
+      apiAccess: true,
+    },
+    'manager': {
+      viewDashboard: true,
+      viewDetails: true,
+      exportData: true,
+      manageBudget: true,
+      manageUsers: false,
+      apiAccess: false,
+    },
+    'collaborator': {
+      viewDashboard: true,
+      viewDetails: true,
+      exportData: true,
+      manageBudget: false,
+      manageUsers: false,
+      apiAccess: false,
+    },
+    'viewer': {
+      viewDashboard: true,
+      viewDetails: false,
+      exportData: false,
+      manageBudget: false,
+      manageUsers: false,
+      apiAccess: false,
+    },
+  };
+  return permissionsByRole[role] || permissionsByRole['viewer'];
+}
 
 export default UserPermissionsManager;
