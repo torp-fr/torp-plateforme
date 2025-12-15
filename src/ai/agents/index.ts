@@ -12,3 +12,7 @@ export type {
   OptimizationResult,
   DelaySimulation,
 } from './PlanningAgent';
+
+// Phase 4 - Réception & Garanties
+export { ReceptionAgent, receptionAgent } from './phase4/ReceptionAgent';
+export { WarrantyAgent, warrantyAgent } from './phase4/WarrantyAgent';
