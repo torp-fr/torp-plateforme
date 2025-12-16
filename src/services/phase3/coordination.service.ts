@@ -1388,3 +1388,92 @@ export class CoordinationService {
     };
   }
 }
+
+// ============================================
+// ADAPTATEUR POUR HOOKS
+// ============================================
+
+/**
+ * Adaptateur singleton pour les hooks React
+ * Expose les méthodes statiques via une interface compatible
+ */
+export const coordinationService = {
+  // Récupérer les créneaux
+  getCreneaux: (projetId: string) =>
+    CoordinationService.listCreneaux({ chantierId: projetId }),
+
+  // Récupérer les conflits
+  getConflits: (projetId: string) =>
+    CoordinationService.listConflits({ chantierId: projetId }),
+
+  // Récupérer le carnet du jour
+  getCarnetDuJour: (projetId: string, date: Date) =>
+    CoordinationService.getCarnetDuJour(projetId, date.toISOString().split('T')[0]),
+
+  // Récupérer la correspondance
+  getCorrespondance: (projetId: string) =>
+    CoordinationService.listConversations(projetId),
+
+  // Récupérer les points d'interface
+  getPointsInterface: (projetId: string) =>
+    CoordinationService.listInterfaces({ chantierId: projetId }),
+
+  // Créer un créneau
+  createCreneau: (data: { projetId: string; lotId: string; dateDebut: Date; dateFin: Date; description: string }) =>
+    CoordinationService.createCreneau({
+      chantierId: data.projetId,
+      lotId: data.lotId,
+      entreprise: 'Entreprise', // Peut être enrichi
+      date: data.dateDebut.toISOString().split('T')[0],
+      heureDebut: data.dateDebut.toTimeString().slice(0, 5),
+      heureFin: data.dateFin.toTimeString().slice(0, 5),
+      type: 'intervention',
+      description: data.description,
+      zones: [],
+    }),
+
+  // Résoudre un conflit
+  resoudreConflit: (conflitId: string, solution: string) =>
+    CoordinationService.resoudreConflit(conflitId, {
+      par: 'Utilisateur',
+      solution,
+    }),
+
+  // Ajouter une entrée au carnet
+  ajouterEntreeCarnet: (carnetId: string, data: { type: string; contenu: string }) =>
+    CoordinationService.ajouterEntreeCarnet({
+      carnetId,
+      auteur: 'Utilisateur',
+      entreprise: 'MOE',
+      type: data.type as any,
+      contenu: data.contenu,
+    }),
+
+  // Envoyer un message
+  envoyerMessage: (conversationId: string, contenu: string, pieces?: string[]) =>
+    CoordinationService.envoyerMessage({
+      conversationId,
+      expediteur: 'Utilisateur',
+      entreprise: 'MOE',
+      contenu,
+      piecesJointes: pieces,
+    }),
+
+  // Valider une interface
+  validerInterface: (interfaceId: string, commentaire?: string) =>
+    CoordinationService.validerInterface(interfaceId, {
+      par: 'Utilisateur',
+      commentaire,
+    }),
+
+  // Signaler un problème d'interface
+  signalerProblemeInterface: (interfaceId: string, description: string) =>
+    CoordinationService.signalerProblemeInterface(interfaceId, {
+      signalePar: 'Utilisateur',
+      description,
+    }),
+
+  // Statistiques
+  getStatistiques: (projetId: string) =>
+    CoordinationService.getStatistiques(projetId),
+};
