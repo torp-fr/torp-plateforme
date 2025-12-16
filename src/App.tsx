@@ -64,7 +64,7 @@ import { Phase1Consultation } from "./pages/phase1";
 // Phase 2 Pages (Préparation de Chantier)
 import { Phase2Dashboard, PlanningPage, ReunionsPage, JournalPage, ChantiersListPage } from "./pages/phase2";
 // Phase 3 Pages (Exécution Chantier)
-import { ControlesPage, CoordinationPage, SituationsPage } from "./pages/phase3";
+import { Phase3Dashboard, ControlesPage, CoordinationPage, SituationsPage } from "./pages/phase3";
 // Phase 4 Pages (Réception & Garanties)
 import Phase4Dashboard from "./pages/phase4/Phase4Dashboard";
 // Layout contextuel chantier
@@ -144,16 +144,20 @@ const AppContent = () => {
           </Route>
           {/* Routes Phase 3 - Exécution Chantier (avec sidebar contextuel) */}
           <Route path="/phase3/:projectId" element={<ProtectedRoute><ChantierLayout /></ProtectedRoute>}>
+            <Route index element={<Phase3Dashboard />} />
+            <Route path="dashboard" element={<Phase3Dashboard />} />
             <Route path="controles" element={<ControlesPage />} />
             <Route path="coordination" element={<CoordinationPage />} />
             <Route path="situations" element={<SituationsPage />} />
           </Route>
-          {/* Routes Phase 4 - Réception & Garanties */}
-          <Route path="/phase4/:projectId" element={<ProtectedRoute><Phase4Dashboard /></ProtectedRoute>} />
-          <Route path="/phase4/:projectId/reception" element={<ProtectedRoute><Phase4Dashboard /></ProtectedRoute>} />
-          <Route path="/phase4/:projectId/reserves" element={<ProtectedRoute><Phase4Dashboard /></ProtectedRoute>} />
-          <Route path="/phase4/:projectId/garanties" element={<ProtectedRoute><Phase4Dashboard /></ProtectedRoute>} />
-          <Route path="/phase4/:projectId/doe" element={<ProtectedRoute><Phase4Dashboard /></ProtectedRoute>} />
+          {/* Routes Phase 4 - Réception & Garanties (avec sidebar contextuel) */}
+          <Route path="/phase4/:projectId" element={<ProtectedRoute><ChantierLayout /></ProtectedRoute>}>
+            <Route index element={<Phase4Dashboard />} />
+            <Route path="reception" element={<Phase4Dashboard />} />
+            <Route path="reserves" element={<Phase4Dashboard />} />
+            <Route path="garanties" element={<Phase4Dashboard />} />
+            <Route path="doe" element={<Phase4Dashboard />} />
+          </Route>
           {/* Routes Appels d'Offres (MOA) */}
           <Route path="/tenders" element={<ProtectedRoute><TendersPage /></ProtectedRoute>} />
           <Route path="/tenders/:tenderId" element={<ProtectedRoute><TenderDetailPage /></ProtectedRoute>} />
