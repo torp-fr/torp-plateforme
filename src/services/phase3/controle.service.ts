@@ -1320,3 +1320,67 @@ export class ControleService {
     };
   }
 }
+
+// ============================================
+// ADAPTATEUR POUR HOOKS
+// ============================================
+
+/**
+ * Adaptateur singleton pour les hooks React
+ * Expose les méthodes statiques via une interface compatible
+ */
+export const controleService = {
+  // Récupérer les contrôles
+  getControles: (projetId: string, lotId?: string) =>
+    ControleService.listQualityControls({ projectId: projetId, lotId }),
+
+  // Récupérer les statistiques
+  getStatistiques: (projetId: string) =>
+    ControleService.getStatistiques(projetId),
+
+  // Planning des contrôles (visites programmées)
+  getPlanningControles: (projetId: string) =>
+    ControleService.listControlVisits({ projectId: projetId, status: 'scheduled' }),
+
+  // Créer un contrôle
+  createControle: (data: { projetId: string; lotId?: string; type: string; checkpoint: string; category: string }) =>
+    ControleService.createQualityControl({
+      projectId: data.projetId,
+      lotId: data.lotId,
+      controlType: data.type as any,
+      checkpointLabel: data.checkpoint,
+      controlCategory: data.category,
+    }),
+
+  // Planifier une visite
+  planifierVisite: (controleId: string, date: Date, participants: string[]) =>
+    ControleService.createControlVisit({
+      projectId: controleId, // Note: on utilise controleId comme projectId ici
+      visitType: 'externe',
+      scheduledAt: date.toISOString(),
+      participants: participants.map(p => ({ name: p, role: 'inspector' })),
+    }),
+
+  // Enregistrer résultat
+  enregistrerResultat: (controleId: string, resultat: string, observations: string, photos?: string[]) =>
+    ControleService.updateQualityControl(controleId, {
+      status: resultat === 'conforme' ? 'pass' : 'fail',
+      notes: observations,
+      photos,
+    }),
+
+  // Créer fiche NC
+  creerFicheNC: (controleId: string, description: string, gravite: string, actionsCorrectives: string[]) =>
+    ControleService.updateQualityControl(controleId, {
+      status: 'fail',
+      notes: `NC ${gravite}: ${description}\nActions: ${actionsCorrectives.join(', ')}`,
+    }),
+
+  // Lever réserve
+  leverReserve: (controleId: string, commentaire: string, photos?: string[]) =>
+    ControleService.updateQualityControl(controleId, {
+      status: 'pass',
+      notes: `Levée: ${commentaire}`,
+      photos,
+    }),
+};

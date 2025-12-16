@@ -3,7 +3,7 @@
  * Suivi quotidien des activités, effectifs, conditions et événements du chantier
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Slider } from '@/components/ui/slider';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useJournalEntries } from '@/hooks/useJournalEntries';
 import {
   Calendar,
   Plus,
@@ -125,71 +127,8 @@ interface SecuriteEntry {
   observations?: string;
 }
 
-// Mock data
-const mockEntries: JournalEntry[] = [
-  {
-    id: '1',
-    date: new Date().toISOString().split('T')[0],
-    meteo: {
-      condition: 'ensoleille',
-      temperature: 18,
-      intemperies: false,
-      arretChantier: false
-    },
-    effectifs: [
-      { id: '1', entreprise: 'Maçonnerie Dupont', lot: 'Gros œuvre', nombrePersonnes: 4, heuresPresence: 8, taches: 'Coulage dalle RDC' },
-      { id: '2', entreprise: 'Électricité Martin', lot: 'Électricité', nombrePersonnes: 2, heuresPresence: 6, taches: 'Passage gaines' }
-    ],
-    activites: [
-      { id: '1', lot: 'Gros œuvre', description: 'Coulage dalle RDC - Zone A', avancement: 75, zone: 'RDC', statut: 'en_cours' },
-      { id: '2', lot: 'Électricité', description: 'Passage gaines électriques', avancement: 40, zone: 'Sous-sol', statut: 'en_cours' }
-    ],
-    livraisons: [
-      { id: '1', fournisseur: 'Point P', materiaux: 'Béton prêt à l\'emploi', quantite: '12 m³', conforme: true }
-    ],
-    incidents: [],
-    observations: 'Bonne avancée des travaux. RAS.',
-    photos: [],
-    securite: {
-      portEPI: true,
-      balisageOK: true,
-      stockageMateriauxOK: true,
-      propreteSite: true
-    },
-    status: 'brouillon'
-  },
-  {
-    id: '2',
-    date: subDays(new Date(), 1).toISOString().split('T')[0],
-    meteo: {
-      condition: 'nuageux',
-      temperature: 15,
-      intemperies: false,
-      arretChantier: false
-    },
-    effectifs: [
-      { id: '1', entreprise: 'Maçonnerie Dupont', lot: 'Gros œuvre', nombrePersonnes: 3, heuresPresence: 8, taches: 'Ferraillage dalle' }
-    ],
-    activites: [
-      { id: '1', lot: 'Gros œuvre', description: 'Ferraillage dalle RDC', avancement: 100, zone: 'RDC', statut: 'termine' }
-    ],
-    livraisons: [
-      { id: '1', fournisseur: 'KDI', materiaux: 'Acier HA', quantite: '2 tonnes', conforme: true }
-    ],
-    incidents: [],
-    observations: 'Ferraillage terminé, prêt pour coulage.',
-    photos: [],
-    securite: {
-      portEPI: true,
-      balisageOK: true,
-      stockageMateriauxOK: true,
-      propreteSite: true
-    },
-    validePar: 'Jean Dupont',
-    valideDate: subDays(new Date(), 1).toISOString(),
-    status: 'valide'
-  }
-];
+// NOTE: Les données mockées ont été supprimées.
+// Le composant utilise maintenant le hook useJournalEntries pour les données réelles.
 
 const MeteoIcon = ({ condition }: { condition: string }) => {
   switch (condition) {
@@ -240,8 +179,80 @@ const getIncidentBadge = (gravite: string) => {
 };
 
 export default function JournalPage() {
-  const { projectId } = useParams();
-  const [entries, setEntries] = useState<JournalEntry[]>(mockEntries);
+  const { projectId, chantierId } = useParams();
+
+  // Hook pour les données réelles depuis Supabase
+  const {
+    entries: dbEntries,
+    isLoading,
+    createEntry,
+    validateEntry,
+    isCreating,
+  } = useJournalEntries({
+    projectId: projectId,
+    chantierId: chantierId,
+  });
+
+  // Mapper les données DB vers le format UI local
+  const entries = useMemo<JournalEntry[]>(() => {
+    if (!dbEntries || dbEntries.length === 0) return [];
+
+    return dbEntries.map(e => ({
+      id: e.id,
+      date: e.date,
+      meteo: {
+        condition: (e.meteo?.condition as any) || 'nuageux',
+        temperature: e.meteo?.temperature || e.meteo?.temperature_max || 15,
+        intemperies: e.meteo?.intemperies || false,
+        arretChantier: e.meteo?.arret_chantier || false
+      },
+      effectifs: (e.effectifs || []).map((ef: any) => ({
+        id: ef.id || crypto.randomUUID(),
+        entreprise: ef.entreprise || '',
+        lot: ef.lot || '',
+        nombrePersonnes: ef.nombre_personnes || ef.nombrePersonnes || 0,
+        heuresPresence: ef.heures_presence || ef.heuresPresence || 0,
+        taches: ef.taches || ''
+      })),
+      activites: (e.activites || []).map((a: any) => ({
+        id: a.id || crypto.randomUUID(),
+        lot: a.lot || '',
+        description: a.description || '',
+        avancement: a.avancement || 0,
+        zone: a.zone || '',
+        statut: a.statut || 'en_cours'
+      })),
+      livraisons: (e.livraisons || []).map((l: any) => ({
+        id: l.id || crypto.randomUUID(),
+        fournisseur: l.fournisseur || '',
+        materiaux: l.materiaux || '',
+        quantite: l.quantite || '',
+        conforme: l.conforme !== false,
+        observations: l.commentaire || l.observations
+      })),
+      incidents: (e.incidents || []).map((i: any) => ({
+        id: i.id || crypto.randomUUID(),
+        type: i.type || 'autre',
+        gravite: i.gravite || 'mineur',
+        description: i.description || '',
+        actionsCorrectives: i.mesures_prises || i.actionsCorrectives,
+        resolu: false
+      })),
+      observations: e.observations || '',
+      photos: (e.photos || []).map((p: any) => typeof p === 'string' ? { id: p, url: p, description: '', zone: '', timestamp: '' } : p),
+      securite: {
+        portEPI: e.securite?.port_epi !== false,
+        balisageOK: e.securite?.balisage_ok !== false,
+        stockageMateriauxOK: e.securite?.stockage_materiaux_ok !== false,
+        propreteSite: e.securite?.proprete_site !== false,
+        observations: e.securite?.incidents_securite
+      },
+      validePar: e.valide_par,
+      valideDate: e.valide_date,
+      status: e.status as any || 'brouillon'
+    }));
+  }, [dbEntries]);
+
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
   const [showNewEntryDialog, setShowNewEntryDialog] = useState(false);
@@ -297,33 +308,94 @@ export default function JournalPage() {
   };
 
   const handleCreateEntry = () => {
-    const entry: JournalEntry = {
-      id: Date.now().toString(),
+    // Utiliser le hook pour créer l'entrée dans la DB
+    createEntry({
       date: selectedDate.toISOString().split('T')[0],
-      meteo: newEntry.meteo!,
-      effectifs: newEntry.effectifs || [],
-      activites: newEntry.activites || [],
-      livraisons: newEntry.livraisons || [],
-      incidents: newEntry.incidents || [],
-      observations: newEntry.observations || '',
-      photos: newEntry.photos || [],
-      securite: newEntry.securite!,
-      status: 'brouillon'
-    };
+      meteo: {
+        condition: newEntry.meteo?.condition as any,
+        temperature_min: newEntry.meteo?.temperature,
+        temperature_max: newEntry.meteo?.temperature,
+        intemperies: newEntry.meteo?.intemperies,
+        arret_chantier: newEntry.meteo?.arretChantier,
+      },
+      effectifs: newEntry.effectifs?.map(ef => ({
+        ...ef,
+        nombre_personnes: ef.nombrePersonnes,
+        heures_presence: ef.heuresPresence,
+      })),
+      activites: newEntry.activites,
+      livraisons: newEntry.livraisons,
+      incidents: newEntry.incidents,
+      observations: newEntry.observations,
+      securite: {
+        port_epi: newEntry.securite?.portEPI,
+        balisage_ok: newEntry.securite?.balisageOK,
+        stockage_materiaux_ok: newEntry.securite?.stockageMateriauxOK,
+        proprete_site: newEntry.securite?.propreteSite,
+      },
+      status: 'brouillon',
+    });
 
-    setEntries([entry, ...entries]);
     setShowNewEntryDialog(false);
-    setSelectedEntry(entry);
-    setShowEntryDetail(true);
+    // Reset form
+    setNewEntry({
+      meteo: { condition: 'ensoleille', temperature: 15, intemperies: false, arretChantier: false },
+      effectifs: [],
+      activites: [],
+      livraisons: [],
+      incidents: [],
+      observations: '',
+      photos: [],
+      securite: { portEPI: true, balisageOK: true, stockageMateriauxOK: true, propreteSite: true },
+      status: 'brouillon'
+    });
   };
 
   const handleValidateEntry = (entry: JournalEntry) => {
-    setEntries(entries.map(e =>
-      e.id === entry.id
-        ? { ...e, status: 'valide', validePar: 'Utilisateur', valideDate: new Date().toISOString() }
-        : e
-    ));
+    // Utiliser le hook pour valider l'entrée
+    validateEntry({ id: entry.id, validateur: 'Utilisateur' });
   };
+
+  // État de chargement
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-6 space-y-6">
+        <div className="flex justify-between items-start">
+          <div>
+            <Skeleton className="h-9 w-64 mb-2" />
+            <Skeleton className="h-5 w-96" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-10 w-32" />
+            <Skeleton className="h-10 w-36" />
+          </div>
+        </div>
+        <div className="grid grid-cols-5 gap-4">
+          {[...Array(5)].map((_, i) => (
+            <Card key={i}>
+              <CardContent className="pt-6">
+                <Skeleton className="h-16 w-full" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between mb-4">
+              <Skeleton className="h-8 w-40" />
+              <Skeleton className="h-6 w-64" />
+              <Skeleton className="h-8 w-40" />
+            </div>
+            <div className="grid grid-cols-7 gap-2">
+              {[...Array(7)].map((_, i) => (
+                <Skeleton key={i} className="h-32 rounded-lg" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-6 space-y-6">

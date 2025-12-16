@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { cadastreService } from '@/services/api/cadastre.service';
 import type {
   DeductionRule,
   DeductionResult,
@@ -485,26 +486,55 @@ export class DeductionService {
   ): Promise<void> {
     result.ruleName = 'Risques naturels depuis adresse';
 
-    // Simulation - en production, appeler l'API Géorisques
-    const mockRisks = {
-      flood: { level: 'low' as const, zone: 'Hors zone inondable' },
+    // Récupérer les coordonnées et le code INSEE depuis le contexte
+    const lat = context.latitude as number;
+    const lon = context.longitude as number;
+    const codeInsee = context.codeInsee as string;
+
+    // Données par défaut si les coordonnées ne sont pas disponibles
+    const defaultRisks = {
+      flood: { level: 'low' as const, zone: 'Non déterminé' },
       earthquake: { level: 'low' as const, zone: 'Zone 1' },
-      clayShrinkage: { level: 'medium' as const },
+      clayShrinkage: { level: 'low' as const },
     };
+
+    let risks = defaultRisks;
+
+    // Appel réel à l'API Géorisques via cadastreService si coordonnées disponibles
+    if (lat && lon && codeInsee) {
+      try {
+        const riskAnalysis = await cadastreService.analyzeRisks(lat, lon, codeInsee);
+        risks = {
+          flood: {
+            level: riskAnalysis.inondation.niveau as 'low' | 'medium' | 'high',
+            zone: riskAnalysis.inondation.zone || 'Non déterminé',
+          },
+          earthquake: {
+            level: defaultRisks.earthquake.level, // Géorisques ne retourne pas toujours ce risque
+            zone: defaultRisks.earthquake.zone,
+          },
+          clayShrinkage: {
+            level: riskAnalysis.argiles.niveau as 'low' | 'medium' | 'high',
+          },
+        };
+      } catch (error) {
+        console.warn('[DeductionService] Erreur API Géorisques, utilisation données par défaut:', error);
+      }
+    }
 
     result.deducedData.push({
       field: 'property.diagnostics.erp.naturalRisks',
       value: [
-        { type: 'flood', level: mockRisks.flood.level, zone: mockRisks.flood.zone },
-        { type: 'earthquake', level: mockRisks.earthquake.level, zone: mockRisks.earthquake.zone },
-        { type: 'clay_shrinkage', level: mockRisks.clayShrinkage.level },
+        { type: 'flood', level: risks.flood.level, zone: risks.flood.zone },
+        { type: 'earthquake', level: risks.earthquake.level, zone: risks.earthquake.zone },
+        { type: 'clay_shrinkage', level: risks.clayShrinkage.level },
       ],
-      confidence: 'high',
+      confidence: lat && lon ? 'high' : 'medium',
       source: 'api_external',
       requiresValidation: true,
       validated: false,
     });
-    result.confidence = 'high';
+    result.confidence = lat && lon ? 'high' : 'medium';
   }
 
   private async deduceHeritageZone(

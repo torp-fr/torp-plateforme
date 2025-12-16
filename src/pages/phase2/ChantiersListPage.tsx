@@ -1,23 +1,24 @@
 /**
  * TORP Phase 2 - Liste des Chantiers
  * Vue d'ensemble de tous les chantiers actifs avec accès rapide aux fonctionnalités
+ * ZÉRO MOCK - Données réelles depuis Supabase
  */
 
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Building2,
   Calendar,
   Users,
   ClipboardList,
   Search,
-  Filter,
   HardHat,
   TrendingUp,
   Clock,
@@ -31,9 +32,7 @@ import {
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout';
 import { useApp } from '@/context/AppContext';
-import { Phase0ProjectService, Phase0Project } from '@/services/phase0';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { useChantiers, ChantierStatus } from '@/hooks/useChantiers';
 
 // Labels adaptés par profil
 const PROFILE_LABELS = {
@@ -95,76 +94,27 @@ const CHANTIER_STATUS = {
   termine: { label: 'Terminé', color: 'bg-blue-100 text-blue-800', icon: CheckCircle2 },
 };
 
-interface ChantierCard {
-  id: string;
-  projectId: string;
-  nom: string;
-  reference: string;
-  adresse: string;
-  status: keyof typeof CHANTIER_STATUS;
-  avancement: number;
-  dateDebut?: string;
-  dateFin?: string;
-  montant?: number;
-  entreprisesActives: number;
-  prochaineReunion?: string;
-  alertes: number;
-}
-
 export default function ChantiersListPage() {
   const navigate = useNavigate();
-  const { phase0Projects, userType } = useApp();
-  const [loading, setLoading] = useState(true);
-  const [chantiers, setChantiers] = useState<ChantierCard[]>([]);
+  const { userType } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<ChantierStatus | 'all'>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Labels adaptés au profil utilisateur
   const labels = PROFILE_LABELS[userType as keyof typeof PROFILE_LABELS] || PROFILE_LABELS.B2C;
 
-  useEffect(() => {
-    loadChantiers();
-  }, [phase0Projects]);
+  // Hook pour les données réelles depuis Supabase
+  const {
+    chantiers: allChantiers,
+    stats,
+    isLoading,
+  } = useChantiers({
+    userType: userType as 'B2C' | 'B2B' | 'B2G',
+  });
 
-  const loadChantiers = async () => {
-    try {
-      setLoading(true);
-
-      // Filtrer les projets en phase consultation ou validés (donc potentiellement en chantier)
-      const projetsConcernes = phase0Projects.filter(p =>
-        p.status === 'in_consultation' || p.status === 'validated' || p.status === 'published'
-      );
-
-      // Transformer en données de chantier
-      const chantiersData: ChantierCard[] = projetsConcernes.map(project => ({
-        id: project.projectId,
-        projectId: project.projectId,
-        nom: project.workProject?.general?.title || 'Projet sans titre',
-        reference: project.reference || project.projectId.slice(0, 8).toUpperCase(),
-        adresse: project.property?.address
-          ? `${project.property.address.city || ''} (${project.property.address.postalCode || ''})`
-          : 'Adresse non définie',
-        status: project.status === 'validated' ? 'en_cours' : 'preparation',
-        avancement: Math.floor(Math.random() * 60) + 10, // Mock pour l'instant
-        dateDebut: project.createdAt,
-        dateFin: undefined,
-        montant: project.workProject?.budget?.estimated || 0,
-        entreprisesActives: Math.floor(Math.random() * 5) + 1, // Mock
-        prochaineReunion: undefined,
-        alertes: Math.floor(Math.random() * 3), // Mock
-      }));
-
-      setChantiers(chantiersData);
-    } catch (error) {
-      console.error('Erreur chargement chantiers:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Filtrer les chantiers
-  const filteredChantiers = chantiers.filter(chantier => {
+  // Filtrer les chantiers localement par recherche et statut
+  const filteredChantiers = allChantiers.filter(chantier => {
     const matchSearch =
       chantier.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
       chantier.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -175,22 +125,65 @@ export default function ChantiersListPage() {
     return matchSearch && matchStatus;
   });
 
-  // Statistiques globales
-  const stats = {
-    total: chantiers.length,
-    enCours: chantiers.filter(c => c.status === 'en_cours').length,
-    preparation: chantiers.filter(c => c.status === 'preparation').length,
-    alertes: chantiers.reduce((sum, c) => sum + c.alertes, 0),
-    avancementMoyen: chantiers.length > 0
-      ? Math.round(chantiers.reduce((sum, c) => sum + c.avancement, 0) / chantiers.length)
-      : 0,
-  };
-
-  if (loading) {
+  if (isLoading) {
     return (
       <AppLayout>
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+        <div className="space-y-6">
+          {/* Header Skeleton */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <Skeleton className="h-8 w-48 mb-2" />
+              <Skeleton className="h-4 w-64" />
+            </div>
+            <Skeleton className="h-10 w-40" />
+          </div>
+
+          {/* Stats Cards Skeleton */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {[...Array(5)].map((_, i) => (
+              <Card key={i}>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Skeleton className="h-4 w-20 mb-2" />
+                      <Skeleton className="h-8 w-12" />
+                    </div>
+                    <Skeleton className="h-8 w-8 rounded" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Filters Skeleton */}
+          <Card>
+            <CardContent className="py-4">
+              <div className="flex gap-4">
+                <Skeleton className="h-10 w-64" />
+                <Skeleton className="h-10 w-48" />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Grid Skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(6)].map((_, i) => (
+              <Card key={i}>
+                <CardHeader className="pb-2">
+                  <Skeleton className="h-6 w-48 mb-2" />
+                  <Skeleton className="h-4 w-32" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Skeleton className="h-2 w-full" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 w-24" />
+                  </div>
+                  <Skeleton className="h-10 w-full" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       </AppLayout>
     );
@@ -220,7 +213,7 @@ export default function ChantiersListPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">{labels.totalLabel}</p>
-                  <p className="text-2xl font-bold">{stats.total}</p>
+                  <p className="text-2xl font-bold">{stats?.total || 0}</p>
                 </div>
                 <HardHat className="h-8 w-8 text-primary opacity-50" />
               </div>
@@ -231,7 +224,7 @@ export default function ChantiersListPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">{labels.enCoursLabel}</p>
-                  <p className="text-2xl font-bold text-green-600">{stats.enCours}</p>
+                  <p className="text-2xl font-bold text-green-600">{stats?.enCours || 0}</p>
                 </div>
                 <TrendingUp className="h-8 w-8 text-green-500 opacity-50" />
               </div>
@@ -242,7 +235,7 @@ export default function ChantiersListPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">{labels.preparationLabel}</p>
-                  <p className="text-2xl font-bold text-yellow-600">{stats.preparation}</p>
+                  <p className="text-2xl font-bold text-yellow-600">{stats?.preparation || 0}</p>
                 </div>
                 <Clock className="h-8 w-8 text-yellow-500 opacity-50" />
               </div>
@@ -253,7 +246,7 @@ export default function ChantiersListPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">{labels.alertesLabel}</p>
-                  <p className="text-2xl font-bold text-orange-600">{stats.alertes}</p>
+                  <p className="text-2xl font-bold text-orange-600">{stats?.alertes || 0}</p>
                 </div>
                 <AlertTriangle className="h-8 w-8 text-orange-500 opacity-50" />
               </div>
@@ -264,7 +257,7 @@ export default function ChantiersListPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">{labels.avancementLabel}</p>
-                  <p className="text-2xl font-bold">{stats.avancementMoyen}%</p>
+                  <p className="text-2xl font-bold">{stats?.avancementMoyen || 0}%</p>
                 </div>
                 <CheckCircle2 className="h-8 w-8 text-blue-500 opacity-50" />
               </div>

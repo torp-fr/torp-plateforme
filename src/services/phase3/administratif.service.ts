@@ -1317,3 +1317,73 @@ export class AdministratifService {
     return alertes;
   }
 }
+
+// ============================================
+// ADAPTATEUR POUR HOOKS
+// ============================================
+
+/**
+ * Adaptateur singleton pour les hooks React
+ * Expose les méthodes statiques via une interface compatible
+ */
+export const administratifService = {
+  // Récupérer les situations
+  getSituations: (projetId: string, lotId?: string) =>
+    AdministratifService.listSituations({ chantierId: projetId, lotId }),
+
+  // Calculer le suivi budgétaire
+  calculerSuiviBudgetaire: (projetId: string) =>
+    AdministratifService.calculerSuiviBudgetaire(projetId),
+
+  // Récupérer les avenants
+  getAvenants: (projetId: string) =>
+    AdministratifService.listAvenants({ chantierId: projetId }),
+
+  // Créer une situation
+  createSituation: (data: { projetId: string; lotId: string; mois: string; lignes: any[] }) =>
+    AdministratifService.createSituation({
+      chantierId: data.projetId,
+      lotId: data.lotId,
+      mois: data.mois,
+      lignes: data.lignes,
+    }),
+
+  // Soumettre une situation
+  soumettreSituation: (situationId: string) =>
+    AdministratifService.soumettreSituation(situationId),
+
+  // Valider une situation
+  validerSituation: (situationId: string, commentaire?: string) =>
+    AdministratifService.validerSituation(situationId, {
+      par: 'Utilisateur',
+      commentaire,
+    }),
+
+  // Refuser une situation
+  refuserSituation: async (situationId: string, motif: string) => {
+    const result = await AdministratifService.verifierSituation(situationId, {
+      par: 'Utilisateur',
+      conformite: false,
+      observations: motif,
+    });
+    return result;
+  },
+
+  // Créer un avenant
+  createAvenant: (data: { projetId: string; lotId: string; objet: string; montantHT: number; justification: string }) =>
+    AdministratifService.createAvenant({
+      chantierId: data.projetId,
+      lotId: data.lotId,
+      type: 'travaux_supplementaires',
+      objet: data.objet,
+      montantHT: data.montantHT,
+      justification: data.justification,
+    }),
+
+  // Valider un avenant
+  validerAvenant: (avenantId: string) =>
+    AdministratifService.validerAvenantMOE(avenantId, {
+      par: 'Utilisateur',
+      avis: 'favorable',
+    }),
+};

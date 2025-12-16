@@ -1,12 +1,15 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useApp } from '@/context/AppContext';
 import { Header } from '@/components/Header';
 import { BackButton } from '@/components/BackButton';
+import { useProjectDetails } from '@/hooks/useProjectDetails';
 import {
   Calendar,
   Clock,
@@ -15,75 +18,61 @@ import {
   AlertTriangle,
   CheckCircle,
   Euro,
-  Camera,
-  MessageSquare,
   Settings,
   BarChart3,
-  MapPin,
   Hammer,
-  Shield,
-  Truck,
-  ClipboardCheck,
-  Plus,
   Edit,
   Download,
   Upload
 } from 'lucide-react';
 
 export default function ProjectDashboard() {
-  const { currentProject, projects } = useApp();
+  const { currentProject } = useApp();
+  const { projectId: urlProjectId } = useParams<{ projectId: string }>();
   const [activeTab, setActiveTab] = useState('overview');
-  
-  // Mock data enrichi pour le dashboard
-  const mockProject = {
-    id: '1',
-    name: 'Rénovation cuisine complète',
-    type: 'Rénovation',
-    status: 'in-progress',
-    score: 85,
-    grade: 'A',
-    amount: '15 000 €',
-    createdAt: new Date().toISOString(),
-    company: 'Maison Familiale',
-    progress: 35,
-    phases: [
-      { id: 1, name: 'Conception & Plans', status: 'completed', progress: 100, duration: '2 semaines' },
-      { id: 2, name: 'Démolition', status: 'completed', progress: 100, duration: '3 jours' },
-      { id: 3, name: 'Plomberie & Électricité', status: 'in-progress', progress: 60, duration: '1 semaine' },
-      { id: 4, name: 'Pose du carrelage', status: 'pending', progress: 0, duration: '4 jours' },
-      { id: 5, name: 'Installation mobilier', status: 'pending', progress: 0, duration: '2 jours' },
-      { id: 6, name: 'Finitions', status: 'pending', progress: 0, duration: '3 jours' }
-    ],
-    budget: {
-      total: 15000,
-      spent: 5250,
-      remaining: 9750,
-      breakdown: [
-        { category: 'Matériaux', budgeted: 8000, spent: 3200, remaining: 4800 },
-        { category: 'Main d\'œuvre', budgeted: 5000, spent: 2050, remaining: 2950 },
-        { category: 'Outillage', budgeted: 1000, spent: 0, remaining: 1000 },
-        { category: 'Imprévus', budgeted: 1000, spent: 0, remaining: 1000 }
-      ]
-    },
-    team: [
-      { name: 'Marc Dubois', role: 'Architecte', status: 'active', phone: '06.12.34.56.78' },
-      { name: 'Pierre Martin', role: 'Plombier', status: 'active', phone: '06.98.76.54.32' },
-      { name: 'Jean Leroy', role: 'Électricien', status: 'scheduled', phone: '06.45.67.89.01' },
-      { name: 'Sophie Dupont', role: 'Carreleur', status: 'scheduled', phone: '06.23.45.67.89' }
-    ],
-    alerts: [
-      { type: 'warning', message: 'Retard possible sur la livraison du carrelage', date: '2024-01-15' },
-      { type: 'info', message: 'Visite de contrôle prévue vendredi', date: '2024-01-12' }
-    ],
-    documents: [
-      { name: 'Plans architecte', type: 'PDF', date: '2024-01-08', size: '2.4 MB' },
-      { name: 'Devis plomberie', type: 'PDF', date: '2024-01-10', size: '1.2 MB' },
-      { name: 'Facture matériaux', type: 'PDF', date: '2024-01-12', size: '856 KB' }
-    ],
-    analysisResult: currentProject?.analysisResult
-  };
 
-  const project = mockProject;
+  // Déterminer l'ID du projet (URL ou projet courant)
+  const projectId = urlProjectId || currentProject?.id || '';
+
+  // Hook pour les données réelles depuis Supabase
+  const {
+    project: projectData,
+    isLoading,
+    error,
+  } = useProjectDetails({
+    projectId,
+    enabled: !!projectId,
+  });
+
+  // Données du projet (réelles ou fallback vide)
+  const project = useMemo(() => {
+    if (projectData) return projectData;
+
+    // Fallback si pas de données
+    return {
+      id: projectId || '1',
+      name: currentProject?.name || 'Projet',
+      type: 'Rénovation',
+      status: 'draft',
+      score: undefined,
+      grade: undefined,
+      amount: '0 €',
+      createdAt: new Date().toISOString(),
+      company: undefined,
+      address: undefined,
+      progress: 0,
+      phases: [],
+      budget: {
+        total: 0,
+        spent: 0,
+        remaining: 0,
+        breakdown: [],
+      },
+      team: [],
+      alerts: [],
+      documents: [],
+    };
+  }, [projectData, projectId, currentProject]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -110,9 +99,45 @@ export default function ProjectDashboard() {
       case 'warning': return <AlertTriangle className="w-4 h-4 text-warning" />;
       case 'error': return <AlertTriangle className="w-4 h-4 text-destructive" />;
       case 'info': return <CheckCircle className="w-4 h-4 text-info" />;
+      case 'success': return <CheckCircle className="w-4 h-4 text-success" />;
       default: return <CheckCircle className="w-4 h-4 text-muted-foreground" />;
     }
   };
+
+  // État de chargement
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-7xl mx-auto space-y-6">
+            <div className="flex items-center gap-4 mb-4">
+              <Skeleton className="h-8 w-32" />
+              <div className="flex-1">
+                <Skeleton className="h-8 w-64 mb-2" />
+                <Skeleton className="h-4 w-48" />
+              </div>
+            </div>
+            <Card>
+              <CardContent className="p-6">
+                <Skeleton className="h-6 w-48 mb-4" />
+                <Skeleton className="h-2 w-full mb-2" />
+                <div className="flex justify-between">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+              </CardContent>
+            </Card>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <Skeleton className="h-48 rounded-lg" />
+              <Skeleton className="h-48 rounded-lg" />
+              <Skeleton className="h-48 rounded-lg" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

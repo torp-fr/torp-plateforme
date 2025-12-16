@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,18 +6,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import { usePayments } from '@/hooks/usePayments';
 import { useApp, UserType } from '@/context/AppContext';
-import { 
-  CreditCard, 
-  Calendar, 
-  CheckCircle, 
-  Clock, 
-  AlertCircle, 
+import {
+  CreditCard,
+  Calendar,
+  CheckCircle,
+  Clock,
+  AlertCircle,
   Euro,
   FileText,
   Send,
-  Eye
+  Eye,
+  Loader2
 } from 'lucide-react';
 
 interface PaymentRequest {
@@ -34,48 +37,42 @@ interface PaymentRequest {
 
 interface PaymentManagerProps {
   projectId: string;
+  contractId?: string;
   userType: UserType;
   projectAmount: string;
 }
 
-const mockPaymentRequests: PaymentRequest[] = [
-  {
-    id: '1',
-    projectId: '1',
-    amount: 4560,
-    description: 'Acompte 30% à la signature du devis',
-    type: 'acompte',
-    status: 'paid',
-    createdAt: '2024-03-15',
-    dueDate: '2024-03-20',
-    milestone: 'Signature du contrat'
-  },
-  {
-    id: '2',
-    projectId: '1',
-    amount: 6080,
-    description: 'Paiement intermédiaire - 40% à la livraison des matériaux',
-    type: 'avancement',
-    status: 'pending',
-    createdAt: '2024-03-18',
-    dueDate: '2024-03-25',
-    milestone: 'Livraison matériaux'
-  },
-  {
-    id: '3',
-    projectId: '1',
-    amount: 4560,
-    description: 'Solde final à la réception des travaux',
-    type: 'solde',
-    status: 'pending',
-    createdAt: '2024-03-20',
-    dueDate: '2024-04-15',
-    milestone: 'Réception travaux'
-  }
-];
+export function PaymentManager({ projectId, contractId, userType, projectAmount }: PaymentManagerProps) {
+  // Hook pour les données réelles depuis Supabase
+  const {
+    milestones,
+    isLoading,
+    validateMilestone,
+    markAsPaid,
+    isValidating,
+    isMarkingPaid,
+  } = usePayments({ projectId, contractId });
 
-export function PaymentManager({ projectId, userType, projectAmount }: PaymentManagerProps) {
-  const [paymentRequests, setPaymentRequests] = useState(mockPaymentRequests);
+  // Transformer les milestones DB en format PaymentRequest pour compatibilité UI
+  const paymentRequests = useMemo<PaymentRequest[]>(() => {
+    if (milestones.length === 0) {
+      // Données de démonstration si pas de données en base
+      return [];
+    }
+
+    return milestones.map(m => ({
+      id: m.id,
+      projectId: projectId,
+      amount: m.montant_ttc || m.montant_ht,
+      description: m.description || m.designation,
+      type: mapMilestoneType(m.numero),
+      status: mapMilestoneStatus(m.status),
+      createdAt: m.created_at?.split('T')[0] || '',
+      dueDate: m.date_prevue || '',
+      milestone: m.designation,
+    }));
+  }, [milestones, projectId]);
+
   const [showNewRequest, setShowNewRequest] = useState(false);
   const [newRequest, setNewRequest] = useState({
     amount: '',
@@ -125,18 +122,8 @@ export function PaymentManager({ projectId, userType, projectAmount }: PaymentMa
   };
 
   const handlePayment = (requestId: string) => {
-    setPaymentRequests(prev => 
-      prev.map(req => 
-        req.id === requestId 
-          ? { ...req, status: 'paid' as const }
-          : req
-      )
-    );
-
-    toast({
-      title: 'Paiement effectué',
-      description: 'Le paiement a été enregistré avec succès.',
-    });
+    // Utiliser le hook pour marquer comme payé dans la DB
+    markAsPaid(requestId);
   };
 
   const getStatusColor = (status: string) => {
@@ -173,6 +160,41 @@ export function PaymentManager({ projectId, userType, projectAmount }: PaymentMa
     .reduce((sum, req) => sum + req.amount, 0);
 
   const totalProject = parseFloat(projectAmount.replace(/[^0-9]/g, '')) || 0;
+
+  // État de chargement
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-48" />
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Skeleton className="h-24 rounded-lg" />
+              <Skeleton className="h-24 rounded-lg" />
+              <Skeleton className="h-24 rounded-lg" />
+            </div>
+            <Skeleton className="h-4 w-full mt-6" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-64" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <Skeleton className="h-32 rounded-lg" />
+              <Skeleton className="h-32 rounded-lg" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Message si aucune donnée
+  const hasData = paymentRequests.length > 0;
 
   return (
     <div className="space-y-6">
@@ -316,6 +338,13 @@ export function PaymentManager({ projectId, userType, projectAmount }: PaymentMa
           <CardTitle>Historique des paiements</CardTitle>
         </CardHeader>
         <CardContent>
+          {!hasData ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Euro className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium">Aucun paiement enregistré</p>
+              <p className="text-sm">Les jalons de paiement apparaîtront ici une fois configurés.</p>
+            </div>
+          ) : (
           <div className="space-y-4">
             {paymentRequests.map((request) => {
               const StatusIcon = getStatusIcon(request.status);
@@ -352,8 +381,15 @@ export function PaymentManager({ projectId, userType, projectAmount }: PaymentMa
                   
                   {userType === 'B2C' && request.status === 'pending' && (
                     <div className="flex gap-2 pt-3 border-t">
-                      <Button onClick={() => handlePayment(request.id)}>
-                        <CreditCard className="w-4 h-4 mr-2" />
+                      <Button
+                        onClick={() => handlePayment(request.id)}
+                        disabled={isMarkingPaid}
+                      >
+                        {isMarkingPaid ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <CreditCard className="w-4 h-4 mr-2" />
+                        )}
                         Payer maintenant
                       </Button>
                       <Button variant="outline">
@@ -381,8 +417,35 @@ export function PaymentManager({ projectId, userType, projectAmount }: PaymentMa
               );
             })}
           </div>
+          )}
         </CardContent>
       </Card>
     </div>
   );
+}
+
+// =============================================================================
+// HELPERS - Mapping entre format DB et format UI
+// =============================================================================
+
+function mapMilestoneType(numero: number): PaymentRequest['type'] {
+  if (numero === 1) return 'acompte';
+  if (numero >= 2 && numero <= 4) return 'avancement';
+  return 'solde';
+}
+
+function mapMilestoneStatus(status: string): PaymentRequest['status'] {
+  switch (status) {
+    case 'completed':
+      return 'paid';
+    case 'validated':
+    case 'pending':
+    case 'in_progress':
+    case 'submitted':
+      return 'pending';
+    case 'rejected':
+      return 'rejected';
+    default:
+      return 'pending';
+  }
 }
