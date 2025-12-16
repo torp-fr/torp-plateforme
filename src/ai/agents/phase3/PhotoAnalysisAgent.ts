@@ -1,10 +1,11 @@
 /**
  * PhotoAnalysisAgent - Agent IA pour l'analyse de photos de chantier
  * Utilise GPT-4o Vision pour analyser les photos et détecter les anomalies
+ * SÉCURISÉ: Utilise les Edge Functions Supabase (pas de clé API côté client)
  */
 
-import OpenAI from 'openai';
 import { supabase } from '@/lib/supabase';
+import { secureAI } from '@/services/ai/secure-ai.service';
 
 // Types
 interface PhotoAnalysisResult {
@@ -51,13 +52,30 @@ interface BatchAnalysisResult {
 }
 
 export class PhotoAnalysisAgent {
-  private openai: OpenAI;
   private model: string = 'gpt-4o';
 
-  constructor() {
-    this.openai = new OpenAI({
-      apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+  /**
+   * Appel vision sécurisé via Edge Function
+   */
+  private async callVision(prompt: string, imageUrls: string[]): Promise<string> {
+    const content: any[] = [{ type: 'text', text: prompt }];
+    imageUrls.forEach(url => {
+      content.push({ type: 'image_url', image_url: { url, detail: 'high' } });
     });
+
+    // Utiliser l'Edge Function directement avec le format vision
+    const { data, error } = await supabase.functions.invoke('llm-completion', {
+      body: {
+        messages: [{ role: 'user', content }],
+        model: this.model,
+        provider: 'openai',
+        max_tokens: 2000,
+        response_format: { type: 'json_object' },
+      },
+    });
+
+    if (error) throw new Error(error.message);
+    return data?.content || '';
   }
 
   /**
@@ -101,22 +119,7 @@ Sois particulièrement attentif aux:
 Réponds uniquement en JSON valide.`;
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: prompt },
-              { type: 'image_url', image_url: { url: photoUrl, detail: 'high' } },
-            ],
-          },
-        ],
-        response_format: { type: 'json_object' },
-        max_tokens: 2000,
-      });
-
-      const content = response.choices[0]?.message?.content;
+      const content = await this.callVision(prompt, [photoUrl]);
       if (!content) throw new Error('No AI response');
 
       const analysis = JSON.parse(content);
@@ -247,23 +250,7 @@ Analyse les deux images et retourne un JSON avec:
 Réponds uniquement en JSON valide.`;
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: prompt },
-              { type: 'image_url', image_url: { url: photoBefore, detail: 'high' } },
-              { type: 'image_url', image_url: { url: photoAfter, detail: 'high' } },
-            ],
-          },
-        ],
-        response_format: { type: 'json_object' },
-        max_tokens: 1500,
-      });
-
-      const content = response.choices[0]?.message?.content;
+      const content = await this.callVision(prompt, [photoBefore, photoAfter]);
       if (!content) throw new Error('No AI response');
 
       return JSON.parse(content);

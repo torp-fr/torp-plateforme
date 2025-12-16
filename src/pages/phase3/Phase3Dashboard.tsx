@@ -26,7 +26,7 @@ import {
   Clock,
   HardHat,
 } from 'lucide-react';
-import { AppLayout } from '@/components/layout';
+// Note: AppLayout est fourni par ChantierLayout, pas besoin de l'importer ici
 import { useProjectDetails } from '@/hooks/useProjectDetails';
 import { useQualityControls, useSituations, useCoordination, useProgressReport } from '@/hooks/phase3';
 
@@ -55,61 +55,57 @@ export default function Phase3Dashboard() {
   // État de chargement
   if (isLoading) {
     return (
-      <AppLayout>
-        <div className="space-y-6">
-          {/* Header Skeleton */}
-          <div className="flex items-center justify-between">
-            <div>
-              <Skeleton className="h-9 w-64 mb-2" />
-              <Skeleton className="h-5 w-48" />
-            </div>
-            <div className="flex items-center gap-4">
-              <Skeleton className="h-10 w-32" />
-              <Skeleton className="h-8 w-40" />
-            </div>
+      <div className="space-y-6">
+        {/* Header Skeleton */}
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-9 w-64 mb-2" />
+            <Skeleton className="h-5 w-48" />
           </div>
-
-          {/* KPIs Skeleton */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <Card key={i}>
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-3">
-                    <Skeleton className="h-8 w-8 rounded" />
-                    <div>
-                      <Skeleton className="h-8 w-16 mb-1" />
-                      <Skeleton className="h-4 w-24" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-10 w-32" />
+            <Skeleton className="h-8 w-40" />
           </div>
-
-          {/* Content Skeleton */}
-          <Card>
-            <CardContent className="pt-6">
-              <Skeleton className="h-64 w-full" />
-            </CardContent>
-          </Card>
         </div>
-      </AppLayout>
+
+        {/* KPIs Skeleton */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-8 w-8 rounded" />
+                  <div>
+                    <Skeleton className="h-8 w-16 mb-1" />
+                    <Skeleton className="h-4 w-24" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Content Skeleton */}
+        <Card>
+          <CardContent className="pt-6">
+            <Skeleton className="h-64 w-full" />
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   if (!project) {
     return (
-      <AppLayout>
-        <div className="text-center py-12">
-          <HardHat className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h2 className="text-xl font-semibold mb-2">Projet non trouvé</h2>
-          <p className="text-muted-foreground mb-4">Ce projet n'existe pas ou vous n'y avez pas accès.</p>
-          <Button onClick={() => navigate('/phase2/chantiers')}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Retour aux chantiers
-          </Button>
-        </div>
-      </AppLayout>
+      <div className="text-center py-12">
+        <HardHat className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+        <h2 className="text-xl font-semibold mb-2">Projet non trouvé</h2>
+        <p className="text-muted-foreground mb-4">Ce projet n'existe pas ou vous n'y avez pas accès.</p>
+        <Button onClick={() => navigate('/chantiers')}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Retour aux chantiers
+        </Button>
+      </div>
     );
   }
 
@@ -127,20 +123,13 @@ export default function Phase3Dashboard() {
   };
 
   return (
-    <AppLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Button variant="ghost" size="sm" onClick={() => navigate('/phase2/chantiers')}>
-                <ArrowLeft className="h-4 w-4 mr-1" />
-                Chantiers
-              </Button>
-            </div>
-            <h1 className="text-3xl font-bold">{project.name}</h1>
-            <p className="text-muted-foreground">Exécution des travaux</p>
-          </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">{project.name}</h1>
+          <p className="text-muted-foreground">Phase 3 - Exécution des travaux</p>
+        </div>
           <div className="flex items-center gap-4">
             <div className="text-right">
               <div className="text-2xl font-bold">{progression}%</div>
@@ -440,6 +429,5 @@ export default function Phase3Dashboard() {
           </Card>
         )}
       </div>
-    </AppLayout>
   );
 }

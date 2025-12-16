@@ -57,37 +57,38 @@ interface NavItem {
 const CHANTIER_NAV: NavSection[] = [
   {
     id: 'preparation',
-    label: 'Préparation',
+    label: 'Phase 2 - Préparation',
     labelB2B: 'Préparation chantier',
     labelB2G: 'Préparation marché',
     items: [
-      { href: '', icon: LayoutDashboard, label: 'Vue d\'ensemble', labelB2B: 'Dashboard', labelB2G: 'Tableau de bord' },
-      { href: '/planning', icon: Calendar, label: 'Planning', labelB2B: 'Planning Gantt', labelB2G: 'Planning marché' },
-      { href: '/reunions', icon: Users, label: 'Réunions', labelB2B: 'Réunions chantier', labelB2G: 'Comités de suivi' },
-      { href: '/journal', icon: FileText, label: 'Journal', labelB2B: 'Journal chantier', labelB2G: 'Registre travaux' },
+      { href: 'phase2:', icon: LayoutDashboard, label: 'Vue d\'ensemble', labelB2B: 'Dashboard', labelB2G: 'Tableau de bord' },
+      { href: 'phase2:/planning', icon: Calendar, label: 'Planning', labelB2B: 'Planning Gantt', labelB2G: 'Planning marché' },
+      { href: 'phase2:/reunions', icon: Users, label: 'Réunions', labelB2B: 'Réunions chantier', labelB2G: 'Comités de suivi' },
+      { href: 'phase2:/journal', icon: FileText, label: 'Journal', labelB2B: 'Journal chantier', labelB2G: 'Registre travaux' },
     ],
   },
   {
     id: 'execution',
-    label: 'Exécution',
+    label: 'Phase 3 - Exécution',
     labelB2B: 'Exécution & Suivi',
     labelB2G: 'Exécution marché',
     items: [
-      { href: '/controles', icon: Shield, label: 'Contrôles', labelB2B: 'Contrôles qualité', labelB2G: 'Contrôles réglementaires' },
-      { href: '/coordination', icon: MessageSquare, label: 'Coordination', labelB2B: 'Coordination équipes', labelB2G: 'Coordination entreprises' },
-      { href: '/situations', icon: Receipt, label: 'Situations', labelB2B: 'Facturation', labelB2G: 'Situations & Paiements' },
+      { href: 'phase3:', icon: TrendingUp, label: 'Vue d\'ensemble', labelB2B: 'Dashboard exécution', labelB2G: 'Tableau de bord' },
+      { href: 'phase3:/controles', icon: Shield, label: 'Contrôles', labelB2B: 'Contrôles qualité', labelB2G: 'Contrôles réglementaires' },
+      { href: 'phase3:/coordination', icon: MessageSquare, label: 'Coordination', labelB2B: 'Coordination équipes', labelB2G: 'Coordination entreprises' },
+      { href: 'phase3:/situations', icon: Receipt, label: 'Situations', labelB2B: 'Facturation', labelB2G: 'Situations & Paiements' },
     ],
   },
   {
     id: 'reception',
-    label: 'Réception',
+    label: 'Phase 4 - Réception',
     labelB2B: 'Réception & Garanties',
     labelB2G: 'Réception marché',
     items: [
-      { href: '/phase4', icon: ClipboardCheck, label: 'OPR', labelB2B: 'Opérations préalables', labelB2G: 'OPR marché', badge: 'Phase 4', badgeColor: 'bg-purple-500' },
-      { href: '/phase4/reserves', icon: AlertTriangle, label: 'Réserves', labelB2B: 'Levée réserves', labelB2G: 'Réserves & Levées' },
-      { href: '/phase4/garanties', icon: Shield, label: 'Garanties', labelB2B: 'Suivi garanties', labelB2G: 'Garanties légales' },
-      { href: '/phase4/doe', icon: FolderOpen, label: 'DOE', labelB2B: 'DOE/DIUO', labelB2G: 'Dossier ouvrage' },
+      { href: 'phase4:', icon: ClipboardCheck, label: 'OPR', labelB2B: 'Opérations préalables', labelB2G: 'OPR marché' },
+      { href: 'phase4:/reserves', icon: AlertTriangle, label: 'Réserves', labelB2B: 'Levée réserves', labelB2G: 'Réserves & Levées' },
+      { href: 'phase4:/garanties', icon: Shield, label: 'Garanties', labelB2B: 'Suivi garanties', labelB2G: 'Garanties légales' },
+      { href: 'phase4:/doe', icon: FolderOpen, label: 'DOE', labelB2B: 'DOE/DIUO', labelB2G: 'Dossier ouvrage' },
     ],
   },
 ];
@@ -119,15 +120,25 @@ export function ChantierLayout() {
     }
   };
 
+  // Construire le lien complet à partir du href
+  const buildLink = (href: string) => {
+    // Format: "phaseX:/path" ou "phaseX:" pour index
+    const match = href.match(/^(phase\d+):(.*)$/);
+    if (match) {
+      const [, phase, path] = match;
+      return `/${phase}/${projectId}${path}`;
+    }
+    // Fallback pour anciens formats
+    return `/phase2/${projectId}${href}`;
+  };
+
   // Déterminer l'item actif
   const getActiveItem = () => {
     const path = location.pathname;
     for (const section of CHANTIER_NAV) {
       for (const item of section.items) {
-        const fullPath = item.href.startsWith('/phase3')
-          ? `/phase3/${projectId}${item.href.replace('/phase3', '')}`
-          : `/phase2/${projectId}${item.href}`;
-        if (path === fullPath || (item.href === '' && path === `/phase2/${projectId}`)) {
+        const fullPath = buildLink(item.href);
+        if (path === fullPath) {
           return { section, item };
         }
       }
@@ -140,20 +151,6 @@ export function ChantierLayout() {
     if (userType === 'B2B' && item.labelB2B) return item.labelB2B;
     if (userType === 'B2G' && item.labelB2G) return item.labelB2G;
     return item.label;
-  };
-
-  // Construire le lien complet
-  const buildLink = (item: NavItem) => {
-    // Les items de Phase 4 vont vers /phase4/
-    if (item.href.startsWith('/phase4')) {
-      return `/phase4/${projectId}${item.href.replace('/phase4', '')}`;
-    }
-    // Les items de la section "execution" vont vers /phase3/
-    const isPhase3 = ['controles', 'coordination', 'situations'].some(p => item.href.includes(p));
-    if (isPhase3) {
-      return `/phase3/${projectId}${item.href}`;
-    }
-    return `/phase2/${projectId}${item.href}`;
   };
 
   const activeItem = getActiveItem();
@@ -221,7 +218,7 @@ export function ChantierLayout() {
                 )}
                 <div className="space-y-1">
                   {section.items.map((item) => {
-                    const href = buildLink(item);
+                    const href = buildLink(item.href);
                     const isActive = activeItem?.item.href === item.href;
                     const Icon = item.icon;
 

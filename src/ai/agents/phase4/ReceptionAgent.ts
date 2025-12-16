@@ -1,10 +1,11 @@
 /**
  * ReceptionAgent - Agent IA pour la Phase 4 Réception
  * Classification des réserves, génération de PV, analyse de conformité
+ * SÉCURISÉ: Utilise les Edge Functions Supabase (pas de clé API côté client)
  */
 
-import OpenAI from 'openai';
 import { supabase } from '@/lib/supabase';
+import { secureAI } from '@/services/ai/secure-ai.service';
 import type {
   OPRSession,
   Reserve,
@@ -49,14 +50,7 @@ interface ConformityAnalysis {
 }
 
 export class ReceptionAgent {
-  private openai: OpenAI;
   private model: string = 'gpt-4o';
-
-  constructor() {
-    this.openai = new OpenAI({
-      apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-    });
-  }
 
   /**
    * Classification automatique d'une réserve via IA
@@ -101,17 +95,12 @@ Réponds UNIQUEMENT en JSON valide :
 }`;
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
+      return await secureAI.completeJSON<ReserveClassification>({
         messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-        temperature: 0.2, // Basse température pour plus de cohérence
+        model: this.model,
+        provider: 'openai',
+        temperature: 0.2,
       });
-
-      const content = response.choices[0]?.message?.content;
-      if (!content) throw new Error('No AI response');
-
-      return JSON.parse(content) as ReserveClassification;
     } catch (error) {
       console.error('[ReceptionAgent] Classification error:', error);
       // Classification par défaut en cas d'erreur
@@ -216,18 +205,13 @@ Réponds en JSON :
 }`;
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
+      return await secureAI.completeJSON<GeneratedPV>({
         messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
+        model: this.model,
+        provider: 'openai',
         max_tokens: 4000,
         temperature: 0.3,
       });
-
-      const content = response.choices[0]?.message?.content;
-      if (!content) throw new Error('No AI response');
-
-      return JSON.parse(content) as GeneratedPV;
     } catch (error) {
       console.error('[ReceptionAgent] PV generation error:', error);
       // PV par défaut
@@ -292,17 +276,17 @@ Critères :
 - Refus si problèmes structurels ou de sécurité`;
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
+      const aiAnalysis = await secureAI.completeJSON<{
+        pointsAmelioration: string[];
+        recommandations: string[];
+        apteReception: boolean;
+        decision: ReceptionDecision;
+      }>({
         messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
+        model: this.model,
+        provider: 'openai',
         temperature: 0.3,
       });
-
-      const content = response.choices[0]?.message?.content;
-      if (!content) throw new Error('No AI response');
-
-      const aiAnalysis = JSON.parse(content);
 
       return {
         tauxConformite,
