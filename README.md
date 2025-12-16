@@ -223,7 +223,7 @@ git push origin --delete nom-branche
 
 - **GitHub Issues** : [Signaler un bug](https://github.com/torp-fr/quote-insight-tally/issues)
 - **Documentation** : [docs/](docs/)
-- **Email** : support@torp.app
+- **Email** : support@torp.fr
 
 ## Licence
 
