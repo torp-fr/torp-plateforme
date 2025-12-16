@@ -1,45 +1,86 @@
-# TORP - Quote Insight Tally
+# TORP - Plateforme Intelligente de Gestion de Projets BTP
 
-> Plateforme d'analyse intelligente de devis pour le secteur des travaux
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/torp-fr/quote-insight-tally)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Build](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue.svg)]()
+[![React](https://img.shields.io/badge/React-18.3-61dafb.svg)]()
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/torp-fr/quote-insight-tally)
+## Présentation
 
-## 🎯 À propos
+**TORP** (Tool for Optimized Renovation Projects) est une plateforme SaaS qui accompagne les particuliers et professionnels du BTP tout au long du cycle de vie d'un projet de construction ou rénovation.
 
-TORP est une plateforme SaaS qui permet d'analyser automatiquement la qualité des devis de travaux grâce à l'intelligence artificielle. Elle s'adresse à deux types d'utilisateurs principaux (B2C et B2B) et offre un scoring détaillé TORP (Transparence, Offre, Robustesse, Prix).
+La plateforme couvre **5 phases** distinctes, de la conception initiale jusqu'à la fin des garanties légales, avec une intelligence artificielle intégrée à chaque étape.
 
-**🎉 Actuellement en phase de test gratuit** - Analyses illimitées pour tous les testeurs !
+## Fonctionnalités par Phase
 
-**Démo en ligne** : [quote-insight-tally.vercel.app](https://quote-insight-tally.vercel.app)
+| Phase | Nom | Description |
+|-------|-----|-------------|
+| **0** | Conception | Qualification projet, définition travaux IA, diagnostics, CCTP, budget & aides |
+| **1** | Consultation | DCE, matching entreprises (Sirene/RGE), analyse offres IA, contrats |
+| **2** | Préparation | Planning Gantt, checklist administrative, réunions, ordre de service |
+| **3** | Exécution | Suivi temps réel, contrôles qualité, coordination multi-lots, situations |
+| **4** | Réception | OPR, gestion réserves, PV réception, garanties, carnet de santé |
 
-## ✨ Fonctionnalités Principales
+### Phase 0 - Conception et Définition
+- Wizard de qualification interactif (type bien, budget, objectifs)
+- Définition des travaux assistée par IA
+- Diagnostics automatisés (DPE, amiante, plomb)
+- Génération CCTP automatique
+- Estimation budget et aides (MaPrimeRénov', CEE)
 
-### B2C - Particuliers
-- 🔍 **Analyse IA de devis reçus** - Score TORP détaillé (A+ à F)
-- 🔎 **Vérification entreprise** - SIREN, Kbis, assurances
-- 💡 **Aide à la décision** - Recommandations pour choisir le bon pro
-- 📊 **Dashboard personnel** - Suivi de vos demandes de devis
+### Phase 1 - Consultation Entreprises
+- Génération DCE (Dossier de Consultation des Entreprises)
+- Recherche entreprises via API Sirene + Qualifications RGE
+- Analyse comparative des offres par IA
+- Génération automatique des contrats
 
-### B2B - Professionnels BTP
-- 🎯 **Optimisation de devis avant envoi** - Améliorez votre taux de signature
-- 📈 **Recommandations IA** - Conseils pour augmenter votre score TORP
-- 🏆 **Certification TORP Pro** - Badge de confiance + QR Code
-- 📊 **Analyse de performance** - Suivez l'évolution de vos scores
+### Phase 2 - Préparation Chantier
+- Planning Gantt interactif avec dépendances
+- Checklist administrative (assurances, autorisations)
+- Gestion des réunions de chantier
+- Ordres de service numériques
 
-### Fonctionnalités communes
-- 📁 **Gestion documentaire** - CCTP, DOE, carnet numérique
-- 🏗️ **Suivi de projet** - Timeline et paiements échelonnés
-- 💬 **Assistant IA** - Chatbot pour répondre à vos questions
-- 📊 **Analytics avancées** - Statistiques et tendances
+### Phase 3 - Exécution des Travaux
+- Dashboard temps réel d'avancement
+- Contrôles qualité avec photos et annotations
+- Coordination multi-lots
+- Situations de travaux et suivi financier
+- Journal de chantier automatisé
 
-> 📖 **[Voir la documentation B2B complète](docs/B2B_ASSISTANT_SCOPE.md)** pour comprendre la différence entre B2C et B2B
+### Phase 4 - Réception et Garanties
+- Opérations Préalables à la Réception (OPR)
+- Gestion des réserves et levées
+- Génération PV de réception
+- Dashboard garanties (parfait achèvement, décennale)
+- Carnet de santé numérique du bâtiment
 
-## 🚀 Démarrage Rapide
+## Intelligence Artificielle
+
+### Agents IA intégrés
+- **Analyse de devis** : Scoring automatique sur 80+ critères (score TORP A+ à F)
+- **Vision par ordinateur** : Analyse photos chantier via GPT-4o Vision
+- **RAG BTP** : Base de connaissances DTU, normes, prix de référence
+- **Génération documentaire** : CCTP, DCE, PV automatisés
+- **Monitoring chantier** : Alertes prédictives et recommandations
+
+### Architecture IA sécurisée
+Tous les appels IA passent par des **Supabase Edge Functions** pour protéger les clés API :
+```
+Client → Edge Function (llm-completion) → OpenAI/Anthropic
+```
+
+## Démarrage Rapide
+
+### Prérequis
+- Node.js 18+
+- npm ou yarn
+- Compte Supabase
+- Clés API (OpenAI, Anthropic - optionnel)
 
 ### Installation
-
 ```bash
-# Cloner le projet
+# Cloner le repository
 git clone https://github.com/torp-fr/quote-insight-tally.git
 cd quote-insight-tally
 
@@ -47,45 +88,30 @@ cd quote-insight-tally
 npm install
 
 # Configurer l'environnement
-cp .env.development.example .env
+cp .env.example .env.local
+# Éditer .env.local avec vos clés
 
-# Lancer le serveur de développement
+# Lancer en développement
 npm run dev
 ```
 
-Le serveur démarre sur **http://localhost:8080**
+### Variables d'environnement
+```env
+# Supabase (requis)
+VITE_SUPABASE_URL=https://xxx.supabase.co
+VITE_SUPABASE_ANON_KEY=xxx
 
-### Scripts disponibles
+# APIs externes (optionnel)
+VITE_INSEE_API_KEY=xxx
+VITE_PAPPERS_API_KEY=xxx
 
-```bash
-npm run dev           # Serveur de développement
-npm run build         # Build production
-npm run preview       # Preview du build
-npm test              # Tests en mode watch
-npm run test:ui       # Tests avec interface UI
-npm run test:coverage # Tests avec couverture
-npm run lint          # Vérifier le code
+# Mode développement
+VITE_MOCK_API=false
 ```
 
-## 📚 Documentation
+## Architecture Technique
 
-### Documentation principale
-- **[Guide de démarrage](docs/GETTING_STARTED.md)** - Installation et configuration détaillée
-- **[Architecture technique](docs/ARCHITECTURE.md)** - Structure du projet et patterns
-- **[Changelog](CHANGELOG.md)** - Historique des modifications
-
-### Documentation métier
-- **[B2B Assistant Scope](docs/B2B_ASSISTANT_SCOPE.md)** - Vision et fonctionnalités B2B détaillées
-- **[Pragmatic Approach](PRAGMATIC_APPROACH.md)** - Stratégie de développement pragmatique
-- **[Free Mode Config](FREE_MODE_CONFIG.md)** - Configuration du mode gratuit
-
-### Guides d'implémentation
-- **[START_HERE Decision](START_HERE_DECISION.md)** - Choisir entre approche radicale et pragmatique
-- **[Automated Tasks](AUTOMATED_TASKS.md)** - Plan d'exécution automatisé (4 phases)
-
-## 🏗️ Stack Technique
-
-### Frontend
+### Stack Frontend
 - **React 18.3** + **TypeScript 5.8**
 - **Vite 5.4** - Build ultra-rapide
 - **TanStack Query v5** - State management serveur
@@ -94,181 +120,115 @@ npm run lint          # Vérifier le code
 ### UI/UX
 - **shadcn/ui** + **Radix UI** - Composants accessibles
 - **Tailwind CSS 3.4** - Styling
-- **Lucide React** - Icons
+- **Lucide React** - Iconographie
 
-### Qualité & Tests
-- **Vitest 4.0** - Tests unitaires (13 tests ✅)
-- **React Testing Library** - Tests de composants
-- **ESLint 9** - Linting
-- **TypeScript strict mode** - Type safety
+### Backend
+- **Supabase** - Base de données PostgreSQL + Auth + Storage
+- **Edge Functions** - Serverless pour appels IA sécurisés
 
-## 🔐 Authentification
-
-Le projet utilise actuellement un système d'authentification mocké pour le développement.
-
-**Pour vous connecter** :
-- Email : n'importe quelle adresse (ex: `demo@torp.app`)
-- Mot de passe : minimum 6 caractères (ex: `password`)
-
-Types d'utilisateurs :
-- **B2C** (Particuliers) - email normal (ex: `jean@email.com`)
-- **B2B** (Professionnels BTP) - email contenant "pro" (ex: `contact@entreprise-pro.fr`)
-- **Admin** - pour la gestion de la plateforme
-
-> 💡 En production, remplacer par Supabase, Auth0 ou Firebase
-> 🎉 **Mode gratuit activé** - Tous les utilisateurs bénéficient de crédits illimités pendant la phase de test
-
-## 📦 Structure du Projet
-
+## Structure du Projet
 ```
 src/
-├── components/       # Composants React (33+ métier + 48 UI)
-│   ├── auth/        # Authentification & routes protégées
-│   ├── error/       # Error boundaries
-│   └── ui/          # Composants shadcn/ui
-├── pages/           # Pages/Routes (26 pages)
-├── services/        # Services API (mockés, backend-ready)
-│   └── api/
-│       ├── client.ts           # Client HTTP
-│       └── mock/               # Services mockés
-├── context/         # État global React Context
-├── config/          # Configuration (env vars)
-├── hooks/           # Custom React hooks
-├── types/           # Types TypeScript
-├── test/            # Utilitaires de test
-└── lib/             # Utilitaires
+├── ai/                    # Agents IA
+│   └── agents/
+│       ├── phase3/        # SiteMonitoring, PhotoAnalysis, Quality
+│       └── phase4/        # Reception, Warranty
+├── components/
+│   ├── layout/            # AppLayout, ChantierLayout, Sidebar
+│   ├── phase0-4/          # Composants par phase
+│   └── ui/                # Composants shadcn/ui
+├── hooks/
+│   ├── phase1-4/          # Hooks React Query par phase
+│   └── useProjectDetails  # Hook projet global
+├── pages/
+│   ├── phase0/            # 6 pages (Dashboard, Wizard, CCTP...)
+│   ├── phase1/            # Consultation entreprises
+│   ├── phase2/            # 5 pages (Dashboard, Planning, Réunions...)
+│   ├── phase3/            # 4 pages (Dashboard, Contrôles, Situations...)
+│   └── phase4/            # Dashboard réception & garanties
+├── services/
+│   ├── ai/                # SecureAI, OpenAI wrappers
+│   ├── api/               # APIs externes (Insee, Cadastre...)
+│   └── phase0-4/          # Services métier par phase
+└── types/                 # Types TypeScript par phase
+
+supabase/
+└── functions/
+    └── llm-completion/    # Edge Function pour appels IA sécurisés
 ```
 
-## 🚀 Déploiement
+## Profils Utilisateurs
 
-### Vercel (Recommandé)
+| Profil | Accès | Navigation |
+|--------|-------|------------|
+| **B2C** (Particuliers) | Toutes phases | /dashboard, /phase0-4 |
+| **B2B** (Professionnels) | Pro features | /pro/* |
+| **B2G** (Collectivités) | Marchés publics | Appels d'offres |
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/torp-fr/quote-insight-tally)
-
-Ou via CLI :
+## Scripts Disponibles
 
 ```bash
-# Installer Vercel CLI
-npm i -g vercel
+npm run dev           # Serveur développement (localhost:5173)
+npm run build         # Build production
+npm run preview       # Preview du build
+npm run lint          # Vérifier le code
+npm test              # Tests unitaires
+```
 
-# Déployer
-vercel
+## Déploiement
 
-# Production
+### Vercel (Recommandé)
+```bash
 vercel --prod
 ```
 
-### Variables d'environnement Vercel
+### Variables Vercel
+```
+VITE_SUPABASE_URL=https://xxx.supabase.co
+VITE_SUPABASE_ANON_KEY=xxx
+```
 
-Dans les settings Vercel, configurer :
+## Branches Git
 
+| Branche | Usage |
+|---------|-------|
+| `main` | Production stable |
+| `claude/*` | Branches de développement IA |
+
+### Nettoyage des branches
 ```bash
-VITE_APP_ENV=production
-VITE_API_BASE_URL=https://api.torp.app/api
-VITE_MOCK_API=false
-VITE_DEBUG_MODE=false
+# Voir les branches mergées
+git branch -r --merged origin/main
 
-# Auth (remplacer par vraies valeurs)
-VITE_AUTH_PROVIDER=supabase
-VITE_AUTH_SUPABASE_URL=https://your-project.supabase.co
-VITE_AUTH_SUPABASE_ANON_KEY=your-key-here
+# Supprimer une branche distante
+git push origin --delete nom-branche
 ```
 
-### Autres plateformes
-
-**Netlify**
-```bash
-npm run build
-# Deploy le dossier dist/
-```
-
-**Docker**
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-CMD ["npm", "run", "preview"]
-```
-
-## 🧪 Tests
-
-```bash
-# Tous les tests
-npm test
-
-# Interface UI interactive
-npm run test:ui
-
-# Avec couverture
-npm run test:coverage
-```
-
-**Couverture actuelle** : 13 tests passants ✅
-
-## 🎯 Roadmap
-
-### ✅ Phase 1 - Fondations (Complété)
-- [x] Infrastructure de tests
-- [x] TypeScript strict mode
-- [x] Architecture backend-ready
-- [x] Protection des routes
-- [x] Error boundaries
-- [x] Lazy loading
-- [x] Documentation complète
-
-### 🔄 Phase 2 - Backend Integration (En cours)
-- [ ] Connexion API backend réelle
-- [ ] Authentification Supabase/Auth0
-- [ ] Upload de fichiers sécurisé
-- [ ] WebSocket pour temps réel
-- [ ] Base de données
-
-### 📅 Phase 3 - Production
-- [ ] Tests E2E (Playwright)
-- [ ] Monitoring (Sentry)
-- [ ] Analytics
-- [ ] CI/CD (GitHub Actions)
-- [ ] SEO optimization
-- [ ] PWA features
-
-## 🤝 Contribution
-
-Les contributions sont les bienvenues ! Merci de :
+## Contribution
 
 1. Fork le projet
-2. Créer une branche (`git checkout -b feature/AmazingFeature`)
-3. Commit vos changements (`git commit -m 'Add AmazingFeature'`)
-4. Push sur la branche (`git push origin feature/AmazingFeature`)
+2. Créer une branche (`git checkout -b feature/nouvelle-fonctionnalite`)
+3. Commit (`git commit -m 'feat: ajouter fonctionnalité X'`)
+4. Push (`git push origin feature/nouvelle-fonctionnalite`)
 5. Ouvrir une Pull Request
 
-**Avant de contribuer** :
-- Lire `docs/ARCHITECTURE.md`
-- S'assurer que les tests passent (`npm test`)
-- Respecter les conventions de code (ESLint)
+### Conventions de commit
+- `feat:` Nouvelle fonctionnalité
+- `fix:` Correction de bug
+- `docs:` Documentation
+- `refactor:` Refactoring
+- `test:` Tests
 
-## 📄 Licence
+## Support
 
-Ce projet a été initialement développé avec [Lovable.dev](https://lovable.dev) et est maintenant maintenu par l'équipe TORP.
+- **GitHub Issues** : [Signaler un bug](https://github.com/torp-fr/quote-insight-tally/issues)
+- **Documentation** : [docs/](docs/)
+- **Email** : support@torp.app
 
----
+## Licence
 
-## 🔗 Liens Utiles
-
-- **Lovable Project**: https://lovable.dev/projects/f7c01cee-8476-487a-9d55-ea6fba0aeeee
-- **Production**: https://quote-insight-tally.vercel.app
-- **GitHub**: https://github.com/torp-fr/quote-insight-tally
-- **Documentation**: [docs/](docs/)
-
-## 💬 Support
-
-Pour toute question ou problème :
-- 📧 Email : support@torp.app
-- 🐛 Issues : [GitHub Issues](https://github.com/torp-fr/quote-insight-tally/issues)
-- 📖 Docs : [Documentation complète](docs/)
+MIT License - Voir [LICENSE](LICENSE)
 
 ---
 
-**Fait avec ❤️ par l'équipe TORP**
+**Développé avec React, TypeScript et Supabase**
