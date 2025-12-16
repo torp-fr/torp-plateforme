@@ -1,10 +1,11 @@
 /**
  * WarrantyAgent - Agent IA pour la gestion des garanties Phase 4
  * Vérification éligibilité, analyse jurisprudence, recommandations
+ * SÉCURISÉ: Utilise les Edge Functions Supabase (pas de clé API côté client)
  */
 
-import OpenAI from 'openai';
 import { supabase } from '@/lib/supabase';
+import { secureAI } from '@/services/ai/secure-ai.service';
 import type { GarantieType, Desordre, Garantie } from '@/types/phase4.types';
 
 // Types spécifiques à l'agent
@@ -39,15 +40,7 @@ interface MaintenanceRecommendation {
 }
 
 export class WarrantyAgent {
-  private openai: OpenAI;
   private model: string = 'gpt-4o';
-
-  constructor() {
-    this.openai = new OpenAI({
-      apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-      dangerouslyAllowBrowser: true,
-    });
-  }
 
   /**
    * Vérification de l'éligibilité garantie pour un désordre
@@ -149,17 +142,12 @@ Réponds en JSON :
 }`;
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
+      return await secureAI.completeJSON<WarrantyEligibility>({
         messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
+        model: this.model,
+        provider: 'openai',
         temperature: 0.2,
       });
-
-      const content = response.choices[0]?.message?.content;
-      if (!content) throw new Error('No AI response');
-
-      return JSON.parse(content) as WarrantyEligibility;
     } catch (error) {
       console.error('[WarrantyAgent] Eligibility check error:', error);
       // Analyse algorithmique en fallback
@@ -213,17 +201,12 @@ Réponds en JSON :
 }`;
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
+      return await secureAI.completeJSON<ClaimAnalysis>({
         messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
+        model: this.model,
+        provider: 'openai',
         temperature: 0.3,
       });
-
-      const content = response.choices[0]?.message?.content;
-      if (!content) throw new Error('No AI response');
-
-      return JSON.parse(content) as ClaimAnalysis;
     } catch (error) {
       console.error('[WarrantyAgent] Claim analysis error:', error);
       return {
@@ -293,17 +276,16 @@ Réponds en JSON :
 }`;
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
+      return await secureAI.completeJSON<{
+        urgents: MaintenanceRecommendation[];
+        programmes: MaintenanceRecommendation[];
+        estimationCoutsAnnuels: number;
+      }>({
         messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
+        model: this.model,
+        provider: 'openai',
         temperature: 0.4,
       });
-
-      const content = response.choices[0]?.message?.content;
-      if (!content) throw new Error('No AI response');
-
-      return JSON.parse(content);
     } catch (error) {
       console.error('[WarrantyAgent] Maintenance recommendations error:', error);
       // Recommandations par défaut
@@ -361,17 +343,17 @@ Réponds en JSON :
 }`;
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
+      return await secureAI.completeJSON<{
+        fourchetteBasse: number;
+        fourchetteHaute: number;
+        facteursPrix: string[];
+        recommandationDevis: boolean;
+      }>({
         messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
+        model: this.model,
+        provider: 'openai',
         temperature: 0.3,
       });
-
-      const content = response.choices[0]?.message?.content;
-      if (!content) throw new Error('No AI response');
-
-      return JSON.parse(content);
     } catch (error) {
       console.error('[WarrantyAgent] Cost estimation error:', error);
       return {

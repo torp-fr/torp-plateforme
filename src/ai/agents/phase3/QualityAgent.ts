@@ -1,10 +1,11 @@
 /**
  * QualityAgent - Agent IA pour le suivi qualité Phase 3
  * Analyse les contrôles, génère des recommandations, prédit les risques qualité
+ * SÉCURISÉ: Utilise les Edge Functions Supabase (pas de clé API côté client)
  */
 
-import OpenAI from 'openai';
 import { supabase } from '@/lib/supabase';
+import { secureAI } from '@/services/ai/secure-ai.service';
 
 // Types
 interface QualityScore {
@@ -50,15 +51,7 @@ interface QualityRecommendation {
 }
 
 export class QualityAgent {
-  private openai: OpenAI;
   private model: string = 'gpt-4o';
-
-  constructor() {
-    this.openai = new OpenAI({
-      apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-      dangerouslyAllowBrowser: true,
-    });
-  }
 
   /**
    * Calcule le score qualité global du projet
@@ -221,17 +214,12 @@ Analyse les patterns et retourne un JSON avec:
 Réponds uniquement en JSON valide.`;
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
+      return await secureAI.completeJSON<QualityPrediction>({
         messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
+        model: this.model,
+        provider: 'openai',
         temperature: 0.3,
       });
-
-      const content = response.choices[0]?.message?.content;
-      if (!content) throw new Error('No AI response');
-
-      return JSON.parse(content);
     } catch (error) {
       console.error('Quality prediction error:', error);
       return {
