@@ -185,10 +185,11 @@ export class SiretLookupService {
   private static async lookupViaSirene(siret: string): Promise<CompanyLookupResult> {
     const siren = siret.substring(0, 9);
 
-    // Stratégie 1: Recherche exacte par SIREN
-    console.log('[SiretLookup] Recherche Sirene par SIREN:', siren);
+    // Stratégie 1: Recherche exacte par SIRET avec préfixe
+    console.log('[SiretLookup] Recherche Sirene exacte par SIRET:', siret);
     let response = await fetch(
-      `https://recherche-entreprises.api.gouv.fr/search?q=${siren}&page=1&per_page=5`
+      `https://recherche-entreprises.api.gouv.fr/search?q=siret:${siret}&page=1&per_page=1`,
+      { headers: { 'Accept': 'application/json' } }
     );
 
     if (!response.ok) {
@@ -197,27 +198,44 @@ export class SiretLookupService {
     }
 
     let data = await response.json();
-    console.log('[SiretLookup] Résultats Sirene:', data.total_results || 0);
+    console.log('[SiretLookup] Résultats recherche exacte SIRET:', data.total_results || 0);
 
-    // Chercher l'entreprise avec le bon SIREN parmi les résultats
-    let company = data.results?.find((c: any) => c.siren === siren);
+    let company = data.results?.[0];
 
-    // Stratégie 2: Si pas trouvé, essayer avec une recherche plus large
-    if (!company && (!data.results || data.results.length === 0)) {
-      console.log('[SiretLookup] Pas de résultat, tentative avec recherche élargie...');
+    // Stratégie 2: Si pas trouvé, recherche par SIREN
+    if (!company) {
+      console.log('[SiretLookup] Pas de résultat exact, recherche par SIREN:', siren);
       response = await fetch(
-        `https://recherche-entreprises.api.gouv.fr/search?q=${siret}&page=1&per_page=5`
+        `https://recherche-entreprises.api.gouv.fr/search?q=${siren}&page=1&per_page=5`,
+        { headers: { 'Accept': 'application/json' } }
       );
 
       if (response.ok) {
         data = await response.json();
+        console.log('[SiretLookup] Résultats recherche SIREN:', data.total_results || 0);
+        // Chercher l'entreprise avec le bon SIREN parmi les résultats
+        company = data.results?.find((c: any) => c.siren === siren);
+      }
+    }
+
+    // Stratégie 3: Recherche générique par numéro complet
+    if (!company) {
+      console.log('[SiretLookup] Tentative recherche générique...');
+      response = await fetch(
+        `https://recherche-entreprises.api.gouv.fr/search?q=${siret}&page=1&per_page=5`,
+        { headers: { 'Accept': 'application/json' } }
+      );
+
+      if (response.ok) {
+        data = await response.json();
+        console.log('[SiretLookup] Résultats recherche générique:', data.total_results || 0);
         company = data.results?.find((c: any) => c.siren === siren) || data.results?.[0];
       }
     }
 
     // Si toujours rien, l'entreprise n'existe pas ou est trop récente
     if (!company) {
-      console.warn('[SiretLookup] Entreprise non trouvée dans la base Sirene');
+      console.warn('[SiretLookup] Entreprise non trouvée dans la base Sirene après toutes les stratégies');
       throw { code: 'NOT_FOUND', message: 'Entreprise non trouvée dans la base Sirene. Elle est peut-être trop récente.' } as SiretLookupError;
     }
 
