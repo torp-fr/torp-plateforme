@@ -180,24 +180,49 @@ export class SiretLookupService {
 
   /**
    * Recherche via API Sirene (INSEE - gratuit)
+   * Utilise plusieurs stratégies pour maximiser les chances de trouver l'entreprise
    */
   private static async lookupViaSirene(siret: string): Promise<CompanyLookupResult> {
-    // API publique de recherche d'entreprises (entreprise.data.gouv.fr)
-    const response = await fetch(
-      `https://recherche-entreprises.api.gouv.fr/search?q=${siret}&per_page=1`
+    const siren = siret.substring(0, 9);
+
+    // Stratégie 1: Recherche exacte par SIREN
+    console.log('[SiretLookup] Recherche Sirene par SIREN:', siren);
+    let response = await fetch(
+      `https://recherche-entreprises.api.gouv.fr/search?q=${siren}&page=1&per_page=5`
     );
 
     if (!response.ok) {
+      console.error('[SiretLookup] Erreur API Sirene:', response.status);
       throw { code: 'API_ERROR', message: 'Erreur API Sirene' } as SiretLookupError;
     }
 
-    const data = await response.json();
+    let data = await response.json();
+    console.log('[SiretLookup] Résultats Sirene:', data.total_results || 0);
 
-    if (!data.results || data.results.length === 0) {
-      throw { code: 'NOT_FOUND', message: 'Entreprise non trouvée' } as SiretLookupError;
+    // Chercher l'entreprise avec le bon SIREN parmi les résultats
+    let company = data.results?.find((c: any) => c.siren === siren);
+
+    // Stratégie 2: Si pas trouvé, essayer avec une recherche plus large
+    if (!company && (!data.results || data.results.length === 0)) {
+      console.log('[SiretLookup] Pas de résultat, tentative avec recherche élargie...');
+      response = await fetch(
+        `https://recherche-entreprises.api.gouv.fr/search?q=${siret}&page=1&per_page=5`
+      );
+
+      if (response.ok) {
+        data = await response.json();
+        company = data.results?.find((c: any) => c.siren === siren) || data.results?.[0];
+      }
     }
 
-    const company = data.results[0];
+    // Si toujours rien, l'entreprise n'existe pas ou est trop récente
+    if (!company) {
+      console.warn('[SiretLookup] Entreprise non trouvée dans la base Sirene');
+      throw { code: 'NOT_FOUND', message: 'Entreprise non trouvée dans la base Sirene. Elle est peut-être trop récente.' } as SiretLookupError;
+    }
+
+    console.log('[SiretLookup] Entreprise trouvée:', company.nom_complet);
+
     const siege = company.siege;
     const effectifTranche = EFFECTIF_TRANCHES[company.tranche_effectif_salarie] || null;
 
