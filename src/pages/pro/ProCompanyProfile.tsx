@@ -413,10 +413,18 @@ export default function ProCompanyProfile() {
       });
     } catch (error: any) {
       console.error('[SiretLookup] Error:', error);
+      let errorMessage = 'Impossible de récupérer les informations.';
+      if (error.code === 'NOT_FOUND') {
+        errorMessage = 'Entreprise non trouvée. Si elle a été créée récemment (< 2 mois), elle peut ne pas encore être référencée.';
+      } else if (error.code === 'INVALID_SIRET') {
+        errorMessage = 'Format SIRET invalide. Vérifiez le numéro saisi.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
       toast({
         variant: 'destructive',
         title: 'Erreur de recherche',
-        description: error.message || 'Impossible de récupérer les informations.',
+        description: errorMessage,
       });
     } finally {
       setSiretLookupLoading(false);

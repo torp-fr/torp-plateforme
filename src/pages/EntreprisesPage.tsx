@@ -289,8 +289,10 @@ export default function EntreprisesPage() {
       if (err.code === 'INVALID_SIRET') {
         setError('Format SIRET invalide. Le SIRET doit contenir 14 chiffres.');
       } else if (err.code === 'NOT_FOUND') {
-        setError('Aucune entreprise trouvée avec ce SIRET.');
+        setError('Aucune entreprise trouvée avec ce SIRET. Si l\'entreprise a été créée récemment (moins de 2 mois), elle peut ne pas encore être référencée dans les bases officielles.');
         setResults([]);
+      } else if (err.code === 'API_ERROR') {
+        setError('Erreur de connexion aux API. Veuillez réessayer dans quelques instants.');
       } else {
         setError('Une erreur s\'est produite lors de la recherche. Veuillez réessayer.');
       }
