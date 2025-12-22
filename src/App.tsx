@@ -43,6 +43,7 @@ import KnowledgeBase from "./pages/KnowledgeBase";
 import AdminAnalytics from "./pages/AdminAnalytics";
 import AdminDiagnostic from "./pages/AdminDiagnostic";
 import Compare from "./pages/Compare";
+import EntreprisesPage from "./pages/EntreprisesPage";
 
 // B2B Pro Pages
 import ProDashboard from "./pages/pro/ProDashboard";
@@ -137,6 +138,7 @@ const AppContent = () => {
           <Route path="/improved-b2b-dashboard" element={<ImprovedB2BDashboard />} />
           <Route path="/b2c-dashboard" element={<B2CDashboard />} />
           <Route path="/compare" element={<Compare />} />
+          <Route path="/entreprises" element={<ProtectedRoute><EntreprisesPage /></ProtectedRoute>} />
           <Route path="/torp-complete" element={<TorpCompleteFlow />} />
           <Route path="/segments" element={<AlgorithmicSegments />} />
           <Route path="/knowledge-base" element={<KnowledgeBase />} />
