@@ -10,7 +10,6 @@ import {
   LayoutDashboard,
   FileSearch,
   PlusCircle,
-  FolderOpen,
   Settings,
   Building2,
   LogOut,
@@ -18,12 +17,10 @@ import {
   X,
   ChevronDown,
   Briefcase,
-  FileText,
   Home,
   Hammer,
   User,
   Landmark,
-  Scale,
   Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -37,9 +34,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { authService } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
-import { useProfile } from '@/hooks/useProfile';
 import torpLogo from '@/assets/torp-logo-red.png';
 
 interface AppLayoutProps {
@@ -53,36 +48,124 @@ interface NavItem {
   exact?: boolean;
 }
 
-// Navigation pour B2C (particuliers)
-const B2C_NAV_ITEMS: NavItem[] = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord', exact: true },
-  { href: '/phase0/dashboard', icon: Briefcase, label: 'Mes projets' },
-  { href: '/chantiers', icon: Hammer, label: 'Mes chantiers' },
-  { href: '/analyze', icon: FileSearch, label: 'Analyser un devis' },
-  { href: '/compare', icon: Scale, label: 'Comparer devis' },
-  { href: '/profile', icon: User, label: 'Mon profil' },
+interface NavSection {
+  id: string;
+  label: string | null; // null for items without section header (like Tableau de bord)
+  items: NavItem[];
+}
+
+// Navigation pour B2C (particuliers) - Structure par catégories
+const B2C_NAV_SECTIONS: NavSection[] = [
+  {
+    id: 'main',
+    label: null,
+    items: [
+      { href: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord', exact: true },
+    ],
+  },
+  {
+    id: 'projets',
+    label: 'PROJETS',
+    items: [
+      { href: '/phase0/new', icon: PlusCircle, label: 'Nouveau projet' },
+      { href: '/phase0/dashboard', icon: Briefcase, label: 'Mes projets' },
+      { href: '/chantiers', icon: Hammer, label: 'Mes chantiers' },
+    ],
+  },
+  {
+    id: 'outils',
+    label: 'OUTILS IA',
+    items: [
+      { href: '/analyze', icon: FileSearch, label: 'Analyser un devis' },
+      { href: '/entreprises', icon: Users, label: 'Trouver des entreprises' },
+    ],
+  },
+  {
+    id: 'compte',
+    label: 'COMPTE',
+    items: [
+      { href: '/profile', icon: User, label: 'Mon profil' },
+      { href: '/settings', icon: Settings, label: 'Paramètres' },
+    ],
+  },
 ];
 
-// Navigation pour B2B (professionnels)
-const B2B_NAV_ITEMS: NavItem[] = [
-  { href: '/pro', icon: LayoutDashboard, label: 'Tableau de bord', exact: true },
-  { href: '/pro/projects', icon: Briefcase, label: 'Mes projets' },
-  { href: '/chantiers', icon: Hammer, label: 'Mes chantiers' },
-  { href: '/pro/documents', icon: FileText, label: 'Documents' },
-  { href: '/b2b/ao', icon: FolderOpen, label: 'Appels d\'offres' },
-  { href: '/pro/analyses', icon: FileSearch, label: 'Analyses devis' },
-  { href: '/pro/settings', icon: Settings, label: 'Paramètres' },
+// Navigation pour B2B (professionnels) - Structure par catégories
+const B2B_NAV_SECTIONS: NavSection[] = [
+  {
+    id: 'main',
+    label: null,
+    items: [
+      { href: '/pro', icon: LayoutDashboard, label: 'Tableau de bord', exact: true },
+    ],
+  },
+  {
+    id: 'projets',
+    label: 'PROJETS',
+    items: [
+      { href: '/pro/projects/new', icon: PlusCircle, label: 'Nouveau projet' },
+      { href: '/pro/projects', icon: Briefcase, label: 'Mes projets' },
+      { href: '/chantiers', icon: Hammer, label: 'Mes chantiers' },
+    ],
+  },
+  {
+    id: 'outils',
+    label: 'OUTILS IA',
+    items: [
+      { href: '/analyze', icon: FileSearch, label: 'Analyser un devis' },
+      { href: '/entreprises', icon: Users, label: 'Trouver des entreprises' },
+    ],
+  },
+  {
+    id: 'compte',
+    label: 'COMPTE',
+    items: [
+      { href: '/pro/company', icon: Building2, label: 'Mon entreprise' },
+      { href: '/pro/settings', icon: Settings, label: 'Paramètres' },
+    ],
+  },
 ];
 
-// Navigation pour B2G (collectivités)
-const B2G_NAV_ITEMS: NavItem[] = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord', exact: true },
-  { href: '/phase0/dashboard', icon: Briefcase, label: 'Marchés en cours' },
-  { href: '/chantiers', icon: Hammer, label: 'Suivi chantiers' },
-  { href: '/tenders', icon: FolderOpen, label: 'Appels d\'offres' },
-  { href: '/pro/documents', icon: FileText, label: 'Documents' },
-  { href: '/profile', icon: Landmark, label: 'Ma collectivité' },
+// Navigation pour B2G (collectivités) - Structure par catégories
+const B2G_NAV_SECTIONS: NavSection[] = [
+  {
+    id: 'main',
+    label: null,
+    items: [
+      { href: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord', exact: true },
+    ],
+  },
+  {
+    id: 'projets',
+    label: 'MARCHÉS',
+    items: [
+      { href: '/phase0/new', icon: PlusCircle, label: 'Nouveau marché' },
+      { href: '/phase0/dashboard', icon: Briefcase, label: 'Marchés en cours' },
+      { href: '/chantiers', icon: Hammer, label: 'Suivi chantiers' },
+    ],
+  },
+  {
+    id: 'outils',
+    label: 'OUTILS IA',
+    items: [
+      { href: '/analyze', icon: FileSearch, label: 'Analyser un devis' },
+      { href: '/entreprises', icon: Users, label: 'Trouver des entreprises' },
+    ],
+  },
+  {
+    id: 'compte',
+    label: 'COMPTE',
+    items: [
+      { href: '/profile', icon: Landmark, label: 'Ma collectivité' },
+      { href: '/settings', icon: Settings, label: 'Paramètres' },
+    ],
+  },
 ];
+
+// Flat navigation items for backward compatibility (used by config)
+const B2C_NAV_ITEMS: NavItem[] = B2C_NAV_SECTIONS.flatMap(s => s.items);
+const B2B_NAV_ITEMS: NavItem[] = B2B_NAV_SECTIONS.flatMap(s => s.items);
+const B2G_NAV_ITEMS: NavItem[] = B2G_NAV_SECTIONS.flatMap(s => s.items);
 
 // Configuration par type d'utilisateur
 const USER_TYPE_CONFIG = {
@@ -90,6 +173,7 @@ const USER_TYPE_CONFIG = {
     label: 'Particulier',
     badge: null,
     navItems: B2C_NAV_ITEMS,
+    navSections: B2C_NAV_SECTIONS,
     newProjectLink: '/phase0/new',
     newProjectLabel: 'Nouveau projet',
     dashboardLink: '/dashboard',
@@ -97,8 +181,9 @@ const USER_TYPE_CONFIG = {
   B2B: {
     label: 'Professionnel',
     badge: 'PRO',
-    badgeColor: 'bg-blue-100 text-blue-700',
+    badgeColor: 'bg-primary/10 text-primary',
     navItems: B2B_NAV_ITEMS,
+    navSections: B2B_NAV_SECTIONS,
     newProjectLink: '/pro/projects/new',
     newProjectLabel: 'Nouveau projet',
     dashboardLink: '/pro',
@@ -108,6 +193,7 @@ const USER_TYPE_CONFIG = {
     badge: 'B2G',
     badgeColor: 'bg-purple-100 text-purple-700',
     navItems: B2G_NAV_ITEMS,
+    navSections: B2G_NAV_SECTIONS,
     newProjectLink: '/phase0/new',
     newProjectLabel: 'Nouveau marché',
     dashboardLink: '/dashboard',
@@ -116,7 +202,8 @@ const USER_TYPE_CONFIG = {
     label: 'Administrateur',
     badge: 'ADMIN',
     badgeColor: 'bg-orange-100 text-orange-700',
-    navItems: B2B_NAV_ITEMS, // Admins can access B2B features
+    navItems: B2B_NAV_ITEMS,
+    navSections: B2B_NAV_SECTIONS,
     newProjectLink: '/admin-dashboard',
     newProjectLabel: 'Administration',
     dashboardLink: '/admin-dashboard',
@@ -125,7 +212,8 @@ const USER_TYPE_CONFIG = {
     label: 'Super Admin',
     badge: 'SUPER',
     badgeColor: 'bg-red-100 text-red-700',
-    navItems: B2B_NAV_ITEMS, // Super admins can access all features
+    navItems: B2B_NAV_ITEMS,
+    navSections: B2B_NAV_SECTIONS,
     newProjectLink: '/admin/analytics',
     newProjectLabel: 'Administration',
     dashboardLink: '/admin/analytics',
@@ -137,29 +225,13 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const { user, userType, logout } = useApp();
   const { toast } = useToast();
-  const { labels, mainRoutes, defaultRoute, profileName, profileColor } = useProfile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Déterminer la configuration selon le type d'utilisateur
   const config = USER_TYPE_CONFIG[userType as keyof typeof USER_TYPE_CONFIG] || USER_TYPE_CONFIG.B2C;
 
-  // Utiliser les labels dynamiques du profil
-  const newProjectLabel = labels.newProjectLabel;
-
-  // Adapter les labels de navigation selon le profil
-  const navItems = config.navItems.map(item => {
-    // Remplacer les labels génériques par ceux du profil
-    if (item.href === '/phase0/dashboard') {
-      return { ...item, label: labels.projectNamePlural };
-    }
-    if (item.href === '/analyze') {
-      return { ...item, label: labels.analyzeLabel };
-    }
-    if (item.href === '/pro/projects') {
-      return { ...item, label: labels.projectNamePlural };
-    }
-    return item;
-  });
+  // Adapter les sections de navigation selon le profil
+  const navSections = config.navSections;
 
   const handleLogout = async () => {
     try {
@@ -273,36 +345,39 @@ export function AppLayout({ children }: AppLayoutProps) {
       <div className="flex">
         {/* Sidebar - Desktop */}
         <aside className="w-64 bg-white border-r min-h-[calc(100vh-4rem)] hidden md:block">
-          <nav className="p-4 space-y-1">
-            {navItems.map((item) => {
-              const isActive = isActiveRoute(item);
-              const Icon = item.icon;
+          <nav className="p-4 space-y-4">
+            {navSections.map((section) => (
+              <div key={section.id}>
+                {section.label && (
+                  <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {section.label}
+                  </div>
+                )}
+                <div className="space-y-1">
+                  {section.items.map((item) => {
+                    const isActive = isActiveRoute(item);
+                    const Icon = item.icon;
 
-              return (
-                <Link
-                  key={item.href}
-                  to={item.href}
-                  className={cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
-                    isActive
-                      ? 'bg-primary text-white'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  )}
-                >
-                  <Icon className="h-5 w-5" />
-                  {item.label}
-                </Link>
-              );
-            })}
+                    return (
+                      <Link
+                        key={item.href}
+                        to={item.href}
+                        className={cn(
+                          'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
+                          isActive
+                            ? 'bg-primary text-white'
+                            : 'text-gray-700 hover:bg-gray-100'
+                        )}
+                      >
+                        <Icon className="h-5 w-5" />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
-
-          {/* CTA */}
-          <div className="p-4 border-t mt-4">
-            <Button className="w-full" onClick={() => navigate(config.newProjectLink)}>
-              <PlusCircle className="h-4 w-4 mr-2" />
-              {newProjectLabel}
-            </Button>
-          </div>
         </aside>
 
         {/* Sidebar - Mobile */}
@@ -313,43 +388,41 @@ export function AppLayout({ children }: AppLayoutProps) {
               onClick={() => setSidebarOpen(false)}
             />
             <aside className="fixed left-0 top-16 bottom-0 w-64 bg-white border-r z-50 overflow-y-auto">
-              <nav className="p-4 space-y-1">
-                {navItems.map((item) => {
-                  const isActive = isActiveRoute(item);
-                  const Icon = item.icon;
+              <nav className="p-4 space-y-4">
+                {navSections.map((section) => (
+                  <div key={section.id}>
+                    {section.label && (
+                      <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        {section.label}
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      {section.items.map((item) => {
+                        const isActive = isActiveRoute(item);
+                        const Icon = item.icon;
 
-                  return (
-                    <Link
-                      key={item.href}
-                      to={item.href}
-                      onClick={() => setSidebarOpen(false)}
-                      className={cn(
-                        'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
-                        isActive
-                          ? 'bg-primary text-white'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      )}
-                    >
-                      <Icon className="h-5 w-5" />
-                      {item.label}
-                    </Link>
-                  );
-                })}
+                        return (
+                          <Link
+                            key={item.href}
+                            to={item.href}
+                            onClick={() => setSidebarOpen(false)}
+                            className={cn(
+                              'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
+                              isActive
+                                ? 'bg-primary text-white'
+                                : 'text-gray-700 hover:bg-gray-100'
+                            )}
+                          >
+                            <Icon className="h-5 w-5" />
+                            {item.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </nav>
 
-              {/* CTA Mobile */}
-              <div className="p-4 border-t">
-                <Button
-                  className="w-full"
-                  onClick={() => {
-                    setSidebarOpen(false);
-                    navigate(config.newProjectLink);
-                  }}
-                >
-                  <PlusCircle className="h-4 w-4 mr-2" />
-                  {newProjectLabel}
-                </Button>
-              </div>
             </aside>
           </div>
         )}
