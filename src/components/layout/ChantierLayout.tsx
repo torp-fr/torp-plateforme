@@ -36,6 +36,7 @@ import { useApp } from '@/context/AppContext';
 import { ChantierService } from '@/services/phase2';
 import type { Chantier } from '@/types/phase2';
 import { AppLayout } from './AppLayout';
+import { usePreloadPhase, type PhaseNumber } from '@/hooks/usePreloadPhase';
 
 interface NavSection {
   id: string;
@@ -100,7 +101,9 @@ const CHANTIER_NAV: NavSection[] = [
     labelB2G: 'Gestion patrimoniale',
     items: [
       { href: 'phase5:', icon: BookOpen, label: 'Carnet numérique', labelB2B: 'Carnet du logement', labelB2G: 'Carnet ouvrage' },
+      { href: 'phase5:/diagnostics', icon: FileCheck, label: 'Diagnostics', labelB2B: 'Diagnostics immobiliers', labelB2G: 'Diagnostics obligatoires' },
       { href: 'phase5:/entretien', icon: Wrench, label: 'Entretien', labelB2B: 'Planning entretien', labelB2G: 'Maintenance' },
+      { href: 'phase5:/sinistres', icon: AlertTriangle, label: 'Sinistres', labelB2B: 'Gestion sinistres', labelB2G: 'Sinistres & Garanties' },
     ],
   },
 ];
@@ -113,6 +116,19 @@ export function ChantierLayout() {
   const [chantier, setChantier] = useState<Chantier | null>(null);
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
+
+  // Déterminer la phase actuelle à partir de l'URL
+  const currentPhase = (() => {
+    const path = location.pathname;
+    if (path.includes('/phase2/')) return 2;
+    if (path.includes('/phase3/')) return 3;
+    if (path.includes('/phase4/')) return 4;
+    if (path.includes('/phase5/')) return 5;
+    return 2; // Default
+  })() as PhaseNumber;
+
+  // Précharger les phases adjacentes pour une navigation fluide
+  usePreloadPhase(currentPhase, { delay: 500 });
 
   useEffect(() => {
     if (projectId) {
