@@ -6,7 +6,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ProLayout } from '@/components/pro/ProLayout';
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -210,7 +210,7 @@ export default function ProNewAnalysis() {
   }
 
   return (
-    <ProLayout>
+    <div className="space-y-6">
       <div className="space-y-6 max-w-2xl mx-auto">
         <div>
           <h1 className="text-2xl font-bold">Nouvelle analyse</h1>
@@ -348,6 +348,6 @@ export default function ProNewAnalysis() {
           </>
         )}
       </div>
-    </ProLayout>
+    </div>
   );
 }

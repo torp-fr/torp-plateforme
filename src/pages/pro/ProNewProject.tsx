@@ -8,14 +8,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Building2 } from 'lucide-react';
 import { WizardContainer } from '@/components/phase0/wizard';
-import { ProLayout } from '@/components/pro/ProLayout';
+
 
 export function Phase0WizardB2B() {
   const { projectId } = useParams<{ projectId?: string }>();
   const navigate = useNavigate();
 
   return (
-    <ProLayout>
+    <div className="space-y-6">
       <div className="max-w-5xl mx-auto">
         {/* Navigation retour */}
         <div className="mb-6">
@@ -53,7 +53,7 @@ export function Phase0WizardB2B() {
           }}
         />
       </div>
-    </ProLayout>
+    </div>
   );
 }
 

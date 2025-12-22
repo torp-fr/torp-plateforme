@@ -6,7 +6,6 @@
 
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ProLayout } from '@/components/pro/ProLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -155,40 +154,35 @@ export default function ProDashboard() {
 
   if (loading) {
     return (
-      <ProLayout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      </ProLayout>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
     );
   }
 
   // Si pas d'entreprise, afficher l'onboarding
   if (!hasCompany) {
     return (
-      <ProLayout>
-        <div className="max-w-2xl mx-auto text-center py-12">
-          <Building2 className="h-16 w-16 text-muted-foreground mx-auto mb-6" />
-          <h1 className="text-2xl font-bold mb-4">
-            Bienvenue sur TORP Pro
-          </h1>
-          <p className="text-muted-foreground mb-8">
-            Pour commencer, vous devez créer le profil de votre entreprise.
-            Cela nous permettra de personnaliser vos projets et de générer
-            les documents adaptés à votre activité.
-          </p>
-          <Button size="lg" onClick={() => navigate('/pro/onboarding')}>
-            <PlusCircle className="h-5 w-5 mr-2" />
-            Créer mon profil entreprise
-          </Button>
-        </div>
-      </ProLayout>
+      <div className="max-w-2xl mx-auto text-center py-12">
+        <Building2 className="h-16 w-16 text-muted-foreground mx-auto mb-6" />
+        <h1 className="text-2xl font-bold mb-4">
+          Bienvenue sur TORP Pro
+        </h1>
+        <p className="text-muted-foreground mb-8">
+          Pour commencer, vous devez créer le profil de votre entreprise.
+          Cela nous permettra de personnaliser vos projets et de générer
+          les documents adaptés à votre activité.
+        </p>
+        <Button size="lg" onClick={() => navigate('/pro/onboarding')}>
+          <PlusCircle className="h-5 w-5 mr-2" />
+          Créer mon profil entreprise
+        </Button>
+      </div>
     );
   }
 
   return (
-    <ProLayout>
-      <div className="space-y-6">
+    <div className="space-y-6">
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold">Tableau de bord</h1>
@@ -322,6 +316,5 @@ export default function ProDashboard() {
           </CardContent>
         </Card>
       </div>
-    </ProLayout>
   );
 }

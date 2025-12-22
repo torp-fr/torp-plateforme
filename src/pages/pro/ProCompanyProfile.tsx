@@ -10,7 +10,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ProLayout } from '@/components/pro/ProLayout';
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -816,18 +816,18 @@ export default function ProCompanyProfile() {
 
   if (loading) {
     return (
-      <ProLayout>
+      <div className="space-y-6">
         <div className="flex justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      </ProLayout>
+      </div>
     );
   }
 
   const completion = calculateCompletion();
 
   return (
-    <ProLayout>
+    <div className="space-y-6">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between">
@@ -2116,6 +2116,6 @@ export default function ProCompanyProfile() {
           </TabsContent>
         </Tabs>
       </div>
-    </ProLayout>
+    </div>
   );
 }

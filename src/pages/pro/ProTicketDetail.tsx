@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ProLayout } from '@/components/pro/ProLayout';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -354,17 +354,17 @@ export default function ProTicketDetail() {
 
   if (loading) {
     return (
-      <ProLayout>
+      <div className="space-y-6">
         <div className="flex justify-center items-center py-24">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      </ProLayout>
+      </div>
     );
   }
 
   if (!ticket) {
     return (
-      <ProLayout>
+      <div className="space-y-6">
         <div className="text-center py-24">
           <Ticket className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
           <p className="text-muted-foreground">Ticket non trouvé</p>
@@ -373,14 +373,14 @@ export default function ProTicketDetail() {
             Retour aux tickets
           </Button>
         </div>
-      </ProLayout>
+      </div>
     );
   }
 
   const daysRemaining = getDaysRemaining(ticket.date_expiration);
 
   return (
-    <ProLayout>
+    <div className="space-y-6">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between gap-4">
@@ -632,6 +632,6 @@ export default function ProTicketDetail() {
           </CardContent>
         </Card>
       </div>
-    </ProLayout>
+    </div>
   );
 }

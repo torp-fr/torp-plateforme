@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { ProLayout } from '@/components/pro/ProLayout';
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -390,16 +390,16 @@ export default function ProTeam() {
 
   if (loading) {
     return (
-      <ProLayout>
+      <div className="space-y-6">
         <div className="flex justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      </ProLayout>
+      </div>
     );
   }
 
   return (
-    <ProLayout>
+    <div className="space-y-6">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between">
@@ -853,6 +853,6 @@ export default function ProTeam() {
           </CardContent>
         </Card>
       </div>
-    </ProLayout>
+    </div>
   );
 }

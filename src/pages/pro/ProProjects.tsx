@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ProLayout } from '@/components/pro/ProLayout';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -163,16 +163,16 @@ export default function ProProjects() {
 
   if (loading) {
     return (
-      <ProLayout>
+      <div className="space-y-6">
         <div className="flex items-center justify-center min-h-[400px]">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      </ProLayout>
+      </div>
     );
   }
 
   return (
-    <ProLayout>
+    <div className="space-y-6">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -290,6 +290,6 @@ export default function ProProjects() {
           </div>
         )}
       </div>
-    </ProLayout>
+    </div>
   );
 }
