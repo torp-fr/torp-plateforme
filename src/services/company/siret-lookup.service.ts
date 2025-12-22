@@ -63,12 +63,15 @@ export class SiretLookupService {
 
   /**
    * Valider le format SIRET (14 chiffres)
+   * Note: La validation Luhn n'est plus bloquante car certains SIRET français
+   * valides ne passent pas cet algorithme (exceptions historiques comme La Poste)
    */
   static validateSiret(siret: string): boolean {
     const cleaned = siret.replace(/\s/g, '');
+    // Valider uniquement le format (14 chiffres)
     if (!/^\d{14}$/.test(cleaned)) return false;
 
-    // Validation Luhn (clé de contrôle)
+    // Validation Luhn optionnelle (avertissement seulement)
     let sum = 0;
     for (let i = 0; i < 14; i++) {
       let digit = parseInt(cleaned[i], 10);
@@ -78,7 +81,11 @@ export class SiretLookupService {
       }
       sum += digit;
     }
-    return sum % 10 === 0;
+    if (sum % 10 !== 0) {
+      console.warn('[SiretLookup] SIRET ne passe pas la validation Luhn (peut être une exception historique):', cleaned);
+    }
+
+    return true;
   }
 
   /**
