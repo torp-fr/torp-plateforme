@@ -1,15 +1,15 @@
 /**
  * ProLayout Component
  * Layout pour les pages B2B professionnelles
+ * Sidebar structuré par catégories: PROJETS, OUTILS IA, COMPTE
  */
 
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   FileSearch,
   PlusCircle,
-  FolderOpen,
   Settings,
   Building2,
   LogOut,
@@ -17,7 +17,7 @@ import {
   X,
   ChevronDown,
   Briefcase,
-  FileText,
+  Hammer,
   Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -31,23 +31,60 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { authService } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
-import { useState } from 'react';
 import torpLogo from '@/assets/torp-logo-red.png';
 
 interface ProLayoutProps {
   children: ReactNode;
 }
 
-const NAV_ITEMS = [
-  { href: '/pro', icon: LayoutDashboard, label: 'Tableau de bord', exact: true },
-  { href: '/pro/projects', icon: Briefcase, label: 'Mes projets' },
-  { href: '/pro/company', icon: Building2, label: 'Mon entreprise' },
-  { href: '/pro/team', icon: Users, label: 'Mon équipe' },
-  { href: '/pro/documents', icon: FileText, label: 'Documents' },
-  { href: '/b2b/ao', icon: FolderOpen, label: 'Appels d\'offres' },
-  { href: '/pro/settings', icon: Settings, label: 'Paramètres' },
+interface NavItem {
+  href: string;
+  icon: React.ElementType;
+  label: string;
+  exact?: boolean;
+}
+
+interface NavSection {
+  id: string;
+  label: string | null;
+  items: NavItem[];
+}
+
+// Navigation B2B structurée par catégories
+const NAV_SECTIONS: NavSection[] = [
+  {
+    id: 'main',
+    label: null,
+    items: [
+      { href: '/pro', icon: LayoutDashboard, label: 'Tableau de bord', exact: true },
+    ],
+  },
+  {
+    id: 'projets',
+    label: 'PROJETS',
+    items: [
+      { href: '/pro/projects/new', icon: PlusCircle, label: 'Nouveau projet' },
+      { href: '/pro/projects', icon: Briefcase, label: 'Mes projets' },
+      { href: '/chantiers', icon: Hammer, label: 'Mes chantiers' },
+    ],
+  },
+  {
+    id: 'outils',
+    label: 'OUTILS IA',
+    items: [
+      { href: '/analyze', icon: FileSearch, label: 'Analyser un devis' },
+      { href: '/entreprises', icon: Users, label: 'Trouver des entreprises' },
+    ],
+  },
+  {
+    id: 'compte',
+    label: 'COMPTE',
+    items: [
+      { href: '/pro/company', icon: Building2, label: 'Mon entreprise' },
+      { href: '/pro/settings', icon: Settings, label: 'Paramètres' },
+    ],
+  },
 ];
 
 export function ProLayout({ children }: ProLayoutProps) {
@@ -71,7 +108,7 @@ export function ProLayout({ children }: ProLayoutProps) {
     }
   };
 
-  const isActiveRoute = (item: typeof NAV_ITEMS[0]) => {
+  const isActiveRoute = (item: NavItem) => {
     if (item.exact) {
       return location.pathname === item.href;
     }
@@ -142,35 +179,39 @@ export function ProLayout({ children }: ProLayoutProps) {
       <div className="flex">
         {/* Sidebar - Desktop */}
         <aside className="w-64 bg-white border-r min-h-[calc(100vh-4rem)] hidden md:block">
-          <nav className="p-4 space-y-1">
-            {NAV_ITEMS.map((item) => {
-              const isActive = isActiveRoute(item);
+          <nav className="p-4 space-y-4">
+            {NAV_SECTIONS.map((section) => (
+              <div key={section.id}>
+                {section.label && (
+                  <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {section.label}
+                  </div>
+                )}
+                <div className="space-y-1">
+                  {section.items.map((item) => {
+                    const isActive = isActiveRoute(item);
+                    const Icon = item.icon;
 
-              return (
-                <Link
-                  key={item.href}
-                  to={item.href}
-                  className={cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
-                    isActive
-                      ? 'bg-primary text-white'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  )}
-                >
-                  <item.icon className="h-5 w-5" />
-                  {item.label}
-                </Link>
-              );
-            })}
+                    return (
+                      <Link
+                        key={item.href}
+                        to={item.href}
+                        className={cn(
+                          'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
+                          isActive
+                            ? 'bg-primary text-white'
+                            : 'text-gray-700 hover:bg-gray-100'
+                        )}
+                      >
+                        <Icon className="h-5 w-5" />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
-
-          {/* CTA */}
-          <div className="p-4 border-t mt-4">
-            <Button className="w-full" onClick={() => navigate('/pro/projects/new')}>
-              <PlusCircle className="h-4 w-4 mr-2" />
-              Nouveau projet
-            </Button>
-          </div>
         </aside>
 
         {/* Sidebar - Mobile */}
@@ -180,28 +221,40 @@ export function ProLayout({ children }: ProLayoutProps) {
               className="fixed inset-0 bg-black/50"
               onClick={() => setSidebarOpen(false)}
             />
-            <aside className="fixed left-0 top-16 bottom-0 w-64 bg-white border-r z-50">
-              <nav className="p-4 space-y-1">
-                {NAV_ITEMS.map((item) => {
-                  const isActive = isActiveRoute(item);
+            <aside className="fixed left-0 top-16 bottom-0 w-64 bg-white border-r z-50 overflow-y-auto">
+              <nav className="p-4 space-y-4">
+                {NAV_SECTIONS.map((section) => (
+                  <div key={section.id}>
+                    {section.label && (
+                      <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        {section.label}
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      {section.items.map((item) => {
+                        const isActive = isActiveRoute(item);
+                        const Icon = item.icon;
 
-                  return (
-                    <Link
-                      key={item.href}
-                      to={item.href}
-                      onClick={() => setSidebarOpen(false)}
-                      className={cn(
-                        'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
-                        isActive
-                          ? 'bg-primary text-white'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      )}
-                    >
-                      <item.icon className="h-5 w-5" />
-                      {item.label}
-                    </Link>
-                  );
-                })}
+                        return (
+                          <Link
+                            key={item.href}
+                            to={item.href}
+                            onClick={() => setSidebarOpen(false)}
+                            className={cn(
+                              'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
+                              isActive
+                                ? 'bg-primary text-white'
+                                : 'text-gray-700 hover:bg-gray-100'
+                            )}
+                          >
+                            <Icon className="h-5 w-5" />
+                            {item.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </nav>
             </aside>
           </div>
