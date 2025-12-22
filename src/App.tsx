@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppProvider, useApp } from "@/context/AppContext";
-import ErrorBoundary from "@/components/ErrorBoundary";
+import { ErrorBoundary } from "@/components/error/ErrorBoundary";
 import Index from "./pages/Index";
 import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
@@ -67,7 +67,9 @@ import { Phase2Dashboard, PlanningPage, ReunionsPage, JournalPage, ChantiersList
 // Phase 3 Pages (Exécution Chantier)
 import { Phase3Dashboard, ControlesPage, CoordinationPage, SituationsPage } from "./pages/phase3";
 // Phase 4 Pages (Réception & Garanties)
-import Phase4Dashboard from "./pages/phase4/Phase4Dashboard";
+import { Phase4Dashboard, OPRPage, ReservesPage, GarantiesPage, DOEPage } from "./pages/phase4";
+// Phase 5 Pages (Maintenance & Exploitation)
+import { Phase5Dashboard } from "./pages/phase5";
 // Layout contextuel chantier
 import ChantierLayout from "./components/layout/ChantierLayout";
 
@@ -155,10 +157,16 @@ const AppContent = () => {
           {/* Routes Phase 4 - Réception & Garanties (avec sidebar contextuel) */}
           <Route path="/phase4/:projectId" element={<ProtectedRoute><ChantierLayout /></ProtectedRoute>}>
             <Route index element={<Phase4Dashboard />} />
-            <Route path="reception" element={<Phase4Dashboard />} />
-            <Route path="reserves" element={<Phase4Dashboard />} />
-            <Route path="garanties" element={<Phase4Dashboard />} />
-            <Route path="doe" element={<Phase4Dashboard />} />
+            <Route path="dashboard" element={<Phase4Dashboard />} />
+            <Route path="reception" element={<OPRPage />} />
+            <Route path="reserves" element={<ReservesPage />} />
+            <Route path="garanties" element={<GarantiesPage />} />
+            <Route path="doe" element={<DOEPage />} />
+          </Route>
+          {/* Routes Phase 5 - Maintenance & Exploitation */}
+          <Route path="/phase5/:projectId" element={<ProtectedRoute><ChantierLayout /></ProtectedRoute>}>
+            <Route index element={<Phase5Dashboard />} />
+            <Route path="carnet" element={<Phase5Dashboard />} />
           </Route>
           {/* Routes Appels d'Offres (MOA) */}
           <Route path="/tenders" element={<ProtectedRoute><TendersPage /></ProtectedRoute>} />
