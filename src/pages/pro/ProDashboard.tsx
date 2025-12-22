@@ -16,13 +16,9 @@ import {
   PlusCircle,
   ArrowRight,
   Building2,
-  Clock,
   Loader2,
   Eye,
   Briefcase,
-  FileText,
-  FolderOpen,
-  Users,
   MapPin,
 } from 'lucide-react';
 
@@ -195,57 +191,6 @@ export default function ProDashboard() {
           <p className="text-muted-foreground">
             Bienvenue, {user?.name || 'Professionnel'}
           </p>
-        </div>
-
-        {/* Actions rapides */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => navigate('/pro/projects/new')}>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-lg bg-primary/10">
-                  <Briefcase className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-semibold">Créer un projet</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Renseigner les infos client et chantier
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => navigate('/pro/documents')}>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-lg bg-blue-100">
-                  <FileText className="h-6 w-6 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold">Mes documents</h3>
-                  <p className="text-sm text-muted-foreground">
-                    DCE, CCTP, devis générés
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => navigate('/b2b/ao')}>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-lg bg-amber-100">
-                  <FolderOpen className="h-6 w-6 text-amber-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold">Appels d'offres</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Consulter et répondre aux AO
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
 
         {/* Projets récents */}
