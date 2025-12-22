@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ProLayout } from '@/components/pro/ProLayout';
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -159,7 +159,7 @@ export default function ProTickets() {
   }
 
   return (
-    <ProLayout>
+    <div className="space-y-6">
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -324,6 +324,6 @@ export default function ProTickets() {
           </CardContent>
         </Card>
       </div>
-    </ProLayout>
+    </div>
   );
 }

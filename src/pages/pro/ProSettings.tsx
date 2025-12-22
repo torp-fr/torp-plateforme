@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { ProLayout } from '@/components/pro/ProLayout';
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -308,16 +308,16 @@ export default function ProSettings() {
 
   if (loading) {
     return (
-      <ProLayout>
+      <div className="space-y-6">
         <div className="flex justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
-      </ProLayout>
+      </div>
     );
   }
 
   return (
-    <ProLayout>
+    <div className="space-y-6">
       <div className="space-y-6 max-w-3xl">
         <h1 className="text-2xl font-bold">Paramètres</h1>
 
@@ -659,6 +659,6 @@ export default function ProSettings() {
           </TabsContent>
         </Tabs>
       </div>
-    </ProLayout>
+    </div>
   );
 }
