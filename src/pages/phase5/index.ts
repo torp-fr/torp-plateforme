@@ -4,3 +4,6 @@
  */
 
 export { default as Phase5Dashboard } from './Phase5Dashboard';
+export { DiagnosticsPage } from './DiagnosticsPage';
+export { EntretienPage } from './EntretienPage';
+export { SinistresPage } from './SinistresPage';

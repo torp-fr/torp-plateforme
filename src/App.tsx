@@ -69,7 +69,7 @@ import { Phase3Dashboard, ControlesPage, CoordinationPage, SituationsPage } from
 // Phase 4 Pages (Réception & Garanties)
 import { Phase4Dashboard, OPRPage, ReservesPage, GarantiesPage, DOEPage } from "./pages/phase4";
 // Phase 5 Pages (Maintenance & Exploitation)
-import { Phase5Dashboard } from "./pages/phase5";
+import { Phase5Dashboard, DiagnosticsPage, EntretienPage, SinistresPage } from "./pages/phase5";
 // Layout contextuel chantier
 import ChantierLayout from "./components/layout/ChantierLayout";
 
@@ -167,6 +167,9 @@ const AppContent = () => {
           <Route path="/phase5/:projectId" element={<ProtectedRoute><ChantierLayout /></ProtectedRoute>}>
             <Route index element={<Phase5Dashboard />} />
             <Route path="carnet" element={<Phase5Dashboard />} />
+            <Route path="diagnostics" element={<DiagnosticsPage />} />
+            <Route path="entretien" element={<EntretienPage />} />
+            <Route path="sinistres" element={<SinistresPage />} />
           </Route>
           {/* Routes Appels d'Offres (MOA) */}
           <Route path="/tenders" element={<ProtectedRoute><TendersPage /></ProtectedRoute>} />

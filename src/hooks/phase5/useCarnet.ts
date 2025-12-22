@@ -118,6 +118,15 @@ export function useCarnet({ projectId, enabled = true }: UseCarnetOptions) {
     },
   });
 
+  const updateEntretienMutation = useMutation({
+    mutationFn: ({ entretienId, data }: { entretienId: string; data: Partial<EntretienProgramme> }) =>
+      carnetService.updateEntretien(entretienId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entretiens', projectId] });
+      toast({ title: 'Entretien mis à jour', description: 'Les informations ont été enregistrées.' });
+    },
+  });
+
   const declarerSinistreMutation = useMutation({
     mutationFn: (sinistre: Omit<Sinistre, 'id'>) =>
       carnetService.declarerSinistre(projectId, sinistre),
@@ -172,8 +181,10 @@ export function useCarnet({ projectId, enabled = true }: UseCarnetOptions) {
     addTravaux: addTravauxMutation.mutate,
     addDiagnostic: addDiagnosticMutation.mutate,
     addEntretien: addEntretienMutation.mutate,
+    updateEntretien: updateEntretienMutation.mutate,
     marquerEntretienRealise: marquerEntretienRealiseMutation.mutate,
     declarerSinistre: declarerSinistreMutation.mutate,
+    addSinistre: declarerSinistreMutation.mutate, // Alias for compatibility
     addDocument: addDocumentMutation.mutate,
 
     // Refresh

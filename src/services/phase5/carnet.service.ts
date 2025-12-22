@@ -169,6 +169,18 @@ class CarnetNumeriqueTService {
     return data;
   }
 
+  async updateEntretien(entretienId: string, updates: Partial<EntretienProgramme>): Promise<EntretienProgramme> {
+    const { data, error } = await supabase
+      .from('entretiens_programmes')
+      .update(updates)
+      .eq('id', entretienId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
   // ==========================================================================
   // GARANTIES
   // ==========================================================================
