@@ -3,7 +3,7 @@
  * Met en avant le parcours projet BTP et les outils IA
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   PlusCircle,
@@ -24,6 +24,10 @@ import {
   Hammer,
   Euro,
   MapPin,
+  MoreVertical,
+  Trash2,
+  Archive,
+  Pencil,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
@@ -31,6 +35,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { useToast } from '@/hooks/use-toast';
 
 // Mock data pour les projets récents
 const MOCK_PROJECTS = [
@@ -77,14 +99,52 @@ const PHASES = [
 export function DashboardUnifie() {
   const navigate = useNavigate();
   const { user, userType } = useApp();
+  const { toast } = useToast();
   const isB2B = userType === 'B2B';
 
-  // Stats mock
+  // State pour la gestion des projets
+  const [projects, setProjects] = useState(MOCK_PROJECTS);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
+
+  // Stats calculées
   const stats = {
-    total: 5,
-    enCours: 3,
-    termines: 2,
-    budgetTotal: 455000,
+    total: projects.length,
+    enCours: projects.length,
+    termines: 0,
+    budgetTotal: projects.reduce((sum, p) => sum + p.budget, 0),
+  };
+
+  // Handlers
+  const handleArchiveProject = (projectId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    setProjects(prev => prev.filter(p => p.id !== projectId));
+    toast({
+      title: 'Projet archivé',
+      description: 'Le projet a été déplacé vers les archives.',
+    });
+  };
+
+  const handleDeleteClick = (projectId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setProjectToDelete(projectId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (projectToDelete) {
+      setProjects(prev => prev.filter(p => p.id !== projectToDelete));
+      toast({
+        title: 'Projet supprimé',
+        description: 'Le projet a été définitivement supprimé.',
+        variant: 'destructive',
+      });
+    }
+    setDeleteDialogOpen(false);
+    setProjectToDelete(null);
   };
 
   return (
@@ -240,7 +300,7 @@ export function DashboardUnifie() {
               </Button>
             </CardHeader>
             <CardContent>
-              {MOCK_PROJECTS.length === 0 ? (
+              {projects.length === 0 ? (
                 <div className="text-center py-12">
                   <FolderOpen className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                   <p className="text-gray-500 mb-4">Aucun projet pour le moment</p>
@@ -251,51 +311,86 @@ export function DashboardUnifie() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {MOCK_PROJECTS.map((project) => {
+                  {projects.map((project) => {
                     const phase = PHASES.find(p => p.id === project.phase);
                     const PhaseIcon = phase?.icon || Lightbulb;
 
                     return (
-                      <Link
+                      <div
                         key={project.id}
-                        to={`/projet/${project.id}`}
                         className="flex items-center gap-4 p-4 rounded-lg border hover:bg-gray-50 transition-colors group"
                       >
-                        <div className={cn(
-                          'h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0',
-                          phase?.bg || 'bg-gray-100'
-                        )}>
-                          <PhaseIcon className={cn('h-5 w-5', phase?.color || 'text-gray-600')} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-medium truncate">{project.nom}</h4>
-                            <Badge variant="secondary" className="text-xs">
-                              Phase {project.phase}
-                            </Badge>
+                        <Link
+                          to={`/projet/${project.id}`}
+                          className="flex items-center gap-4 flex-1 min-w-0"
+                        >
+                          <div className={cn(
+                            'h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0',
+                            phase?.bg || 'bg-gray-100'
+                          )}>
+                            <PhaseIcon className={cn('h-5 w-5', phase?.color || 'text-gray-600')} />
                           </div>
-                          <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
-                            <span className="flex items-center gap-1 truncate">
-                              <MapPin className="h-3 w-3" />
-                              {project.adresse}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Euro className="h-3 w-3" />
-                              {project.budget.toLocaleString('fr-FR')} €
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="w-24 hidden sm:block">
-                            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-                              <span>Avancement</span>
-                              <span>{project.avancement}%</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-medium truncate">{project.nom}</h4>
+                              <Badge variant="secondary" className="text-xs">
+                                Phase {project.phase}
+                              </Badge>
                             </div>
-                            <Progress value={project.avancement} className="h-1.5" />
+                            <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
+                              <span className="flex items-center gap-1 truncate">
+                                <MapPin className="h-3 w-3" />
+                                {project.adresse}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Euro className="h-3 w-3" />
+                                {project.budget.toLocaleString('fr-FR')} €
+                              </span>
+                            </div>
                           </div>
-                          <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-primary transition-colors" />
-                        </div>
-                      </Link>
+                          <div className="flex items-center gap-4">
+                            <div className="w-24 hidden sm:block">
+                              <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                                <span>Avancement</span>
+                                <span>{project.avancement}%</span>
+                              </div>
+                              <Progress value={project.avancement} className="h-1.5" />
+                            </div>
+                          </div>
+                        </Link>
+
+                        {/* Menu actions */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={(e) => e.preventDefault()}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => navigate(`/projet/${project.id}`)}>
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Modifier
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e) => handleArchiveProject(project.id, e)}>
+                              <Archive className="h-4 w-4 mr-2" />
+                              Archiver
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-red-600 focus:text-red-600"
+                              onClick={(e) => handleDeleteClick(project.id, e)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Supprimer
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     );
                   })}
                 </div>
@@ -325,6 +420,27 @@ export function DashboardUnifie() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Dialog de confirmation de suppression */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer ce projet ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action est irréversible. Le projet et toutes ses données seront définitivement supprimés.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
