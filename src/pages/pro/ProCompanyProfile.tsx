@@ -132,19 +132,36 @@ export default function ProCompanyProfile() {
     // Identification
     company: '',
     company_siret: '',
+    company_siren: '',
     company_address: '',
+    company_code_postal: '',
+    company_ville: '',
     company_code_ape: '',
+    company_libelle_ape: '',
+    company_forme_juridique: '',
     company_rcs: '',
+    company_tva_intra: '',
     company_capital: '',
     company_creation_date: '',
     company_effectif: 0,
+    company_effectif_tranche: '',
     company_ca_annuel: 0,
+    // Dirigeant
+    company_dirigeant_nom: '',
+    company_dirigeant_prenom: '',
+    company_dirigeant_fonction: '',
+    // Contact
+    company_telephone: '',
+    company_email: '',
+    company_site_web: '',
     // Mémoire technique
     company_description: '',
     company_human_resources: '',
     company_material_resources: '',
     company_methodology: '',
     company_quality_commitments: '',
+    // Statut
+    company_est_actif: true,
   });
 
   // Certifications
@@ -218,18 +235,32 @@ export default function ProCompanyProfile() {
         setFormData({
           company: data.company || '',
           company_siret: data.company_siret || '',
+          company_siren: data.company_siren || '',
           company_address: data.company_address || '',
+          company_code_postal: data.company_code_postal || '',
+          company_ville: data.company_ville || '',
           company_code_ape: data.company_code_ape || '',
+          company_libelle_ape: data.company_libelle_ape || '',
+          company_forme_juridique: data.company_forme_juridique || '',
           company_rcs: data.company_rcs || '',
+          company_tva_intra: data.company_tva_intra || '',
           company_capital: data.company_capital || '',
           company_creation_date: data.company_creation_date || '',
           company_effectif: data.company_effectif || 0,
+          company_effectif_tranche: data.company_effectif_tranche || '',
           company_ca_annuel: data.company_ca_annuel || 0,
+          company_dirigeant_nom: data.company_dirigeant_nom || '',
+          company_dirigeant_prenom: data.company_dirigeant_prenom || '',
+          company_dirigeant_fonction: data.company_dirigeant_fonction || '',
+          company_telephone: data.company_telephone || '',
+          company_email: data.company_email || '',
+          company_site_web: data.company_site_web || '',
           company_description: data.company_description || '',
           company_human_resources: data.company_human_resources || '',
           company_material_resources: data.company_material_resources || '',
           company_methodology: data.company_methodology || '',
           company_quality_commitments: data.company_quality_commitments || '',
+          company_est_actif: data.company_est_actif !== false,
         });
         setCertifications(Array.isArray(data.company_certifications) ? data.company_certifications : []);
         setReferences(Array.isArray(data.company_references) ? data.company_references : []);
@@ -394,22 +425,58 @@ export default function ProCompanyProfile() {
       const result = await SiretLookupService.lookupBySiret(siret);
       setSiretLookupResult(result);
 
-      // Auto-remplir les champs
+      // Auto-remplir tous les champs disponibles depuis l'API
       setFormData(prev => ({
         ...prev,
+        // Identification principale
         company: result.raisonSociale || prev.company,
         company_siret: SiretLookupService.formatSiret(siret),
+        company_siren: result.siren || prev.company_siren,
+        // Adresse
+        company_address: result.adresse?.complete || result.adresse?.voie || prev.company_address,
+        company_code_postal: result.adresse?.codePostal || prev.company_code_postal,
+        company_ville: result.adresse?.ville || prev.company_ville,
+        // Activité
         company_code_ape: result.codeApe || prev.company_code_ape,
+        company_libelle_ape: result.libelleApe || prev.company_libelle_ape,
+        company_forme_juridique: result.formeJuridique || prev.company_forme_juridique,
+        // Administratif
+        company_rcs: result.rcs || prev.company_rcs,
+        company_tva_intra: result.tvaIntracommunautaire || prev.company_tva_intra,
         company_capital: result.capital ? result.capital.toString() : prev.company_capital,
         company_creation_date: result.dateCreation || prev.company_creation_date,
-        company_effectif: result.effectifMax || prev.company_effectif,
-        company_address: result.adresse?.complete || prev.company_address,
-        company_rcs: result.rcs || prev.company_rcs,
+        // Effectif
+        company_effectif: result.effectifMax || result.effectifMin || prev.company_effectif,
+        company_effectif_tranche: result.effectif || prev.company_effectif_tranche,
+        // Dirigeant
+        company_dirigeant_nom: result.dirigeant?.nom || prev.company_dirigeant_nom,
+        company_dirigeant_prenom: result.dirigeant?.prenom || prev.company_dirigeant_prenom,
+        company_dirigeant_fonction: result.dirigeant?.fonction || prev.company_dirigeant_fonction,
+        // Statut
+        company_est_actif: result.estActif,
       }));
+
+      // Compter les champs remplis
+      const fieldsPopulated = [
+        result.raisonSociale,
+        result.siren,
+        result.adresse?.complete || result.adresse?.voie,
+        result.adresse?.codePostal,
+        result.adresse?.ville,
+        result.codeApe,
+        result.libelleApe,
+        result.formeJuridique,
+        result.rcs,
+        result.tvaIntracommunautaire,
+        result.capital,
+        result.dateCreation,
+        result.effectif,
+        result.dirigeant?.nom,
+      ].filter(Boolean).length;
 
       toast({
         title: 'Informations récupérées',
-        description: `Données de ${result.raisonSociale} importées avec succès.`,
+        description: `${fieldsPopulated} champs auto-remplis depuis les données de ${result.raisonSociale}.`,
       });
     } catch (error: any) {
       console.error('[SiretLookup] Error:', error);
@@ -951,8 +1018,32 @@ export default function ProCompanyProfile() {
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Saisissez votre SIRET et cliquez sur Rechercher pour auto-compléter les informations
+                      Saisissez votre SIRET et cliquez sur Rechercher pour auto-compléter les informations via l'API Sirene
                     </p>
+                  </div>
+
+                  {/* SIREN */}
+                  <div>
+                    <Label htmlFor="siren">SIREN</Label>
+                    <Input
+                      id="siren"
+                      value={formData.company_siren}
+                      onChange={(e) => setFormData({ ...formData, company_siren: e.target.value })}
+                      placeholder="123 456 789"
+                      disabled
+                      className="bg-muted"
+                    />
+                  </div>
+
+                  {/* Forme juridique */}
+                  <div>
+                    <Label htmlFor="forme_juridique">Forme juridique</Label>
+                    <Input
+                      id="forme_juridique"
+                      value={formData.company_forme_juridique}
+                      onChange={(e) => setFormData({ ...formData, company_forme_juridique: e.target.value })}
+                      placeholder="SAS, SARL, EURL..."
+                    />
                   </div>
 
                   <div className="md:col-span-2">
@@ -964,8 +1055,10 @@ export default function ProCompanyProfile() {
                       placeholder="Nom de l'entreprise"
                     />
                   </div>
+
+                  {/* Code APE et libellé */}
                   <div>
-                    <Label htmlFor="code_ape">Code APE</Label>
+                    <Label htmlFor="code_ape">Code APE / NAF</Label>
                     <Input
                       id="code_ape"
                       value={formData.company_code_ape}
@@ -973,6 +1066,17 @@ export default function ProCompanyProfile() {
                       placeholder="4321A"
                     />
                   </div>
+                  <div>
+                    <Label htmlFor="libelle_ape">Activité principale</Label>
+                    <Input
+                      id="libelle_ape"
+                      value={formData.company_libelle_ape}
+                      onChange={(e) => setFormData({ ...formData, company_libelle_ape: e.target.value })}
+                      placeholder="Travaux d'installation électrique"
+                    />
+                  </div>
+
+                  {/* RCS et TVA */}
                   <div>
                     <Label htmlFor="rcs">RCS</Label>
                     <Input
@@ -983,23 +1087,27 @@ export default function ProCompanyProfile() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="capital">Capital social</Label>
+                    <Label htmlFor="tva_intra">N° TVA Intracommunautaire</Label>
+                    <Input
+                      id="tva_intra"
+                      value={formData.company_tva_intra}
+                      onChange={(e) => setFormData({ ...formData, company_tva_intra: e.target.value })}
+                      placeholder="FR12345678901"
+                    />
+                  </div>
+
+                  {/* Capital */}
+                  <div>
+                    <Label htmlFor="capital">Capital social (€)</Label>
                     <Input
                       id="capital"
                       value={formData.company_capital}
                       onChange={(e) => setFormData({ ...formData, company_capital: e.target.value })}
-                      placeholder="10 000 €"
+                      placeholder="10000"
                     />
                   </div>
-                  <div className="md:col-span-2">
-                    <Label htmlFor="address">Adresse du siège</Label>
-                    <Input
-                      id="address"
-                      value={formData.company_address}
-                      onChange={(e) => setFormData({ ...formData, company_address: e.target.value })}
-                      placeholder="123 rue de l'Exemple, 75001 Paris"
-                    />
-                  </div>
+
+                  {/* Date création */}
                   <div>
                     <Label htmlFor="creation_date">Date de création</Label>
                     <Input
@@ -1009,8 +1117,41 @@ export default function ProCompanyProfile() {
                       onChange={(e) => setFormData({ ...formData, company_creation_date: e.target.value })}
                     />
                   </div>
+
+                  {/* Adresse complète */}
+                  <div className="md:col-span-2">
+                    <Label htmlFor="address">Adresse du siège</Label>
+                    <Input
+                      id="address"
+                      value={formData.company_address}
+                      onChange={(e) => setFormData({ ...formData, company_address: e.target.value })}
+                      placeholder="123 rue de l'Exemple"
+                    />
+                  </div>
+
+                  {/* Code postal et ville */}
                   <div>
-                    <Label htmlFor="effectif">Effectif</Label>
+                    <Label htmlFor="code_postal">Code postal</Label>
+                    <Input
+                      id="code_postal"
+                      value={formData.company_code_postal}
+                      onChange={(e) => setFormData({ ...formData, company_code_postal: e.target.value })}
+                      placeholder="75001"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="ville">Ville</Label>
+                    <Input
+                      id="ville"
+                      value={formData.company_ville}
+                      onChange={(e) => setFormData({ ...formData, company_ville: e.target.value })}
+                      placeholder="Paris"
+                    />
+                  </div>
+
+                  {/* Effectif */}
+                  <div>
+                    <Label htmlFor="effectif">Effectif (nombre)</Label>
                     <Input
                       id="effectif"
                       type="number"
@@ -1020,6 +1161,19 @@ export default function ProCompanyProfile() {
                     />
                   </div>
                   <div>
+                    <Label htmlFor="effectif_tranche">Tranche d'effectif</Label>
+                    <Input
+                      id="effectif_tranche"
+                      value={formData.company_effectif_tranche}
+                      onChange={(e) => setFormData({ ...formData, company_effectif_tranche: e.target.value })}
+                      placeholder="10 à 19 salariés"
+                      disabled
+                      className="bg-muted"
+                    />
+                  </div>
+
+                  {/* CA */}
+                  <div>
                     <Label htmlFor="ca_annuel">CA annuel (€)</Label>
                     <Input
                       id="ca_annuel"
@@ -1028,6 +1182,81 @@ export default function ProCompanyProfile() {
                       onChange={(e) => setFormData({ ...formData, company_ca_annuel: parseFloat(e.target.value) || 0 })}
                       placeholder="500000"
                     />
+                  </div>
+                </div>
+
+                {/* Section Dirigeant */}
+                <div className="border-t pt-4 mt-4">
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <Briefcase className="h-4 w-4" />
+                    Dirigeant principal
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="dirigeant_prenom">Prénom</Label>
+                      <Input
+                        id="dirigeant_prenom"
+                        value={formData.company_dirigeant_prenom}
+                        onChange={(e) => setFormData({ ...formData, company_dirigeant_prenom: e.target.value })}
+                        placeholder="Jean"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="dirigeant_nom">Nom</Label>
+                      <Input
+                        id="dirigeant_nom"
+                        value={formData.company_dirigeant_nom}
+                        onChange={(e) => setFormData({ ...formData, company_dirigeant_nom: e.target.value })}
+                        placeholder="DUPONT"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="dirigeant_fonction">Fonction</Label>
+                      <Input
+                        id="dirigeant_fonction"
+                        value={formData.company_dirigeant_fonction}
+                        onChange={(e) => setFormData({ ...formData, company_dirigeant_fonction: e.target.value })}
+                        placeholder="Gérant, Président..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section Contact */}
+                <div className="border-t pt-4 mt-4">
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <Phone className="h-4 w-4" />
+                    Coordonnées de contact
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="telephone">Téléphone</Label>
+                      <Input
+                        id="telephone"
+                        value={formData.company_telephone}
+                        onChange={(e) => setFormData({ ...formData, company_telephone: e.target.value })}
+                        placeholder="01 23 45 67 89"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={formData.company_email}
+                        onChange={(e) => setFormData({ ...formData, company_email: e.target.value })}
+                        placeholder="contact@entreprise.fr"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="site_web">Site web</Label>
+                      <Input
+                        id="site_web"
+                        value={formData.company_site_web}
+                        onChange={(e) => setFormData({ ...formData, company_site_web: e.target.value })}
+                        placeholder="www.entreprise.fr"
+                      />
+                    </div>
                   </div>
                 </div>
               </CardContent>
