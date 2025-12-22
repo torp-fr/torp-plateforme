@@ -25,6 +25,8 @@ import {
   FileCheck,
   Home,
   FolderOpen,
+  BookOpen,
+  Wrench,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -89,6 +91,16 @@ const CHANTIER_NAV: NavSection[] = [
       { href: 'phase4:/reserves', icon: AlertTriangle, label: 'Réserves', labelB2B: 'Levée réserves', labelB2G: 'Réserves & Levées' },
       { href: 'phase4:/garanties', icon: Shield, label: 'Garanties', labelB2B: 'Suivi garanties', labelB2G: 'Garanties légales' },
       { href: 'phase4:/doe', icon: FolderOpen, label: 'DOE', labelB2B: 'DOE/DIUO', labelB2G: 'Dossier ouvrage' },
+    ],
+  },
+  {
+    id: 'maintenance',
+    label: 'Phase 5 - Maintenance',
+    labelB2B: 'Exploitation & Maintenance',
+    labelB2G: 'Gestion patrimoniale',
+    items: [
+      { href: 'phase5:', icon: BookOpen, label: 'Carnet numérique', labelB2B: 'Carnet du logement', labelB2G: 'Carnet ouvrage' },
+      { href: 'phase5:/entretien', icon: Wrench, label: 'Entretien', labelB2B: 'Planning entretien', labelB2G: 'Maintenance' },
     ],
   },
 ];
