@@ -7,7 +7,6 @@ import { useMemo, useCallback, useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { ProfileConfigService } from '@/services/profile/profile-config.service';
 import { PermissionService, PermissionCheck } from '@/services/auth/permission.service';
-import { InteroperabilityService } from '@/services/interop/interoperability.service';
 import {
   UserType,
   ProfileConfig,
@@ -77,26 +76,6 @@ export interface UsePermissionsReturn {
   getAvailableActions: (resource: PermissionResource, projectId?: string) => Promise<PermissionAction[]>;
 }
 
-export interface UseInteropReturn {
-  // Acteurs
-  getProjectActors: (projectId: string) => Promise<ProjectActor[]>;
-  inviteActor: (projectId: string, email: string, role: string) => Promise<{ success: boolean; error?: string }>;
-
-  // Notifications
-  notifications: ActorNotification[];
-  unreadCount: number;
-  loadNotifications: () => Promise<void>;
-  markAsRead: (notificationIds: string[]) => Promise<void>;
-
-  // Documents
-  shareDocument: (projectId: string, document: {
-    documentType: string;
-    name: string;
-    fileUrl: string;
-    fileSize: number;
-    mimeType: string;
-  }) => Promise<{ success: boolean; error?: string }>;
-}
 
 // =============================================================================
 // HOOK: useProfile
@@ -266,100 +245,6 @@ export function usePermissions(): UsePermissionsReturn {
   };
 }
 
-// =============================================================================
-// HOOK: useInterop
-// =============================================================================
-
-export function useInterop(): UseInteropReturn {
-  const { user } = useApp();
-  const [notifications, setNotifications] = useState<ActorNotification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  // Charger les notifications au montage
-  const loadNotifications = useCallback(async () => {
-    if (!user?.id) return;
-    try {
-      const notifs = await InteroperabilityService.getUserNotifications(user.id, { limit: 50 });
-      setNotifications(notifs);
-      setUnreadCount(notifs.filter((n) => !n.read).length);
-    } catch (error) {
-      console.error('Erreur chargement notifications:', error);
-    }
-  }, [user?.id]);
-
-  useEffect(() => {
-    loadNotifications();
-  }, [loadNotifications]);
-
-  const getProjectActors = useCallback(
-    async (projectId: string) => {
-      return InteroperabilityService.getProjectActors(projectId);
-    },
-    []
-  );
-
-  const inviteActor = useCallback(
-    async (projectId: string, email: string, role: string) => {
-      if (!user?.id || !user?.name) {
-        return { success: false, error: 'Non connecté' };
-      }
-      return InteroperabilityService.inviteActor(
-        projectId,
-        email,
-        role as any,
-        user.id,
-        user.name
-      );
-    },
-    [user?.id, user?.name]
-  );
-
-  const markAsRead = useCallback(
-    async (notificationIds: string[]) => {
-      if (!user?.id) return;
-      await InteroperabilityService.markNotificationsRead(notificationIds, user.id);
-      setNotifications((prev) =>
-        prev.map((n) =>
-          notificationIds.includes(n.id) ? { ...n, read: true } : n
-        )
-      );
-      setUnreadCount((prev) => Math.max(0, prev - notificationIds.length));
-    },
-    [user?.id]
-  );
-
-  const shareDocument = useCallback(
-    async (projectId: string, document: {
-      documentType: string;
-      name: string;
-      fileUrl: string;
-      fileSize: number;
-      mimeType: string;
-    }) => {
-      if (!user?.id || !user?.name) {
-        return { success: false, error: 'Non connecté' };
-      }
-      const result = await InteroperabilityService.shareDocument(
-        projectId,
-        document as any,
-        user.id,
-        user.name
-      );
-      return { success: !!result.document, error: result.error };
-    },
-    [user?.id, user?.name]
-  );
-
-  return {
-    getProjectActors,
-    inviteActor,
-    notifications,
-    unreadCount,
-    loadNotifications,
-    markAsRead,
-    shareDocument,
-  };
-}
 
 // =============================================================================
 // COMBINED HOOK
@@ -371,12 +256,10 @@ export function useInterop(): UseInteropReturn {
 export function useMultiProfile() {
   const profile = useProfile();
   const permissions = usePermissions();
-  const interop = useInterop();
 
   return {
     ...profile,
     permissions,
-    interop,
   };
 }
 

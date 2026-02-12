@@ -39,7 +39,6 @@ import {
   X,
   Info,
 } from 'lucide-react';
-import { warrantyAgent } from '@/ai/agents/phase4/WarrantyAgent';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -149,19 +148,8 @@ export function WarrantyClaimForm({
 
     setIsChecking(true);
     try {
-      const result = await warrantyAgent.checkWarrantyEligibility(
-        {
-          description: formData.description,
-          typeDesordre: formData.typeDesordre || formData.nature,
-          dateDecouverte: formData.dateDecouverte.toISOString().split('T')[0],
-          localisation: formData.localisation,
-          gravite: formData.gravite || undefined,
-        },
-        chantierId
-      );
-
-      setEligibility(result);
-      setStep('eligibility');
+      // Placeholder for warranty eligibility check (removed)
+      setStep('confirm');
     } catch (error) {
       console.error('Eligibility check error:', error);
       // Continuer quand même
