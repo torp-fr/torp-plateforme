@@ -61,17 +61,21 @@ WHERE name = 'quote-uploads';
 --
 
 -- ============================================================
--- Verification query (after adding policies via Dashboard)
+-- Verification (after adding policies via Dashboard)
 -- ============================================================
 --
--- Run this to verify policies were created:
+-- Check via Dashboard:
+-- 1. Supabase Dashboard → Storage → quote-uploads → Policies tab
+-- 2. Should see 4 policies:
+--    - quote_uploads_allow_read_dev (SELECT)
+--    - quote_uploads_allow_insert_dev (INSERT)
+--    - quote_uploads_allow_update_dev (UPDATE)
+--    - quote_uploads_allow_delete_dev (DELETE)
 --
--- SELECT policyname, definition
--- FROM pg_policies
--- WHERE schemaname = 'storage'
---   AND tablename = 'objects'
---   AND definition LIKE '%quote-uploads%';
---
--- Expected: 4 rows with your policies
+-- Then test the upload functionality via the app:
+-- 1. npm run dev
+-- 2. Create a CCF at /quote
+-- 3. Upload a PDF at /quote-upload
+-- 4. Check Storage → Objects to see the uploaded file
 --
 

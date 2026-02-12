@@ -133,27 +133,49 @@ Optionnel - Pour automatiser les policies (SQL Editor):
 
 ---
 
-## ✅ Vérification
+## ✅ Vérification Complète
 
-### Vérifier les tables
+### 1️⃣ Vérifier les tables
 
-```bash
-curl -X GET "https://<project-id>.supabase.co/rest/v1/ccf?limit=0" \
-  -H "apikey: <anon-key>"
+Dans **Supabase Dashboard → SQL Editor**, exécuter:
+
+```sql
+SELECT table_name FROM information_schema.tables
+WHERE table_schema = 'public'
+ORDER BY table_name;
 ```
 
-Résultat: `200 OK` ou `404` (normal si vide)
-
-### Vérifier le storage
-
-```bash
-curl -X GET "https://<project-id>.supabase.co/storage/v1/bucket" \
-  -H "Authorization: Bearer <anon-key>"
+**Résultat attendu:**
+```
+audit_log
+ccf
+client_enriched_data
+quote_analysis
+quote_uploads
+rag_context_cache
 ```
 
-Vous devez voir `quote-uploads` dans la liste.
+### 2️⃣ Vérifier la RPC function
 
-### Test complet (depuis l'app)
+```sql
+SELECT routine_name FROM information_schema.routines
+WHERE routine_name = 'match_enriched_data';
+```
+
+**Résultat attendu:** `match_enriched_data`
+
+### 3️⃣ Vérifier le storage bucket
+
+1. Aller dans **Supabase Dashboard → Storage → Buckets**
+2. Vérifier que `quote-uploads` existe et est **PUBLIC** (badge vert)
+3. Cliquer sur `quote-uploads` → onglet **Policies**
+4. Vérifier que **4 policies** sont listées:
+   - `quote_uploads_allow_read_dev` (SELECT)
+   - `quote_uploads_allow_insert_dev` (INSERT)
+   - `quote_uploads_allow_update_dev` (UPDATE)
+   - `quote_uploads_allow_delete_dev` (DELETE)
+
+### 4️⃣ Tester le flux complet (depuis l'app)
 
 1. **Démarrer l'app:**
    ```bash
@@ -161,21 +183,24 @@ Vous devez voir `quote-uploads` dans la liste.
    ```
 
 2. **Tester le flux complet:**
-   - Créer un CCF → `/quote`
-   - Vérifier qu'il apparaît dans Supabase
-   - Uploader un PDF → `/quote-upload`
-   - Vérifier que le PDF est dans Storage
-   - Voir l'analyse → `/quote-analysis`
+   - Aller à `/quote` et créer un CCF avec tous les champs
+   - Vérifier qu'on arrive à `/quote-success` ✅
+   - Cliquer **Uploader un devis**
+   - Sélectionner un fichier PDF test
+   - Cliquer **Uploader et analyser**
+   - Vérifier qu'on arrive à `/quote-analysis` avec résultats ✅
 
-3. **Vérifier la base de données:**
-   - **Supabase Dashboard → SQL Editor**
-   - Exécuter:
+3. **Vérifier les données dans Supabase:**
+   - **Dashboard → SQL Editor**
    ```sql
-   SELECT id, client_name, project_name, status
+   SELECT id, client_name, project_name, status, created_at
    FROM ccf
    ORDER BY created_at DESC
    LIMIT 5;
    ```
+
+   - **Dashboard → Storage → quote-uploads → Objects**
+     Vérifier que le PDF uploadé aparaît dans la liste
 
 ---
 
