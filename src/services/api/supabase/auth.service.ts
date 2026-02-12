@@ -101,17 +101,27 @@ export class SupabaseAuthService {
     }
 
     // Fetch user profile from users table (all columns for profile pre-fill)
+    // If no profile exists yet, create a basic user object from auth data
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('*')
       .eq('id', authData.user.id)
       .single();
 
-    if (userError) {
-      throw new Error('Failed to fetch user profile');
-    }
+    let mappedUser: User;
 
-    const mappedUser = mapDbUserToAppUser(userData);
+    if (userError) {
+      // User profile doesn't exist yet, create basic user from auth data
+      console.warn('User profile not found, creating from auth data:', authData.user.email);
+      mappedUser = {
+        id: authData.user.id,
+        email: authData.user.email || '',
+        name: authData.user.user_metadata?.name || undefined,
+        type: (authData.user.user_metadata?.user_type as UserType) || 'B2C',
+      };
+    } else {
+      mappedUser = mapDbUserToAppUser(userData);
+    }
 
     console.log('✓ Login réussi:', mappedUser.email, '- Type:', mappedUser.type);
 
