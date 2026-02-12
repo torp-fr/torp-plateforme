@@ -1,24 +1,48 @@
 /**
- * Quote Page - Guided CCF (Single Page)
- * Utilisateur crée son cahier des charges fonctionnel en une seule page
+ * Quote Page - Guided CCF avec Enrichissement Automatique
+ * Utilisateur crée son cahier des charges fonctionnel
+ * Enrichissement auto des données client via APIs
  */
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GuidedCCFSinglePage, type CCFData } from '@/components/guided-ccf/GuidedCCFSinglePage';
+import { GuidedCCFEnriched } from '@/components/guided-ccf/GuidedCCFEnriched';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft } from 'lucide-react';
+import type { CCFData } from '@/components/guided-ccf/GuidedCCF';
+import type { EnrichedClientData } from '@/types/enrichment';
+import { createCCF, storeEnrichedData, logAction } from '@/services/supabaseService';
 
 export function QuotePage() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleCCFSubmit = async (data: CCFData) => {
+  const handleCCFSubmit = async (data: CCFData & { enrichedData?: EnrichedClientData }) => {
     setIsLoading(true);
     try {
-      // Stocke en localStorage pour demo
+      // Stocke d'abord en localStorage pour fallback
       localStorage.setItem('currentCCF', JSON.stringify(data));
-      console.log('✅ CCF Created:', data);
+
+      // Créer CCF dans Supabase
+      const createdCCF = await createCCF(data);
+
+      if (createdCCF) {
+        // Stocker enriched data si disponible
+        if (data.enrichedData) {
+          await storeEnrichedData(createdCCF.id, data.enrichedData);
+          console.log('✅ CCF + Enriched Data Created in Supabase:', createdCCF.id);
+        }
+
+        // Log l'action
+        await logAction(createdCCF.id, 'ccf_created', {
+          has_enrichment: !!data.enrichedData,
+        });
+
+        // Stocker le CCF ID pour utilisation dans les pages suivantes
+        localStorage.setItem('currentCCFId', createdCCF.id);
+      } else {
+        console.warn('⚠️ Failed to create CCF in Supabase, using localStorage fallback');
+      }
 
       // Redirection vers la page de succès
       navigate('/quote-success');
@@ -43,7 +67,9 @@ export function QuotePage() {
               <ChevronLeft className="h-5 w-5 mr-2" />
               Retour
             </Button>
-            <h1 className="font-display text-2xl font-bold text-foreground">Créer votre CCF</h1>
+            <h1 className="font-display text-2xl font-bold text-foreground">
+              Créer votre Cahier des Charges
+            </h1>
           </div>
         </div>
       </header>
@@ -51,7 +77,7 @@ export function QuotePage() {
       {/* Content */}
       <main className="py-12 px-6">
         <div className="container mx-auto max-w-4xl">
-          <GuidedCCFSinglePage onSubmit={handleCCFSubmit} isLoading={isLoading} />
+          <GuidedCCFEnriched onSubmit={handleCCFSubmit} isLoading={isLoading} />
         </div>
       </main>
     </div>

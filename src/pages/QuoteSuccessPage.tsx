@@ -7,20 +7,28 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, Download, Home, FileText } from 'lucide-react';
+import { CheckCircle, Download, Home, FileText, AlertTriangle, Zap } from 'lucide-react';
 import type { CCFData } from '@/components/guided-ccf';
+import type { EnrichedClientData } from '@/types/enrichment';
 
 export function QuoteSuccessPage() {
   const navigate = useNavigate();
   const [ccfData, setCCFData] = useState<CCFData | null>(null);
+  const [enrichedData, setEnrichedData] = useState<EnrichedClientData | null>(null);
 
   useEffect(() => {
-    const data = localStorage.getItem('currentCCF');
-    if (data) {
-      setCCFData(JSON.parse(data));
+    const ccfJson = localStorage.getItem('currentCCF');
+    const enrichedJson = localStorage.getItem('enrichedClientData');
+
+    if (ccfJson) {
+      setCCFData(JSON.parse(ccfJson));
     } else {
       // Pas de CCF, redirect
       navigate('/quote');
+    }
+
+    if (enrichedJson) {
+      setEnrichedData(JSON.parse(enrichedJson));
     }
   }, [navigate]);
 
@@ -141,6 +149,111 @@ export function QuoteSuccessPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Enriched Data Card */}
+          {enrichedData && (
+            <Card className="bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-200 shadow-md mb-8">
+              <CardHeader>
+                <CardTitle className="text-slate-900 flex items-center gap-2">
+                  <Zap className="h-5 w-5 text-blue-600" />
+                  Données enrichies du projet
+                </CardTitle>
+                <CardDescription>Informations automatiquement collectées et analysées</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* DPE Info */}
+                {enrichedData.dpe?.available && (
+                  <div className="border-b pb-6">
+                    <p className="text-sm text-slate-600 font-medium mb-3">Performance Énergétique (DPE)</p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-white p-3 rounded-lg border border-blue-100">
+                        <p className="text-xs text-slate-600 mb-1">Classe DPE</p>
+                        <p className="text-2xl font-bold text-blue-600">{enrichedData.dpe.class || 'N/A'}</p>
+                      </div>
+                      <div className="bg-white p-3 rounded-lg border border-blue-100">
+                        <p className="text-xs text-slate-600 mb-1">Consommation</p>
+                        <p className="text-lg font-semibold text-slate-900">
+                          {enrichedData.dpe.consumption} <span className="text-xs">kWh/m²/an</span>
+                        </p>
+                      </div>
+                      <div className="bg-white p-3 rounded-lg border border-blue-100">
+                        <p className="text-xs text-slate-600 mb-1">Émissions</p>
+                        <p className="text-lg font-semibold text-slate-900">
+                          {enrichedData.dpe.emissions} <span className="text-xs">kg CO₂/m²</span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Cadastre Info */}
+                {enrichedData.cadastre && (
+                  <div className="border-b pb-6">
+                    <p className="text-sm text-slate-600 font-medium mb-3">Information cadastrales</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-slate-600">Année de construction</p>
+                        <p className="font-semibold text-slate-900">{enrichedData.cadastre.yearConstruction || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-600">Type de bâtiment</p>
+                        <p className="font-semibold text-slate-900 capitalize">{enrichedData.cadastre.buildingType || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-600">Surface totale</p>
+                        <p className="font-semibold text-slate-900">{enrichedData.cadastre.totalSurface} m²</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-600">Surface habitable</p>
+                        <p className="font-semibold text-slate-900">{enrichedData.cadastre.habitableSurface} m²</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Regulatory Alerts */}
+                {enrichedData.regulatory && (
+                  <div>
+                    <p className="text-sm text-slate-600 font-medium mb-3">Contexte réglementaire</p>
+                    <div className="space-y-2">
+                      {enrichedData.regulatory.abfZone && (
+                        <div className="flex gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                          <AlertTriangle className="h-4 w-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+                          <span className="text-sm text-yellow-800">
+                            <strong>Zone ABF:</strong> Restriction architecturale - Approbation requise
+                          </span>
+                        </div>
+                      )}
+                      {enrichedData.regulatory.floodableZone && (
+                        <div className="flex gap-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                          <AlertTriangle className="h-4 w-4 text-orange-600 flex-shrink-0 mt-0.5" />
+                          <span className="text-sm text-orange-800">
+                            <strong>Zone inondable:</strong> PPRI applicable - Mesures protection requises
+                          </span>
+                        </div>
+                      )}
+                      {enrichedData.regulatory.seismicZone && enrichedData.regulatory.seismicZone !== 'zone1' && (
+                        <div className="flex gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
+                          <span className="text-sm text-red-800">
+                            <strong>Zone sismique:</strong> {enrichedData.regulatory.seismicZone} - Normes de renforcement applicables
+                          </span>
+                        </div>
+                      )}
+                      {enrichedData.regulatory.coOwned && (
+                        <div className="flex gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <AlertTriangle className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                          <span className="text-sm text-blue-800">
+                            <strong>Co-propriété:</strong> Approbation assemblée générale requise
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Next Steps */}
           <Card className="bg-blue-50 border-blue-200 shadow-md mb-8">

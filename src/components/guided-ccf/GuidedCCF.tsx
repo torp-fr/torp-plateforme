@@ -17,9 +17,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, ChevronRight, ChevronLeft, AlertCircle, FileText } from 'lucide-react';
+import { CheckCircle2, ChevronRight, ChevronLeft, AlertCircle, FileText, Loader } from 'lucide-react';
+import type { EnrichedClientData } from '@/types/enrichment';
 
 export interface CCFData {
+  // Informations projet
   projectName: string;
   projectType: 'renovation' | 'neuf' | 'extension' | 'maintenance';
   scope: string;
@@ -28,8 +30,26 @@ export interface CCFData {
   objectives: string[];
   constraints: string[];
   successCriteria: string[];
+
+  // Informations client (NEW)
+  clientName: string;
+  clientPhone?: string;
+  clientEmail?: string;
+  projectAddress: {
+    number?: string;
+    street: string;
+    postalCode: string;
+    city: string;
+  };
+
+  // Données entreprise (will be auto-filled from profile later)
   company?: string;
+  siret?: string;
   contacts?: string;
+
+  // Données enrichies (AUTO-FILLED from APIs)
+  enrichedData?: EnrichedClientData;
+  enrichmentStatus?: 'pending' | 'in_progress' | 'completed' | 'failed';
 }
 
 interface GuidedCCFProps {
