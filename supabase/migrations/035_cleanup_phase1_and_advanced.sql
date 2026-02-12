@@ -11,44 +11,44 @@
 -- DROP MATERIALIZED VIEWS FIRST (before tables they depend on)
 -- ============================================================================
 
-DROP MATERIALIZED VIEW IF EXISTS public.analytics_overview CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS public.feedback_summary CASCADE;
+DROP MATERIALIZED VIEW IF EXISTS public.analytics_overview;
+DROP MATERIALIZED VIEW IF EXISTS public.feedback_summary;
 
 -- ============================================================================
 -- DROP REGULAR VIEWS (if any exist)
 -- ============================================================================
 
-DROP VIEW IF EXISTS public.analytics_overview_view CASCADE;
-DROP VIEW IF EXISTS public.feedback_summary_view CASCADE;
+DROP VIEW IF EXISTS public.analytics_overview_view;
+DROP VIEW IF EXISTS public.feedback_summary_view;
 
 -- ============================================================================
 -- DROP PHASE 1 TABLES (from your current schema)
 -- ============================================================================
 
 -- Consultation tables
-DROP TABLE IF EXISTS public.phase1_prises_references CASCADE;
-DROP TABLE IF EXISTS public.phase1_formalites CASCADE;
-DROP TABLE IF EXISTS public.phase1_negociations CASCADE;
-DROP TABLE IF EXISTS public.phase1_offres CASCADE;
-DROP TABLE IF EXISTS public.phase1_contrats CASCADE;
-DROP TABLE IF EXISTS public.phase1_consultations CASCADE;
-DROP TABLE IF EXISTS public.phase1_dce CASCADE;
-DROP TABLE IF EXISTS public.phase1_entreprises CASCADE;
+DROP TABLE IF EXISTS public.phase1_prises_references ;
+DROP TABLE IF EXISTS public.phase1_formalites ;
+DROP TABLE IF EXISTS public.phase1_negociations ;
+DROP TABLE IF EXISTS public.phase1_offres ;
+DROP TABLE IF EXISTS public.phase1_contrats ;
+DROP TABLE IF EXISTS public.phase1_consultations ;
+DROP TABLE IF EXISTS public.phase1_dce ;
+DROP TABLE IF EXISTS public.phase1_entreprises ;
 
 -- ============================================================================
 -- DROP KNOWLEDGE BASE / RAG TABLES
 -- ============================================================================
 
-DROP TABLE IF EXISTS public.knowledge_chunks CASCADE;
-DROP TABLE IF EXISTS public.knowledge_documents CASCADE;
-DROP TABLE IF EXISTS public.rag_health_dashboard CASCADE;
+DROP TABLE IF EXISTS public.knowledge_chunks ;
+DROP TABLE IF EXISTS public.knowledge_documents ;
+DROP TABLE IF EXISTS public.rag_health_dashboard ;
 
 -- ============================================================================
 -- DROP ADVANCED COMPANY TABLES
 -- ============================================================================
 
-DROP TABLE IF EXISTS public.company_search_history CASCADE;
-DROP TABLE IF EXISTS public.company_documents CASCADE;
+DROP TABLE IF EXISTS public.company_search_history ;
+DROP TABLE IF EXISTS public.company_documents ;
 
 -- ============================================================================
 -- VERIFY CLEANUP
