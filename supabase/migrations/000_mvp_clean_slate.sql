@@ -246,10 +246,6 @@ CREATE POLICY "Companies can view own tickets" ON public.torp_tickets
 -- =====================================================
 -- STORAGE BUCKETS
 -- =====================================================
-CREATE BUCKET devis_uploads;
-CREATE BUCKET documents;
-
--- Storage policies
 INSERT INTO storage.buckets (id, name, public) VALUES ('devis_uploads', 'devis_uploads', false);
 INSERT INTO storage.buckets (id, name, public) VALUES ('documents', 'documents', false);
 
