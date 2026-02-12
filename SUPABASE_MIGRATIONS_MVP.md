@@ -47,7 +47,12 @@ Apply these migrations **IN ORDER** in Supabase SQL Editor:
 ### Step 6: Storage Uploads
 ```
 033_quote_uploads_storage.sql    ← Documentation reference
-034_cleanup_advanced_features.sql ← Optional: cleans if upgrading
+```
+
+### Step 7: Cleanup (for existing databases)
+```
+034_cleanup_advanced_features.sql ← Cleans advanced features (optional)
+035_cleanup_phase1_and_advanced.sql ← Cleans Phase 1 tables (RUN IF Phase 1 tables exist)
 ```
 
 ---
@@ -152,14 +157,34 @@ Migrations reference policies but **CANNOT create them via SQL**.
 
 ---
 
-## 🧹 Cleanup Script
+## 🧹 Cleanup Scripts (for existing databases)
 
-If upgrading an existing database with old migrations:
+If your database has Phase 1 or advanced tables (from previous migrations), run these:
 
+### Step 1: Advanced Feature Cleanup
 ```sql
--- Run after 010_enrich_devis_table.sql
--- This will DELETE all phase 0-4, B2B, and advanced feature tables
-SELECT * FROM migration_034_cleanup_advanced_features;
+-- Copy entire content of: 034_cleanup_advanced_features.sql
+-- Run in SQL Editor
+-- Removes: Phase 0, B2B advanced tables, RAG, pgvector
+```
+
+### Step 2: Phase 1 Specific Cleanup (if Phase 1 tables still exist)
+```sql
+-- Copy entire content of: 035_cleanup_phase1_and_advanced.sql
+-- Run in SQL Editor
+-- Removes: phase1_consultations, phase1_contrats, phase1_dce, etc.
+-- Removes: knowledge_base tables, RAG tables
+```
+
+### Verification After Cleanup
+```sql
+-- Check that Phase 1 tables are gone:
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
+AND table_name LIKE 'phase1_%';
+
+-- Should return: (no results)
 ```
 
 ---
