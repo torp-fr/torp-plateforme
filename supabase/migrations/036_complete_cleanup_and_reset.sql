@@ -10,55 +10,65 @@
 
 -- ============================================================================
 -- STEP 1: TRUNCATE ALL PHASE 1 TABLES (clears data + constraints)
+-- Use DO block to handle non-existent tables gracefully
 -- ============================================================================
 
-TRUNCATE TABLE IF EXISTS public.phase1_contrats CASCADE;
-TRUNCATE TABLE IF EXISTS public.phase1_prises_references CASCADE;
-TRUNCATE TABLE IF EXISTS public.phase1_formalites CASCADE;
-TRUNCATE TABLE IF EXISTS public.phase1_negociations CASCADE;
-TRUNCATE TABLE IF EXISTS public.phase1_consultations CASCADE;
-TRUNCATE TABLE IF EXISTS public.phase1_offres CASCADE;
-TRUNCATE TABLE IF EXISTS public.phase1_dce CASCADE;
-TRUNCATE TABLE IF EXISTS public.phase1_entreprises CASCADE;
+DO $$
+BEGIN
+  -- Phase 1 tables
+  BEGIN TRUNCATE TABLE public.phase1_contrats CASCADE; EXCEPTION WHEN OTHERS THEN NULL; END;
+  BEGIN TRUNCATE TABLE public.phase1_prises_references CASCADE; EXCEPTION WHEN OTHERS THEN NULL; END;
+  BEGIN TRUNCATE TABLE public.phase1_formalites CASCADE; EXCEPTION WHEN OTHERS THEN NULL; END;
+  BEGIN TRUNCATE TABLE public.phase1_negociations CASCADE; EXCEPTION WHEN OTHERS THEN NULL; END;
+  BEGIN TRUNCATE TABLE public.phase1_consultations CASCADE; EXCEPTION WHEN OTHERS THEN NULL; END;
+  BEGIN TRUNCATE TABLE public.phase1_offres CASCADE; EXCEPTION WHEN OTHERS THEN NULL; END;
+  BEGIN TRUNCATE TABLE public.phase1_dce CASCADE; EXCEPTION WHEN OTHERS THEN NULL; END;
+  BEGIN TRUNCATE TABLE public.phase1_entreprises CASCADE; EXCEPTION WHEN OTHERS THEN NULL; END;
 
-TRUNCATE TABLE IF EXISTS public.knowledge_chunks CASCADE;
-TRUNCATE TABLE IF EXISTS public.knowledge_documents CASCADE;
-TRUNCATE TABLE IF EXISTS public.rag_health_dashboard CASCADE;
+  -- Knowledge base tables
+  BEGIN TRUNCATE TABLE public.knowledge_chunks CASCADE; EXCEPTION WHEN OTHERS THEN NULL; END;
+  BEGIN TRUNCATE TABLE public.knowledge_documents CASCADE; EXCEPTION WHEN OTHERS THEN NULL; END;
+  BEGIN TRUNCATE TABLE public.rag_health_dashboard CASCADE; EXCEPTION WHEN OTHERS THEN NULL; END;
 
-TRUNCATE TABLE IF EXISTS public.company_search_history CASCADE;
-TRUNCATE TABLE IF EXISTS public.company_documents CASCADE;
+  -- Advanced company tables
+  BEGIN TRUNCATE TABLE public.company_search_history CASCADE; EXCEPTION WHEN OTHERS THEN NULL; END;
+  BEGIN TRUNCATE TABLE public.company_documents CASCADE; EXCEPTION WHEN OTHERS THEN NULL; END;
+END $$;
 
 -- ============================================================================
 -- STEP 2: DROP ALL VIEWS AND MATERIALIZED VIEWS
 -- ============================================================================
 
-DROP VIEW IF EXISTS public.analytics_overview;
-DROP VIEW IF EXISTS public.feedback_summary;
-DROP VIEW IF EXISTS public.analytics_overview_view;
-DROP VIEW IF EXISTS public.feedback_summary_view;
+DROP VIEW IF EXISTS public.analytics_overview CASCADE;
+DROP VIEW IF EXISTS public.feedback_summary CASCADE;
+DROP VIEW IF EXISTS public.analytics_overview_view CASCADE;
+DROP VIEW IF EXISTS public.feedback_summary_view CASCADE;
 
 -- ============================================================================
 -- STEP 3: NOW DROP ALL TABLES (no FK issues after TRUNCATE)
+-- Use simple DROP TABLE without CASCADE (safer after TRUNCATE)
 -- ============================================================================
 
--- Phase 1 tables
-DROP TABLE IF EXISTS public.phase1_contrats;
-DROP TABLE IF EXISTS public.phase1_prises_references;
-DROP TABLE IF EXISTS public.phase1_formalites;
-DROP TABLE IF EXISTS public.phase1_negociations;
-DROP TABLE IF EXISTS public.phase1_consultations;
-DROP TABLE IF EXISTS public.phase1_offres;
-DROP TABLE IF EXISTS public.phase1_dce;
-DROP TABLE IF EXISTS public.phase1_entreprises;
+-- Phase 1 tables (safe to drop after TRUNCATE)
+BEGIN;
+  DROP TABLE IF EXISTS public.phase1_contrats;
+  DROP TABLE IF EXISTS public.phase1_prises_references;
+  DROP TABLE IF EXISTS public.phase1_formalites;
+  DROP TABLE IF EXISTS public.phase1_negociations;
+  DROP TABLE IF EXISTS public.phase1_consultations;
+  DROP TABLE IF EXISTS public.phase1_offres;
+  DROP TABLE IF EXISTS public.phase1_dce;
+  DROP TABLE IF EXISTS public.phase1_entreprises;
 
--- Knowledge base tables
-DROP TABLE IF EXISTS public.knowledge_chunks;
-DROP TABLE IF EXISTS public.knowledge_documents;
-DROP TABLE IF EXISTS public.rag_health_dashboard;
+  -- Knowledge base tables
+  DROP TABLE IF EXISTS public.knowledge_chunks;
+  DROP TABLE IF EXISTS public.knowledge_documents;
+  DROP TABLE IF EXISTS public.rag_health_dashboard;
 
--- Advanced company tables
-DROP TABLE IF EXISTS public.company_search_history;
-DROP TABLE IF EXISTS public.company_documents;
+  -- Advanced company tables
+  DROP TABLE IF EXISTS public.company_search_history;
+  DROP TABLE IF EXISTS public.company_documents;
+END;
 
 -- ============================================================================
 -- VERIFY CLEANUP
