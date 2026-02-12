@@ -290,12 +290,10 @@ $$ LANGUAGE plpgsql;
 -- GRANT PERMISSIONS
 -- ============================================
 
-GRANT SELECT ON get_ccf_analysis_history TO authenticated, anon;
-GRANT SELECT ON get_analysis_api_calls TO authenticated, anon;
-GRANT SELECT ON get_analysis_criteria_breakdown TO authenticated, anon;
-GRANT SELECT ON get_execution_summary TO authenticated, anon;
-
-GRANT EXECUTE ON FUNCTION get_execution_trace(TEXT) TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION get_ccf_analysis_history(UUID, INT) TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION get_analysis_api_calls(UUID) TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION get_analysis_criteria_breakdown(UUID) TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION get_execution_summary(TEXT) TO authenticated, anon;
 
 -- ============================================
 -- MIGRATION COMPLETE
