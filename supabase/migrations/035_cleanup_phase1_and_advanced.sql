@@ -18,33 +18,35 @@ DROP VIEW IF EXISTS public.analytics_overview_view;
 DROP VIEW IF EXISTS public.feedback_summary_view;
 
 -- ============================================================================
--- DROP PHASE 1 TABLES (from your current schema)
+-- DROP PHASE 1 TABLES (with CASCADE to handle foreign key dependencies)
 -- ============================================================================
 
--- Consultation tables
-DROP TABLE IF EXISTS public.phase1_prises_references ;
-DROP TABLE IF EXISTS public.phase1_formalites ;
-DROP TABLE IF EXISTS public.phase1_negociations ;
-DROP TABLE IF EXISTS public.phase1_offres ;
-DROP TABLE IF EXISTS public.phase1_contrats ;
-DROP TABLE IF EXISTS public.phase1_consultations ;
-DROP TABLE IF EXISTS public.phase1_dce ;
-DROP TABLE IF EXISTS public.phase1_entreprises ;
+-- Drop tables that depend on others first
+DROP TABLE IF EXISTS public.phase1_contrats CASCADE ;
+DROP TABLE IF EXISTS public.phase1_prises_references CASCADE ;
+DROP TABLE IF EXISTS public.phase1_formalites CASCADE ;
+DROP TABLE IF EXISTS public.phase1_negociations CASCADE ;
+DROP TABLE IF EXISTS public.phase1_consultations CASCADE ;
+
+-- Then drop independent tables
+DROP TABLE IF EXISTS public.phase1_offres CASCADE ;
+DROP TABLE IF EXISTS public.phase1_dce CASCADE ;
+DROP TABLE IF EXISTS public.phase1_entreprises CASCADE ;
 
 -- ============================================================================
 -- DROP KNOWLEDGE BASE / RAG TABLES
 -- ============================================================================
 
-DROP TABLE IF EXISTS public.knowledge_chunks ;
-DROP TABLE IF EXISTS public.knowledge_documents ;
-DROP TABLE IF EXISTS public.rag_health_dashboard ;
+DROP TABLE IF EXISTS public.knowledge_chunks CASCADE ;
+DROP TABLE IF EXISTS public.knowledge_documents CASCADE ;
+DROP TABLE IF EXISTS public.rag_health_dashboard CASCADE ;
 
 -- ============================================================================
 -- DROP ADVANCED COMPANY TABLES
 -- ============================================================================
 
-DROP TABLE IF EXISTS public.company_search_history ;
-DROP TABLE IF EXISTS public.company_documents ;
+DROP TABLE IF EXISTS public.company_search_history CASCADE ;
+DROP TABLE IF EXISTS public.company_documents CASCADE ;
 
 -- ============================================================================
 -- VERIFY CLEANUP
