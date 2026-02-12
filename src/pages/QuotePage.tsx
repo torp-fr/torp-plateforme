@@ -1,11 +1,11 @@
 /**
- * Quote Page - Guided CCF
- * Utilisateur crée son cahier des charges fonctionnel
+ * Quote Page - Guided CCF (Single Page)
+ * Utilisateur crée son cahier des charges fonctionnel en une seule page
  */
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GuidedCCF, type CCFData } from '@/components/guided-ccf';
+import { GuidedCCFSinglePage, type CCFData } from '@/components/guided-ccf/GuidedCCFSinglePage';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft } from 'lucide-react';
 
@@ -29,29 +29,29 @@ export function QuotePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-blue-50 to-cyan-50">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 w-full bg-white/80 backdrop-blur-md z-50 border-b border-blue-100/30 shadow-sm">
+      <header className="sticky top-0 w-full backdrop-blur-md bg-background/80 z-50 border-b border-border shadow-sm">
         <div className="container mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => navigate('/')}
-              className="text-slate-600 hover:text-blue-600"
+              className="text-muted-foreground hover:text-foreground"
             >
               <ChevronLeft className="h-5 w-5 mr-2" />
               Retour
             </Button>
-            <h1 className="text-2xl font-bold text-slate-900">Créer votre CCF</h1>
+            <h1 className="font-display text-2xl font-bold text-foreground">Créer votre CCF</h1>
           </div>
         </div>
       </header>
 
       {/* Content */}
       <main className="py-12 px-6">
-        <div className="container mx-auto">
-          <GuidedCCF onSubmit={handleCCFSubmit} isLoading={isLoading} />
+        <div className="container mx-auto max-w-4xl">
+          <GuidedCCFSinglePage onSubmit={handleCCFSubmit} isLoading={isLoading} />
         </div>
       </main>
     </div>
