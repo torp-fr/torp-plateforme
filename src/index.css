@@ -2,135 +2,110 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here.
 All colors MUST be HSL.
 */
 
 @layer base {
   :root {
-    /* TORP Rouge Design System */
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* TORP Orange Design System (inspired by Lovable template) */
+    --background: 30 10% 96%;
+    --foreground: 20 10% 12%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 30 8% 98%;
+    --card-foreground: 20 10% 12%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 30 8% 98%;
+    --popover-foreground: 20 10% 12%;
 
-    /* TORP Rouge Principal */
-    --primary: 0 72% 41%;  /* #B91C1C - Rouge principal TORP */
-    --primary-foreground: 0 0% 98%;
-    --primary-light: 0 72% 96%;  /* Version très claire pour fonds */
-    --primary-dark: 0 59% 25%;   /* #7F1D1D - Rouge foncé TORP */
+    /* TORP Primary: Orange/Bronze */
+    --primary: 16 65% 45%;  /* #C4703C - Orange TORP */
+    --primary-foreground: 30 10% 98%;
 
     /* Secondary: Gris neutre */
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 30 8% 90%;
+    --secondary-foreground: 20 10% 20%;
 
-    --muted: 0 0% 96%;  /* Gris très clair TORP */
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 30 6% 92%;
+    --muted-foreground: 20 5% 45%;
 
-    --accent: 0 72% 41%;  /* Utilise le rouge TORP comme accent */
-    --accent-foreground: 0 0% 98%;
+    --accent: 25 50% 50%;
+    --accent-foreground: 30 10% 98%;
 
-    /* Couleurs fonctionnelles TORP */
-    --success: 158 64% 52%;  /* #10B981 - Vert pour scores A-B */
-    --success-foreground: 0 0% 98%;
-    --success-light: 158 64% 96%;
+    /* Couleurs fonctionnelles */
+    --success: 142 71% 45%;  /* Vert */
+    --warning: 38 92% 50%;   /* Orange clair */
+    --destructive: 0 84.2% 60.2%;
 
-    --warning: 38 92% 50%;   /* #F59E0B - Orange pour scores C */
-    --warning-foreground: 0 0% 98%;
-    --warning-light: 38 92% 96%;
+    --border: 25 12% 86%;
+    --input: 25 12% 86%;
+    --ring: 16 65% 45%;
 
-    --destructive: 0 84.2% 60.2%;  /* Rouge pour erreurs */
-    --destructive-foreground: 0 0% 98%;
+    --radius: 0.625rem;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 0 72% 41%;  /* Ring en rouge TORP */
+    /* Score colors */
+    --score-excellent: 142 71% 45%;  /* Vert */
+    --score-good: 80 60% 45%;        /* Bleu-vert */
+    --score-average: 45 93% 47%;     /* Jaune */
+    --score-poor: 16 65% 45%;        /* Orange TORP */
+    --score-bad: 0 72% 51%;          /* Rouge */
 
-    --radius: 0.75rem;
+    /* Chart colors */
+    --chart-1: 16 65% 45%;
+    --chart-2: 25 50% 50%;
+    --chart-3: 35 45% 55%;
+    --chart-4: 200 30% 45%;
+    --chart-5: 160 30% 45%;
 
-    /* Grades avec couleurs TORP */
-    --grade-a: 158 64% 52%;  /* Vert */
-    --grade-b: 158 64% 42%;  /* Vert foncé */
-    --grade-c: 38 92% 50%;   /* Orange */
-    --grade-d: 0 84.2% 60.2%; /* Rouge clair */
-    --grade-e: 0 72% 41%;    /* Rouge TORP */
-
-    /* Gradients signature TORP */
-    --gradient-hero: linear-gradient(135deg, #B91C1C 0%, #7F1D1D 100%);
-    --gradient-card: linear-gradient(135deg, #F9FAFB 0%, #FFFFFF 100%);
-    --gradient-button: linear-gradient(135deg, #B91C1C 0%, #991B1B 100%);
-    --gradient-success: linear-gradient(135deg, hsl(158 64% 52%), hsl(158 64% 62%));
-
-    /* Ombres TORP avec teinte rouge */
-    --shadow-soft: 0 2px 8px -2px rgba(185, 28, 28, 0.1);
-    --shadow-medium: 0 4px 16px -4px rgba(185, 28, 28, 0.15);
-    --shadow-strong: 0 8px 32px -8px rgba(185, 28, 28, 0.2);
-
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 20 12% 10%;
+    --sidebar-foreground: 30 10% 85%;
+    --sidebar-primary: 16 65% 50%;
+    --sidebar-primary-foreground: 30 10% 98%;
+    --sidebar-accent: 20 10% 16%;
+    --sidebar-accent-foreground: 30 10% 90%;
+    --sidebar-border: 20 8% 18%;
+    --sidebar-ring: 16 65% 50%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 20 12% 8%;
+    --foreground: 30 10% 90%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 20 10% 12%;
+    --card-foreground: 30 10% 90%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 20 10% 12%;
+    --popover-foreground: 30 10% 90%;
 
-    /* TORP Rouge en mode sombre */
-    --primary: 0 72% 51%;  /* Rouge TORP plus clair en mode sombre */
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --primary-light: 0 72% 15%;
-    --primary-dark: 0 59% 25%;
+    --primary: 16 65% 50%;
+    --primary-foreground: 30 10% 98%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 20 8% 18%;
+    --secondary-foreground: 30 10% 85%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 20 8% 16%;
+    --muted-foreground: 30 5% 55%;
 
-    --accent: 0 72% 51%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 25 50% 55%;
+    --accent-foreground: 30 10% 98%;
 
     --destructive: 0 62.8% 50.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 30 10% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 0 72% 51%;
+    --border: 20 8% 20%;
+    --input: 20 8% 20%;
+    --ring: 16 65% 50%;
 
-    /* Gradients en mode sombre */
-    --gradient-hero: linear-gradient(135deg, #DC2626 0%, #991B1B 100%);
-    --gradient-card: linear-gradient(135deg, #1F2937 0%, #111827 100%);
-    --gradient-button: linear-gradient(135deg, #DC2626 0%, #B91C1C 100%);
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 20 14% 6%;
+    --sidebar-foreground: 30 10% 85%;
+    --sidebar-primary: 16 65% 50%;
+    --sidebar-primary-foreground: 30 10% 98%;
+    --sidebar-accent: 20 10% 12%;
+    --sidebar-accent-foreground: 30 10% 90%;
+    --sidebar-border: 20 8% 14%;
+    --sidebar-ring: 16 65% 50%;
   }
 }
 
@@ -140,6 +115,46 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', sans-serif;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: 'Space Grotesk', sans-serif;
+  }
+
+  .gradient-primary {
+    background: linear-gradient(135deg, hsl(16 65% 45%), hsl(25 50% 50%));
+  }
+
+  .gradient-dark {
+    background: linear-gradient(135deg, hsl(20 12% 8%), hsl(20 10% 14%));
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, hsl(16 65% 50%), hsl(25 50% 55%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .animate-fade-up {
+    animation: fadeUp 0.5s ease-out;
+  }
+
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }

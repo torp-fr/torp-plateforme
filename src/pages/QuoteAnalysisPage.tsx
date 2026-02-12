@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ScoreGauge } from '@/components/ScoreGauge';
 import { Home, Download, AlertCircle, CheckCircle2, TrendingUp } from 'lucide-react';
 
 interface AnalysisResult {
@@ -86,20 +87,19 @@ export function QuoteAnalysisPage() {
       <main className="py-12 px-6">
         <div className="container mx-auto max-w-3xl space-y-8">
           {/* Score Card */}
-          <Card className="bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-200 shadow-md">
+          <Card className="bg-gradient-to-br from-background to-card border-border shadow-md">
             <CardContent className="pt-8">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-600 font-medium mb-2">Score de conformité</p>
-                  <div className="flex items-baseline gap-3">
-                    <span className="text-6xl font-bold text-blue-600">{analysis.score}</span>
-                    <span className="text-slate-600">/100</span>
+              <div className="flex items-center justify-between gap-8">
+                <div className="flex-1">
+                  <p className="text-sm text-muted-foreground font-medium mb-4">Score de conformité</p>
+                  <div className="flex items-baseline gap-3 mb-4">
+                    <span className="text-slate-600 text-sm">/100</span>
                   </div>
-                  <Badge className={`mt-4 ${getStatusColor(analysis.status)} border-0`}>
+                  <Badge className={`${getStatusColor(analysis.status)} border-0`}>
                     {analysis.status.toUpperCase()}
                   </Badge>
                 </div>
-                <TrendingUp className="h-24 w-24 text-blue-200" />
+                <ScoreGauge score={analysis.score} maxScore={100} size="lg" grade={analysis.status.charAt(0).toUpperCase()} />
               </div>
             </CardContent>
           </Card>
