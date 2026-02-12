@@ -5,3 +5,6 @@
 
 export { ProjectContextService } from './ProjectContextService';
 export { default as projectContextService } from './ProjectContextService';
+
+export { ProjectEnrichmentService, projectEnrichmentService } from './ProjectEnrichmentService';
+export type { EnrichedProjectContext } from './ProjectEnrichmentService';
