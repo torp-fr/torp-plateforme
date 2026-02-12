@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { authService } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
-import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 export const Header = () => {
   const { user, userType, logout } = useApp();
@@ -142,7 +141,6 @@ export const Header = () => {
           <div className="hidden lg:flex items-center gap-3">
             {user ? (
               <>
-                <NotificationBell />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm">
