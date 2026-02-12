@@ -5,6 +5,7 @@
  */
 
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +25,7 @@ import {
 } from 'lucide-react';
 
 export function LandingPage() {
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const features = [
@@ -115,7 +117,10 @@ export function LandingPage() {
           </nav>
 
           <div className="hidden md:flex items-center gap-4">
-            <Button className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white shadow-md">
+            <Button
+              onClick={() => navigate('/quote')}
+              className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white shadow-md"
+            >
               Commencer maintenant
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
@@ -141,7 +146,10 @@ export function LandingPage() {
               Tarifs
             </a>
             <div className="pt-4 border-t border-blue-100/30">
-              <Button className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white">
+              <Button
+                onClick={() => navigate('/quote')}
+                className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white"
+              >
                 Commencer maintenant
               </Button>
             </div>
@@ -172,7 +180,11 @@ export function LandingPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-            <Button size="lg" className="text-lg px-8 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white shadow-lg hover:shadow-xl transition-shadow">
+            <Button
+              size="lg"
+              onClick={() => navigate('/quote')}
+              className="text-lg px-8 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white shadow-lg hover:shadow-xl transition-shadow"
+            >
               Essayer maintenant
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
@@ -180,6 +192,7 @@ export function LandingPage() {
               size="lg"
               variant="outline"
               className="text-lg px-8 border-blue-300 text-blue-700 hover:bg-blue-50"
+              onClick={() => navigate('/quote')}
             >
               Voir la démo (3 min)
             </Button>
@@ -397,7 +410,11 @@ export function LandingPage() {
             <p className="text-lg text-blue-100 mb-8">
               7 jours d'essai gratuit. Pas de carte bancaire. Annulation facile.
             </p>
-            <Button size="lg" className="text-lg px-8 bg-white text-blue-600 hover:bg-blue-50 font-semibold shadow-lg">
+            <Button
+              size="lg"
+              onClick={() => navigate('/quote')}
+              className="text-lg px-8 bg-white text-blue-600 hover:bg-blue-50 font-semibold shadow-lg"
+            >
               Commencer maintenant
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
