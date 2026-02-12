@@ -32,6 +32,7 @@ import ProjetsListePage from "./pages/projet/ProjetsListePage";
 import Profile from "./pages/Profile";
 import Analyze from "./pages/Analyze";
 import Results from "./pages/Results";
+import AnalyticsDashboard from "./pages/AnalyticsDashboard";
 
 const queryClient = new QueryClient();
 
@@ -62,6 +63,7 @@ const AppContent = () => {
             <Route path="/projet/:projectId" element={<ProjetPage />} />
             <Route path="/analyze" element={<Analyze />} />
             <Route path="/results" element={<Results />} />
+            <Route path="/analytics" element={<AnalyticsDashboard />} />
             <Route path="/profile" element={<Profile />} />
           </Route>
 
