@@ -1,128 +1,77 @@
 -- ============================================================
--- Migration: Storage bucket for quote uploads (Supabase dev)
+-- Migration: Storage bucket policies for quote uploads
 -- ============================================================
 --
--- Ce fichier configure le bucket de stockage pour les uploads
--- de devis PDF avec les policies RLS appropriées.
+-- ⚠️ IMPORTANT: Storage policies CANNOT be created via SQL!
+-- They must be configured manually in the Supabase Dashboard.
 --
--- IMPORTANT: Le bucket doit être créé via le Dashboard Supabase
--- AVANT d'exécuter ce script!
+-- This file serves as documentation. The bucket quote-uploads
+-- must already exist and be public.
 --
--- Étapes:
--- 1. Aller dans Supabase Dashboard → Storage → Buckets
--- 2. Cliquer "New bucket"
--- 3. Nom: quote-uploads
--- 4. Public: OUI (décocher "Make it private" - le rendre public)
--- 5. Cliquer "Create bucket"
--- 6. Exécuter ce script pour les policies RLS
+-- See SUPABASE_SETUP.md for manual instructions on adding policies.
 --
 
 -- ============================================================
--- Development Policies (Allow all - pour développement uniquement)
+-- Bucket verification query (run this to check bucket exists)
 -- ============================================================
 
--- Policy 1: Allow all to read files
-INSERT INTO storage.policies (name, bucket_id, operation, definition)
-VALUES (
-  'quote_uploads_allow_read_dev',
-  'quote-uploads',
-  'SELECT',
-  '(bucket_id = ''quote-uploads'')'
-)
-ON CONFLICT DO NOTHING;
+SELECT name, owner, public
+FROM storage.buckets
+WHERE name = 'quote-uploads';
 
--- Policy 2: Allow all to upload files
-INSERT INTO storage.policies (name, bucket_id, operation, definition)
-VALUES (
-  'quote_uploads_allow_insert_dev',
-  'quote-uploads',
-  'INSERT',
-  '(bucket_id = ''quote-uploads'')'
-)
-ON CONFLICT DO NOTHING;
-
--- Policy 3: Allow all to update files
-INSERT INTO storage.policies (name, bucket_id, operation, definition)
-VALUES (
-  'quote_uploads_allow_update_dev',
-  'quote-uploads',
-  'UPDATE',
-  '(bucket_id = ''quote-uploads'')'
-)
-ON CONFLICT DO NOTHING;
-
--- Policy 4: Allow all to delete files
-INSERT INTO storage.policies (name, bucket_id, operation, definition)
-VALUES (
-  'quote_uploads_allow_delete_dev',
-  'quote-uploads',
-  'DELETE',
-  '(bucket_id = ''quote-uploads'')'
-)
-ON CONFLICT DO NOTHING;
-
+-- Expected result:
+-- name          | owner | public
 -- ============================================================
--- Production Policies (Restrict by user/company - À configurer)
+-- quote-uploads | null  | true
 -- ============================================================
 
-/*
--- POUR LA PRODUCTION - Remplacer les policies ci-dessus par:
-
--- Policy 1: Users can only read files from their own CCF
-INSERT INTO storage.policies (name, bucket_id, operation, definition)
-VALUES (
-  'quote_uploads_allow_read_own',
-  'quote-uploads',
-  'SELECT',
-  $$
-  (bucket_id = 'quote-uploads' AND
-   (storage.foldername(name))[1]::uuid IN (
-    SELECT id FROM ccf WHERE client_email = auth.jwt()->>'email'
-   ))
-  $$
-)
-ON CONFLICT DO NOTHING;
-
--- Policy 2: Users can only upload to their own CCF directory
-INSERT INTO storage.policies (name, bucket_id, operation, definition)
-VALUES (
-  'quote_uploads_allow_insert_own',
-  'quote-uploads',
-  'INSERT',
-  $$
-  (bucket_id = 'quote-uploads' AND
-   (storage.foldername(name))[1]::uuid IN (
-    SELECT id FROM ccf WHERE client_email = auth.jwt()->>'email'
-   ))
-  $$
-)
-ON CONFLICT DO NOTHING;
-
--- Policy 3: Users can only delete their own files
-INSERT INTO storage.policies (name, bucket_id, operation, definition)
-VALUES (
-  'quote_uploads_allow_delete_own',
-  'quote-uploads',
-  'DELETE',
-  $$
-  (bucket_id = 'quote-uploads' AND
-   (storage.foldername(name))[1]::uuid IN (
-    SELECT id FROM ccf WHERE client_email = auth.jwt()->>'email'
-   ))
-  $$
-)
-ON CONFLICT DO NOTHING;
-*/
+-- If bucket doesn't exist, create it manually via Dashboard:
+-- 1. Supabase Dashboard → Storage → Create bucket
+-- 2. Name: quote-uploads
+-- 3. Public: YES (checked)
+-- 4. Create bucket
 
 -- ============================================================
--- Verification query
+-- POLICIES MUST BE ADDED VIA DASHBOARD (NOT SQL)
 -- ============================================================
+--
+-- Go to: Supabase Dashboard → Storage → quote-uploads → Policies
+--
+-- Add these 4 policies:
+--
+-- 1. SELECT (Read)
+--    Name: quote_uploads_allow_read_dev
+--    Allowed operation: SELECT
+--    Policy: (bucket_id = 'quote-uploads')
+--
+-- 2. INSERT (Upload)
+--    Name: quote_uploads_allow_insert_dev
+--    Allowed operation: INSERT
+--    Policy: (bucket_id = 'quote-uploads')
+--
+-- 3. UPDATE (Update)
+--    Name: quote_uploads_allow_update_dev
+--    Allowed operation: UPDATE
+--    Policy: (bucket_id = 'quote-uploads')
+--
+-- 4. DELETE (Delete)
+--    Name: quote_uploads_allow_delete_dev
+--    Allowed operation: DELETE
+--    Policy: (bucket_id = 'quote-uploads')
+--
 
--- Vérifier que les policies sont bien créées:
--- SELECT policy_name, definition
+-- ============================================================
+-- Verification query (after adding policies via Dashboard)
+-- ============================================================
+--
+-- Run this to verify policies were created:
+--
+-- SELECT policyname, definition
 -- FROM pg_policies
--- WHERE schemaname = 'storage' AND tablename = 'objects'
--- AND definition LIKE '%quote-uploads%';
+-- WHERE schemaname = 'storage'
+--   AND tablename = 'objects'
+--   AND definition LIKE '%quote-uploads%';
+--
+-- Expected: 4 rows with your policies
+--
 
--- Vérifier que le bucket existe:
--- SELECT name, owner, public FROM storage.buckets WHERE name = 'quote-uploads';
