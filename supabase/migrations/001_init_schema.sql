@@ -268,17 +268,54 @@ CREATE INDEX idx_audit_created_at ON audit_log(created_at DESC);
 -- Les RLS policies seront configurées une fois que l'authentification est mise en place
 -- Pour le moment, laisser public_access enabled pour le développement
 
-ALTER TABLE ccf ENABLE ROW LEVEL SECURITY;
-ALTER TABLE client_enriched_data ENABLE ROW LEVEL SECURITY;
-ALTER TABLE quote_uploads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE quote_analysis ENABLE ROW LEVEL SECURITY;
-ALTER TABLE rag_context_cache ENABLE ROW LEVEL SECURITY;
-ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+BEGIN;
 
--- Policy temporaire (dev) - À remplacer en production
-CREATE POLICY "Allow all for now" ON ccf FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for now" ON client_enriched_data FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for now" ON quote_uploads FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for now" ON quote_analysis FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for now" ON rag_context_cache FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all for now" ON audit_log FOR ALL USING (true) WITH CHECK (true);
+ALTER TABLE ccf ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all for now" ON ccf;
+CREATE POLICY "ccf_allow_all_dev" ON ccf FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE client_enriched_data ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all for now" ON client_enriched_data;
+CREATE POLICY "enriched_allow_all_dev" ON client_enriched_data FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE quote_uploads ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all for now" ON quote_uploads;
+CREATE POLICY "uploads_allow_all_dev" ON quote_uploads FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE quote_analysis ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all for now" ON quote_analysis;
+CREATE POLICY "analysis_allow_all_dev" ON quote_analysis FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE rag_context_cache ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all for now" ON rag_context_cache;
+CREATE POLICY "rag_cache_allow_all_dev" ON rag_context_cache FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow all for now" ON audit_log;
+CREATE POLICY "audit_allow_all_dev" ON audit_log FOR ALL USING (true) WITH CHECK (true);
+
+COMMIT;
+
+-- ============================================================================
+-- RPC Function: Vector Similarity Search for RAG
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION match_enriched_data(
+  query_embedding vector(1536),
+  match_count int DEFAULT 5,
+  match_threshold float DEFAULT 0.7
+) RETURNS TABLE (
+  id uuid,
+  ccf_id uuid,
+  similarity float
+) AS $$
+  SELECT
+    client_enriched_data.id,
+    client_enriched_data.ccf_id,
+    (1 - (client_enriched_data.embedding <=> query_embedding)) as similarity
+  FROM client_enriched_data
+  WHERE client_enriched_data.embedding IS NOT NULL
+    AND (1 - (client_enriched_data.embedding <=> query_embedding)) > match_threshold
+  ORDER BY similarity DESC
+  LIMIT match_count;
+$$ LANGUAGE sql STABLE PARALLEL SAFE;
