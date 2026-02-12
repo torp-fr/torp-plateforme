@@ -18,20 +18,39 @@ DROP VIEW IF EXISTS public.analytics_overview_view;
 DROP VIEW IF EXISTS public.feedback_summary_view;
 
 -- ============================================================================
--- DROP ALL PHASE 1 TABLES AT ONCE WITH CASCADE
--- (Drop all together to handle circular/complex dependencies)
+-- REMOVE FOREIGN KEY CONSTRAINTS FIRST
+-- (Supabase doesn't support CASCADE well on tables with FK)
 -- ============================================================================
 
-DROP TABLE IF EXISTS
-  public.phase1_contrats,
-  public.phase1_prises_references,
-  public.phase1_formalites,
-  public.phase1_negociations,
-  public.phase1_consultations,
-  public.phase1_offres,
-  public.phase1_dce,
-  public.phase1_entreprises
-CASCADE ;
+-- Find and drop all constraints pointing to Phase 1 tables
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN (
+    SELECT constraint_name, table_name
+    FROM information_schema.table_constraints
+    WHERE constraint_type = 'FOREIGN KEY'
+      AND (table_name LIKE 'phase1_%' OR referenced_table_name LIKE 'phase1_%')
+  )
+  LOOP
+    EXECUTE 'ALTER TABLE IF EXISTS public.' || quote_ident(r.table_name) ||
+            ' DROP CONSTRAINT IF EXISTS ' || quote_ident(r.constraint_name) || ' CASCADE';
+  END LOOP;
+END $$;
+
+-- ============================================================================
+-- NOW DROP ALL PHASE 1 TABLES (constraints are gone)
+-- ============================================================================
+
+DROP TABLE IF EXISTS public.phase1_contrats ;
+DROP TABLE IF EXISTS public.phase1_prises_references ;
+DROP TABLE IF EXISTS public.phase1_formalites ;
+DROP TABLE IF EXISTS public.phase1_negociations ;
+DROP TABLE IF EXISTS public.phase1_consultations ;
+DROP TABLE IF EXISTS public.phase1_offres ;
+DROP TABLE IF EXISTS public.phase1_dce ;
+DROP TABLE IF EXISTS public.phase1_entreprises ;
 
 -- ============================================================================
 -- DROP KNOWLEDGE BASE / RAG TABLES AT ONCE
