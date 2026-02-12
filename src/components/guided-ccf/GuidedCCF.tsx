@@ -41,6 +41,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
   const [step, setStep] = useState(0);
   const [formData, setFormData] = useState<Partial<CCFData>>({
     projectType: 'renovation',
+    timeline: '1-3-months',
     objectives: [],
     constraints: [],
     successCriteria: [],
