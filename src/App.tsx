@@ -13,6 +13,7 @@ import MainLayout from "./components/layout/MainLayout";
 // Pages - Core MVP
 import LandingPage from "./pages/LandingPage";
 import QuotePage from "./pages/QuotePage";
+import QuoteSuccessPage from "./pages/QuoteSuccessPage";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -44,6 +45,7 @@ const AppContent = () => {
           {/* Public Routes */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/quote" element={<QuotePage />} />
+          <Route path="/quote-success" element={<QuoteSuccessPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />

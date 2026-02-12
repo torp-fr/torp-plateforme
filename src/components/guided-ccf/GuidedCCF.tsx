@@ -175,33 +175,33 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
       </div>
 
       {/* Content */}
-      <Card className="bg-slate-800 border-slate-700 mb-6">
+      <Card className="bg-white border-slate-200 mb-6 shadow-md">
         <CardHeader>
-          <CardTitle className="text-2xl">{steps[step].title}</CardTitle>
-          <CardDescription>{steps[step].description}</CardDescription>
+          <CardTitle className="text-2xl text-slate-900">{steps[step].title}</CardTitle>
+          <CardDescription className="text-slate-600">{steps[step].description}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Step 0: Infos projet */}
           {step === 0 && (
             <>
               <div>
-                <label className="text-sm font-medium text-slate-300 block mb-2">
+                <label className="text-sm font-medium text-slate-700 block mb-2">
                   Nom du projet *
                 </label>
                 <Input
                   placeholder="ex: Rénovation Appartement Paris 16"
                   value={formData.projectName || ''}
                   onChange={(e) => handleInputChange('projectName', e.target.value)}
-                  className="bg-slate-700 border-slate-600 text-white"
+                  className="bg-white border-slate-200 text-slate-900 placeholder-slate-400"
                 />
               </div>
 
               <div>
-                <label className="text-sm font-medium text-slate-300 block mb-2">
+                <label className="text-sm font-medium text-slate-700 block mb-2">
                   Type de projet *
                 </label>
                 <Select value={formData.projectType} onValueChange={(v) => handleInputChange('projectType', v)}>
-                  <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                  <SelectTrigger className="bg-white border-slate-200 text-slate-900">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -220,7 +220,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
           {step === 1 && (
             <>
               <div>
-                <label className="text-sm font-medium text-slate-300 block mb-2">
+                <label className="text-sm font-medium text-slate-700 block mb-2">
                   Périmètre du projet *
                 </label>
                 <Textarea
@@ -228,12 +228,12 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
                   value={formData.scope || ''}
                   onChange={(e) => handleInputChange('scope', e.target.value)}
                   rows={4}
-                  className="bg-slate-700 border-slate-600 text-white"
+                  className="bg-white border-slate-200 text-slate-900 placeholder-slate-400"
                 />
               </div>
 
               <div>
-                <label className="text-sm font-medium text-slate-300 block mb-2">
+                <label className="text-sm font-medium text-slate-700 block mb-2">
                   Budget (€) *
                 </label>
                 <Input
@@ -241,7 +241,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
                   placeholder="50000"
                   value={formData.budget || ''}
                   onChange={(e) => handleInputChange('budget', parseFloat(e.target.value))}
-                  className="bg-slate-700 border-slate-600 text-white"
+                  className="bg-white border-slate-200 text-slate-900 placeholder-slate-400"
                 />
               </div>
             </>
@@ -251,11 +251,11 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
           {step === 2 && (
             <>
               <div>
-                <label className="text-sm font-medium text-slate-300 block mb-2">
+                <label className="text-sm font-medium text-slate-700 block mb-2">
                   Timeline souhaité *
                 </label>
                 <Select value={formData.timeline} onValueChange={(v) => handleInputChange('timeline', v)}>
-                  <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                  <SelectTrigger className="bg-white border-slate-200 text-slate-900">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -284,9 +284,9 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
                         id={obj}
                         checked={formData.objectives?.includes(obj) || false}
                         onChange={() => toggleArrayItem('objectives', obj)}
-                        className="h-4 w-4 bg-slate-700 border-slate-600 text-cyan-500 rounded"
+                        className="h-4 w-4 bg-white border-slate-300 text-cyan-600 rounded"
                       />
-                      <label htmlFor={obj} className="text-sm text-slate-300 cursor-pointer flex-1">
+                      <label htmlFor={obj} className="text-sm text-slate-700 cursor-pointer flex-1">
                         {obj}
                       </label>
                     </div>
@@ -295,13 +295,13 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-slate-300 block mb-2">
+                <label className="text-sm font-medium text-slate-700 block mb-2">
                   Objectifs personnalisés
                 </label>
                 <Textarea
                   placeholder="Ajoutez d'autres objectifs spécifiques à votre projet"
                   rows={2}
-                  className="bg-slate-700 border-slate-600 text-white"
+                  className="bg-white border-slate-200 text-slate-900 placeholder-slate-400"
                 />
               </div>
             </>
@@ -322,7 +322,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
                         id={constraint}
                         checked={formData.constraints?.includes(constraint) || false}
                         onChange={() => toggleArrayItem('constraints', constraint)}
-                        className="h-4 w-4 bg-slate-700 border-slate-600 text-cyan-500 rounded"
+                        className="h-4 w-4 bg-white border-slate-300 text-cyan-600 rounded"
                       />
                       <label htmlFor={constraint} className="text-sm text-slate-300 cursor-pointer flex-1">
                         {constraint}
@@ -338,7 +338,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
           {step === 5 && (
             <>
               <div>
-                <label className="text-sm font-medium text-slate-300 block mb-2">
+                <label className="text-sm font-medium text-slate-700 block mb-2">
                   Critères de succès * (sélectionnez au moins 1)
                 </label>
                 <div className="space-y-2">
@@ -356,7 +356,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
                         id={criteria}
                         checked={formData.successCriteria?.includes(criteria) || false}
                         onChange={() => toggleArrayItem('successCriteria', criteria)}
-                        className="h-4 w-4 bg-slate-700 border-slate-600 text-cyan-500 rounded"
+                        className="h-4 w-4 bg-white border-slate-300 text-cyan-600 rounded"
                       />
                       <label htmlFor={criteria} className="text-sm text-slate-300 cursor-pointer flex-1">
                         {criteria}
@@ -372,26 +372,26 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
           {step === 6 && (
             <>
               <div>
-                <label className="text-sm font-medium text-slate-300 block mb-2">
+                <label className="text-sm font-medium text-slate-700 block mb-2">
                   Entreprise/Raison sociale
                 </label>
                 <Input
                   placeholder="ex: Acme SARL"
                   value={formData.company || ''}
                   onChange={(e) => handleInputChange('company', e.target.value)}
-                  className="bg-slate-700 border-slate-600 text-white"
+                  className="bg-white border-slate-200 text-slate-900 placeholder-slate-400"
                 />
               </div>
 
               <div>
-                <label className="text-sm font-medium text-slate-300 block mb-2">
+                <label className="text-sm font-medium text-slate-700 block mb-2">
                   Contact principal
                 </label>
                 <Input
                   placeholder="ex: Pierre Dupont, Chef de projet"
                   value={formData.contacts || ''}
                   onChange={(e) => handleInputChange('contacts', e.target.value)}
-                  className="bg-slate-700 border-slate-600 text-white"
+                  className="bg-white border-slate-200 text-slate-900 placeholder-slate-400"
                 />
               </div>
             </>
@@ -400,27 +400,27 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
           {/* Step 7: Review */}
           {step === 7 && (
             <>
-              <div className="bg-slate-700/50 p-4 rounded-lg space-y-3 text-sm">
+              <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg space-y-3 text-sm">
                 <div>
-                  <span className="text-slate-400">Nom:</span>
-                  <span className="text-white ml-2 font-medium">{formData.projectName}</span>
+                  <span className="text-slate-600">Nom:</span>
+                  <span className="text-slate-900 ml-2 font-medium">{formData.projectName}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400">Type:</span>
-                  <span className="text-white ml-2 font-medium">
+                  <span className="text-slate-600">Type:</span>
+                  <span className="text-slate-900 ml-2 font-medium">
                     {projectTypes.find((t) => t.value === formData.projectType)?.label}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400">Budget:</span>
-                  <span className="text-white ml-2 font-medium">{formData.budget}€</span>
+                  <span className="text-slate-600">Budget:</span>
+                  <span className="text-slate-900 ml-2 font-medium">{formData.budget}€</span>
                 </div>
                 <div>
-                  <span className="text-slate-400">Timeline:</span>
-                  <span className="text-white ml-2 font-medium">{formData.timeline}</span>
+                  <span className="text-slate-600">Timeline:</span>
+                  <span className="text-slate-900 ml-2 font-medium">{formData.timeline}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400">Objectifs:</span>
+                  <span className="text-slate-600">Objectifs:</span>
                   <div className="flex flex-wrap gap-1 mt-2">
                     {formData.objectives?.map((obj) => (
                       <Badge key={obj} className="bg-blue-500/20 text-blue-300 border-0">
@@ -430,7 +430,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
                   </div>
                 </div>
                 <div>
-                  <span className="text-slate-400">Constraints:</span>
+                  <span className="text-slate-600">Constraints:</span>
                   <div className="flex flex-wrap gap-1 mt-2">
                     {formData.constraints?.map((c) => (
                       <Badge key={c} className="bg-orange-500/20 text-orange-300 border-0">
@@ -458,7 +458,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
           variant="outline"
           onClick={handlePrev}
           disabled={step === 0}
-          className="border-slate-600 text-white hover:bg-slate-800"
+          className="border-slate-300 text-slate-700 hover:bg-slate-50"
         >
           <ChevronLeft className="h-4 w-4 mr-2" />
           Précédent

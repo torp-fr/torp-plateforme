@@ -16,20 +16,14 @@ export function QuotePage() {
   const handleCCFSubmit = async (data: CCFData) => {
     setIsLoading(true);
     try {
-      // TODO: Save to backend
+      // Stocke en localStorage pour demo
+      localStorage.setItem('currentCCF', JSON.stringify(data));
       console.log('✅ CCF Created:', data);
 
-      // Pour maintenant, on stocke en localStorage pour demo
-      localStorage.setItem('currentCCF', JSON.stringify(data));
-
-      // Redirection vers dashboard ou analyse
-      // navigate('/quote-summary');
-
-      // Temporairement, juste afficher le succès
-      alert('✅ Votre CCF a été créé avec succès!');
+      // Redirection vers la page de succès
+      navigate('/quote-success');
     } catch (error) {
       console.error('❌ Error:', error);
-    } finally {
       setIsLoading(false);
     }
   };
