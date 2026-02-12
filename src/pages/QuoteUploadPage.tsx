@@ -2,7 +2,7 @@
  * Quote Upload Page - Upload devis pour analyse
  */
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { Upload, FileText, AlertCircle, CheckCircle2, ChevronLeft } from 'lucide
 
 export function QuoteUploadPage() {
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,9 +36,15 @@ export function QuoteUploadPage() {
   const handleFileSelect = (selectedFile: File) => {
     setError(null);
 
+    if (!selectedFile) {
+      setError('❌ Aucun fichier sélectionné');
+      return;
+    }
+
     // Validate file type
     if (!selectedFile.type.includes('pdf')) {
       setError('❌ Veuillez sélectionner un fichier PDF');
+      console.warn('Invalid file type:', selectedFile.type);
       return;
     }
 
@@ -47,22 +54,31 @@ export function QuoteUploadPage() {
       return;
     }
 
+    console.log('✅ File selected:', selectedFile.name, `(${(selectedFile.size / 1024 / 1024).toFixed(2)} MB)`);
     setFile(selectedFile);
   };
 
   const handleUpload = async () => {
-    if (!file) return;
+    if (!file) {
+      setError('❌ Aucun fichier sélectionné');
+      return;
+    }
 
     setIsLoading(true);
+    setError(null);
     try {
-      console.log('📤 Uploading file:', file.name);
+      console.log('📤 [QuoteUpload] Starting upload:', file.name);
 
       // Récupérer CCF ID depuis localStorage
       const ccfId = localStorage.getItem('currentCCFId');
       const ccfData = localStorage.getItem('currentCCF');
 
+      console.log('📋 [QuoteUpload] CCF ID from storage:', ccfId);
+
       if (!ccfId) {
-        setError('❌ CCF introuvable. Veuillez créer un CCF d\'abord.');
+        const errorMsg = '❌ CCF introuvable. Veuillez créer un CCF d\'abord.';
+        setError(errorMsg);
+        console.error('❌ [QuoteUpload]', errorMsg);
         setIsLoading(false);
         return;
       }
@@ -70,29 +86,37 @@ export function QuoteUploadPage() {
       // Upload vers Supabase (importé dynamiquement pour éviter les erreurs si Supabase ne configure)
       let uploadedQuoteId: string | null = null;
       try {
+        console.log('🔄 [QuoteUpload] Importing supabaseService...');
         const { uploadQuotePDF } = await import('@/services/supabaseService');
+        console.log('🔄 [QuoteUpload] Calling uploadQuotePDF...');
         uploadedQuoteId = await uploadQuotePDF(ccfId, file, 'user');
+        console.log('✅ [QuoteUpload] Supabase upload successful:', uploadedQuoteId);
       } catch (supabaseError) {
-        console.warn('⚠️ Supabase upload failed, using localStorage fallback:', supabaseError);
+        console.warn('⚠️ [QuoteUpload] Supabase upload failed, using localStorage fallback:', supabaseError);
       }
 
       // Fallback: stocker en localStorage si Supabase échoue
-      localStorage.setItem('uploadedQuote', JSON.stringify({
+      const uploadData = {
         id: uploadedQuoteId,
         ccfId,
         filename: file.name,
         size: file.size,
         uploadedAt: new Date().toISOString(),
         ccf: ccfData ? JSON.parse(ccfData) : null,
-      }));
+      };
 
-      console.log('✅ Quote uploaded successfully:', file.name);
+      localStorage.setItem('uploadedQuote', JSON.stringify(uploadData));
+      console.log('✅ [QuoteUpload] Quote data saved to localStorage:', uploadData);
 
-      // Navigate to analysis page
+      // Small delay to ensure state updates
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      console.log('✅ [QuoteUpload] Navigating to analysis...');
       navigate('/quote-analysis');
     } catch (err) {
-      setError('Erreur lors de l\'upload. Veuillez réessayer.');
-      console.error('Upload error:', err);
+      const errorMsg = err instanceof Error ? err.message : 'Erreur inconnue lors de l\'upload';
+      setError(`❌ ${errorMsg}`);
+      console.error('❌ [QuoteUpload] Error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -158,17 +182,20 @@ export function QuoteUploadPage() {
                   Déposez votre PDF ici
                 </h3>
                 <p className="text-sm text-slate-600 mb-4">ou</p>
-                <label>
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])}
-                    className="hidden"
-                  />
-                  <Button variant="outline" className="cursor-pointer">
-                    Parcourir les fichiers
-                  </Button>
-                </label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf"
+                  onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])}
+                  style={{ display: 'none' }}
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  type="button"
+                >
+                  Parcourir les fichiers
+                </Button>
               </div>
 
                       {/* File Selected */}

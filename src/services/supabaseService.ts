@@ -274,8 +274,16 @@ export async function uploadQuotePDF(
   uploadedBy: string
 ): Promise<string | null> {
   try {
+    // Sanitize filename - remove special characters that Supabase Storage rejects
+    const sanitizedName = file.name
+      .replace(/[^a-zA-Z0-9._-]/g, '_') // Replace special chars with underscore
+      .replace(/_{2,}/g, '_') // Replace multiple underscores with single
+      .toLowerCase();
+
     // Upload fichier à Supabase Storage
-    const filePath = `ccf/${ccfId}/${Date.now()}_${file.name}`;
+    const filePath = `ccf/${ccfId}/${Date.now()}_${sanitizedName}`;
+
+    console.log('🔄 [uploadQuotePDF] Uploading to storage:', filePath);
 
     const { error: uploadError } = await supabase.storage
       .from('quote-uploads')
@@ -285,14 +293,18 @@ export async function uploadQuotePDF(
       });
 
     if (uploadError) {
-      console.error('❌ Storage upload error:', uploadError);
-      return null;
+      console.error('❌ [uploadQuotePDF] Storage upload error:', uploadError);
+      throw new Error(`Storage error: ${uploadError.message}`);
     }
+
+    console.log('✅ [uploadQuotePDF] File uploaded to storage');
 
     // Créer enregistrement DB
     const { data: urlData } = supabase.storage
       .from('quote-uploads')
       .getPublicUrl(filePath);
+
+    console.log('🔄 [uploadQuotePDF] Creating database record...');
 
     const { data: record, error: dbError } = await supabase
       .from('quote_uploads')
@@ -311,15 +323,15 @@ export async function uploadQuotePDF(
       .single();
 
     if (dbError) {
-      console.error('❌ DB insert error:', dbError);
-      return null;
+      console.error('❌ [uploadQuotePDF] DB insert error:', dbError);
+      throw new Error(`Database error: ${dbError.message}`);
     }
 
-    console.log('✅ Quote uploaded:', record.id);
+    console.log('✅ [uploadQuotePDF] Quote uploaded successfully:', record.id);
     return record.id;
   } catch (error) {
-    console.error('❌ Quote upload error:', error);
-    return null;
+    console.error('❌ [uploadQuotePDF] Upload error:', error);
+    throw error; // Re-throw so caller can handle
   }
 }
 
