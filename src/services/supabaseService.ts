@@ -277,6 +277,8 @@ export async function uploadQuotePDF(
     // Upload fichier à Supabase Storage
     const filePath = `ccf/${ccfId}/${Date.now()}_${file.name}`;
 
+    console.log('🔄 [uploadQuotePDF] Uploading to storage:', filePath);
+
     const { error: uploadError } = await supabase.storage
       .from('quote-uploads')
       .upload(filePath, file, {
@@ -285,14 +287,18 @@ export async function uploadQuotePDF(
       });
 
     if (uploadError) {
-      console.error('❌ Storage upload error:', uploadError);
-      return null;
+      console.error('❌ [uploadQuotePDF] Storage upload error:', uploadError);
+      throw new Error(`Storage error: ${uploadError.message}`);
     }
+
+    console.log('✅ [uploadQuotePDF] File uploaded to storage');
 
     // Créer enregistrement DB
     const { data: urlData } = supabase.storage
       .from('quote-uploads')
       .getPublicUrl(filePath);
+
+    console.log('🔄 [uploadQuotePDF] Creating database record...');
 
     const { data: record, error: dbError } = await supabase
       .from('quote_uploads')
@@ -311,15 +317,15 @@ export async function uploadQuotePDF(
       .single();
 
     if (dbError) {
-      console.error('❌ DB insert error:', dbError);
-      return null;
+      console.error('❌ [uploadQuotePDF] DB insert error:', dbError);
+      throw new Error(`Database error: ${dbError.message}`);
     }
 
-    console.log('✅ Quote uploaded:', record.id);
+    console.log('✅ [uploadQuotePDF] Quote uploaded successfully:', record.id);
     return record.id;
   } catch (error) {
-    console.error('❌ Quote upload error:', error);
-    return null;
+    console.error('❌ [uploadQuotePDF] Upload error:', error);
+    throw error; // Re-throw so caller can handle
   }
 }
 
