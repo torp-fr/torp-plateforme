@@ -22,7 +22,6 @@ import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Pricing from "./pages/Pricing";
-import Demo from "./pages/Demo";
 import NotFound from "./pages/NotFound";
 
 // ============================================
@@ -65,25 +64,11 @@ import ProTeam from "./pages/pro/ProTeam";
 // ============================================
 // PAGES PHASES (pour compatibilité)
 // ============================================
-import Phase0Dashboard from "./pages/phase0/Phase0Dashboard";
-import Phase0Wizard from "./pages/phase0/Phase0Wizard";
-import Phase0ProjectPage from "./pages/phase0/Phase0Project";
-import Phase0AnalyzeDevis from "./pages/phase0/Phase0AnalyzeDevis";
-import Phase1Consultation from "./pages/phase1/Phase1Consultation";
 import Phase2Dashboard from "./pages/phase2/Phase2Dashboard";
 import PlanningPage from "./pages/phase2/PlanningPage";
 import ReunionsPage from "./pages/phase2/ReunionsPage";
 import JournalPage from "./pages/phase2/JournalPage";
 import ChantiersListPage from "./pages/phase2/ChantiersListPage";
-import Phase3Dashboard from "./pages/phase3/Phase3Dashboard";
-import ControlesPage from "./pages/phase3/ControlesPage";
-import CoordinationPage from "./pages/phase3/CoordinationPage";
-import SituationsPage from "./pages/phase3/SituationsPage";
-import Phase4Dashboard from "./pages/phase4/Phase4Dashboard";
-import OPRPage from "./pages/phase4/OPRPage";
-import ReservesPage from "./pages/phase4/ReservesPage";
-import GarantiesPage from "./pages/phase4/GarantiesPage";
-import DOEPage from "./pages/phase4/DOEPage";
 import Phase5Dashboard from "./pages/phase5/Phase5Dashboard";
 import DiagnosticsPage from "./pages/phase5/DiagnosticsPage";
 import EntretienPage from "./pages/phase5/EntretienPage";
@@ -101,9 +86,6 @@ import B2BResponseFormPage from "./pages/b2b/B2BResponseFormPage";
 // ============================================
 // PAGES ADMIN
 // ============================================
-import AdminDashboard from "./pages/AdminDashboard";
-import AdminAnalytics from "./pages/AdminAnalytics";
-import AdminDiagnostic from "./pages/AdminDiagnostic";
 
 const queryClient = new QueryClient();
 
@@ -126,7 +108,6 @@ const AppContent = () => {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/pricing" element={<Pricing />} />
-          <Route path="/demo" element={<Demo />} />
 
           {/* ============================================ */}
           {/* ROUTES PROTÉGÉES AVEC MAINLAYOUT */}
@@ -137,7 +118,6 @@ const AppContent = () => {
 
             {/* Projets - Nouveau parcours unifié */}
             <Route path="/projets" element={<ProjetsListePage />} />
-            <Route path="/projet/nouveau" element={<Phase0Wizard />} />
             <Route path="/projet/:projectId" element={<ProjetPage />} />
 
             {/* Outils */}
@@ -162,7 +142,6 @@ const AppContent = () => {
             <Route path="/pro/onboarding" element={<ProOnboarding />} />
             <Route path="/pro/projects" element={<ProProjects />} />
             <Route path="/pro/projects/new" element={<ProNewProject />} />
-            <Route path="/pro/projects/:projectId" element={<Phase0ProjectPage />} />
             <Route path="/pro/analyses" element={<ProAnalyses />} />
             <Route path="/pro/analyses/new" element={<ProNewAnalysis />} />
             <Route path="/pro/documents" element={<ProDocuments />} />
@@ -176,19 +155,6 @@ const AppContent = () => {
             <Route path="/b2b/ao/:tenderId/response/:responseId" element={<B2BResponseFormPage />} />
           </Route>
 
-          {/* ============================================ */}
-          {/* ROUTES PHASES (compatibilité) */}
-          {/* ============================================ */}
-          <Route path="/phase0" element={<Navigate to="/projets" replace />} />
-          <Route path="/phase0/dashboard" element={<Navigate to="/projets" replace />} />
-          <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
-            <Route path="/phase0/new" element={<Phase0Wizard />} />
-            <Route path="/phase0/wizard/:projectId" element={<Phase0Wizard />} />
-            <Route path="/phase0/project/:projectId" element={<Phase0ProjectPage />} />
-            <Route path="/phase0/project/:projectId/analyze" element={<Phase0AnalyzeDevis />} />
-            <Route path="/phase1/project/:projectId" element={<Phase1Consultation />} />
-            <Route path="/phase1/project/:projectId/consultation" element={<Phase1Consultation />} />
-          </Route>
 
           {/* Routes Phases 2-5 avec ChantierLayout */}
           <Route path="/phase2/:projectId" element={<ProtectedRoute><ChantierLayout /></ProtectedRoute>}>
@@ -197,21 +163,6 @@ const AppContent = () => {
             <Route path="planning" element={<PlanningPage />} />
             <Route path="reunions" element={<ReunionsPage />} />
             <Route path="journal" element={<JournalPage />} />
-          </Route>
-          <Route path="/phase3/:projectId" element={<ProtectedRoute><ChantierLayout /></ProtectedRoute>}>
-            <Route index element={<Phase3Dashboard />} />
-            <Route path="dashboard" element={<Phase3Dashboard />} />
-            <Route path="controles" element={<ControlesPage />} />
-            <Route path="coordination" element={<CoordinationPage />} />
-            <Route path="situations" element={<SituationsPage />} />
-          </Route>
-          <Route path="/phase4/:projectId" element={<ProtectedRoute><ChantierLayout /></ProtectedRoute>}>
-            <Route index element={<Phase4Dashboard />} />
-            <Route path="dashboard" element={<Phase4Dashboard />} />
-            <Route path="reception" element={<OPRPage />} />
-            <Route path="reserves" element={<ReservesPage />} />
-            <Route path="garanties" element={<GarantiesPage />} />
-            <Route path="doe" element={<DOEPage />} />
           </Route>
           <Route path="/phase5/:projectId" element={<ProtectedRoute><ChantierLayout /></ProtectedRoute>}>
             <Route index element={<Phase5Dashboard />} />
@@ -227,12 +178,6 @@ const AppContent = () => {
             <Route path="/tenders/:tenderId" element={<TenderDetailPage />} />
           </Route>
 
-          {/* ============================================ */}
-          {/* ROUTES ADMIN */}
-          {/* ============================================ */}
-          <Route path="/admin-dashboard" element={<AdminDashboard />} />
-          <Route path="/admin/analytics" element={<AdminAnalytics />} />
-          <Route path="/admin/diagnostic" element={<AdminDiagnostic />} />
 
           {/* ============================================ */}
           {/* FALLBACK */}

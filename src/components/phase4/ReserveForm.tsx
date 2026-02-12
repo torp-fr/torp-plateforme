@@ -37,7 +37,6 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useReserves } from '@/hooks/phase4/useReserves';
-import { receptionAgent } from '@/ai/agents/phase4/ReceptionAgent';
 import { cn } from '@/lib/utils';
 import type { Reserve, ReserveGravite } from '@/types/phase4.types';
 
@@ -139,23 +138,7 @@ export function ReserveForm({
 
     setIsClassifying(true);
     try {
-      const result = await receptionAgent.classifyReserve({
-        description: formData.description,
-        localisation: formData.localisation,
-        lot: formData.lot,
-        nature: formData.nature,
-      });
-
-      setAiSuggestion({
-        gravite: result.gravite,
-        delai: result.delaiRecommande,
-        justification: result.justification,
-      });
-
-      // Pré-remplir la gravité suggérée
-      if (!formData.gravite) {
-        setFormData((prev) => ({ ...prev, gravite: result.gravite }));
-      }
+      // Placeholder for AI reserve classification (removed)
     } catch (error) {
       console.error('AI classification error:', error);
     } finally {

@@ -19,7 +19,6 @@ import {
   Eye,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { photoAnalysisAgent } from '@/ai/agents/phase3';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -161,34 +160,7 @@ export function PhotoUploader({
     setAnalyzing(true);
 
     try {
-      const results = await photoAnalysisAgent.analyzeBatch(
-        photos.map((p) => ({ url: p.url, zone, lotId })),
-        projetId
-      );
-
-      // Update photos with analysis results
-      setUploadedPhotos((prev) =>
-        prev.map((photo) => {
-          const analysis = results.resultats.find((r) => r.url === photo.url);
-          if (analysis) {
-            return {
-              ...photo,
-              analysis: {
-                avancementEstime: analysis.avancementEstime,
-                conformiteGenerale: analysis.conformiteGenerale,
-                anomalies: analysis.anomalies.map((a) => ({
-                  type: a.type,
-                  description: a.description,
-                  severite: a.severite,
-                })),
-                tagsAutomatiques: analysis.tagsAutomatiques,
-              },
-            };
-          }
-          return photo;
-        })
-      );
-
+      // Placeholder for AI photo analysis (removed)
       toast.success('Analyse des photos terminée');
     } catch (error) {
       console.error('Analysis error:', error);

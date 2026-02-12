@@ -5,8 +5,6 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PlanningService } from '@/services/phase2/planning.service';
-import { planningAgent } from '@/ai/agents/PlanningAgent';
-import type { PlanningGenerationInput, GeneratedPlanning } from '@/ai/agents/PlanningAgent';
 import type { PlanningLot, PlanningTache, GanttTask, CheminCritique } from '@/types/phase2';
 import type { PlanningStats } from '@/services/phase2/planning.service';
 
@@ -226,37 +224,11 @@ export function useProjectPlanning(chantierId: string): UseProjectPlanningReturn
   // ============================================
 
   const generatePlanningMutation = useMutation({
-    mutationFn: async (options?: Partial<PlanningGenerationInput>) => {
-      const lots = lotsQuery.data || [];
-      const input: PlanningGenerationInput = {
-        projectId: '', // Will be fetched from chantier
-        chantierId,
-        lots: lots.map(l => ({
-          code: l.code,
-          name: l.nom,
-          estimatedDuration: l.dureePrevueJours,
-        })),
-        startDate: options?.startDate || new Date().toISOString().split('T')[0],
-        constraints: options?.constraints,
-      };
-      return planningAgent.generatePlanning(input);
+    mutationFn: async (options?: any) => {
+      // Placeholder for AI planning generation (removed)
+      return null;
     },
-    onSuccess: async (planning: GeneratedPlanning) => {
-      // Sauvegarder les tâches générées
-      for (const lot of planning.lots) {
-        const existingLot = lotsQuery.data?.find(l => l.code === lot.code);
-        if (existingLot) {
-          for (const task of lot.tasks) {
-            await PlanningService.createTache({
-              lotId: existingLot.id,
-              nom: task.name,
-              dureeJours: task.duration,
-              description: `Généré par IA - ${task.resources.join(', ')}`,
-            });
-          }
-        }
-      }
-
+    onSuccess: () => {
       // Rafraîchir les données
       queryClient.invalidateQueries({ queryKey: ['planning-lots', chantierId] });
       queryClient.invalidateQueries({ queryKey: ['planning-taches', chantierId] });
@@ -284,7 +256,8 @@ export function useProjectPlanning(chantierId: string): UseProjectPlanningReturn
   // ============================================
 
   const optimizePlanning = async (objective: 'duration' | 'cost' | 'resources') => {
-    return planningAgent.optimizePlanning(chantierId, objective);
+    // Placeholder for AI planning optimization (removed)
+    return null;
   };
 
   // ============================================
