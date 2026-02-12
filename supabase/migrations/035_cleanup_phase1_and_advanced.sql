@@ -8,6 +8,20 @@
 --
 
 -- ============================================================================
+-- DROP MATERIALIZED VIEWS FIRST (before tables they depend on)
+-- ============================================================================
+
+DROP MATERIALIZED VIEW IF EXISTS public.analytics_overview CASCADE;
+DROP MATERIALIZED VIEW IF EXISTS public.feedback_summary CASCADE;
+
+-- ============================================================================
+-- DROP REGULAR VIEWS (if any exist)
+-- ============================================================================
+
+DROP VIEW IF EXISTS public.analytics_overview_view CASCADE;
+DROP VIEW IF EXISTS public.feedback_summary_view CASCADE;
+
+-- ============================================================================
 -- DROP PHASE 1 TABLES (from your current schema)
 -- ============================================================================
 
@@ -30,32 +44,11 @@ DROP TABLE IF EXISTS public.knowledge_documents CASCADE;
 DROP TABLE IF EXISTS public.rag_health_dashboard CASCADE;
 
 -- ============================================================================
--- DROP ADVANCED ANALYTICS TABLES
--- ============================================================================
-
-DROP TABLE IF EXISTS public.analytics_overview CASCADE;
-DROP TABLE IF EXISTS public.feedback_summary CASCADE;
-
--- ============================================================================
 -- DROP ADVANCED COMPANY TABLES
 -- ============================================================================
 
 DROP TABLE IF EXISTS public.company_search_history CASCADE;
 DROP TABLE IF EXISTS public.company_documents CASCADE;
-
--- ============================================================================
--- DROP VIEWS (if any exist)
--- ============================================================================
-
-DROP VIEW IF EXISTS public.analytics_overview_view CASCADE;
-DROP VIEW IF EXISTS public.feedback_summary_view CASCADE;
-
--- ============================================================================
--- DROP MATERIALIZED VIEWS
--- ============================================================================
-
-DROP MATERIALIZED VIEW IF EXISTS public.analytics_overview CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS public.feedback_summary CASCADE;
 
 -- ============================================================================
 -- VERIFY CLEANUP
