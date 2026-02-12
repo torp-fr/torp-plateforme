@@ -8,16 +8,12 @@
 --
 
 -- ============================================================================
--- DROP MATERIALIZED VIEWS FIRST (before tables they depend on)
+-- DROP VIEWS AND MATERIALIZED VIEWS (handle both types)
 -- ============================================================================
 
-DROP MATERIALIZED VIEW IF EXISTS public.analytics_overview;
-DROP MATERIALIZED VIEW IF EXISTS public.feedback_summary;
-
--- ============================================================================
--- DROP REGULAR VIEWS (if any exist)
--- ============================================================================
-
+-- Try as VIEW first (most common)
+DROP VIEW IF EXISTS public.analytics_overview;
+DROP VIEW IF EXISTS public.feedback_summary;
 DROP VIEW IF EXISTS public.analytics_overview_view;
 DROP VIEW IF EXISTS public.feedback_summary_view;
 
