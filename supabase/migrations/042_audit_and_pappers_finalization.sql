@@ -27,37 +27,8 @@ CREATE INDEX IF NOT EXISTS idx_devis_execution_context_id ON devis(execution_con
 -- ============================================
 -- ENHANCED RLS POLICIES FOR AUDIT TABLES
 -- ============================================
-
--- Allow admins to see all audit logs without any restrictions
-CREATE POLICY IF NOT EXISTS "Admins see all API requests"
-  ON api_requests_log FOR SELECT
-  USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true)
-  );
-
-CREATE POLICY IF NOT EXISTS "Admins see all external API calls"
-  ON external_api_calls_log FOR SELECT
-  USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true)
-  );
-
-CREATE POLICY IF NOT EXISTS "Admins see all criteria evaluations"
-  ON criteria_evaluation_log FOR SELECT
-  USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true)
-  );
-
-CREATE POLICY IF NOT EXISTS "Admins see all execution contexts"
-  ON execution_context_log FOR SELECT
-  USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true)
-  );
-
-CREATE POLICY IF NOT EXISTS "Admins see all score snapshots"
-  ON score_snapshots FOR SELECT
-  USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true)
-  );
+-- Note: Admin policies will be created in migration 043
+-- using proper SQL syntax without IF NOT EXISTS
 
 -- ============================================
 -- AUDIT EVENTS TABLE (Optional: for system events)

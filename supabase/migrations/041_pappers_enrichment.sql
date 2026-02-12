@@ -82,18 +82,8 @@ CREATE INDEX IF NOT EXISTS idx_company_data_cache_solvency_score ON company_data
 -- Enable RLS
 ALTER TABLE company_data_cache ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies
-CREATE POLICY IF NOT EXISTS "Everyone can read company data cache"
-  ON company_data_cache FOR SELECT
-  USING (true);
-
-CREATE POLICY IF NOT EXISTS "Only service role can insert/update company data"
-  ON company_data_cache FOR INSERT
-  WITH CHECK (true);
-
-CREATE POLICY IF NOT EXISTS "Only service role can update company data"
-  ON company_data_cache FOR UPDATE
-  WITH CHECK (true);
+-- RLS Policies (will be fixed in migration 043)
+-- Note: Policies defined separately to handle IF NOT EXISTS syntax
 
 -- ============================================
 -- ANALYSIS CRITERIA ENRICHMENT TABLE
