@@ -18,35 +18,39 @@ DROP VIEW IF EXISTS public.analytics_overview_view;
 DROP VIEW IF EXISTS public.feedback_summary_view;
 
 -- ============================================================================
--- DROP PHASE 1 TABLES (with CASCADE to handle foreign key dependencies)
+-- DROP ALL PHASE 1 TABLES AT ONCE WITH CASCADE
+-- (Drop all together to handle circular/complex dependencies)
 -- ============================================================================
 
--- Drop tables that depend on others first
-DROP TABLE IF EXISTS public.phase1_contrats CASCADE ;
-DROP TABLE IF EXISTS public.phase1_prises_references CASCADE ;
-DROP TABLE IF EXISTS public.phase1_formalites CASCADE ;
-DROP TABLE IF EXISTS public.phase1_negociations CASCADE ;
-DROP TABLE IF EXISTS public.phase1_consultations CASCADE ;
-
--- Then drop independent tables
-DROP TABLE IF EXISTS public.phase1_offres CASCADE ;
-DROP TABLE IF EXISTS public.phase1_dce CASCADE ;
-DROP TABLE IF EXISTS public.phase1_entreprises CASCADE ;
-
--- ============================================================================
--- DROP KNOWLEDGE BASE / RAG TABLES
--- ============================================================================
-
-DROP TABLE IF EXISTS public.knowledge_chunks CASCADE ;
-DROP TABLE IF EXISTS public.knowledge_documents CASCADE ;
-DROP TABLE IF EXISTS public.rag_health_dashboard CASCADE ;
+DROP TABLE IF EXISTS
+  public.phase1_contrats,
+  public.phase1_prises_references,
+  public.phase1_formalites,
+  public.phase1_negociations,
+  public.phase1_consultations,
+  public.phase1_offres,
+  public.phase1_dce,
+  public.phase1_entreprises
+CASCADE ;
 
 -- ============================================================================
--- DROP ADVANCED COMPANY TABLES
+-- DROP KNOWLEDGE BASE / RAG TABLES AT ONCE
 -- ============================================================================
 
-DROP TABLE IF EXISTS public.company_search_history CASCADE ;
-DROP TABLE IF EXISTS public.company_documents CASCADE ;
+DROP TABLE IF EXISTS
+  public.knowledge_chunks,
+  public.knowledge_documents,
+  public.rag_health_dashboard
+CASCADE ;
+
+-- ============================================================================
+-- DROP ADVANCED COMPANY TABLES AT ONCE
+-- ============================================================================
+
+DROP TABLE IF EXISTS
+  public.company_search_history,
+  public.company_documents
+CASCADE ;
 
 -- ============================================================================
 -- VERIFY CLEANUP
