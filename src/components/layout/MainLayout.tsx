@@ -25,7 +25,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
-import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -311,7 +310,6 @@ export function MainLayout({ children }: MainLayoutProps) {
             </Link>
           </div>
           <div className="flex items-center gap-2">
-            <NotificationBell />
           </div>
         </div>
       </header>
@@ -348,7 +346,6 @@ export function MainLayout({ children }: MainLayoutProps) {
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <NotificationBell />
               <Button size="sm" onClick={() => navigate('/projet/nouveau')}>
                 <PlusCircle className="h-4 w-4 mr-2" />
                 Nouveau projet
