@@ -16,6 +16,8 @@ interface AnalysisResult {
   conformity: number;
   alerts: Array<{ type: string; message: string }>;
   recommendations: string[];
+  filename?: string;
+  projectName?: string;
 }
 
 export function QuoteAnalysisPage() {
@@ -23,26 +25,31 @@ export function QuoteAnalysisPage() {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
 
   useEffect(() => {
-    // Simulate analysis
+    // Load analysis from uploaded quote
     const uploadedQuote = localStorage.getItem('uploadedQuote');
     if (!uploadedQuote) {
       navigate('/quote-upload');
       return;
     }
 
-    // Mock analysis result
+    const quoteData = JSON.parse(uploadedQuote);
+    const ccf = quoteData.ccf;
+
+    // Mock analysis result (based on CCF data)
     const mockAnalysis: AnalysisResult = {
       score: 78,
       status: 'good',
       conformity: 85,
+      filename: quoteData.filename,
+      projectName: ccf?.projectName || 'Projet sans nom',
       alerts: [
         {
           type: 'warning',
-          message: 'Budget dépassé de 12% par rapport au CCF',
+          message: `Budget du devis vs CCF: ${ccf?.budget ? '✓' : 'non défini'}`,
         },
         {
           type: 'info',
-          message: 'Timeline conforme aux attentes',
+          message: `Timeline: ${ccf?.timeline || 'non spécifiée'} - Conforme`,
         },
       ],
       recommendations: [
@@ -70,22 +77,32 @@ export function QuoteAnalysisPage() {
       case 'critical':
         return 'bg-red-100 text-red-800';
       default:
-        return 'bg-slate-100 text-slate-800';
+        return 'bg-muted text-foreground';
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-blue-50 to-cyan-50">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 w-full bg-white/80 backdrop-blur-md z-50 border-b border-blue-100/30 shadow-sm">
+      <header className="sticky top-0 w-full backdrop-blur-md bg-background/80 z-50 border-b border-border shadow-sm">
         <div className="container mx-auto px-6 h-16 flex items-center">
-          <h1 className="text-2xl font-bold text-slate-900">Résultats de l'analyse</h1>
+          <h1 className="font-display text-2xl font-bold text-foreground">Résultats de l'analyse</h1>
         </div>
       </header>
 
       {/* Content */}
       <main className="py-12 px-6">
         <div className="container mx-auto max-w-3xl space-y-8">
+          {/* Project Info Card */}
+          <Card className="bg-card border-border shadow-md">
+            <CardHeader>
+              <CardTitle className="font-display text-foreground">Analyse du devis</CardTitle>
+              <CardDescription className="text-muted-foreground">
+                {analysis.filename} • {analysis.projectName}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
           {/* Score Card */}
           <Card className="bg-gradient-to-br from-background to-card border-border shadow-md">
             <CardContent className="pt-8">
@@ -93,7 +110,7 @@ export function QuoteAnalysisPage() {
                 <div className="flex-1">
                   <p className="text-sm text-muted-foreground font-medium mb-4">Score de conformité</p>
                   <div className="flex items-baseline gap-3 mb-4">
-                    <span className="text-slate-600 text-sm">/100</span>
+                    <span className="text-muted-foreground text-sm">/100</span>
                   </div>
                   <Badge className={`${getStatusColor(analysis.status)} border-0`}>
                     {analysis.status.toUpperCase()}
@@ -105,20 +122,20 @@ export function QuoteAnalysisPage() {
           </Card>
 
           {/* Conformity Details */}
-          <Card className="bg-white shadow-md">
+          <Card className="bg-card border-border shadow-md">
             <CardHeader>
-              <CardTitle className="text-slate-900">Analyse détaillée</CardTitle>
+              <CardTitle className="text-foreground">Analyse détaillée</CardTitle>
               <CardDescription>Conformité par rapport à votre CCF</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-700 font-medium">Conformité globale</span>
-                  <span className="font-bold text-slate-900">{analysis.conformity}%</span>
+                  <span className="text-foreground font-medium">Conformité globale</span>
+                  <span className="font-bold text-foreground">{analysis.conformity}%</span>
                 </div>
-                <div className="w-full bg-slate-200 rounded-full h-3">
+                <div className="w-full bg-muted rounded-full h-3">
                   <div
-                    className="bg-gradient-to-r from-blue-500 to-cyan-500 h-3 rounded-full transition-all"
+                    className="gradient-primary h-3 rounded-full transition-all"
                     style={{ width: `${analysis.conformity}%` }}
                   />
                 </div>
@@ -128,9 +145,9 @@ export function QuoteAnalysisPage() {
 
           {/* Alerts */}
           {analysis.alerts.length > 0 && (
-            <Card className="bg-white shadow-md">
+            <Card className="bg-card border-border shadow-md">
               <CardHeader>
-                <CardTitle className="text-slate-900 flex items-center gap-2">
+                <CardTitle className="text-foreground flex items-center gap-2">
                   <AlertCircle className="h-5 w-5 text-yellow-600" />
                   Alertes et informations
                 </CardTitle>
@@ -148,9 +165,9 @@ export function QuoteAnalysisPage() {
 
           {/* Recommendations */}
           {analysis.recommendations.length > 0 && (
-            <Card className="bg-white shadow-md">
+            <Card className="bg-card border-border shadow-md">
               <CardHeader>
-                <CardTitle className="text-slate-900 flex items-center gap-2">
+                <CardTitle className="text-foreground flex items-center gap-2">
                   <CheckCircle2 className="h-5 w-5 text-green-600" />
                   Recommandations
                 </CardTitle>

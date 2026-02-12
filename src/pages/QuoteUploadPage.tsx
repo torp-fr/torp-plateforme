@@ -55,24 +55,29 @@ export function QuoteUploadPage() {
 
     setIsLoading(true);
     try {
-      // TODO: Upload to Supabase
       console.log('📤 Uploading file:', file.name);
 
       // Simulate upload delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
-      // Store file info in localStorage
+      // Get current CCF from localStorage
+      const ccfData = localStorage.getItem('currentCCF');
+
+      // Store file info + CCF in localStorage
       localStorage.setItem('uploadedQuote', JSON.stringify({
         filename: file.name,
         size: file.size,
         uploadedAt: new Date().toISOString(),
+        ccf: ccfData ? JSON.parse(ccfData) : null,
       }));
+
+      console.log('✅ Quote uploaded successfully:', file.name);
 
       // Navigate to analysis page
       navigate('/quote-analysis');
     } catch (err) {
-      setError('❌ Erreur lors de l\'upload');
-      console.error(err);
+      setError('Erreur lors de l\'upload. Veuillez réessayer.');
+      console.error('Upload error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -151,19 +156,19 @@ export function QuoteUploadPage() {
                 </label>
               </div>
 
-              {/* File Selected */}
+                      {/* File Selected */}
               {file && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex items-center gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-green-900 truncate">{file.name}</p>
-                    <p className="text-sm text-green-700">
-                      {(file.size / 1024 / 1024).toFixed(2)}MB
+                    <p className="font-semibold text-emerald-900 truncate">{file.name}</p>
+                    <p className="text-sm text-emerald-700">
+                      {(file.size / 1024 / 1024).toFixed(2)} MB
                     </p>
                   </div>
                   <button
                     onClick={() => setFile(null)}
-                    className="text-green-600 hover:text-green-700 font-semibold text-sm"
+                    className="text-emerald-600 hover:text-emerald-700 font-semibold text-sm"
                   >
                     Annuler
                   </button>
