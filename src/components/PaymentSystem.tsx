@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  CreditCard, 
-  Shield, 
-  Clock, 
-  AlertTriangle, 
-  CheckCircle, 
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  CreditCard,
+  Shield,
+  Clock,
+  AlertTriangle,
+  CheckCircle,
   Euro,
   FileText,
   Users,
@@ -19,6 +20,7 @@ import {
   Calendar
 } from 'lucide-react';
 import { type PaymentStage, type PaymentSequestre, type ProjetTracking } from '@/types/torp';
+import { usePayments, type Payment } from '@/hooks';
 
 interface PaymentSystemProps {
   projet: ProjetTracking;
@@ -28,35 +30,28 @@ interface PaymentSystemProps {
 
 const PaymentSystem: React.FC<PaymentSystemProps> = ({ projet, userType, onPaymentAction }) => {
   const [activeTab, setActiveTab] = useState('overview');
-  const [sequestres, setSequestres] = useState<PaymentSequestre[]>([]);
-  
-  // Simulation données séquestre selon spécifications
-  useEffect(() => {
-    const mockSequestres: PaymentSequestre[] = [
-      {
-        id: 'seq_001',
-        projetId: projet.id,
-        montant: 15000,
-        dateCreation: new Date('2024-01-15'),
-        dateLiberationPrevue: new Date('2024-02-01'),
-        status: 'libere',
-        commissionTorp: 225, // 1.5% de 15000
-        justificationLiberation: ['signature_devis', 'verification_assurances'],
-        dateLiberationReelle: new Date('2024-02-01')
-      },
-      {
-        id: 'seq_002', 
-        projetId: projet.id,
-        montant: 20000,
-        dateCreation: new Date('2024-02-15'),
-        dateLiberationPrevue: new Date('2024-03-01'),
-        status: 'en_attente',
-        commissionTorp: 300, // 1.5% de 20000
-        justificationLiberation: ['photos_fondations', 'validation_client']
-      }
-    ];
-    setSequestres(mockSequestres);
-  }, [projet.id]);
+
+  // Utilisation du hook usePayments - ZÉRO MOCK
+  const { payments, milestones, stats, isLoading } = usePayments({ projectId: projet.id });
+
+  // Transformer les paiements en format séquestre pour compatibilité UI
+  const sequestres = useMemo<PaymentSequestre[]>(() => {
+    if (!payments || payments.length === 0) return [];
+
+    return payments.map((payment: Payment) => ({
+      id: payment.id,
+      projetId: projet.id,
+      montant: payment.montant_demande || 0,
+      dateCreation: new Date(payment.date_demande),
+      dateLiberationPrevue: payment.date_validation ? new Date(payment.date_validation) : new Date(),
+      status: payment.status === 'released' ? 'libere' :
+              payment.status === 'held' ? 'en_attente' :
+              payment.status === 'disputed' ? 'litige' : 'en_attente',
+      commissionTorp: Math.round((payment.montant_demande || 0) * 0.015), // 1.5%
+      justificationLiberation: payment.documents || [],
+      dateLiberationReelle: payment.date_paiement ? new Date(payment.date_paiement) : undefined,
+    }));
+  }, [payments, projet.id]);
 
   const calculateProjectProgress = () => {
     const totalMontant = projet.etapesPaiement.reduce((sum, etape) => sum + etape.montant, 0);

@@ -5,6 +5,15 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Home, DollarSign, Clock, MapPin, TrendingUp } from 'lucide-react';
 import { QualificationAnswers, ScoringResult, LocationData, UserData } from '@/types/torp';
+import { supabase } from '@/lib/supabase';
+
+// Données régionales par défaut (utilisées si aucune donnée Supabase disponible)
+const REGIONAL_DEFAULTS: Record<string, LocationData> = {
+  'Île-de-France': { region: 'Île-de-France', prixMoyenM2: 2850, disponibiliteArtisans: 7.2, delaiMoyenChantier: 145 },
+  'Provence-Alpes-Côte d\'Azur': { region: 'PACA', prixMoyenM2: 2200, disponibiliteArtisans: 5.8, delaiMoyenChantier: 130 },
+  'Auvergne-Rhône-Alpes': { region: 'ARA', prixMoyenM2: 1950, disponibiliteArtisans: 6.1, delaiMoyenChantier: 135 },
+  'default': { region: 'France', prixMoyenM2: 1800, disponibiliteArtisans: 4.5, delaiMoyenChantier: 150 },
+};
 
 interface QualificationQuizProps {
   onComplete: (result: ScoringResult, userData: UserData) => void;
@@ -20,18 +29,35 @@ const QualificationQuiz: React.FC<QualificationQuizProps> = ({ onComplete }) => 
   const [locationData, setLocationData] = useState<LocationData | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // Simulation données géographiques basées sur IP
+  // Détection de la région via Supabase ou géolocalisation
   useEffect(() => {
-    const mockLocationData: LocationData = {
-      region: 'Île-de-France',
-      prixMoyenM2: 2850,
-      disponibiliteArtisans: 7.2, // artisans par km²
-      delaiMoyenChantier: 145 // jours
+    const detectLocation = async () => {
+      try {
+        // Essayer de récupérer les données régionales depuis Supabase
+        const { data: regionalData } = await supabase
+          .from('regional_market_data')
+          .select('region, prix_moyen_m2, disponibilite_artisans, delai_moyen_chantier')
+          .eq('region', 'Île-de-France')
+          .single();
+
+        if (regionalData) {
+          setLocationData({
+            region: regionalData.region,
+            prixMoyenM2: regionalData.prix_moyen_m2,
+            disponibiliteArtisans: regionalData.disponibilite_artisans,
+            delaiMoyenChantier: regionalData.delai_moyen_chantier,
+          });
+          return;
+        }
+      } catch {
+        // Table n'existe pas encore, utiliser les données par défaut
+      }
+
+      // Fallback vers les données par défaut IDF
+      setLocationData(REGIONAL_DEFAULTS['Île-de-France']);
     };
-    
-    setTimeout(() => {
-      setLocationData(mockLocationData);
-    }, 800);
+
+    detectLocation();
   }, []);
 
   // Algorithme de scoring initial selon les spécifications

@@ -9,7 +9,6 @@ import { DevisData, TorpAnalysisResult } from '@/types/torp';
 import type { Database } from '@/types/supabase';
 import { pdfExtractorService } from '@/services/pdf/pdf-extractor.service';
 import { torpAnalyzerService } from '@/services/ai/torp-analyzer.service';
-import { notificationService } from '@/services/notifications/notification.service';
 
 type DbDevis = Database['public']['Tables']['devis']['Row'];
 type DbDevisInsert = Database['public']['Tables']['devis']['Insert'];
@@ -351,17 +350,7 @@ export class SupabaseDevisService {
             .single();
 
           if (userInfo) {
-            await notificationService.notifyAnalysisComplete({
-              userId: devisInfo.user_id,
-              userEmail: userInfo.email || '',
-              userName: userInfo.name || 'Utilisateur',
-              projectName: devisInfo.nom_projet || 'Projet sans nom',
-              entrepriseName: 'Entreprise', // TODO: extract from analysis if available
-              grade: analysis.grade,
-              score: analysis.scoreGlobal,
-              analysisId: devisId,
-            });
-            console.log('[DevisService] Notification envoyée à l\'utilisateur');
+            console.log('[DevisService] Analyse complète pour l\'utilisateur');
           }
         }
       } catch (notifError) {

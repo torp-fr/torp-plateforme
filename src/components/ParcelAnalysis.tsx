@@ -1,132 +1,74 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { 
-  MapPin, 
-  Home, 
-  AlertTriangle, 
-  CheckCircle, 
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  MapPin,
+  Home,
+  AlertTriangle,
+  CheckCircle,
   Calculator,
   FileText,
   Zap,
   Shield,
-  TrendingDown,
   TrendingUp
 } from 'lucide-react';
-
-interface ParcelData {
-  surfaceTotale: number;
-  surfaceConstruiteExistante: number;
-  zone: string;
-  cosMaximum: number;
-  cesMaximum: number;
-  hauteurMax: string;
-  retraitVoirie: number;
-  retraitLimites: number;
-  potentielConstructible: {
-    surfacePlancherMax: number;
-    surfacePlancherDisponible: number;
-    emprisesolMax: number;
-    emprisesolDisponible: number;
-  };
-}
-
-interface RiskAnalysis {
-  zoneInondable: 'rouge' | 'bleue' | 'verte';
-  argileGonflante: 'fort' | 'moyen' | 'faible';
-  distanceRaccordementEgout: number;
-  largeurAcces: number;
-  score: number;
-  alerts: string[];
-  surcouts: { description: string; montant: number }[];
-}
+import { useParcelAnalysis, ParcelAnalysisData, RiskAnalysisData } from '@/hooks/useParcelAnalysis';
 
 interface ParcelAnalysisProps {
-  onAnalysisComplete: (data: ParcelData, risks: RiskAnalysis) => void;
+  onAnalysisComplete: (data: ParcelAnalysisData, risks: RiskAnalysisData) => void;
 }
 
 const ParcelAnalysis: React.FC<ParcelAnalysisProps> = ({ onAnalysisComplete }) => {
   const [address, setAddress] = useState('');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisStep, setAnalysisStep] = useState(0);
-  const [parcelData, setParcelData] = useState<ParcelData | null>(null);
-  const [riskAnalysis, setRiskAnalysis] = useState<RiskAnalysis | null>(null);
+  const [analysisStarted, setAnalysisStarted] = useState(false);
+
+  // Hook pour l'analyse réelle via APIs cadastre et géorisques
+  const {
+    parcelData,
+    riskAnalysis,
+    isLoading,
+    isAnalyzing,
+    analyzeParcelAsync,
+    error,
+  } = useParcelAnalysis({
+    address: analysisStarted ? address : undefined,
+    enabled: analysisStarted,
+  });
 
   const analysisSteps = [
-    'Localisation de la parcelle...',
-    'Extraction données cadastrales...',
+    'Géocodage de l\'adresse...',
+    'Extraction données cadastrales IGN...',
     'Vérification PLU/POS...',
-    'Analyse géorisques...',
+    'Analyse Géorisques (inondation, argiles, radon)...',
     'Calcul potentiel constructible...',
     'Génération rapport faisabilité...'
   ];
 
-  // Simulation de l'analyse de parcelle
-  const simulateParcelAnalysis = async () => {
-    setIsAnalyzing(true);
-    
-    for (let i = 0; i < analysisSteps.length; i++) {
-      setAnalysisStep(i);
-      await new Promise(resolve => setTimeout(resolve, 1200));
+  // Effet pour callback quand l'analyse est terminée
+  React.useEffect(() => {
+    if (parcelData && riskAnalysis && !isLoading) {
+      onAnalysisComplete(parcelData, riskAnalysis);
     }
+  }, [parcelData, riskAnalysis, isLoading, onAnalysisComplete]);
 
-    // Données simulées selon les spécifications
-    const mockParcelData: ParcelData = {
-      surfaceTotale: 850,
-      surfaceConstruiteExistante: 120,
-      zone: 'UB',
-      cosMaximum: 0.4,
-      cesMaximum: 0.3,
-      hauteurMax: '9m (R+1+combles)',
-      retraitVoirie: 5,
-      retraitLimites: 3,
-      potentielConstructible: {
-        surfacePlancherMax: 340, // 850 × 0.4
-        surfacePlancherDisponible: 220, // 340 - 120
-        emprisesolMax: 255, // 850 × 0.3
-        emprisesolDisponible: 135 // 255 - 120
-      }
-    };
-
-    // Analyse des risques selon algorithme
-    const mockRiskAnalysis: RiskAnalysis = {
-      zoneInondable: 'bleue',
-      argileGonflante: 'moyen',
-      distanceRaccordementEgout: 75,
-      largeurAcces: 4.2,
-      score: 78,
-      alerts: [
-        'Zone inondable bleue - Surcoût PPRI +15%',
-        'Sols argileux - Étude sol G2 recommandée'
-      ],
-      surcouts: [
-        { description: 'Surcoût PPRI (zone inondable)', montant: 3500 },
-        { description: 'Étude de sol G2', montant: 2500 },
-        { description: 'Fondations adaptées argile', montant: 4200 }
-      ]
-    };
-
-    setParcelData(mockParcelData);
-    setRiskAnalysis(mockRiskAnalysis);
-    setIsAnalyzing(false);
-
-    setTimeout(() => {
-      onAnalysisComplete(mockParcelData, mockRiskAnalysis);
-    }, 1000);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (address.trim()) {
-      simulateParcelAnalysis();
+      setAnalysisStarted(true);
+      try {
+        await analyzeParcelAsync(address);
+      } catch {
+        // Error handled by hook
+      }
     }
   };
 
-  if (isAnalyzing) {
+  if (isAnalyzing || isLoading) {
     return (
       <Card className="max-w-3xl mx-auto">
         <CardHeader>
@@ -139,30 +81,26 @@ const ParcelAnalysis: React.FC<ParcelAnalysisProps> = ({ onAnalysisComplete }) =
           <div className="text-center">
             <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mx-auto mb-4"></div>
             <h3 className="text-lg font-semibold mb-2">
-              {analysisSteps[analysisStep]}
+              Analyse en cours...
             </h3>
-            <Progress value={((analysisStep + 1) / analysisSteps.length) * 100} className="max-w-md mx-auto" />
+            <Progress value={50} className="max-w-md mx-auto" />
           </div>
 
           <div className="grid md:grid-cols-2 gap-4 mt-8">
             <div className="space-y-3">
-              <h4 className="font-medium text-sm">APIs Consultées :</h4>
+              <h4 className="font-medium text-sm">APIs Consultées (données réelles) :</h4>
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-success" />
-                  <span>Cadastre.gouv.fr</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-success" />
-                  <span>Géorisques.gouv.fr</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-success" />
-                  <span>PLU communal</span>
+                  <Zap className="h-4 w-4 text-warning animate-pulse" />
+                  <span>api-adresse.data.gouv.fr</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Zap className="h-4 w-4 text-warning animate-pulse" />
-                  <span>BRGM (sols)</span>
+                  <span>apicarto.ign.fr (Cadastre)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-warning animate-pulse" />
+                  <span>Géorisques.gouv.fr</span>
                 </div>
               </div>
             </div>
@@ -170,12 +108,11 @@ const ParcelAnalysis: React.FC<ParcelAnalysisProps> = ({ onAnalysisComplete }) =
             <div className="space-y-3">
               <h4 className="font-medium text-sm">Données Extraites :</h4>
               <div className="space-y-2 text-sm">
-                <div>✓ Références parcellaires</div>
-                <div>✓ Zonage PLU/POS</div>
-                <div>✓ Coefficients d'occupation</div>
-                <div>✓ Contraintes géologiques</div>
-                <div>✓ Risques naturels</div>
-                <div>⏳ Calculs de faisabilité...</div>
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-24" />
               </div>
             </div>
           </div>

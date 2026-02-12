@@ -6,7 +6,6 @@
 import { supabase } from '@/lib/supabase';
 import { User, UserType } from '@/context/AppContext';
 import type { Database } from '@/types/supabase';
-import { analyticsService } from '@/services/analytics/analyticsService';
 
 export interface LoginCredentials {
   email: string;
@@ -114,13 +113,6 @@ export class SupabaseAuthService {
 
     const mappedUser = mapDbUserToAppUser(userData);
 
-    // Track login event
-    try {
-      await analyticsService.trackLogin(mappedUser.type === 'admin' ? 'B2C' : mappedUser.type);
-    } catch (trackError) {
-      console.warn('Failed to track login event:', trackError);
-    }
-
     console.log('✓ Login réussi:', mappedUser.email, '- Type:', mappedUser.type);
 
     return {
@@ -193,9 +185,6 @@ export class SupabaseAuthService {
         phone: data.phone,
       };
 
-      // Track signup event
-      await analyticsService.trackSignup(data.type === 'admin' ? 'B2C' : data.type);
-
       return {
         user,
         token: authData.session?.access_token || '',
@@ -205,9 +194,6 @@ export class SupabaseAuthService {
 
     // RPC now returns JSONB object directly (not an array)
     const mappedUser = mapDbUserToAppUser(userData as DbUser);
-
-    // Track signup event
-    await analyticsService.trackSignup(mappedUser.type === 'admin' ? 'B2C' : mappedUser.type);
 
     return {
       user: mappedUser,

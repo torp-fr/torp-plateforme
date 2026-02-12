@@ -1,39 +1,53 @@
+import React from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppProvider, useApp } from "@/context/AppContext";
-import ErrorBoundary from "@/components/ErrorBoundary";
-import Index from "./pages/Index";
+import { ErrorBoundary } from "@/components/error/ErrorBoundary";
+
+// ============================================
+// LAYOUTS
+// ============================================
+import MainLayout from "./components/layout/MainLayout";
+import ChantierLayout from "./components/layout/ChantierLayout";
+
+// ============================================
+// PAGES PUBLIQUES
+// ============================================
+import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import Pricing from "./pages/Pricing";
+import NotFound from "./pages/NotFound";
+
+// ============================================
+// AUTH & PROTECTION
+// ============================================
+import { ProRoute, ProtectedRoute } from "@/components/auth/ProRoute";
+
+// ============================================
+// NOUVEAU PARCOURS UNIFIÉ
+// ============================================
+import DashboardUnifie from "./pages/DashboardUnifie";
+import ProjetPage from "./pages/projet/ProjetPage";
+import ProjetsListePage from "./pages/projet/ProjetsListePage";
+
+// ============================================
+// PAGES UTILITAIRES
+// ============================================
 import Profile from "./pages/Profile";
 import Analyze from "./pages/Analyze";
 import Results from "./pages/Results";
 import ResultsInteractive from "./pages/ResultsInteractive";
-import DashboardPage from "./pages/DashboardPage";
-import UnifiedDashboard from "./pages/UnifiedDashboard";
-import Pricing from "./pages/Pricing";
-import Demo from "./pages/Demo";
-import ProjectTracking from "./pages/ProjectTracking";
-import FormulaPicker from "./pages/FormulaPicker";
-import AdminDashboard from "./pages/AdminDashboard";
-import ProjectDashboard from "./pages/ProjectDashboard";
-import ImprovedB2BDashboard from "@/pages/ImprovedB2BDashboard";
-import B2CDashboard from "./pages/B2CDashboard";
-import NotFound from "./pages/NotFound";
-// Note: DiscoveryFlow obsolète, remplacé par Phase0Wizard
-import TorpCompleteFlow from "./pages/TorpCompleteFlow";
-import AlgorithmicSegments from "./pages/AlgorithmicSegments";
-import KnowledgeBase from "./pages/KnowledgeBase";
-import AdminAnalytics from "./pages/AdminAnalytics";
-import AdminDiagnostic from "./pages/AdminDiagnostic";
 import Compare from "./pages/Compare";
-// B2B Pro Pages
-import { ProRoute, ProtectedRoute } from "@/components/auth/ProRoute";
+
+// ============================================
+// PAGES B2B PRO
+// ============================================
 import ProDashboard from "./pages/pro/ProDashboard";
 import ProOnboarding from "./pages/pro/ProOnboarding";
 import ProAnalyses from "./pages/pro/ProAnalyses";
@@ -46,29 +60,32 @@ import ProProjects from "./pages/pro/ProProjects";
 import ProNewProject from "./pages/pro/ProNewProject";
 import ProCompanyProfile from "./pages/pro/ProCompanyProfile";
 import ProTeam from "./pages/pro/ProTeam";
-// Phase 0 Pages
-import {
-  Phase0Landing,
-  Phase0Wizard,
-  Phase0Professional,
-  Phase0Dashboard,
-  Phase0ProjectPage,
-  Phase0AnalyzeDevis,
-} from "./pages/phase0";
-// Tender Pages (Appels d'Offres)
-import { TendersPage, TenderDetailPage } from "./pages/tenders";
-// B2B Enterprise Pages (Consultation AO)
-import { B2BTendersPage, B2BTenderViewPage, B2BResponseFormPage } from "./pages/b2b";
-// Phase 1 Pages (Consultation & Sélection Entreprises)
-import { Phase1Consultation } from "./pages/phase1";
-// Phase 2 Pages (Préparation de Chantier)
-import { Phase2Dashboard, PlanningPage, ReunionsPage, JournalPage, ChantiersListPage } from "./pages/phase2";
-// Phase 3 Pages (Exécution Chantier)
-import { ControlesPage, CoordinationPage, SituationsPage } from "./pages/phase3";
-// Phase 4 Pages (Réception & Garanties)
-import Phase4Dashboard from "./pages/phase4/Phase4Dashboard";
-// Layout contextuel chantier
-import ChantierLayout from "./components/layout/ChantierLayout";
+
+// ============================================
+// PAGES PHASES (pour compatibilité)
+// ============================================
+import Phase2Dashboard from "./pages/phase2/Phase2Dashboard";
+import PlanningPage from "./pages/phase2/PlanningPage";
+import ReunionsPage from "./pages/phase2/ReunionsPage";
+import JournalPage from "./pages/phase2/JournalPage";
+import ChantiersListPage from "./pages/phase2/ChantiersListPage";
+import Phase5Dashboard from "./pages/phase5/Phase5Dashboard";
+import DiagnosticsPage from "./pages/phase5/DiagnosticsPage";
+import EntretienPage from "./pages/phase5/EntretienPage";
+import SinistresPage from "./pages/phase5/SinistresPage";
+
+// ============================================
+// PAGES B2B TENDERS
+// ============================================
+import TendersPage from "./pages/tenders/TendersPage";
+import TenderDetailPage from "./pages/tenders/TenderDetailPage";
+import B2BTendersPage from "./pages/b2b/B2BTendersPage";
+import B2BTenderViewPage from "./pages/b2b/B2BTenderViewPage";
+import B2BResponseFormPage from "./pages/b2b/B2BResponseFormPage";
+
+// ============================================
+// PAGES ADMIN
+// ============================================
 
 const queryClient = new QueryClient();
 
@@ -82,59 +99,64 @@ const AppContent = () => {
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
+          {/* ============================================ */}
+          {/* ROUTES PUBLIQUES */}
+          {/* ============================================ */}
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/analyze" element={<Analyze />} />
-          <Route path="/results" element={<Results />} />
-          <Route path="/results-interactive" element={<ResultsInteractive />} />
-          <Route path="/dashboard" element={<ProtectedRoute><UnifiedDashboard /></ProtectedRoute>} />
-          <Route path="/dashboard-legacy" element={<DashboardPage />} />
           <Route path="/pricing" element={<Pricing />} />
-          <Route path="/demo" element={<Demo />} />
-          <Route path="/project-tracking" element={<ProjectTracking />} />
-          <Route path="/formula-picker" element={<FormulaPicker />} />
-          <Route path="/admin-dashboard" element={<AdminDashboard />} />
-          <Route path="/admin/analytics" element={<AdminAnalytics />} />
-          <Route path="/admin/diagnostic" element={<AdminDiagnostic />} />
-          <Route path="/project-dashboard" element={<ProjectDashboard />} />
-          <Route path="/improved-b2b-dashboard" element={<ImprovedB2BDashboard />} />
-          <Route path="/b2c-dashboard" element={<B2CDashboard />} />
-          <Route path="/compare" element={<Compare />} />
-          <Route path="/torp-complete" element={<TorpCompleteFlow />} />
-          <Route path="/segments" element={<AlgorithmicSegments />} />
-          <Route path="/knowledge-base" element={<KnowledgeBase />} />
-          {/* Routes B2B Pro */}
-          <Route path="/pro" element={<ProRoute><ProDashboard /></ProRoute>} />
-          <Route path="/pro/onboarding" element={<ProRoute><ProOnboarding /></ProRoute>} />
-          <Route path="/pro/projects" element={<ProRoute><ProProjects /></ProRoute>} />
-          <Route path="/pro/projects/new" element={<ProRoute><ProNewProject /></ProRoute>} />
-          <Route path="/pro/projects/:projectId" element={<ProRoute><Phase0ProjectPage /></ProRoute>} />
-          <Route path="/pro/analyses" element={<ProRoute><ProAnalyses /></ProRoute>} />
-          <Route path="/pro/analyses/new" element={<ProRoute><ProNewAnalysis /></ProRoute>} />
-          <Route path="/pro/documents" element={<ProRoute><ProDocuments /></ProRoute>} />
-          <Route path="/pro/company" element={<ProRoute><ProCompanyProfile /></ProRoute>} />
-          <Route path="/pro/team" element={<ProRoute><ProTeam /></ProRoute>} />
-          <Route path="/pro/tickets" element={<ProRoute><ProTickets /></ProRoute>} />
-          <Route path="/pro/tickets/:id" element={<ProRoute><ProTicketDetail /></ProRoute>} />
-          <Route path="/pro/settings" element={<ProRoute><ProSettings /></ProRoute>} />
-          {/* Routes Phase 0 - Conception et Définition (protégées) */}
-          <Route path="/phase0" element={<ProtectedRoute><Phase0Dashboard /></ProtectedRoute>} />
-          <Route path="/phase0/dashboard" element={<ProtectedRoute><Phase0Dashboard /></ProtectedRoute>} />
-          <Route path="/phase0/new" element={<ProtectedRoute><Phase0Wizard /></ProtectedRoute>} />
-          <Route path="/phase0/wizard/:projectId" element={<ProtectedRoute><Phase0Wizard /></ProtectedRoute>} />
-          <Route path="/phase0/professional" element={<ProtectedRoute><Phase0Professional /></ProtectedRoute>} />
-          <Route path="/phase0/project/:projectId" element={<ProtectedRoute><Phase0ProjectPage /></ProtectedRoute>} />
-          <Route path="/phase0/project/:projectId/analyze" element={<ProtectedRoute><Phase0AnalyzeDevis /></ProtectedRoute>} />
-          {/* Routes Phase 1 - Consultation & Sélection Entreprises (protégées) */}
-          <Route path="/phase1/project/:projectId" element={<ProtectedRoute><Phase1Consultation /></ProtectedRoute>} />
-          <Route path="/phase1/project/:projectId/consultation" element={<ProtectedRoute><Phase1Consultation /></ProtectedRoute>} />
-          {/* Routes Phase 2 & 3 - Chantier avec layout contextuel */}
-          <Route path="/chantiers" element={<ProtectedRoute><ChantiersListPage /></ProtectedRoute>} />
-          {/* Routes Phase 2 - Préparation de Chantier (avec sidebar contextuel) */}
+
+          {/* ============================================ */}
+          {/* ROUTES PROTÉGÉES AVEC MAINLAYOUT */}
+          {/* ============================================ */}
+          <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+            {/* Dashboard principal */}
+            <Route path="/dashboard" element={<DashboardUnifie />} />
+
+            {/* Projets - Nouveau parcours unifié */}
+            <Route path="/projets" element={<ProjetsListePage />} />
+            <Route path="/projet/:projectId" element={<ProjetPage />} />
+
+            {/* Outils */}
+            <Route path="/analyze" element={<Analyze />} />
+            <Route path="/results" element={<Results />} />
+            <Route path="/results-interactive" element={<ResultsInteractive />} />
+            <Route path="/compare" element={<Compare />} />
+
+            {/* Profil et paramètres */}
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/parametres" element={<Profile />} />
+
+            {/* Liste des chantiers */}
+            <Route path="/chantiers" element={<ChantiersListPage />} />
+          </Route>
+
+          {/* ============================================ */}
+          {/* ROUTES B2B PRO */}
+          {/* ============================================ */}
+          <Route element={<ProRoute><MainLayout /></ProRoute>}>
+            <Route path="/pro" element={<ProDashboard />} />
+            <Route path="/pro/onboarding" element={<ProOnboarding />} />
+            <Route path="/pro/projects" element={<ProProjects />} />
+            <Route path="/pro/projects/new" element={<ProNewProject />} />
+            <Route path="/pro/analyses" element={<ProAnalyses />} />
+            <Route path="/pro/analyses/new" element={<ProNewAnalysis />} />
+            <Route path="/pro/documents" element={<ProDocuments />} />
+            <Route path="/pro/company" element={<ProCompanyProfile />} />
+            <Route path="/pro/team" element={<ProTeam />} />
+            <Route path="/pro/tickets" element={<ProTickets />} />
+            <Route path="/pro/tickets/:id" element={<ProTicketDetail />} />
+            <Route path="/pro/settings" element={<ProSettings />} />
+            <Route path="/b2b/ao" element={<B2BTendersPage />} />
+            <Route path="/b2b/ao/:tenderId" element={<B2BTenderViewPage />} />
+            <Route path="/b2b/ao/:tenderId/response/:responseId" element={<B2BResponseFormPage />} />
+          </Route>
+
+
+          {/* Routes Phases 2-5 avec ChantierLayout */}
           <Route path="/phase2/:projectId" element={<ProtectedRoute><ChantierLayout /></ProtectedRoute>}>
             <Route index element={<Phase2Dashboard />} />
             <Route path="dashboard" element={<Phase2Dashboard />} />
@@ -142,25 +164,24 @@ const AppContent = () => {
             <Route path="reunions" element={<ReunionsPage />} />
             <Route path="journal" element={<JournalPage />} />
           </Route>
-          {/* Routes Phase 3 - Exécution Chantier (avec sidebar contextuel) */}
-          <Route path="/phase3/:projectId" element={<ProtectedRoute><ChantierLayout /></ProtectedRoute>}>
-            <Route path="controles" element={<ControlesPage />} />
-            <Route path="coordination" element={<CoordinationPage />} />
-            <Route path="situations" element={<SituationsPage />} />
+          <Route path="/phase5/:projectId" element={<ProtectedRoute><ChantierLayout /></ProtectedRoute>}>
+            <Route index element={<Phase5Dashboard />} />
+            <Route path="carnet" element={<Phase5Dashboard />} />
+            <Route path="diagnostics" element={<DiagnosticsPage />} />
+            <Route path="entretien" element={<EntretienPage />} />
+            <Route path="sinistres" element={<SinistresPage />} />
           </Route>
-          {/* Routes Phase 4 - Réception & Garanties */}
-          <Route path="/phase4/:projectId" element={<ProtectedRoute><Phase4Dashboard /></ProtectedRoute>} />
-          <Route path="/phase4/:projectId/reception" element={<ProtectedRoute><Phase4Dashboard /></ProtectedRoute>} />
-          <Route path="/phase4/:projectId/reserves" element={<ProtectedRoute><Phase4Dashboard /></ProtectedRoute>} />
-          <Route path="/phase4/:projectId/garanties" element={<ProtectedRoute><Phase4Dashboard /></ProtectedRoute>} />
-          <Route path="/phase4/:projectId/doe" element={<ProtectedRoute><Phase4Dashboard /></ProtectedRoute>} />
-          {/* Routes Appels d'Offres (MOA) */}
-          <Route path="/tenders" element={<ProtectedRoute><TendersPage /></ProtectedRoute>} />
-          <Route path="/tenders/:tenderId" element={<ProtectedRoute><TenderDetailPage /></ProtectedRoute>} />
-          {/* Routes B2B Enterprise (Consultation AO) */}
-          <Route path="/b2b/ao" element={<ProRoute><B2BTendersPage /></ProRoute>} />
-          <Route path="/b2b/ao/:tenderId" element={<ProRoute><B2BTenderViewPage /></ProRoute>} />
-          <Route path="/b2b/ao/:tenderId/response/:responseId" element={<ProRoute><B2BResponseFormPage /></ProRoute>} />
+
+          {/* Tenders */}
+          <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+            <Route path="/tenders" element={<TendersPage />} />
+            <Route path="/tenders/:tenderId" element={<TenderDetailPage />} />
+          </Route>
+
+
+          {/* ============================================ */}
+          {/* FALLBACK */}
+          {/* ============================================ */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
