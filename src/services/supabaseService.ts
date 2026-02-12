@@ -274,8 +274,14 @@ export async function uploadQuotePDF(
   uploadedBy: string
 ): Promise<string | null> {
   try {
+    // Sanitize filename - remove special characters that Supabase Storage rejects
+    const sanitizedName = file.name
+      .replace(/[^a-zA-Z0-9._-]/g, '_') // Replace special chars with underscore
+      .replace(/_{2,}/g, '_') // Replace multiple underscores with single
+      .toLowerCase();
+
     // Upload fichier à Supabase Storage
-    const filePath = `ccf/${ccfId}/${Date.now()}_${file.name}`;
+    const filePath = `ccf/${ccfId}/${Date.now()}_${sanitizedName}`;
 
     console.log('🔄 [uploadQuotePDF] Uploading to storage:', filePath);
 
