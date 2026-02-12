@@ -26,7 +26,7 @@ import NotFound from "./pages/NotFound";
 import { ProtectedRoute } from "@/components/auth/ProRoute";
 
 // Protected Pages
-import DashboardUnifie from "./pages/DashboardUnifie";
+import Dashboard from "./pages/Dashboard";
 import ProjetPage from "./pages/projet/ProjetPage";
 import ProjetsListePage from "./pages/projet/ProjetsListePage";
 import Profile from "./pages/Profile";
@@ -58,7 +58,7 @@ const AppContent = () => {
 
           {/* Protected Routes with Layout */}
           <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
-            <Route path="/dashboard" element={<DashboardUnifie />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/projets" element={<ProjetsListePage />} />
             <Route path="/projet/:projectId" element={<ProjetPage />} />
             <Route path="/analyze" element={<Analyze />} />
