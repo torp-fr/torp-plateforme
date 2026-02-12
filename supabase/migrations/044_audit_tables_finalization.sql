@@ -287,13 +287,10 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================
--- GRANT PERMISSIONS
+-- HELPER FUNCTIONS CREATED
 -- ============================================
-
-GRANT EXECUTE ON FUNCTION get_ccf_analysis_history(UUID, INT) TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION get_analysis_api_calls(UUID) TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION get_analysis_criteria_breakdown(UUID) TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION get_execution_summary(TEXT) TO authenticated, anon;
+-- Note: Function permissions are controlled through RLS policies on related tables
+-- Functions are callable by authenticated and service_role users
 
 -- ============================================
 -- MIGRATION COMPLETE
