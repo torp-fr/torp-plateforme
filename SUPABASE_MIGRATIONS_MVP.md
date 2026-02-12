@@ -39,7 +39,12 @@ Apply these migrations **IN ORDER** in Supabase SQL Editor:
 010_enrich_devis_table.sql       ← Add quote enrichment
 ```
 
-### Step 5: Storage Uploads
+### Step 5: Essential MVP Tables
+```
+011_essential_tables_mvp.sql     ← Create profiles, audit, rate limits
+```
+
+### Step 6: Storage Uploads
 ```
 033_quote_uploads_storage.sql    ← Documentation reference
 034_cleanup_advanced_features.sql ← Optional: cleans if upgrading
@@ -119,12 +124,13 @@ Migrations reference policies but **CANNOT create them via SQL**.
 
 ### Users & Auth
 - `auth.users` (native Supabase)
-- `profiles` (user profiles)
+- `profiles` (user profiles, auto-created on signup)
 
 ### Business
 - `companies` (contractor companies)
 - `ccf` (Cahier des Charges - project specs)
 - `devis` (quotes)
+- `devis_photos` (photo attachments for quotes)
 - `quote_analysis` (quote analysis results)
 - `quote_uploads` (uploaded PDFs)
 
@@ -132,12 +138,17 @@ Migrations reference policies but **CANNOT create them via SQL**.
 - `client_enriched_data` (addresses, DPE, cadastre, regulatory)
 - `company_data_cache` (cached company search results)
 
-### Support
+### Tracking & Analytics
 - `analytics_events` (usage tracking)
+- `audit_trail` (complete action audit log)
+- `api_rate_limits` (API usage tracking)
 - `user_feedback` (feedback/ratings)
 - `search_history` (search logs)
 - `comparisons` (quote comparisons)
 - `notifications` (user notifications)
+
+### Configuration
+- `feature_flags` (feature toggles for MVP)
 
 ---
 
@@ -165,21 +176,25 @@ WHERE table_schema = 'public'
 ORDER BY table_name;
 ```
 
-**Expected output:**
+**Expected output (15 tables):**
 ```
+analytics_events
+api_rate_limits
+audit_trail
 ccf
 client_enriched_data
 companies
 company_data_cache
 comparisons
 devis
+devis_photos
+feature_flags
 notifications
 profiles
 quote_analysis
 quote_uploads
 search_history
 user_feedback
-analytics_events
 ```
 
 ---
