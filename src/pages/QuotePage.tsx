@@ -1,24 +1,33 @@
 /**
- * Quote Page - Guided CCF (Single Page)
- * Utilisateur crée son cahier des charges fonctionnel en une seule page
+ * Quote Page - Guided CCF avec Enrichissement Automatique
+ * Utilisateur crée son cahier des charges fonctionnel
+ * Enrichissement auto des données client via APIs
  */
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GuidedCCFSinglePage, type CCFData } from '@/components/guided-ccf/GuidedCCFSinglePage';
+import { GuidedCCFEnriched } from '@/components/guided-ccf/GuidedCCFEnriched';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft } from 'lucide-react';
+import type { CCFData } from '@/components/guided-ccf/GuidedCCF';
+import type { EnrichedClientData } from '@/types/enrichment';
 
 export function QuotePage() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleCCFSubmit = async (data: CCFData) => {
+  const handleCCFSubmit = async (data: CCFData & { enrichedData?: EnrichedClientData }) => {
     setIsLoading(true);
     try {
-      // Stocke en localStorage pour demo
+      // Stocke le CCF + données enrichies en localStorage
       localStorage.setItem('currentCCF', JSON.stringify(data));
-      console.log('✅ CCF Created:', data);
+
+      if (data.enrichedData) {
+        localStorage.setItem('enrichedClientData', JSON.stringify(data.enrichedData));
+        console.log('✅ CCF + Enriched Data Created:', data);
+      } else {
+        console.log('✅ CCF Created (without enrichment):', data);
+      }
 
       // Redirection vers la page de succès
       navigate('/quote-success');
@@ -43,7 +52,9 @@ export function QuotePage() {
               <ChevronLeft className="h-5 w-5 mr-2" />
               Retour
             </Button>
-            <h1 className="font-display text-2xl font-bold text-foreground">Créer votre CCF</h1>
+            <h1 className="font-display text-2xl font-bold text-foreground">
+              Créer votre Cahier des Charges
+            </h1>
           </div>
         </div>
       </header>
@@ -51,7 +62,7 @@ export function QuotePage() {
       {/* Content */}
       <main className="py-12 px-6">
         <div className="container mx-auto max-w-4xl">
-          <GuidedCCFSinglePage onSubmit={handleCCFSubmit} isLoading={isLoading} />
+          <GuidedCCFEnriched onSubmit={handleCCFSubmit} isLoading={isLoading} />
         </div>
       </main>
     </div>
