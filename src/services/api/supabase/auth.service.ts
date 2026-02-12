@@ -106,11 +106,11 @@ export class SupabaseAuthService {
       .from('users')
       .select('*')
       .eq('id', authData.user.id)
-      .single();
+      .maybeSingle();
 
     let mappedUser: User;
 
-    if (userError) {
+    if (userError || !userData) {
       // User profile doesn't exist yet, create basic user from auth data
       console.warn('User profile not found, creating from auth data:', authData.user.email);
       mappedUser = {
