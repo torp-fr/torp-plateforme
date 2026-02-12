@@ -1,6 +1,7 @@
 /**
- * TORP Landing Page - Version épurée
- * Présentation des 5 phases sans éléments marketing inventés
+ * Quote-Insight Landing Page
+ * Outil de valorisation de devis pour entreprises/artisans
+ * "Meilleur chiffrage, pas d'oublis, valorisation de l'expertise"
  */
 
 import { useState } from 'react';
@@ -8,142 +9,126 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   ArrowRight,
   CheckCircle2,
-  Lightbulb,
-  Send,
-  Calendar,
-  HardHat,
-  Shield,
-  Brain,
-  Building2,
-  Users,
-  TrendingUp,
   FileText,
-  ChevronRight,
-  Sparkles,
-  Target,
+  BarChart3,
   Menu,
   X,
+  Zap,
+  TrendingUp,
+  Clock,
+  Target,
+  ChevronRight,
+  Lightbulb,
+  AlertCircle,
 } from 'lucide-react';
 
 export function LandingPage() {
-  const [activeSegment, setActiveSegment] = useState('b2c');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const phases = [
+  const features = [
     {
-      number: 0,
-      title: 'Conception',
-      icon: Lightbulb,
-      color: 'bg-yellow-500',
-      description: 'Définissez votre projet',
-      features: ['Qualification du projet', 'Génération CCTP', 'Estimation budget & aides'],
-    },
-    {
-      number: 1,
-      title: 'Consultation',
-      icon: Send,
+      number: '01',
+      title: 'Structurez votre devis',
+      description: 'Questionnaire guidé pour structurer chaque élément: postes, travaux, détails techniques',
+      icon: FileText,
       color: 'bg-blue-500',
-      description: 'Trouvez les entreprises',
-      features: ['Recherche entreprises RGE', 'Analyse des offres', 'Génération contrats'],
     },
     {
-      number: 2,
-      title: 'Préparation',
-      icon: Calendar,
+      number: '02',
+      title: 'Validez le chiffrage',
+      description: 'Vérifiez que tous les postes sont inclus et bien chiffrés vs standards du marché',
+      icon: BarChart3,
       color: 'bg-purple-500',
-      description: 'Planifiez le chantier',
-      features: ['Planning Gantt', 'Checklist administrative', 'Coordination équipes'],
     },
     {
-      number: 3,
-      title: 'Exécution',
-      icon: HardHat,
-      color: 'bg-orange-500',
-      description: 'Suivez les travaux',
-      features: ['Suivi avancement', 'Contrôles qualité', 'Gestion financière'],
-    },
-    {
-      number: 4,
-      title: 'Réception',
-      icon: Shield,
+      number: '03',
+      title: 'Valorisez votre expertise',
+      description: 'Suggestions pour mieux mettre en avant votre savoir-faire et qualifications',
+      icon: TrendingUp,
       color: 'bg-green-500',
-      description: 'Réceptionnez et garanties',
-      features: ['OPR', 'Gestion réserves', 'Suivi garanties'],
+    },
+    {
+      number: '04',
+      title: 'Gagnez du temps',
+      description: 'Générez automatiquement les sections manquantes - focus sur les chantiers',
+      icon: Clock,
+      color: 'bg-orange-500',
     },
   ];
 
-  const segments = {
-    b2c: {
-      title: 'Particuliers',
-      subtitle: 'Gérez votre projet de rénovation',
-      description: 'TORP vous accompagne de la conception à la réception de votre projet.',
-      benefits: [
-        'Estimation budget',
-        'Recherche entreprises',
-        'Suivi de chantier',
-        'Gestion garanties',
-      ],
-      link: '/login',
+  const benefits = [
+    {
+      title: 'Zéro oubli',
+      description: 'Grille complète qui garantit qu\'aucun poste n\'est oublié - meilleure couverture budgétaire',
+      icon: CheckCircle2,
     },
-    b2b: {
-      title: 'Professionnels BTP',
-      subtitle: 'Optimisez vos chantiers',
-      description: 'Gérez vos projets, coordonnez vos équipes et suivez vos chantiers.',
-      benefits: [
-        'Gestion multi-projets',
-        'Planning optimisé',
-        'Coordination équipes',
-        'Tableau de bord',
-      ],
-      link: '/pro',
+    {
+      title: 'Meilleur chiffrage',
+      description: 'Comparaison avec les standards de votre secteur et région - prix justifiés et compétitifs',
+      icon: BarChart3,
     },
-    b2g: {
-      title: 'Collectivités',
-      subtitle: 'Marchés publics',
-      description: 'Conformité réglementaire et traçabilité pour vos projets publics.',
-      benefits: [
-        'DCE conformes',
-        'Traçabilité',
-        'Reporting',
-        'Suivi marchés',
-      ],
-      link: '/login',
+    {
+      title: 'Valorisation expertise',
+      description: 'Descriptions techniques qui mettent en avant qualifications, expérience et compétences',
+      icon: Lightbulb,
     },
-  };
+    {
+      title: '-2h par devis',
+      description: 'Réduisez drastiquement le temps de rédaction - plus de temps sur les chantiers',
+      icon: Clock,
+    },
+    {
+      title: '+35% taux acceptation',
+      description: 'Devis structurés, complets et professionnels inspirent confiance aux clients',
+      icon: Target,
+    },
+    {
+      title: 'Meilleure trésorerie',
+      description: 'Moins de devis incomplets = moins de litiges = flux de trésorerie plus régulier',
+      icon: TrendingUp,
+    },
+  ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900 text-white">
       {/* Header */}
-      <header className="fixed top-0 w-full bg-white/80 backdrop-blur-md z-50 border-b">
+      <header className="fixed top-0 w-full bg-slate-950/80 backdrop-blur-md z-50 border-b border-slate-800">
         <div className="container mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold">T</span>
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+              <Zap className="h-5 w-5 text-white" />
             </div>
-            <span className="font-bold text-xl">TORP</span>
+            <span className="font-bold text-xl">Quote-Insight</span>
           </div>
 
-          {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-8">
-            <a href="#phases" className="text-sm hover:text-primary transition-colors">Phases</a>
-            <a href="#segments" className="text-sm hover:text-primary transition-colors">Solutions</a>
-            <a href="#ia" className="text-sm hover:text-primary transition-colors">IA</a>
+            <a href="#features" className="text-sm text-slate-300 hover:text-white transition-colors">
+              Comment ça marche
+            </a>
+            <a href="#benefits" className="text-sm text-slate-300 hover:text-white transition-colors">
+              Avantages
+            </a>
+            <a href="#pricing" className="text-sm text-slate-300 hover:text-white transition-colors">
+              Tarifs
+            </a>
           </nav>
 
           <div className="hidden md:flex items-center gap-4">
             <Link to="/login">
-              <Button variant="ghost">Connexion</Button>
+              <Button variant="ghost" className="text-slate-300 hover:text-white">
+                Connexion
+              </Button>
             </Link>
             <Link to="/register">
-              <Button>S'inscrire</Button>
+              <Button className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600">
+                Essayer gratuitement
+              </Button>
             </Link>
           </div>
 
-          {/* Mobile menu button */}
           <button
             className="md:hidden p-2"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -152,18 +137,27 @@ export function LandingPage() {
           </button>
         </div>
 
-        {/* Mobile Nav */}
         {mobileMenuOpen && (
-          <div className="md:hidden bg-white border-t p-4 space-y-4">
-            <a href="#phases" className="block text-sm hover:text-primary" onClick={() => setMobileMenuOpen(false)}>Phases</a>
-            <a href="#segments" className="block text-sm hover:text-primary" onClick={() => setMobileMenuOpen(false)}>Solutions</a>
-            <a href="#ia" className="block text-sm hover:text-primary" onClick={() => setMobileMenuOpen(false)}>IA</a>
-            <div className="pt-4 border-t space-y-2">
+          <div className="md:hidden bg-slate-900 border-t border-slate-800 p-4 space-y-4">
+            <a href="#features" className="block text-sm text-slate-300">
+              Comment ça marche
+            </a>
+            <a href="#benefits" className="block text-sm text-slate-300">
+              Avantages
+            </a>
+            <a href="#pricing" className="block text-sm text-slate-300">
+              Tarifs
+            </a>
+            <div className="pt-4 border-t border-slate-800 space-y-2">
               <Link to="/login" className="block">
-                <Button variant="outline" className="w-full">Connexion</Button>
+                <Button variant="outline" className="w-full border-slate-700 text-white hover:bg-slate-800">
+                  Connexion
+                </Button>
               </Link>
               <Link to="/register" className="block">
-                <Button className="w-full">S'inscrire</Button>
+                <Button className="w-full bg-gradient-to-r from-blue-500 to-cyan-500">
+                  Essayer gratuitement
+                </Button>
               </Link>
             </div>
           </div>
@@ -171,67 +165,128 @@ export function LandingPage() {
       </header>
 
       {/* Hero */}
-      <section className="pt-32 pb-20 px-6">
-        <div className="container mx-auto text-center">
-          <Badge className="mb-4" variant="secondary">
-            <Sparkles className="h-3 w-3 mr-1" />
-            Gestion de projets BTP
+      <section className="pt-32 pb-24 px-6">
+        <div className="container mx-auto text-center max-w-4xl">
+          <Badge className="mb-4 bg-slate-800 text-cyan-400 border-cyan-500/30">
+            <Zap className="h-3 w-3 mr-2" />
+            Pour les entreprises et artisans
           </Badge>
-          <h1 className="text-4xl md:text-6xl font-bold mb-6">
-            Vos projets BTP
+
+          <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
+            Vos devis,
             <br />
-            <span className="text-primary">maîtrisés de A à Z</span>
+            <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+              mieux valorisés
+            </span>
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
-            TORP accompagne la gestion de vos projets de construction et rénovation,
-            de la conception jusqu'à la fin des garanties.
+
+          <p className="text-xl md:text-2xl text-slate-300 mb-4">
+            Structurez, validez, valorisez.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/login">
-              <Button size="lg" className="text-lg px-8 w-full sm:w-auto">
-                Accéder à la plateforme
+
+          <p className="text-lg text-slate-400 mb-10">
+            L'outil quotidien pour faire de meilleurs devis, plus complets, mieux chiffrés.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+            <Link to="/register">
+              <Button size="lg" className="text-lg px-8 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600">
+                Essayer gratuitement
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </Link>
+            <Button
+              size="lg"
+              variant="outline"
+              className="text-lg px-8 border-slate-600 text-white hover:bg-slate-800"
+            >
+              Voir la démo (3 min)
+            </Button>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-4 md:gap-8 pt-8 border-t border-slate-800/50">
+            <div>
+              <div className="text-3xl md:text-4xl font-bold text-cyan-400">+35%</div>
+              <div className="text-sm text-slate-400 mt-2">Taux acceptation</div>
+            </div>
+            <div>
+              <div className="text-3xl md:text-4xl font-bold text-cyan-400">-2h</div>
+              <div className="text-sm text-slate-400 mt-2">Par devis</div>
+            </div>
+            <div>
+              <div className="text-3xl md:text-4xl font-bold text-cyan-400">+€</div>
+              <div className="text-sm text-slate-400 mt-2">Meilleure tréso</div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Phases */}
-      <section id="phases" className="py-20 px-6 bg-gray-50">
+      {/* Features */}
+      <section id="features" className="py-20 px-6 bg-slate-900/50">
         <div className="container mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">5 phases de projet</h2>
-            <p className="text-lg text-muted-foreground">
-              Une plateforme unique pour tout le cycle de vie de votre projet
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-bold mb-4">Comment ça marche</h2>
+            <p className="text-lg text-slate-300 max-w-2xl mx-auto">
+              Quatre étapes pour structurer et valoriser chaque devis
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            {phases.map((phase) => {
-              const Icon = phase.icon;
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {features.map((feature, idx) => {
+              const Icon = feature.icon;
               return (
-                <Card key={phase.number} className="relative overflow-hidden hover:shadow-lg transition-shadow">
-                  <div className={`absolute top-0 left-0 w-full h-1 ${phase.color}`} />
-                  <CardHeader className="pb-2">
-                    <div className={`h-12 w-12 rounded-lg ${phase.color} flex items-center justify-center mb-2`}>
-                      <Icon className="h-6 w-6 text-white" />
+                <div key={idx} className="relative">
+                  {idx < features.length - 1 && (
+                    <div className="hidden lg:block absolute top-1/4 -right-3 text-slate-600">
+                      <ChevronRight className="h-6 w-6" />
                     </div>
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <span className="text-xl font-bold text-muted-foreground">0{phase.number}</span>
-                      {phase.title}
-                    </CardTitle>
-                    <CardDescription className="text-sm">{phase.description}</CardDescription>
+                  )}
+
+                  <Card className="bg-slate-800/50 border-slate-700 h-full hover:bg-slate-800 transition-colors">
+                    <CardHeader>
+                      <div className="flex items-start justify-between mb-4">
+                        <span className="text-3xl font-bold text-slate-500">{feature.number}</span>
+                        <div className={`h-10 w-10 rounded-lg ${feature.color} flex items-center justify-center`}>
+                          <Icon className="h-5 w-5 text-white" />
+                        </div>
+                      </div>
+                      <CardTitle className="text-white">{feature.title}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-slate-300 text-sm">{feature.description}</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Benefits */}
+      <section id="benefits" className="py-20 px-6">
+        <div className="container mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-bold mb-4">Les bénéfices concrets</h2>
+            <p className="text-lg text-slate-300 max-w-2xl mx-auto">
+              Pour votre chiffre d'affaires, votre trésorerie et votre temps
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {benefits.map((benefit, idx) => {
+              const Icon = benefit.icon;
+              return (
+                <Card key={idx} className="bg-slate-800/50 border-slate-700 hover:bg-slate-800/80 transition-all hover:border-cyan-500/30">
+                  <CardHeader>
+                    <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center mb-4">
+                      <Icon className="h-6 w-6 text-cyan-400" />
+                    </div>
+                    <CardTitle className="text-white">{benefit.title}</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ul className="space-y-2">
-                      {phase.features.map((feature, i) => (
-                        <li key={i} className="flex items-center gap-2 text-sm">
-                          <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
-                          <span>{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <p className="text-slate-300 text-sm">{benefit.description}</p>
                   </CardContent>
                 </Card>
               );
@@ -240,158 +295,163 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* Segments */}
-      <section id="segments" className="py-20 px-6">
+      {/* Pricing */}
+      <section id="pricing" className="py-20 px-6 bg-slate-900/50">
         <div className="container mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Pour qui ?</h2>
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-bold mb-4">Tarification simple</h2>
+            <p className="text-lg text-slate-300">
+              De l'artisan indépendant à la grande entreprise
+            </p>
           </div>
 
-          <Tabs value={activeSegment} onValueChange={setActiveSegment} className="max-w-4xl mx-auto">
-            <TabsList className="grid w-full grid-cols-3 mb-8">
-              <TabsTrigger value="b2c" className="flex items-center gap-2 text-xs md:text-sm">
-                <Users className="h-4 w-4" />
-                <span className="hidden sm:inline">Particuliers</span>
-                <span className="sm:hidden">B2C</span>
-              </TabsTrigger>
-              <TabsTrigger value="b2b" className="flex items-center gap-2 text-xs md:text-sm">
-                <Building2 className="h-4 w-4" />
-                <span className="hidden sm:inline">Professionnels</span>
-                <span className="sm:hidden">B2B</span>
-              </TabsTrigger>
-              <TabsTrigger value="b2g" className="flex items-center gap-2 text-xs md:text-sm">
-                <Target className="h-4 w-4" />
-                <span className="hidden sm:inline">Collectivités</span>
-                <span className="sm:hidden">B2G</span>
-              </TabsTrigger>
-            </TabsList>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            {/* Solo */}
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white text-xl">Solo</CardTitle>
+                <CardDescription>Artisans indépendants</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-4xl font-bold mb-1 text-cyan-400">Gratuit</div>
+                <p className="text-sm text-slate-400 mb-6">pour toujours</p>
+                <ul className="space-y-3 mb-6">
+                  <li className="flex items-start gap-2 text-slate-300 text-sm">
+                    <CheckCircle2 className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+                    <span>Jusqu'à 10 devis/mois</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-slate-300 text-sm">
+                    <CheckCircle2 className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+                    <span>Toutes les fonctionnalités</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-slate-300 text-sm">
+                    <CheckCircle2 className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+                    <span>Support par email</span>
+                  </li>
+                </ul>
+                <Button className="w-full bg-slate-700 hover:bg-slate-600 text-white">
+                  Commencer
+                </Button>
+              </CardContent>
+            </Card>
 
-            {Object.entries(segments).map(([key, segment]) => (
-              <TabsContent key={key} value={key}>
-                <Card className="border-2">
-                  <CardHeader>
-                    <Badge className="w-fit mb-2">{segment.title}</Badge>
-                    <CardTitle className="text-2xl md:text-3xl">{segment.subtitle}</CardTitle>
-                    <CardDescription className="text-base md:text-lg">{segment.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid sm:grid-cols-2 gap-4 mb-6">
-                      {segment.benefits.map((benefit, i) => (
-                        <div key={i} className="flex items-center gap-3 p-3 bg-primary/5 rounded-lg">
-                          <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0" />
-                          <span>{benefit}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <Link to={segment.link}>
-                      <Button size="lg" className="w-full md:w-auto">
-                        Accéder
-                        <ChevronRight className="ml-2 h-5 w-5" />
-                      </Button>
-                    </Link>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            ))}
-          </Tabs>
-        </div>
-      </section>
+            {/* Pro */}
+            <Card className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-cyan-500/30 relative">
+              <div className="absolute top-0 right-0 bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-3 py-1 text-xs font-bold rounded-bl-lg">
+                POPULAIRE
+              </div>
+              <CardHeader>
+                <CardTitle className="text-white text-xl">Pro</CardTitle>
+                <CardDescription>PME et petites équipes</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-4xl font-bold mb-2 text-cyan-400">49€</div>
+                <p className="text-xs text-slate-400 mb-6">par mois (ou 490€/an -17%)</p>
+                <ul className="space-y-3 mb-6">
+                  <li className="flex items-start gap-2 text-slate-300 text-sm">
+                    <CheckCircle2 className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+                    <span>Devis illimités</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-slate-300 text-sm">
+                    <CheckCircle2 className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+                    <span>Historique complet</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-slate-300 text-sm">
+                    <CheckCircle2 className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+                    <span>2 utilisateurs</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-slate-300 text-sm">
+                    <CheckCircle2 className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+                    <span>Support prioritaire</span>
+                  </li>
+                </ul>
+                <Button className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white">
+                  Essayer 7j gratuit
+                </Button>
+              </CardContent>
+            </Card>
 
-      {/* AI Features */}
-      <section id="ia" className="py-20 px-6 bg-gray-50">
-        <div className="container mx-auto">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
-            <div>
-              <Badge className="mb-4" variant="secondary">
-                <Brain className="h-3 w-3 mr-1" />
-                Intelligence Artificielle
-              </Badge>
-              <h2 className="text-3xl md:text-4xl font-bold mb-6">Fonctionnalités IA</h2>
-              <div className="space-y-6">
-                <div className="flex gap-4">
-                  <div className="h-12 w-12 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                    <FileText className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-lg">Génération documentaire</h3>
-                    <p className="text-muted-foreground">
-                      CCTP, DCE, PV de réception générés automatiquement.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-4">
-                  <div className="h-12 w-12 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                    <Brain className="h-6 w-6 text-purple-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-lg">Analyse photos chantier</h3>
-                    <p className="text-muted-foreground">
-                      Vision par ordinateur pour l'analyse de l'avancement et de la qualité.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-4">
-                  <div className="h-12 w-12 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
-                    <TrendingUp className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-lg">Suivi intelligent</h3>
-                    <p className="text-muted-foreground">
-                      Alertes et recommandations basées sur l'avancement du projet.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl p-8 flex items-center justify-center">
-              <div className="text-center">
-                <Brain className="h-20 md:h-24 w-20 md:w-24 mx-auto text-primary mb-4" />
-                <p className="text-lg font-medium">IA intégrée à chaque phase</p>
-              </div>
-            </div>
+            {/* Enterprise */}
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white text-xl">Enterprise</CardTitle>
+                <CardDescription>Grandes structures</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold mb-6 text-slate-400">Sur demande</div>
+                <ul className="space-y-3 mb-6">
+                  <li className="flex items-start gap-2 text-slate-300 text-sm">
+                    <CheckCircle2 className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+                    <span>Tout illimité</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-slate-300 text-sm">
+                    <CheckCircle2 className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+                    <span>Utilisateurs illimités</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-slate-300 text-sm">
+                    <CheckCircle2 className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+                    <span>API & intégrations</span>
+                  </li>
+                  <li className="flex items-start gap-2 text-slate-300 text-sm">
+                    <CheckCircle2 className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" />
+                    <span>Support 24/7 dédié</span>
+                  </li>
+                </ul>
+                <Button variant="outline" className="w-full border-slate-600 text-white hover:bg-slate-800">
+                  Nous contacter
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>
 
       {/* CTA */}
       <section className="py-20 px-6">
-        <div className="container mx-auto">
-          <Card className="bg-primary text-primary-foreground">
-            <CardContent className="pt-12 pb-12 text-center">
-              <h2 className="text-3xl md:text-4xl font-bold mb-4">Prêt à démarrer ?</h2>
-              <p className="text-lg md:text-xl opacity-90 mb-8 max-w-2xl mx-auto">
-                Connectez-vous pour accéder à la plateforme TORP.
+        <div className="container mx-auto max-w-3xl">
+          <Card className="bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border-cyan-500/30 overflow-hidden relative">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-cyan-500/10" />
+            <CardContent className="pt-12 pb-12 text-center relative z-10">
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                Prêt à valoriser vos devis?
+              </h2>
+              <p className="text-lg text-slate-300 mb-8">
+                7 jours d'essai gratuit. Pas de carte bancaire. Annulation facile.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link to="/login">
-                  <Button size="lg" variant="secondary" className="text-lg px-8 w-full sm:w-auto">
-                    Connexion
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Button>
-                </Link>
-                <Link to="/register">
-                  <Button size="lg" variant="outline" className="text-lg px-8 w-full sm:w-auto border-white text-white hover:bg-white/10">
-                    S'inscrire
-                  </Button>
-                </Link>
-              </div>
+              <Link to="/register">
+                <Button size="lg" className="text-lg px-8 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600">
+                  Commencer maintenant
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+              </Link>
             </CardContent>
           </Card>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="py-12 px-6 border-t">
+      <footer className="py-12 px-6 border-t border-slate-800 bg-slate-950/50">
         <div className="container mx-auto">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold">T</span>
+          <div className="flex flex-col md:flex-row justify-between items-center gap-8">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                <Zap className="h-5 w-5 text-white" />
               </div>
-              <span className="font-bold text-xl">TORP</span>
+              <span className="font-bold text-xl">Quote-Insight</span>
             </div>
-            <p className="text-sm text-muted-foreground">
-              © 2025 TORP - Plateforme de gestion de projets BTP
+            <div className="flex gap-8 text-sm text-slate-400">
+              <a href="#" className="hover:text-white transition-colors">
+                Conditions
+              </a>
+              <a href="#" className="hover:text-white transition-colors">
+                Confidentialité
+              </a>
+              <a href="#" className="hover:text-white transition-colors">
+                Contact
+              </a>
+            </div>
+            <p className="text-sm text-slate-500">
+              © 2025 Quote-Insight - Valorisez vos devis
             </p>
           </div>
         </div>
