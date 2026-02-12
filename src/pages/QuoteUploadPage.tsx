@@ -57,14 +57,29 @@ export function QuoteUploadPage() {
     try {
       console.log('📤 Uploading file:', file.name);
 
-      // Simulate upload delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // Get current CCF from localStorage
+      // Récupérer CCF ID depuis localStorage
+      const ccfId = localStorage.getItem('currentCCFId');
       const ccfData = localStorage.getItem('currentCCF');
 
-      // Store file info + CCF in localStorage
+      if (!ccfId) {
+        setError('❌ CCF introuvable. Veuillez créer un CCF d\'abord.');
+        setIsLoading(false);
+        return;
+      }
+
+      // Upload vers Supabase (importé dynamiquement pour éviter les erreurs si Supabase ne configure)
+      let uploadedQuoteId: string | null = null;
+      try {
+        const { uploadQuotePDF } = await import('@/services/supabaseService');
+        uploadedQuoteId = await uploadQuotePDF(ccfId, file, 'user');
+      } catch (supabaseError) {
+        console.warn('⚠️ Supabase upload failed, using localStorage fallback:', supabaseError);
+      }
+
+      // Fallback: stocker en localStorage si Supabase échoue
       localStorage.setItem('uploadedQuote', JSON.stringify({
+        id: uploadedQuoteId,
+        ccfId,
         filename: file.name,
         size: file.size,
         uploadedAt: new Date().toISOString(),

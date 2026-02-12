@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { ChevronLeft } from 'lucide-react';
 import type { CCFData } from '@/components/guided-ccf/GuidedCCF';
 import type { EnrichedClientData } from '@/types/enrichment';
+import { createCCF, storeEnrichedData, logAction } from '@/services/supabaseService';
 
 export function QuotePage() {
   const navigate = useNavigate();
@@ -19,14 +20,28 @@ export function QuotePage() {
   const handleCCFSubmit = async (data: CCFData & { enrichedData?: EnrichedClientData }) => {
     setIsLoading(true);
     try {
-      // Stocke le CCF + données enrichies en localStorage
+      // Stocke d'abord en localStorage pour fallback
       localStorage.setItem('currentCCF', JSON.stringify(data));
 
-      if (data.enrichedData) {
-        localStorage.setItem('enrichedClientData', JSON.stringify(data.enrichedData));
-        console.log('✅ CCF + Enriched Data Created:', data);
+      // Créer CCF dans Supabase
+      const createdCCF = await createCCF(data);
+
+      if (createdCCF) {
+        // Stocker enriched data si disponible
+        if (data.enrichedData) {
+          await storeEnrichedData(createdCCF.id, data.enrichedData);
+          console.log('✅ CCF + Enriched Data Created in Supabase:', createdCCF.id);
+        }
+
+        // Log l'action
+        await logAction(createdCCF.id, 'ccf_created', {
+          has_enrichment: !!data.enrichedData,
+        });
+
+        // Stocker le CCF ID pour utilisation dans les pages suivantes
+        localStorage.setItem('currentCCFId', createdCCF.id);
       } else {
-        console.log('✅ CCF Created (without enrichment):', data);
+        console.warn('⚠️ Failed to create CCF in Supabase, using localStorage fallback');
       }
 
       // Redirection vers la page de succès
