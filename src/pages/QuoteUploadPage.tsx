@@ -2,7 +2,7 @@
  * Quote Upload Page - Upload devis pour analyse
  */
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { Upload, FileText, AlertCircle, CheckCircle2, ChevronLeft } from 'lucide
 
 export function QuoteUploadPage() {
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -181,17 +182,20 @@ export function QuoteUploadPage() {
                   Déposez votre PDF ici
                 </h3>
                 <p className="text-sm text-slate-600 mb-4">ou</p>
-                <label>
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])}
-                    className="hidden"
-                  />
-                  <Button variant="outline" className="cursor-pointer">
-                    Parcourir les fichiers
-                  </Button>
-                </label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf"
+                  onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])}
+                  style={{ display: 'none' }}
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  type="button"
+                >
+                  Parcourir les fichiers
+                </Button>
               </div>
 
                       {/* File Selected */}
