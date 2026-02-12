@@ -1,1 +1,0 @@
-export { RoomWorkEditor } from './RoomWorkEditor';
