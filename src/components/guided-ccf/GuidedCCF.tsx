@@ -144,17 +144,17 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-3xl mx-auto animate-fade-up">
       {/* Progress */}
       <div className="mb-8">
         <div className="flex justify-between items-center mb-4">
           {steps.map((s, idx) => (
             <div key={idx} className="flex-1 flex flex-col items-center">
               <div
-                className={`h-10 w-10 rounded-full flex items-center justify-center font-bold transition-colors ${
+                className={`h-10 w-10 rounded-full flex items-center justify-center font-display font-bold transition-colors ${
                   idx <= step
-                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white'
-                    : 'bg-slate-700 text-slate-400'
+                    ? 'gradient-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground'
                 }`}
               >
                 {idx < step ? (
@@ -166,7 +166,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
               {idx < steps.length - 1 && (
                 <div
                   className={`h-1 flex-1 mx-2 mb-10 transition-colors ${
-                    idx < step ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-slate-700'
+                    idx < step ? 'gradient-primary' : 'bg-muted'
                   }`}
                 />
               )}
@@ -176,33 +176,33 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
       </div>
 
       {/* Content */}
-      <Card className="bg-white border-slate-200 mb-6 shadow-md">
+      <Card className="bg-card border-border mb-6 shadow-md hover:shadow-lg transition-shadow">
         <CardHeader>
-          <CardTitle className="text-2xl text-slate-900">{steps[step].title}</CardTitle>
-          <CardDescription className="text-slate-600">{steps[step].description}</CardDescription>
+          <CardTitle className="text-2xl text-foreground font-display">{steps[step].title}</CardTitle>
+          <CardDescription className="text-muted-foreground">{steps[step].description}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Step 0: Infos projet */}
           {step === 0 && (
             <>
               <div>
-                <label className="text-sm font-medium text-slate-700 block mb-2">
+                <label className="text-sm font-medium text-foreground block mb-2">
                   Nom du projet *
                 </label>
                 <Input
                   placeholder="ex: Rénovation Appartement Paris 16"
                   value={formData.projectName || ''}
                   onChange={(e) => handleInputChange('projectName', e.target.value)}
-                  className="bg-white border-slate-200 text-slate-900 placeholder-slate-400"
+                  className="bg-background border-border text-foreground placeholder-muted-foreground"
                 />
               </div>
 
               <div>
-                <label className="text-sm font-medium text-slate-700 block mb-2">
+                <label className="text-sm font-medium text-foreground block mb-2">
                   Type de projet *
                 </label>
                 <Select value={formData.projectType} onValueChange={(v) => handleInputChange('projectType', v)}>
-                  <SelectTrigger className="bg-white border-slate-200 text-slate-900">
+                  <SelectTrigger className="bg-background border-border text-foreground">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -221,7 +221,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
           {step === 1 && (
             <>
               <div>
-                <label className="text-sm font-medium text-slate-700 block mb-2">
+                <label className="text-sm font-medium text-foreground block mb-2">
                   Périmètre du projet *
                 </label>
                 <Textarea
@@ -229,12 +229,12 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
                   value={formData.scope || ''}
                   onChange={(e) => handleInputChange('scope', e.target.value)}
                   rows={4}
-                  className="bg-white border-slate-200 text-slate-900 placeholder-slate-400"
+                  className="bg-background border-border text-foreground placeholder-muted-foreground"
                 />
               </div>
 
               <div>
-                <label className="text-sm font-medium text-slate-700 block mb-2">
+                <label className="text-sm font-medium text-foreground block mb-2">
                   Budget (€) *
                 </label>
                 <Input
@@ -242,7 +242,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
                   placeholder="50000"
                   value={formData.budget || ''}
                   onChange={(e) => handleInputChange('budget', parseFloat(e.target.value))}
-                  className="bg-white border-slate-200 text-slate-900 placeholder-slate-400"
+                  className="bg-background border-border text-foreground placeholder-muted-foreground"
                 />
               </div>
             </>
@@ -252,7 +252,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
           {step === 2 && (
             <>
               <div>
-                <label className="text-sm font-medium text-slate-700 block mb-2">
+                <label className="text-sm font-medium text-foreground block mb-2">
                   Timeline souhaité *
                 </label>
                 <Select value={formData.timeline} onValueChange={(v) => handleInputChange('timeline', v)}>
@@ -274,7 +274,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
           {step === 3 && (
             <>
               <div>
-                <label className="text-sm font-medium text-slate-300 block mb-4">
+                <label className="text-sm font-medium text-muted-foreground block mb-4">
                   Objectifs principaux * (sélectionnez au moins 1)
                 </label>
                 <div className="space-y-2">
@@ -287,7 +287,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
                         onChange={() => toggleArrayItem('objectives', obj)}
                         className="h-4 w-4 bg-white border-slate-300 text-cyan-600 rounded"
                       />
-                      <label htmlFor={obj} className="text-sm text-slate-700 cursor-pointer flex-1">
+                      <label htmlFor={obj} className="text-sm text-foreground cursor-pointer flex-1">
                         {obj}
                       </label>
                     </div>
@@ -296,13 +296,13 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-slate-700 block mb-2">
+                <label className="text-sm font-medium text-foreground block mb-2">
                   Objectifs personnalisés
                 </label>
                 <Textarea
                   placeholder="Ajoutez d'autres objectifs spécifiques à votre projet"
                   rows={2}
-                  className="bg-white border-slate-200 text-slate-900 placeholder-slate-400"
+                  className="bg-background border-border text-foreground placeholder-muted-foreground"
                 />
               </div>
             </>
@@ -312,7 +312,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
           {step === 4 && (
             <>
               <div>
-                <label className="text-sm font-medium text-slate-300 block mb-4">
+                <label className="text-sm font-medium text-muted-foreground block mb-4">
                   Contraintes & limitations * (sélectionnez au moins 1)
                 </label>
                 <div className="space-y-2">
@@ -325,7 +325,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
                         onChange={() => toggleArrayItem('constraints', constraint)}
                         className="h-4 w-4 bg-white border-slate-300 text-cyan-600 rounded"
                       />
-                      <label htmlFor={constraint} className="text-sm text-slate-300 cursor-pointer flex-1">
+                      <label htmlFor={constraint} className="text-sm text-muted-foreground cursor-pointer flex-1">
                         {constraint}
                       </label>
                     </div>
@@ -339,7 +339,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
           {step === 5 && (
             <>
               <div>
-                <label className="text-sm font-medium text-slate-700 block mb-2">
+                <label className="text-sm font-medium text-foreground block mb-2">
                   Critères de succès * (sélectionnez au moins 1)
                 </label>
                 <div className="space-y-2">
@@ -359,7 +359,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
                         onChange={() => toggleArrayItem('successCriteria', criteria)}
                         className="h-4 w-4 bg-white border-slate-300 text-cyan-600 rounded"
                       />
-                      <label htmlFor={criteria} className="text-sm text-slate-300 cursor-pointer flex-1">
+                      <label htmlFor={criteria} className="text-sm text-muted-foreground cursor-pointer flex-1">
                         {criteria}
                       </label>
                     </div>
@@ -373,26 +373,26 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
           {step === 6 && (
             <>
               <div>
-                <label className="text-sm font-medium text-slate-700 block mb-2">
+                <label className="text-sm font-medium text-foreground block mb-2">
                   Entreprise/Raison sociale
                 </label>
                 <Input
                   placeholder="ex: Acme SARL"
                   value={formData.company || ''}
                   onChange={(e) => handleInputChange('company', e.target.value)}
-                  className="bg-white border-slate-200 text-slate-900 placeholder-slate-400"
+                  className="bg-background border-border text-foreground placeholder-muted-foreground"
                 />
               </div>
 
               <div>
-                <label className="text-sm font-medium text-slate-700 block mb-2">
+                <label className="text-sm font-medium text-foreground block mb-2">
                   Contact principal
                 </label>
                 <Input
                   placeholder="ex: Pierre Dupont, Chef de projet"
                   value={formData.contacts || ''}
                   onChange={(e) => handleInputChange('contacts', e.target.value)}
-                  className="bg-white border-slate-200 text-slate-900 placeholder-slate-400"
+                  className="bg-background border-border text-foreground placeholder-muted-foreground"
                 />
               </div>
             </>
@@ -459,7 +459,7 @@ export function GuidedCCF({ onSubmit, isLoading = false }: GuidedCCFProps) {
           variant="outline"
           onClick={handlePrev}
           disabled={step === 0}
-          className="border-slate-300 text-slate-700 hover:bg-slate-50"
+          className="border-slate-300 text-foreground hover:bg-slate-50"
         >
           <ChevronLeft className="h-4 w-4 mr-2" />
           Précédent
