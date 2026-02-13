@@ -49,14 +49,14 @@ export default function Login() {
 
       // Redirection selon le type d'utilisateur
       if (response.user.type === 'admin' || response.user.type === 'super_admin') {
-        console.log('[Login] Admin détecté, redirection vers /admin/analytics');
-        navigate('/admin/analytics');
+        console.log('[Login] Admin détecté, redirection vers /analytics');
+        navigate('/analytics');
       } else if (response.user.type === 'B2B') {
-        console.log('[Login] Professionnel B2B détecté, redirection vers /pro');
-        navigate('/pro');
+        console.log('[Login] Professionnel B2B détecté, redirection vers /dashboard');
+        navigate('/dashboard');
       } else if (response.user.type === 'B2G') {
         console.log('[Login] Collectivité B2G détectée, redirection vers /dashboard');
-        navigate('/dashboard'); // TODO: Créer un dashboard B2G dédié
+        navigate('/dashboard');
       } else {
         console.log('[Login] Particulier B2C, redirection vers /dashboard');
         navigate('/dashboard');

@@ -313,12 +313,6 @@ export function MainLayout({ children }: MainLayoutProps) {
                 Valorisation intelligente de vos devis BTP
               </span>
             </div>
-            <div className="flex items-center gap-3">
-              <Button size="sm" onClick={() => navigate('/analyze')}>
-                <PlusCircle className="h-4 w-4 mr-2" />
-                Nouveau Projet
-              </Button>
-            </div>
           </header>
 
           {/* Content */}
