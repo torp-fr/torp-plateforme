@@ -6,7 +6,9 @@ import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Upload, FileText, AlertCircle, CheckCircle2, ChevronLeft } from 'lucide-react';
+import { Upload, FileText, AlertCircle, CheckCircle2, ChevronLeft, Loader2 } from 'lucide-react';
+import { pappersService } from '@/services/external-apis/PappersService';
+import { auditService } from '@/services/audit';
 
 export function QuoteUploadPage() {
   const navigate = useNavigate();
@@ -15,6 +17,7 @@ export function QuoteUploadPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
+  const [enrichmentStatus, setEnrichmentStatus] = useState<string | null>(null);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -66,6 +69,7 @@ export function QuoteUploadPage() {
 
     setIsLoading(true);
     setError(null);
+    setEnrichmentStatus(null);
     try {
       console.log('📤 [QuoteUpload] Starting upload:', file.name);
 
@@ -95,6 +99,42 @@ export function QuoteUploadPage() {
         console.warn('⚠️ [QuoteUpload] Supabase upload failed, using localStorage fallback:', supabaseError);
       }
 
+      // 🆕 Pappers Integration: Extract SIRET and enrich company data
+      setEnrichmentStatus('🔍 Extraction du SIRET...');
+      const siret = await pappersService.extractSIRETFromFilename(file.name);
+
+      if (siret) {
+        console.log(`🔍 [QuoteUpload] SIRET extracted: ${siret}`);
+        setEnrichmentStatus(`📊 Enrichissement données Pappers pour ${siret}...`);
+
+        try {
+          const companyProfile = await pappersService.getCompleteProfile(siret);
+          if (companyProfile) {
+            console.log('✅ [QuoteUpload] Company enriched via Pappers:', companyProfile.company.name);
+            setEnrichmentStatus(`✅ Entreprise enrichie: ${companyProfile.company.name}`);
+            localStorage.setItem('enrichedCompanyProfile', JSON.stringify(companyProfile));
+          }
+        } catch (papperError) {
+          console.warn('⚠️ [QuoteUpload] Pappers enrichment failed:', papperError);
+          setEnrichmentStatus('⚠️ Enrichissement Pappers échoué');
+        }
+      } else {
+        console.log('⚠️ [QuoteUpload] No SIRET found in filename');
+        setEnrichmentStatus('⚠️ SIRET non trouvé dans le nom du fichier');
+      }
+
+      // 🆕 Log API request via AuditService
+      const requestId = auditService.generateRequestId();
+      await auditService.logApiRequest({
+        ccfId,
+        endpoint: '/quote-upload',
+        method: 'POST',
+        params: {
+          filename: file.name,
+          siret: siret || 'N/A',
+        },
+      });
+
       // Fallback: stocker en localStorage si Supabase échoue
       const uploadData = {
         id: uploadedQuoteId,
@@ -102,6 +142,7 @@ export function QuoteUploadPage() {
         filename: file.name,
         size: file.size,
         uploadedAt: new Date().toISOString(),
+        siret: siret || null,
         ccf: ccfData ? JSON.parse(ccfData) : null,
       };
 
@@ -225,6 +266,20 @@ export function QuoteUploadPage() {
                 </div>
               )}
 
+              {/* Enrichment Status */}
+              {enrichmentStatus && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex gap-3">
+                  {enrichmentStatus.includes('✅') || enrichmentStatus.includes('Entreprise enrichie') ? (
+                    <CheckCircle2 className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  ) : enrichmentStatus.includes('⚠️') ? (
+                    <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <Loader2 className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5 animate-spin" />
+                  )}
+                  <p className="text-sm text-blue-700">{enrichmentStatus}</p>
+                </div>
+              )}
+
               {/* Upload Button */}
               {file && (
                 <Button
@@ -233,7 +288,7 @@ export function QuoteUploadPage() {
                   className="w-full text-lg py-6 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white"
                 >
                   <FileText className="h-5 w-5 mr-2" />
-                  {isLoading ? 'Upload en cours...' : 'Uploader et analyser'}
+                  {isLoading ? 'Upload et enrichissement en cours...' : 'Uploader et analyser'}
                 </Button>
               )}
             </CardContent>
