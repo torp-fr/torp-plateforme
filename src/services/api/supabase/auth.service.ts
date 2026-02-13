@@ -19,10 +19,6 @@ export interface RegisterData {
   type: UserType;
   company?: string;
   phone?: string;
-  // B2G specific fields
-  entityName?: string;
-  siret?: string;
-  entityType?: 'commune' | 'departement' | 'region' | 'epci' | 'other';
 }
 
 export interface AuthResponse {
@@ -62,17 +58,6 @@ function mapDbUserToAppUser(dbUser: DbUser): User {
     company_address: (dbUser as Record<string, unknown>).company_address as string || undefined,
     company_code_ape: (dbUser as Record<string, unknown>).company_code_ape as string || undefined,
     company_rcs: (dbUser as Record<string, unknown>).company_rcs as string || undefined,
-    // B2G
-    entity_name: (dbUser as Record<string, unknown>).entity_name as string || undefined,
-    entity_type: (dbUser as Record<string, unknown>).entity_type as string || undefined,
-    entity_address: (dbUser as Record<string, unknown>).entity_address as string || undefined,
-    siret: (dbUser as Record<string, unknown>).siret as string || undefined,
-    entity_function: (dbUser as Record<string, unknown>).entity_function as string || undefined,
-    entity_code_insee: (dbUser as Record<string, unknown>).entity_code_insee as string || undefined,
-    entity_code_ape: (dbUser as Record<string, unknown>).entity_code_ape as string || undefined,
-    entity_strate: (dbUser as Record<string, unknown>).entity_strate as string || undefined,
-    entity_service_name: (dbUser as Record<string, unknown>).entity_service_name as string || undefined,
-    entity_service_email: (dbUser as Record<string, unknown>).entity_service_email as string || undefined,
   };
 }
 
@@ -156,10 +141,6 @@ export class SupabaseAuthService {
           user_type: data.type,
           company: data.company,
           phone: data.phone,
-          // B2G specific metadata
-          entity_name: data.entityName,
-          siret: data.siret,
-          entity_type: data.entityType,
         },
       },
     });

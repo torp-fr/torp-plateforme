@@ -2,8 +2,8 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { authService } from '@/services/api/supabase/auth.service';
 import { devisService } from '@/services/api/supabase/devis.service';
 
-// User types - Particulier (B2C), Professionnel (B2B), Secteur Public (B2G), Admin
-export type UserType = 'B2C' | 'B2B' | 'B2G' | 'admin' | 'super_admin';
+// User types - Particulier (B2C), Professionnel (B2B), Admin
+export type UserType = 'B2C' | 'B2B' | 'admin' | 'super_admin';
 
 export interface User {
   id: string;
@@ -43,17 +43,6 @@ export interface User {
   company_certifications?: CompanyCertification[];
   company_references?: CompanyReference[];
   company_documents?: CompanyDocument[];
-  // B2G
-  entity_name?: string;
-  entity_type?: string;
-  entity_address?: string;
-  siret?: string;
-  entity_function?: string;
-  entity_code_insee?: string;
-  entity_code_ape?: string;
-  entity_strate?: string;
-  entity_service_name?: string;
-  entity_service_email?: string;
 }
 
 // Types pour les données B2B enrichies

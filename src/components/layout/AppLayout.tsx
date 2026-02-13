@@ -22,9 +22,6 @@ import {
   Home,
   Hammer,
   User,
-  Landmark,
-  Scale,
-  Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
@@ -72,16 +69,6 @@ const B2B_NAV_ITEMS: NavItem[] = [
   { href: '/pro/settings', icon: Settings, label: 'Paramètres' },
 ];
 
-// Navigation pour B2G (collectivités)
-const B2G_NAV_ITEMS: NavItem[] = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord', exact: true },
-  { href: '/phase0/dashboard', icon: Briefcase, label: 'Marchés en cours' },
-  { href: '/chantiers', icon: Hammer, label: 'Suivi chantiers' },
-  { href: '/tenders', icon: FolderOpen, label: 'Appels d\'offres' },
-  { href: '/pro/documents', icon: FileText, label: 'Documents' },
-  { href: '/profile', icon: Landmark, label: 'Ma collectivité' },
-];
-
 // Configuration par type d'utilisateur
 const USER_TYPE_CONFIG = {
   B2C: {
@@ -100,15 +87,6 @@ const USER_TYPE_CONFIG = {
     newProjectLink: '/pro/projects/new',
     newProjectLabel: 'Nouveau projet',
     dashboardLink: '/pro',
-  },
-  B2G: {
-    label: 'Collectivité',
-    badge: 'B2G',
-    badgeColor: 'bg-purple-100 text-purple-700',
-    navItems: B2G_NAV_ITEMS,
-    newProjectLink: '/phase0/new',
-    newProjectLabel: 'Nouveau marché',
-    dashboardLink: '/dashboard',
   },
   admin: {
     label: 'Administrateur',
@@ -202,8 +180,6 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <Button variant="ghost" size="sm" className="gap-2">
                   {userType === 'B2B' ? (
                     <Building2 className="h-4 w-4 text-muted-foreground" />
-                  ) : userType === 'B2G' ? (
-                    <Landmark className="h-4 w-4 text-muted-foreground" />
                   ) : (
                     <User className="h-4 w-4 text-muted-foreground" />
                   )}
@@ -280,7 +256,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <div className="p-4 border-t mt-4">
             <Button className="w-full" onClick={() => navigate(config.newProjectLink)}>
               <PlusCircle className="h-4 w-4 mr-2" />
-              {newProjectLabel}
+              {config.newProjectLabel}
             </Button>
           </div>
         </aside>
@@ -327,7 +303,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   }}
                 >
                   <PlusCircle className="h-4 w-4 mr-2" />
-                  {newProjectLabel}
+                  {config.newProjectLabel}
                 </Button>
               </div>
             </aside>

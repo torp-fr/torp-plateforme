@@ -5,7 +5,7 @@
 
 // === TYPES UTILISATEUR ===
 
-export type UserType = 'B2C' | 'B2B' | 'B2G' | 'admin' | 'super_admin';
+export type UserType = 'B2C' | 'B2B' | 'admin' | 'super_admin';
 
 export type UserRole =
   | 'owner'           // Propriétaire du projet/ressource
@@ -88,10 +88,6 @@ export interface ProfileFeatures {
   canManageTeam: boolean;
   canAccessAnalytics: boolean;
 
-  // B2G Specific
-  canCreatePublicTender: boolean;
-  canManagePublicMarket: boolean;
-
   // Admin
   canAccessAdminPanel: boolean;
   canManageUsers: boolean;
@@ -163,7 +159,7 @@ export interface QuickAction {
   primary?: boolean;
 }
 
-export type WizardMode = 'b2c_simple' | 'b2c_detailed' | 'b2b_professional' | 'b2g_public';
+export type WizardMode = 'b2c_simple' | 'b2c_detailed' | 'b2b_professional';
 
 export interface NavigationConfig {
   // Routes principales
@@ -221,10 +217,6 @@ export interface ProjectActor {
   // Entreprise (si B2B)
   companyName?: string;
   companySiret?: string;
-
-  // Entité (si B2G)
-  entityName?: string;
-  entityType?: string;
 
   // Permissions spécifiques au projet
   permissions: ProjectPermission[];

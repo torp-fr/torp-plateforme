@@ -1,15 +1,13 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApp, UserType } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
-import { Building, Users, ArrowLeft, Landmark, Info } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Building, Users, ArrowLeft } from 'lucide-react';
 import torpLogo from '@/assets/torp-logo-red.png';
 import { authService } from '@/services/api';
 
@@ -20,10 +18,6 @@ export default function Register() {
   const [name, setName] = useState('');
   const [company, setCompany] = useState('');
   const [phone, setPhone] = useState('');
-  // B2G specific fields
-  const [entityName, setEntityName] = useState('');
-  const [siret, setSiret] = useState('');
-  const [entityType, setEntityType] = useState<'commune' | 'departement' | 'region' | 'epci' | 'other'>('commune');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { setUser, userType, setUserType } = useApp();
@@ -60,12 +54,8 @@ export default function Register() {
         password,
         name,
         type: userType,
-        company: (userType === 'B2B') ? company : (userType === 'B2G') ? entityName : undefined,
+        company: (userType === 'B2B') ? company : undefined,
         phone: phone || undefined,
-        // B2G specific fields stored in metadata
-        entityName: (userType === 'B2G') ? entityName : undefined,
-        siret: (userType === 'B2G') ? siret : undefined,
-        entityType: (userType === 'B2G') ? entityType : undefined,
       });
 
       setUser(response.user);
@@ -112,7 +102,7 @@ export default function Register() {
 
           <CardContent>
             <Tabs defaultValue={userType} onValueChange={(value) => setUserType(value as UserType)}>
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="B2C" className="flex items-center gap-1 text-xs sm:text-sm">
                   <Users className="w-4 h-4" />
                   <span className="hidden sm:inline">Particulier</span>
@@ -122,11 +112,6 @@ export default function Register() {
                   <Building className="w-4 h-4" />
                   <span className="hidden sm:inline">Professionnel</span>
                   <span className="sm:hidden">Pro</span>
-                </TabsTrigger>
-                <TabsTrigger value="B2G" className="flex items-center gap-1 text-xs sm:text-sm">
-                  <Landmark className="w-4 h-4" />
-                  <span className="hidden sm:inline">Collectivité</span>
-                  <span className="sm:hidden">Public</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -273,124 +258,6 @@ export default function Register() {
                     disabled={isLoading}
                   >
                     {isLoading ? 'Création du compte...' : 'Créer mon compte professionnel'}
-                  </Button>
-                </form>
-              </TabsContent>
-
-              <TabsContent value="B2G" className="space-y-4 mt-6">
-                <Alert className="bg-primary/5 border-primary/20">
-                  <Landmark className="h-4 w-4 text-primary" />
-                  <AlertDescription className="text-primary">
-                    <strong>Espace Collectivités</strong> : Structurez vos consultations
-                    et recevez des offres conformes au Code de la commande publique.
-                  </AlertDescription>
-                </Alert>
-                <form onSubmit={handleRegister} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="entity-name">Nom de la collectivité *</Label>
-                    <Input
-                      id="entity-name"
-                      type="text"
-                      placeholder="Mairie de Lyon, Conseil Départemental 69..."
-                      value={entityName}
-                      onChange={(e) => setEntityName(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="entity-type">Type d'entité *</Label>
-                      <Select
-                        value={entityType}
-                        onValueChange={(value) => setEntityType(value as typeof entityType)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionnez..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="commune">Commune</SelectItem>
-                          <SelectItem value="epci">EPCI / Interco</SelectItem>
-                          <SelectItem value="departement">Département</SelectItem>
-                          <SelectItem value="region">Région</SelectItem>
-                          <SelectItem value="other">Autre établissement public</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="siret">SIRET *</Label>
-                      <Input
-                        id="siret"
-                        type="text"
-                        placeholder="123 456 789 00012"
-                        value={siret}
-                        onChange={(e) => setSiret(e.target.value)}
-                        required
-                        maxLength={17}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="name-b2g">Nom du contact *</Label>
-                    <Input
-                      id="name-b2g"
-                      type="text"
-                      placeholder="Jean Dupont"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email-b2g">Email professionnel *</Label>
-                    <Input
-                      id="email-b2g"
-                      type="email"
-                      placeholder="contact@mairie.fr"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone-b2g">Téléphone (optionnel)</Label>
-                    <Input
-                      id="phone-b2g"
-                      type="tel"
-                      placeholder="04 72 00 00 00"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password-b2g">Mot de passe *</Label>
-                    <Input
-                      id="password-b2g"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      minLength={8}
-                    />
-                    <p className="text-xs text-muted-foreground">Minimum 8 caractères</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password-b2g">Confirmer le mot de passe *</Label>
-                    <Input
-                      id="confirm-password-b2g"
-                      type="password"
-                      placeholder="••••••••"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? 'Création du compte...' : 'Créer mon espace collectivité'}
                   </Button>
                 </form>
               </TabsContent>

@@ -111,31 +111,29 @@ export function Dashboard() {
           Projets & Analyses
         </h2>
 
-        {projects.length === 0 ? (
-          <Card className="border-2 border-dashed">
-            <CardContent className="p-12 text-center">
-              <p className="text-muted-foreground">
-                Aucun projet archivé pour le moment. Uploadez votre premier devis ci-dessus.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b bg-muted/50">
-                      <th className="text-left p-4 font-semibold text-foreground">Nom du client</th>
-                      <th className="text-left p-4 font-semibold text-foreground">Adresse</th>
-                      <th className="text-center p-4 font-semibold text-foreground">Score</th>
-                      <th className="text-center p-4 font-semibold text-foreground">Grade</th>
-                      <th className="text-center p-4 font-semibold text-foreground">Statut</th>
-                      <th className="text-right p-4 font-semibold text-foreground">Actions</th>
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left p-4 font-semibold text-foreground">Nom du client</th>
+                    <th className="text-left p-4 font-semibold text-foreground">Adresse</th>
+                    <th className="text-center p-4 font-semibold text-foreground">Score</th>
+                    <th className="text-center p-4 font-semibold text-foreground">Grade</th>
+                    <th className="text-center p-4 font-semibold text-foreground">Statut</th>
+                    <th className="text-right p-4 font-semibold text-foreground">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {projects.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-12 text-center text-muted-foreground">
+                        Aucun projet archivé pour le moment. Uploadez votre premier devis ci-dessus.
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {projects.map((project) => (
+                  ) : (
+                    projects.map((project) => (
                       <tr
                         key={project.id}
                         className="border-b hover:bg-muted/50 transition-colors"
@@ -187,13 +185,13 @@ export function Dashboard() {
                           </DropdownMenu>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
