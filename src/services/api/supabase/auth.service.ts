@@ -38,7 +38,7 @@ function mapDbUserToAppUser(dbUser: DbUser): User {
     email: dbUser.email,
     name: dbUser.name || undefined,
     type: dbUser.user_type,
-    isAdmin: (dbUser as Record<string, unknown>).is_admin as boolean || false,
+    isAdmin: Boolean((dbUser as Record<string, unknown>).is_admin),
     role: (dbUser as Record<string, unknown>).role as string || 'user',
     canUploadKb: (dbUser as Record<string, unknown>).can_upload_kb as boolean || false,
     phone: dbUser.phone || undefined,
