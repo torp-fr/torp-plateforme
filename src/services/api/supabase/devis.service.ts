@@ -9,9 +9,27 @@ import { DevisData, TorpAnalysisResult } from '@/types/torp';
 import type { Database } from '@/types/supabase';
 import { pdfExtractorService } from '@/services/pdf/pdf-extractor.service';
 import { torpAnalyzerService } from '@/services/ai/torp-analyzer.service';
+import { projectContextEmbeddingsService, type ProjectContextData } from '@/services/ai/embeddings';
 
 type DbDevis = Database['public']['Tables']['devis']['Row'];
 type DbDevisInsert = Database['public']['Tables']['devis']['Insert'];
+
+/**
+ * Extended metadata including project context
+ */
+export type DevisMetadata = {
+  nom?: string;                                          // Project name
+  typeTravaux?: string;
+  budget?: string;
+  surface?: number | string;
+  description?: string;
+  delaiSouhaite?: string;
+  urgence?: string;
+  contraintes?: string;
+  userType?: 'B2B' | 'B2C' | 'admin';
+  // Context embeddings (auto-generated)
+  projectContextEmbeddings?: any;
+};
 
 /**
  * Map database devis to app DevisData format
@@ -57,16 +75,7 @@ export class SupabaseDevisService {
     userId: string,
     file: File,
     projectName: string,
-    metadata?: {
-      typeTravaux?: string;
-      budget?: string;
-      surface?: number;
-      description?: string;
-      delaiSouhaite?: string;
-      urgence?: string;
-      contraintes?: string;
-      userType?: 'B2B' | 'B2C' | 'admin';
-    }
+    metadata?: DevisMetadata
   ): Promise<{ id: string; status: string }> {
     console.log('[DevisService] uploadDevis called with userId:', userId);
 
@@ -226,8 +235,9 @@ export class SupabaseDevisService {
 
   /**
    * Analyze a devis file using AI (TORP methodology)
+   * Enriches metadata with project context embeddings
    */
-  async analyzeDevisById(devisId: string, file?: File, metadata?: { region?: string; typeTravaux?: string; userType?: 'B2B' | 'B2C' | 'admin' }): Promise<void> {
+  async analyzeDevisById(devisId: string, file?: File, metadata?: DevisMetadata): Promise<void> {
     const startTime = Date.now();
 
     try {
@@ -263,12 +273,41 @@ export class SupabaseDevisService {
       console.log(`[Devis] Extracting text from PDF...`);
       const devisText = await pdfExtractorService.extractText(devisFile);
 
+      // Step 1.5: Vectorize project context if available
+      let enrichedMetadata: DevisMetadata = { ...metadata, userType: metadata?.userType || 'B2C' };
+      if (metadata?.nom || metadata?.typeTravaux || metadata?.budget || metadata?.surface) {
+        console.log(`[Devis] Vectorizing project context...`);
+        const projectContextData: ProjectContextData = {
+          name: metadata?.nom || '',
+          type: metadata?.typeTravaux || '',
+          budget: metadata?.budget,
+          surface: typeof metadata?.surface === 'number' ? String(metadata.surface) : metadata?.surface,
+          startDate: undefined,
+          endDate: metadata?.delaiSouhaite,
+          description: metadata?.description,
+          urgency: metadata?.urgence,
+          constraints: metadata?.contraintes,
+        };
+
+        const embeddings = projectContextEmbeddingsService.vectorizeProjectContext(projectContextData);
+        const contextSummary = projectContextEmbeddingsService.generateContextSummary(projectContextData);
+
+        enrichedMetadata.projectContextEmbeddings = embeddings;
+
+        console.log(`[Devis] Project context vectorized:`, {
+          typeEmbedding: embeddings.typeEmbedding,
+          budgetRange: embeddings.budgetRange.category,
+          surfaceRange: embeddings.surfaceRange.category,
+          urgencyLevel: embeddings.urgencyLevel,
+          contextFactors: embeddings.contextualFactors.length,
+        });
+
+        console.log(`[Devis] Context summary:\n${contextSummary}`);
+      }
+
       // Step 2: Run TORP analysis
-      console.log(`[Devis] Running TORP analysis... (userType: ${metadata?.userType || 'B2C'})`);
-      const analysis = await torpAnalyzerService.analyzeDevis(devisText, {
-        ...metadata,
-        userType: metadata?.userType || 'B2C',
-      });
+      console.log(`[Devis] Running TORP analysis... (userType: ${enrichedMetadata.userType || 'B2C'})`);
+      const analysis = await torpAnalyzerService.analyzeDevis(devisText, enrichedMetadata as any);
 
       // Step 3: Save results to database
       console.log(`[Devis] Saving analysis results...`);

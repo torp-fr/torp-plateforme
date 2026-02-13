@@ -155,6 +155,7 @@ export function Dashboard() {
         uploadedFile,
         projectData.name,
         {
+          nom: projectData.name,
           typeTravaux: projectData.type,
           budget: projectData.budget || undefined,
           surface: projectData.surface ? parseFloat(projectData.surface) : undefined,
