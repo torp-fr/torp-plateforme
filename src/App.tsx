@@ -28,6 +28,7 @@ import { ProtectedRoute } from "@/components/auth/ProRoute";
 // Protected Pages
 import Dashboard from "./pages/Dashboard";
 import Analytics from "./pages/Analytics";
+import Settings from "./pages/Settings";
 import ProjetPage from "./pages/projet/ProjetPage";
 import ProjetsListePage from "./pages/projet/ProjetsListePage";
 import Profile from "./pages/Profile";
@@ -60,6 +61,7 @@ const AppContent = () => {
           <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/analytics" element={<Analytics />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="/projets" element={<ProjetsListePage />} />
             <Route path="/projet/:projectId" element={<ProjetPage />} />
             <Route path="/analyze" element={<Analyze />} />

@@ -244,7 +244,7 @@ export function MainLayout({ children }: MainLayoutProps) {
               <User className="h-4 w-4 mr-2" />
               Mon profil
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/parametres')}>
+            <DropdownMenuItem onClick={() => navigate('/settings')}>
               <Settings className="h-4 w-4 mr-2" />
               Paramètres
             </DropdownMenuItem>
