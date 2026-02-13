@@ -1,423 +1,286 @@
-# 🚀 Guide de Déploiement - Système de Recherche d'Entreprise
+# 🚀 Guide de Déploiement - Admin Panel & Knowledge Base
 
-## Méthode Rapide (Automatique)
+## ⚠️ Problème Rencontré
 
-```bash
-# Depuis la racine du projet
-./deploy-company-search.sh
+```
+Error: Failed to run sql query: ERROR: 42P01: relation "profiles" does not exist
 ```
 
-Le script vous guidera à travers toutes les étapes automatiquement.
+**Cause:** La table `profiles` n'existait pas dans Supabase
+
+**Solution:** Migration 049 créée avec `CREATE TABLE IF NOT EXISTS`
 
 ---
 
-## Méthode Manuelle (Étape par Étape)
+## 📋 Deployment Steps
 
-### Prérequis
+### Step 1: Deploy Migration to Supabase
 
-1. **Installer Supabase CLI** (si pas déjà fait) :
-
+**Option A: Via CLI (Recommended)**
 ```bash
-# macOS
-brew install supabase/tap/supabase
-
-# npm
-npm install -g supabase
-
-# Linux
-# Voir https://supabase.com/docs/guides/cli
-```
-
-2. **Se connecter à Supabase** :
-
-```bash
-supabase login
-```
-
-3. **Lier le projet** (si pas déjà fait) :
-
-```bash
-supabase link --project-ref YOUR_PROJECT_ID
-```
-
----
-
-## 📋 Étape 1 : Vérifier les Migrations
-
-```bash
-# Lister les migrations disponibles
-supabase migration list
-
-# Devrait afficher :
-# 001_initial_schema.sql
-# 002_knowledge_base_pgvector.sql
-# 003_company_data_cache.sql ← NOUVEAU
-```
-
----
-
-## 🗄️ Étape 2 : Appliquer la Migration
-
-### Option A : Via Supabase CLI (Recommandé)
-
-```bash
-# Appliquer toutes les migrations en attente
 supabase db push
-
-# Ou appliquer une migration spécifique
-supabase migration up
 ```
 
-**Vérification** :
+**Option B: Via Supabase Dashboard**
+1. Go to `SQL Editor`
+2. Open file: `supabase/migrations/049_fix_profiles_and_add_kb.sql`
+3. Copy entire content
+4. Paste in SQL Editor
+5. Click "Run"
 
+**Option C: Via Direct SQL**
+If you have direct database access:
 ```bash
-# Vérifier que la table existe
-supabase db remote query "
-  SELECT table_name
-  FROM information_schema.tables
-  WHERE table_schema = 'public'
-  AND table_name IN ('company_data_cache', 'company_search_history');
-"
-# Devrait retourner 2 lignes
-```
-
-```bash
-# Vérifier que les fonctions existent
-supabase db remote query "
-  SELECT proname
-  FROM pg_proc
-  WHERE proname LIKE '%company%'
-  ORDER BY proname;
-"
-# Devrait retourner 5 fonctions :
-# - clean_expired_company_cache
-# - get_cached_company_data
-# - increment_company_cache_fetch_count
-# - should_refresh_company_cache
-# - upsert_company_cache
-```
-
-### Option B : Via Supabase Dashboard
-
-1. Aller sur https://supabase.com/dashboard/project/YOUR_PROJECT_ID/sql
-2. Ouvrir `supabase/migrations/003_company_data_cache.sql`
-3. Copier tout le contenu
-4. Coller dans l'éditeur SQL
-5. Cliquer sur "Run"
-
-**Vérification** :
-- Aller dans l'onglet "Table Editor"
-- Vérifier que `company_data_cache` et `company_search_history` existent
-
----
-
-## 🔐 Étape 3 : Configurer les Secrets
-
-### Secrets OBLIGATOIRES
-
-```bash
-# CLAUDE_API_KEY (pour extraction SIRET intelligente)
-supabase secrets set CLAUDE_API_KEY=sk-ant-xxxxxxxxxxxxx
-
-# SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY sont déjà configurés automatiquement
-```
-
-### Secrets OPTIONNELS (mais recommandés)
-
-```bash
-# PAPPERS_API_KEY (votre clé personnelle)
-supabase secrets set PAPPERS_API_KEY=b02fe90a049bef5a160c7f4abc5d67f0c7ffcd71f4d11bbe
-
-# API_ENTREPRISE (optionnel - pour endpoints authentifiés)
-supabase secrets set API_ENTREPRISE_TOKEN=your_token_here
-supabase secrets set API_ENTREPRISE_RECIPIENT=your_siret
-```
-
-**Vérification** :
-
-```bash
-# Lister tous les secrets configurés
-supabase secrets list
+psql postgresql://user:password@host/db < supabase/migrations/049_fix_profiles_and_add_kb.sql
 ```
 
 ---
 
-## 🚀 Étape 4 : Déployer les Edge Functions
+## ✅ Verify Migration Success
 
-### 4.1 Fonction de Rafraîchissement
+After running migration:
 
-```bash
-supabase functions deploy refresh-company-cache --no-verify-jwt
-```
-
-**Résultat attendu** :
-```
-✓ Deployed Function refresh-company-cache on project YOUR_PROJECT_ID
-✓ URL: https://YOUR_PROJECT_ID.supabase.co/functions/v1/refresh-company-cache
-```
-
-### 4.2 Fonction de Nettoyage
-
-```bash
-supabase functions deploy cleanup-company-cache --no-verify-jwt
-```
-
-### 4.3 Fonction de Test
-
-```bash
-supabase functions deploy test-company-search --no-verify-jwt
-```
-
-### Déployer Toutes les Fonctions en Une Fois
-
-```bash
-# Déployer les 3 fonctions
-supabase functions deploy refresh-company-cache --no-verify-jwt && \
-supabase functions deploy cleanup-company-cache --no-verify-jwt && \
-supabase functions deploy test-company-search --no-verify-jwt
-```
-
----
-
-## 🧪 Étape 5 : Tester le Système
-
-### Test 1 : Suite de Tests Complète
-
-```bash
-# Via Supabase CLI
-supabase functions invoke test-company-search --no-verify-jwt
-```
-
-**Ou via curl** :
-
-```bash
-curl https://YOUR_PROJECT_ID.supabase.co/functions/v1/test-company-search \
-  -H "Authorization: Bearer YOUR_ANON_KEY"
-```
-
-**Résultat attendu** :
-
-```json
-{
-  "totalTests": 12,
-  "totalPassed": 12,
-  "totalFailed": 0,
-  "passRate": "100.00%",
-  "suites": [...]
-}
-```
-
-### Test 2 : Rafraîchissement Manuel
-
-```bash
-curl -X POST https://YOUR_PROJECT_ID.supabase.co/functions/v1/refresh-company-cache \
-  -H "Authorization: Bearer YOUR_ANON_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"maxCompanies": 5}'
-```
-
-**Résultat attendu** :
-
-```json
-{
-  "success": true,
-  "refreshed": 0,
-  "failed": 0,
-  "skipped": 0,
-  "errors": []
-}
-```
-
-### Test 3 : Nettoyage (Dry Run)
-
-```bash
-curl -X POST https://YOUR_PROJECT_ID.supabase.co/functions/v1/cleanup-company-cache \
-  -H "Authorization: Bearer YOUR_ANON_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"dryRun": true}'
-```
-
----
-
-## 🔍 Vérification Post-Déploiement
-
-### 1. Vérifier les Logs
-
-```bash
-# Logs en temps réel
-supabase functions logs --follow
-
-# Logs d'une fonction spécifique
-supabase functions logs refresh-company-cache
-```
-
-### 2. Vérifier la Base de Données
-
+### 1. Check Tables Created
 ```sql
--- Nombre d'entrées dans le cache
-SELECT COUNT(*) FROM company_data_cache;
-
--- Historique des recherches
-SELECT COUNT(*) FROM company_search_history;
-
--- Vérifier les index
-SELECT
-  tablename,
-  indexname
-FROM pg_indexes
-WHERE tablename LIKE 'company%';
+SELECT table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'public' 
+  AND table_name LIKE 'knowledge_%';
 ```
 
-### 3. Dashboard Supabase
-
-Aller sur https://supabase.com/dashboard/project/YOUR_PROJECT_ID
-
-- ✅ **Table Editor** → Vérifier `company_data_cache` et `company_search_history`
-- ✅ **Edge Functions** → Vérifier que les 3 fonctions sont déployées
-- ✅ **Logs** → Vérifier qu'il n'y a pas d'erreurs
-
----
-
-## 🛠️ Troubleshooting
-
-### Problème : "Migration already applied"
-
-**Solution** : C'est normal si vous avez déjà appliqué la migration.
-
-```bash
-# Vérifier l'état des migrations
-supabase migration list
+Expected output:
+```
+knowledge_documents
+knowledge_document_sections
+knowledge_vectors
+knowledge_queries_log
 ```
 
-### Problème : "Function deployment failed"
-
-**Causes possibles** :
-1. Secrets non configurés
-2. Erreur de syntaxe TypeScript
-3. Dépendances manquantes
-
-**Solutions** :
-
-```bash
-# 1. Vérifier les secrets
-supabase secrets list
-
-# 2. Tester localement
-supabase functions serve test-company-search
-
-# 3. Voir les logs détaillés
-supabase functions logs test-company-search --limit 50
-```
-
-### Problème : "Cannot find module"
-
-**Cause** : Import incorrect dans les Edge Functions
-
-**Solution** :
-
-```bash
-# Redéployer avec --no-verify-jwt
-supabase functions deploy FUNCTION_NAME --no-verify-jwt
-```
-
-### Problème : Tests échouent
-
-**Vérifications** :
-
-```bash
-# 1. PAPPERS_API_KEY configuré ?
-supabase secrets list | grep PAPPERS
-
-# 2. CLAUDE_API_KEY configuré ?
-supabase secrets list | grep CLAUDE
-
-# 3. Migration appliquée ?
-supabase db remote query "SELECT * FROM company_data_cache LIMIT 1;"
-```
-
----
-
-## 📊 Vérifier les Performances
-
-### Après 24h
-
+### 2. Check Profiles Table
 ```sql
--- Cache hit rate
-SELECT
-  COUNT(*) FILTER (WHERE cache_hit)::float / COUNT(*) * 100 as hit_rate,
-  AVG(response_time_ms) as avg_response
-FROM company_search_history
-WHERE created_at > NOW() - INTERVAL '24 hours';
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'profiles';
 ```
 
-### Après 1 semaine
+Should include new columns:
+```
+role (TEXT)
+is_admin (BOOLEAN)
+can_upload_kb (BOOLEAN)
+created_role_date (TIMESTAMP)
+updated_role_date (TIMESTAMP)
+```
 
+### 3. Check Functions Created
 ```sql
--- Statistiques globales
-SELECT
-  COUNT(*) as total_cached,
-  AVG(fetch_count) as avg_usage,
-  AVG(quality_score) as avg_quality
-FROM company_data_cache;
+SELECT routine_name 
+FROM information_schema.routines 
+WHERE routine_schema = 'public' 
+  AND routine_name LIKE '%admin%';
+```
+
+Expected:
+```
+promote_user_to_admin
+demote_admin_to_user
+is_user_admin
 ```
 
 ---
 
-## 🎯 Prochaines Étapes
+## 🔧 Initialize First Admin User
 
-### 1. Configurer le Cron Job (Optionnel mais recommandé)
+After migration is deployed, initialize the first admin:
 
-Voir `docs/QUICKSTART_COMPANY_SEARCH.md` section "Configuration du Cron"
+### Option 1: Via Direct SQL
+```sql
+-- First, ensure user profile exists
+INSERT INTO profiles (id, email, full_name, role, is_admin, can_upload_kb)
+SELECT id, email, 'Admin User', 'admin', true, true
+FROM auth.users
+WHERE email = 'your-email@example.com'
+ON CONFLICT (id) DO UPDATE
+SET role = 'admin', is_admin = true, can_upload_kb = true, updated_role_date = NOW();
+```
 
-**Recommandations** :
-- **Refresh** : Quotidien à 2h du matin
-- **Cleanup** : Hebdomadaire le dimanche à 3h
+### Option 2: Via Application
+1. Go to `/admin/users` (as any user)
+2. See "Access Denied" message
+3. Have a super_admin manually promote you via SQL above
+4. Reload page
+5. Now you can see user management
 
-### 2. Configurer le Monitoring
-
-- Alertes sur cache hit rate < 80%
-- Alertes sur error rate > 5%
-- Dashboard Grafana/Metabase (optionnel)
-
-### 3. Tester en Production
-
-1. Uploader un devis PDF
-2. Vérifier que le SIRET est extrait
-3. Vérifier que les données entreprise sont récupérées
-4. Vérifier le scoring TORP enrichi
-
----
-
-## 📚 Documentation Complète
-
-- **Architecture** : `docs/ARCHITECTURE_COMPANY_SEARCH.md`
-- **Quick Start** : `docs/QUICKSTART_COMPANY_SEARCH.md`
-- **README** : `docs/COMPANY_SEARCH_README.md`
-
----
-
-## ✅ Checklist de Déploiement
-
-- [ ] Migration database appliquée
-- [ ] Tables `company_data_cache` et `company_search_history` créées
-- [ ] 5 fonctions PostgreSQL créées
-- [ ] Secrets configurés (CLAUDE_API_KEY, PAPPERS_API_KEY)
-- [ ] 3 Edge Functions déployées
-- [ ] Tests passent (12/12)
-- [ ] Logs sans erreurs
-- [ ] Cron job configuré (optionnel)
+### Option 3: Via Supabase Dashboard
+1. Go to `Authentication` → `Users`
+2. Find your user
+3. Note their `UUID`
+4. Go to `SQL Editor`
+5. Run:
+```sql
+UPDATE profiles 
+SET role = 'admin', is_admin = true, can_upload_kb = true
+WHERE id = 'YOUR_USER_UUID';
+```
 
 ---
 
-## 🆘 Support
+## 🎯 What Each Migration Does
 
-En cas de problème :
+### Migration 048 (Original - Skip if using 049)
+- ❌ Failed because profiles table didn't exist
+- ❌ Tried to ALTER TABLE profiles
 
-1. **Vérifier les logs** : `supabase functions logs`
-2. **Consulter la doc** : `docs/COMPANY_SEARCH_README.md`
-3. **Vérifier les secrets** : `supabase secrets list`
-4. **Tester localement** : `supabase functions serve`
+### Migration 049 (Fixed - Use This)
+- ✅ `CREATE TABLE IF NOT EXISTS profiles`
+- ✅ Includes all columns (new + existing)
+- ✅ Uses idempotent SQL patterns
+- ✅ Handles existing RLS policies gracefully
+- ✅ Creates all KB tables
+- ✅ Creates SQL functions for admin operations
+
+**Key Pattern Used:**
+```sql
+DO $$ BEGIN
+  CREATE POLICY "name" ON table ...
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+```
+
+This prevents errors if the object already exists!
 
 ---
 
-**Bon déploiement !** 🚀
+## 📚 After Migration: Next Steps
+
+### 1. Test Admin Access
+```
+User A (regular user):
+  - Go to /analytics
+  - See "Access Denied" ✓
+
+User B (admin):
+  - Go to /analytics
+  - See tabs: Overview | KB Upload | Users | Settings ✓
+  - Click "KB Upload" tab
+  - Upload a PDF/TXT document ✓
+```
+
+### 2. Test User Management
+```
+Admin user:
+  - Go to /analytics
+  - Click "Users" tab
+  - Click "Manage Users" button
+  - Navigate to /admin/users
+  - See list of all users ✓
+  - Promote/demote buttons work ✓
+```
+
+### 3. Upload First Document
+```
+Admin user:
+  - Go to /analytics
+  - Click "KB Upload" tab
+  - Select document (PDF/TXT)
+  - Fill in: Title, Category, WorkTypes (optional), Source
+  - Click "Upload"
+  - See success message ✓
+```
+
+### 4. Verify Database
+```sql
+-- Check documents uploaded
+SELECT title, category, source, confidence_score 
+FROM knowledge_documents 
+LIMIT 5;
+
+-- Check audit log
+SELECT admin_id, action, created_at 
+FROM admin_audit_log 
+LIMIT 5;
+
+-- Check KB queries
+SELECT query_text, results_count 
+FROM knowledge_queries_log 
+LIMIT 5;
+```
+
+---
+
+## 🔒 Security Checklist
+
+After deployment, verify:
+
+- [ ] Profile RLS policies working (users can only see own profile)
+- [ ] Knowledge documents RLS working (public docs visible, admin-only docs hidden)
+- [ ] Admin audit log RLS working (only admins can view)
+- [ ] Functions are SECURITY DEFINER (safe to call from app)
+- [ ] No direct database access from frontend (use services only)
+
+---
+
+## 🐛 Troubleshooting
+
+### Error: "relation profiles does not exist"
+**Solution:** Run migration 049
+
+### Error: "duplicate_object"
+**Solution:** Migration 049 is idempotent - safe to re-run
+
+### Error: "permission denied for schema public"
+**Solution:** Check Supabase user permissions - should have CREATE/ALTER rights
+
+### Error: "vector type does not exist"
+**Solution:** pgvector extension not enabled - run this first:
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+### Can't upload KB documents
+**Checklist:**
+1. Are you logged in as admin? ✓
+2. Is `can_upload_kb = true` in your profile? ✓
+3. Did migration 049 run successfully? ✓
+4. Is file PDF or TXT? ✓
+5. Is file less than 10MB? ✓
+
+---
+
+## 📊 Migration Files
+
+```
+supabase/migrations/
+├─ 048_add_user_roles_and_kb_tables.sql (Original - DON'T USE)
+└─ 049_fix_profiles_and_add_kb.sql (Fixed - USE THIS)
+```
+
+**Recommendation:** Delete 048, keep 049
+
+---
+
+## 🚀 One-Line Deploy
+
+If you have Supabase CLI installed:
+
+```bash
+supabase db push && echo "✅ Migration deployed!"
+```
+
+---
+
+## 📞 Support
+
+If you encounter issues:
+
+1. Check `TROUBLESHOOTING` section above
+2. Run verification queries
+3. Check Supabase logs (Dashboard → Logs)
+4. Verify migration ran successfully (Dashboard → SQL → Migrations)
+
+---
+
+**Status:** ✅ Ready to deploy
+**Migration:** 049_fix_profiles_and_add_kb.sql
+**Safe to re-run:** Yes (idempotent)
+**Required:** Yes (for admin panel + KB functionality)
