@@ -129,7 +129,7 @@ FOR INSERT
 TO authenticated
 WITH CHECK (
   public.get_user_type() = 'admin'
-  AND user_type IN ('B2C', 'B2B', 'B2G', 'B2B2C', 'technicien')
+  AND user_type IN ('B2C', 'B2B', 'technicien')
 );
 
 -- =====================================================
@@ -162,11 +162,11 @@ FOR UPDATE
 TO authenticated
 USING (
   public.get_user_type() = 'admin'
-  AND user_type IN ('B2C', 'B2B', 'B2G', 'B2B2C', 'technicien')
+  AND user_type IN ('B2C', 'B2B', 'technicien')
 )
 WITH CHECK (
   public.get_user_type() = 'admin'
-  AND user_type IN ('B2C', 'B2B', 'B2G', 'B2B2C', 'technicien')
+  AND user_type IN ('B2C', 'B2B', 'technicien')
 );
 
 -- =====================================================
@@ -188,7 +188,7 @@ FOR DELETE
 TO authenticated
 USING (
   public.get_user_type() = 'admin'
-  AND user_type IN ('B2C', 'B2B', 'B2G', 'B2B2C', 'technicien')
+  AND user_type IN ('B2C', 'B2B', 'technicien')
 );
 
 SELECT '✅ STEP 2 TERMINÉE - RLS configuré avec succès!' as status;
