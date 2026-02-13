@@ -44,6 +44,18 @@ export default function Analyze() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Load devis from query params if provided
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const devisId = params.get('devisId');
+
+    if (devisId) {
+      setCurrentDevisId(devisId);
+      // Set step to 2 (project details) since file is already uploaded
+      setStep(2);
+    }
+  }, [location.search]);
+
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {

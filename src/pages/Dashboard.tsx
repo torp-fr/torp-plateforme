@@ -17,6 +17,7 @@ import { useApp } from '@/context/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { devisService } from '@/services/api/supabase/devis.service';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +39,7 @@ export function Dashboard() {
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [projects, setProjects] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -83,11 +85,25 @@ export function Dashboard() {
     }
   };
 
-  const handleContinueToAnalyze = () => {
-    if (uploadedFile) {
-      // Pass file info via sessionStorage to Analyze page
-      sessionStorage.setItem('uploadedFileName', uploadedFile.name);
-      navigate('/analyze');
+  const handleContinueToAnalyze = async () => {
+    if (!uploadedFile || !user?.id) return;
+
+    try {
+      setUploading(true);
+      // Upload devis and get ID
+      const result = await devisService.uploadDevis(
+        user.id,
+        uploadedFile,
+        uploadedFile.name.replace(/\.[^/.]+$/, '') // Remove extension as project name
+      );
+
+      // Redirect to analyze page with devis ID to skip file upload step
+      navigate(`/analyze?devisId=${result.id}`);
+    } catch (error) {
+      console.error('Upload failed:', error);
+      alert('Erreur lors du téléchargement du fichier');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -128,14 +144,16 @@ export function Dashboard() {
                 <Button
                   variant="outline"
                   onClick={handleFileSelect}
+                  disabled={uploading}
                 >
                   Sélectionner un autre fichier
                 </Button>
                 <Button
                   onClick={handleContinueToAnalyze}
+                  disabled={uploading}
                   className="bg-primary hover:bg-primary/90 text-primary-foreground"
                 >
-                  Continuer vers l'analyse
+                  {uploading ? 'Téléchargement...' : 'Continuer vers l\'analyse'}
                 </Button>
               </div>
             </div>
