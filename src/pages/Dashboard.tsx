@@ -11,7 +11,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
 export function Dashboard() {
