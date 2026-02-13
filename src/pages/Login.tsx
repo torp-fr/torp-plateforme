@@ -224,7 +224,7 @@ export default function Login() {
                   </div>
                   <Button
                     type="submit"
-                    className="w-full bg-purple-600 hover:bg-purple-700"
+                    className="w-full"
                     disabled={isLoading}
                   >
                     {isLoading ? 'Connexion...' : 'Accéder à mon espace collectivité'}
