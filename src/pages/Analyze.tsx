@@ -9,7 +9,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, FileText, Clock, Shield, CheckCircle, Home, Zap, Droplet, Paintbrush, Download, Loader2 } from 'lucide-react';
-import { AppLayout } from '@/components/layout';
 import { devisService } from '@/services/api/supabase/devis.service';
 
 const projectTypes = [
@@ -352,8 +351,7 @@ export default function Analyze() {
   }
 
   return (
-    <AppLayout>
-      <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-foreground">
             Analyser votre devis BTP
@@ -579,6 +577,6 @@ export default function Analyze() {
             </Card>
         )}
       </div>
-    </AppLayout>
+    </div>
   );
 }
