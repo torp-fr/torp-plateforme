@@ -64,10 +64,12 @@ const AppContent = () => {
             <Route path="/settings" element={<Settings />} />
             <Route path="/projets" element={<ProjetsListePage />} />
             <Route path="/projet/:projectId" element={<ProjetPage />} />
-            <Route path="/analyze" element={<Analyze />} />
             <Route path="/results" element={<Results />} />
             <Route path="/profile" element={<Profile />} />
           </Route>
+
+          {/* Protected Routes with Custom Layout (Analyze has its own AppLayout) */}
+          <Route element={<ProtectedRoute><Analyze /></ProtectedRoute>} path="/analyze" />
 
           {/* Fallback */}
           <Route path="*" element={<NotFound />} />
