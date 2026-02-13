@@ -228,16 +228,35 @@ export class SupabaseAuthService {
         .from('users')
         .select('*')
         .eq('id', authUser.id)
-        .single();
+        .maybeSingle();
 
       if (userError) {
-        console.error('[getCurrentUser] Error fetching user profile:', userError);
-        return null;
+        console.warn('[getCurrentUser] Error fetching user profile:', userError);
+        // If profile doesn't exist, create temporary user from auth data
+        const tempUser: User = {
+          id: authUser.id,
+          email: authUser.email || '',
+          name: authUser.user_metadata?.name || 'User',
+          type: (authUser.user_metadata?.user_type as UserType) || 'B2C',
+          company: authUser.user_metadata?.company,
+          phone: authUser.user_metadata?.phone,
+        };
+        console.log('[getCurrentUser] Error occurred, returning temporary user:', tempUser.email);
+        return tempUser;
       }
 
       if (!userData) {
-        console.warn('[getCurrentUser] No user profile found for auth user');
-        return null;
+        console.warn('[getCurrentUser] No user profile found, creating temporary from auth data');
+        // Create temporary user from auth metadata
+        const tempUser: User = {
+          id: authUser.id,
+          email: authUser.email || '',
+          name: authUser.user_metadata?.name || 'User',
+          type: (authUser.user_metadata?.user_type as UserType) || 'B2C',
+          company: authUser.user_metadata?.company,
+          phone: authUser.user_metadata?.phone,
+        };
+        return tempUser;
       }
 
       const mappedUser = mapDbUserToAppUser(userData);
