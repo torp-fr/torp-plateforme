@@ -244,7 +244,7 @@ export function MainLayout({ children }: MainLayoutProps) {
               <User className="h-4 w-4 mr-2" />
               Mon profil
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/parametres')}>
+            <DropdownMenuItem onClick={() => navigate('/settings')}>
               <Settings className="h-4 w-4 mr-2" />
               Paramètres
             </DropdownMenuItem>
@@ -312,12 +312,6 @@ export function MainLayout({ children }: MainLayoutProps) {
               <span className="text-sm text-muted-foreground">
                 Valorisation intelligente de vos devis BTP
               </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button size="sm" onClick={() => navigate('/analyze')}>
-                <PlusCircle className="h-4 w-4 mr-2" />
-                Nouveau Projet
-              </Button>
             </div>
           </header>
 
