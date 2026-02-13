@@ -354,11 +354,22 @@ export class SupabaseAuthService {
             .from('users')
             .select('*')
             .eq('id', session.user.id)
-            .single();
+            .maybeSingle();
 
           if (error) {
-            console.error('[Auth State Change] Error fetching user profile:', error);
-            callback(null);
+            console.warn('[Auth State Change] Error fetching user profile:', error);
+            // If profile doesn't exist yet, create temporary user from auth data
+            // This handles newly registered users waiting for profile creation
+            const tempUser: User = {
+              id: session.user.id,
+              email: session.user.email || '',
+              name: session.user.user_metadata?.name || 'User',
+              type: (session.user.user_metadata?.user_type as UserType) || 'B2C',
+              company: session.user.user_metadata?.company,
+              phone: session.user.user_metadata?.phone,
+            };
+            console.log('[Auth State Change] Using temporary user profile:', tempUser.email);
+            callback(tempUser);
             return;
           }
 
@@ -367,12 +378,31 @@ export class SupabaseAuthService {
             console.log('[Auth State Change] User profile loaded:', mappedUser.email);
             callback(mappedUser);
           } else {
-            console.warn('[Auth State Change] No user profile found for session');
-            callback(null);
+            // Profile doesn't exist - create temporary user from auth metadata
+            const tempUser: User = {
+              id: session.user.id,
+              email: session.user.email || '',
+              name: session.user.user_metadata?.name || 'User',
+              type: (session.user.user_metadata?.user_type as UserType) || 'B2C',
+              company: session.user.user_metadata?.company,
+              phone: session.user.user_metadata?.phone,
+            };
+            console.log('[Auth State Change] No profile found, using temporary user:', tempUser.email);
+            callback(tempUser);
           }
         } catch (error) {
           console.error('[Auth State Change] Exception:', error);
-          callback(null);
+          // Fallback: create temporary user from auth data instead of disconnecting
+          const tempUser: User = {
+            id: session.user.id,
+            email: session.user.email || '',
+            name: session.user.user_metadata?.name || 'User',
+            type: (session.user.user_metadata?.user_type as UserType) || 'B2C',
+            company: session.user.user_metadata?.company,
+            phone: session.user.user_metadata?.phone,
+          };
+          console.log('[Auth State Change] Error occurred, using temporary user:', tempUser.email);
+          callback(tempUser);
         }
       } else {
         console.log('[Auth State Change] No session, calling callback with null');
