@@ -1,15 +1,9 @@
 /**
- * Knowledge Base Services
- * Exporte tous les services pour la base de connaissances
+ * Knowledge Base Services Index
+ * Central export for all knowledge base functionality
  */
 
-export { DocumentUploadService } from './DocumentUploadService';
-export { default as documentUploadService } from './DocumentUploadService';
-
-export { VectorizationService } from './VectorizationService';
-export { default as vectorizationService } from './VectorizationService';
-
-export { RAGService } from './RAGService';
-export { default as ragService } from './RAGService';
-
-export type * from './types';
+export * from './types';
+export { RAGOrchestratorService, ragOrchestratorService } from './rag-orchestrator.service';
+export { DocumentIngestionService, documentIngestionService } from './document-ingestion.service';
+export { DomainAnalysisService, domainAnalysisService } from './domain-analysis.service';
