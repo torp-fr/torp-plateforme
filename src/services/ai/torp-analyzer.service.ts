@@ -1029,6 +1029,18 @@ export class TorpAnalyzerService {
     return data;
   }
 
+  /**
+   * Public method to extract devis data (for vectorization)
+   */
+  async extractDevisDataDirect(devisText: string): Promise<ExtractedDevisData | null> {
+    try {
+      return await this.extractDevisData(devisText);
+    } catch (error) {
+      console.error('[TorpAnalyzer] Failed to extract devis data:', error);
+      return null;
+    }
+  }
+
 }
 
 export const torpAnalyzerService = new TorpAnalyzerService();
