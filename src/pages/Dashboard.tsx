@@ -68,6 +68,18 @@ export function Dashboard() {
     setProjects(prev => prev.filter(p => p.id !== projectId));
   };
 
+  const handleFileSelect = () => {
+    document.getElementById('file-input-dashboard')?.click();
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      // Navigate to analyze page with file selected
+      navigate('/analyze');
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -97,11 +109,18 @@ export function Dashboard() {
             Glissez-déposez vos fichiers PDF ou cliquez pour parcourir
           </p>
           <Button
-            onClick={() => navigate('/analyze')}
+            onClick={handleFileSelect}
             className="bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             Sélectionner un fichier
           </Button>
+          <input
+            id="file-input-dashboard"
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
         </CardContent>
       </Card>
 
