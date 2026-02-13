@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import torpLogo from '@/assets/torp-logo-red.png';
+import { AdminInitializer } from '@/components/admin/AdminInitializer';
 
 interface MainLayoutProps {
   children?: ReactNode;
@@ -261,6 +262,9 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Admin Initializer Dialog */}
+      {user?.email && <AdminInitializer userEmail={user.email} />}
+
       {/* Header mobile */}
       <header className="md:hidden bg-background border-b sticky top-0 z-50">
         <div className="flex items-center justify-between h-14 px-4">

@@ -24,6 +24,7 @@ import NotFound from "./pages/NotFound";
 
 // Auth
 import { ProtectedRoute } from "@/components/auth/ProRoute";
+import { AdminRoute } from "@/components/auth/AdminRoute";
 
 // Protected Pages
 import Dashboard from "./pages/Dashboard";
@@ -34,6 +35,7 @@ import ProjetsListePage from "./pages/projet/ProjetsListePage";
 import Profile from "./pages/Profile";
 import Analyze from "./pages/Analyze";
 import Results from "./pages/Results";
+import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 
 const queryClient = new QueryClient();
 
@@ -60,7 +62,8 @@ const AppContent = () => {
           {/* Protected Routes with Layout */}
           <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/analytics" element={<AdminRoute><Analytics /></AdminRoute>} />
+            <Route path="/admin/users" element={<AdminRoute><AdminUsersPage /></AdminRoute>} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/projets" element={<ProjetsListePage />} />
             <Route path="/projet/:projectId" element={<ProjetPage />} />
