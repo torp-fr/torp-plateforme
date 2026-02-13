@@ -40,14 +40,17 @@ export default function Login() {
         description: `Bienvenue ${response.user.name || response.user.email}!`,
       });
 
-      // Redirection selon le statut admin
+      // Redirection selon le statut admin et le type d'utilisateur
       await new Promise(resolve => setTimeout(resolve, 100));
 
       if (response.user.isAdmin === true) {
         console.log('[Login] Admin détecté, redirection vers /analytics');
         navigate('/analytics');
+      } else if (response.user.type === 'B2B') {
+        console.log('[Login] Utilisateur B2B, redirection vers /projets');
+        navigate('/projets');
       } else {
-        console.log('[Login] Utilisateur régulier, redirection vers /dashboard');
+        console.log('[Login] Utilisateur B2C, redirection vers /dashboard');
         navigate('/dashboard');
       }
     } catch (error) {
