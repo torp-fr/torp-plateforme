@@ -278,9 +278,9 @@ export default function Register() {
               </TabsContent>
 
               <TabsContent value="B2G" className="space-y-4 mt-6">
-                <Alert className="bg-purple-50 border-purple-200">
-                  <Landmark className="h-4 w-4 text-purple-600" />
-                  <AlertDescription className="text-purple-800">
+                <Alert className="bg-primary/5 border-primary/20">
+                  <Landmark className="h-4 w-4 text-primary" />
+                  <AlertDescription className="text-primary">
                     <strong>Espace Collectivités</strong> : Structurez vos consultations
                     et recevez des offres conformes au Code de la commande publique.
                   </AlertDescription>
@@ -387,7 +387,7 @@ export default function Register() {
                   </div>
                   <Button
                     type="submit"
-                    className="w-full bg-purple-600 hover:bg-purple-700"
+                    className="w-full"
                     disabled={isLoading}
                   >
                     {isLoading ? 'Création du compte...' : 'Créer mon espace collectivité'}
