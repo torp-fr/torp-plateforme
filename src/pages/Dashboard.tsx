@@ -11,6 +11,7 @@ import {
   Archive,
   MoreVertical,
   ChevronDown,
+  FileText,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,6 +36,7 @@ export function Dashboard() {
   const navigate = useNavigate();
   const { user } = useApp();
   const [dragActive, setDragActive] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [projects, setProjects] = useState<any[]>([]);
 
   const handleDrag = (e: React.DragEvent) => {
@@ -54,9 +56,11 @@ export function Dashboard() {
 
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
-      // TODO: Handle file upload to /analyze
-      console.log('Files dropped:', files);
-      navigate('/analyze');
+      const file = files[0];
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+      if (allowedTypes.includes(file.type)) {
+        setUploadedFile(file);
+      }
     }
   };
 
@@ -75,7 +79,14 @@ export function Dashboard() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      // Navigate to analyze page with file selected
+      setUploadedFile(files[0]);
+    }
+  };
+
+  const handleContinueToAnalyze = () => {
+    if (uploadedFile) {
+      // Pass file info via sessionStorage to Analyze page
+      sessionStorage.setItem('uploadedFileName', uploadedFile.name);
       navigate('/analyze');
     }
   };
@@ -101,19 +112,50 @@ export function Dashboard() {
         onDrop={handleDrop}
       >
         <CardContent className="p-12 text-center cursor-pointer">
-          <Upload className="h-16 w-16 text-primary/40 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-foreground mb-2">
-            Uploadez vos devis ici
-          </h3>
-          <p className="text-muted-foreground mb-4">
-            Glissez-déposez vos fichiers PDF ou cliquez pour parcourir
-          </p>
-          <Button
-            onClick={handleFileSelect}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground"
-          >
-            Sélectionner un fichier
-          </Button>
+          {uploadedFile ? (
+            <div className="space-y-4">
+              <FileText className="w-16 h-16 text-primary mx-auto" />
+              <div>
+                <h3 className="text-xl font-semibold text-foreground mb-2">
+                  Fichier sélectionné
+                </h3>
+                <p className="text-muted-foreground">{uploadedFile.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+                </p>
+              </div>
+              <div className="flex gap-3 justify-center pt-4">
+                <Button
+                  variant="outline"
+                  onClick={handleFileSelect}
+                >
+                  Sélectionner un autre fichier
+                </Button>
+                <Button
+                  onClick={handleContinueToAnalyze}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                >
+                  Continuer vers l'analyse
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <Upload className="h-16 w-16 text-primary/40 mx-auto" />
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                Uploadez vos devis ici
+              </h3>
+              <p className="text-muted-foreground mb-4">
+                Glissez-déposez vos fichiers PDF ou cliquez pour parcourir
+              </p>
+              <Button
+                onClick={handleFileSelect}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              >
+                Sélectionner un fichier
+              </Button>
+            </div>
+          )}
           <input
             id="file-input-dashboard"
             type="file"
