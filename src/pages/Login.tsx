@@ -31,7 +31,7 @@ export default function Login() {
         password,
       });
 
-      console.log('[Login] Connexion réussie:', response.user.email, 'Type:', response.user.type);
+      console.log('[Login] Connexion réussie:', response.user.email, 'Role:', response.user.role, 'isAdmin:', response.user.isAdmin);
 
       setUser(response.user);
 
@@ -40,14 +40,14 @@ export default function Login() {
         description: `Bienvenue ${response.user.name || response.user.email}!`,
       });
 
-      // Redirection selon le type d'utilisateur
+      // Redirection selon le statut admin
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      if (response.user.type === 'admin' || response.user.type === 'super_admin') {
+      if (response.user.isAdmin === true) {
         console.log('[Login] Admin détecté, redirection vers /analytics');
         navigate('/analytics');
       } else {
-        console.log('[Login] Utilisateur, redirection vers /dashboard');
+        console.log('[Login] Utilisateur régulier, redirection vers /dashboard');
         navigate('/dashboard');
       }
     } catch (error) {
