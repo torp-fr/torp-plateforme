@@ -37,7 +37,7 @@ type TabType = 'overview' | 'orchestration' | 'kb' | 'doctrine' | 'fraud' | 'ada
 export function Analytics() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { userType } = useApp();
+  const { isAdmin } = useApp();
   const [activeTab, setActiveTab] = useState<TabType>('orchestration');
   const [loading, setLoading] = useState(false);
 
@@ -50,7 +50,7 @@ export function Analytics() {
   }, [searchParams]);
 
   // Check if user is admin
-  if (userType !== 'admin' && userType !== 'super_admin') {
+  if (!isAdmin) {
     return (
       <div className="space-y-8">
         <Alert className="bg-destructive/10 border-destructive/20">
