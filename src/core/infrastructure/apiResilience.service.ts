@@ -4,7 +4,7 @@
  * Ensures platform resilience against API failures
  */
 
-import { logger } from '@/core/platform/logger';
+import { logger } from '@/core/platform/logger.ts';
 
 export interface ResilientResult<T> {
   success: boolean;
