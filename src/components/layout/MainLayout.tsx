@@ -3,7 +3,7 @@
  * Le sidebar ne change JAMAIS - navigation stable et prévisible
  */
 
-import React, { ReactNode, useState, useMemo } from 'react';
+import React, { ReactNode, useState } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -115,14 +115,12 @@ const NAV_SECTIONS: NavSection[] = [
 export function MainLayout({ children }: MainLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, userType, logout } = useApp();
+  const { user, userType, logout, isAdmin } = useApp();
   const { toast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const isB2B = userType === 'B2B';
-
-  // Hide sidebar for analytics page (full width)
-  const hideSidebar = useMemo(() => location.pathname === '/analytics', [location.pathname]);
+  const isOnAnalytics = location.pathname === '/analytics';
 
   const handleLogout = async () => {
     try {
@@ -146,6 +144,13 @@ export function MainLayout({ children }: MainLayoutProps) {
   };
 
   const shouldShowItem = (item: NavItem) => {
+    // Hide user-focused items on analytics page for admins
+    if (isOnAnalytics && isAdmin) {
+      // Only show dashboard on analytics page
+      if (item.id === 'dashboard') return true;
+      return false;
+    }
+
     if (item.show === 'always') return true;
     if (item.show === 'b2b-only' && isB2B) return true;
     if (item.show === 'b2c-only' && !isB2B) return true;
@@ -290,12 +295,10 @@ export function MainLayout({ children }: MainLayoutProps) {
       </header>
 
       <div className="flex">
-        {/* Sidebar Desktop - FIXE - Hidden on /analytics */}
-        {!hideSidebar && (
-          <aside className="hidden md:flex md:flex-col w-64 bg-sidebar text-sidebar-foreground min-h-screen fixed left-0 top-0 border-r border-sidebar-border">
-            <SidebarContent />
-          </aside>
-        )}
+        {/* Sidebar Desktop - FIXE */}
+        <aside className="hidden md:flex md:flex-col w-64 bg-sidebar text-sidebar-foreground min-h-screen fixed left-0 top-0 border-r border-sidebar-border">
+          <SidebarContent />
+        </aside>
 
         {/* Sidebar Mobile */}
         {sidebarOpen && (
@@ -313,7 +316,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         )}
 
         {/* Main content */}
-        <main className={cn("flex-1 min-h-screen bg-background", !hideSidebar && "md:ml-64")}>
+        <main className="flex-1 md:ml-64 min-h-screen bg-background">
           {/* Header Desktop */}
           <header className="hidden md:flex bg-background border-b h-14 items-center justify-between px-6 sticky top-0 z-40">
             <div className="flex items-center gap-4">
