@@ -5,25 +5,37 @@
  */
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
-import { getRulesByCategory } from '@/core/rules/ruleRegistry';
+import { getRulesByCategory, getRuleById } from '@/core/rules/ruleRegistry';
 
 /**
- * Rule obligation structure
+ * Rule obligation structure with severity and weight
  */
 export interface RuleObligation {
+  id: string;
   category: string;
   obligation: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  weight: number;
   source?: string;
 }
 
 /**
- * Rule Engine result
+ * Rule Engine result with weighted obligations
  */
 export interface RuleEngineResult {
   obligations: string[];
   uniqueObligations: string[];
+  detailedObligations: RuleObligation[];
+  uniqueDetailedObligations: RuleObligation[];
   obligationCount: number;
   ruleCount: number;
+  totalWeight: number;
+  severityBreakdown: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
   categorySummary: Record<string, number>;
   meta: {
     engineVersion: string;
@@ -35,7 +47,7 @@ export interface RuleEngineResult {
 /**
  * Run Rule Engine - evaluate declarative rules based on lots
  * Input: EngineExecutionContext with normalized lots from Lot Engine
- * Output: Set of obligations based on lot categories
+ * Output: Set of obligations with severity and weight for scoring
  */
 export async function runRuleEngine(
   executionContext: EngineExecutionContext
@@ -50,7 +62,16 @@ export async function runRuleEngine(
 
     // Collect obligations based on lot categories
     const obligations: string[] = [];
+    const detailedObligations: RuleObligation[] = [];
     const categoryTriggers: Record<string, number> = {};
+    let totalWeight = 0;
+
+    const severityBreakdown = {
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+    };
 
     normalizedLots.forEach((lot: any) => {
       const category = lot.category || 'unknown';
@@ -61,14 +82,38 @@ export async function runRuleEngine(
       // Get rules for this category from the centralized registry
       const rules = getRulesByCategory(category);
 
-      // Collect obligations from matching rules
+      // Collect obligations from matching rules with severity and weight
       rules.forEach((rule) => {
         obligations.push(rule.obligation);
+
+        const detailedObligation: RuleObligation = {
+          id: rule.id,
+          category: rule.category,
+          obligation: rule.obligation,
+          severity: rule.severity,
+          weight: rule.weight,
+          source: rule.source,
+        };
+
+        detailedObligations.push(detailedObligation);
+        totalWeight += rule.weight;
+        severityBreakdown[rule.severity]++;
       });
     });
 
     // Deduplicate obligations while preserving order
     const uniqueObligations = Array.from(new Set(obligations));
+
+    // Deduplicate detailed obligations by ID (preserve detailed info, eliminate duplicates)
+    const seenIds = new Set<string>();
+    const uniqueDetailedObligations: RuleObligation[] = [];
+
+    detailedObligations.forEach((oblig) => {
+      if (!seenIds.has(oblig.id)) {
+        seenIds.add(oblig.id);
+        uniqueDetailedObligations.push(oblig);
+      }
+    });
 
     // Build category summary
     const categorySummary = categoryTriggers;
@@ -78,8 +123,12 @@ export async function runRuleEngine(
     const result: RuleEngineResult = {
       obligations,
       uniqueObligations,
+      detailedObligations,
+      uniqueDetailedObligations,
       obligationCount: obligations.length,
       ruleCount: uniqueObligations.length,
+      totalWeight,
+      severityBreakdown,
       categorySummary,
       meta: {
         engineVersion: '1.0',
@@ -91,6 +140,8 @@ export async function runRuleEngine(
     console.log('[RuleEngine] Rule evaluation completed', {
       totalObligations: obligations.length,
       uniqueRules: uniqueObligations.length,
+      totalWeight,
+      severityBreakdown,
       categories: Object.keys(categoryTriggers),
       processingTime,
     });
@@ -104,8 +155,17 @@ export async function runRuleEngine(
     return {
       obligations: [],
       uniqueObligations: [],
+      detailedObligations: [],
+      uniqueDetailedObligations: [],
       obligationCount: 0,
       ruleCount: 0,
+      totalWeight: 0,
+      severityBreakdown: {
+        critical: 0,
+        high: 0,
+        medium: 0,
+        low: 0,
+      },
       categorySummary: {},
       meta: {
         engineVersion: '1.0',

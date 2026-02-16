@@ -143,8 +143,11 @@ export async function runOrchestration(
           executionContext.rules = {
             obligations: ruleResult.obligations,
             uniqueObligations: ruleResult.uniqueObligations,
+            detailedObligations: ruleResult.uniqueDetailedObligations,
             obligationCount: ruleResult.obligationCount,
             ruleCount: ruleResult.ruleCount,
+            totalWeight: ruleResult.totalWeight,
+            severityBreakdown: ruleResult.severityBreakdown,
           };
 
           engineExecutionResult.status = 'completed';

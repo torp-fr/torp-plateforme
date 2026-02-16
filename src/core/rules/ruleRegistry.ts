@@ -11,6 +11,8 @@ export interface Rule {
   id: string;
   category: 'electricite' | 'plomberie' | 'toiture' | 'generic';
   obligation: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  weight: number;
   source?: string;
 }
 
@@ -25,18 +27,24 @@ export const RULE_REGISTRY: Rule[] = [
     id: 'ELEC_NFC15100',
     category: 'electricite',
     obligation: 'Vérifier conformité NFC 15-100',
+    severity: 'critical',
+    weight: 15,
     source: 'Code construction français',
   },
   {
     id: 'ELEC_DECLARATION',
     category: 'electricite',
     obligation: 'Vérifier déclaration conformité électrique',
+    severity: 'high',
+    weight: 10,
     source: 'Norme AFNOR',
   },
   {
     id: 'ELEC_ASSURANCE',
     category: 'electricite',
     obligation: 'Vérifier assurance responsabilité civile',
+    severity: 'high',
+    weight: 10,
     source: 'Obligation légale',
   },
 
@@ -45,12 +53,16 @@ export const RULE_REGISTRY: Rule[] = [
     id: 'PLOMB_EAU',
     category: 'plomberie',
     obligation: 'Vérifier conformité normes eau potable',
+    severity: 'high',
+    weight: 10,
     source: 'Code sanitaire',
   },
   {
     id: 'PLOMB_ASSURANCE',
     category: 'plomberie',
     obligation: 'Vérifier assurance dommages',
+    severity: 'medium',
+    weight: 7,
     source: 'Obligation légale',
   },
 
@@ -59,18 +71,24 @@ export const RULE_REGISTRY: Rule[] = [
     id: 'TOIT_DECLARATION',
     category: 'toiture',
     obligation: 'Vérifier déclaration préalable en mairie',
+    severity: 'high',
+    weight: 10,
     source: 'Code urbanisme',
   },
   {
     id: 'TOIT_CODE',
     category: 'toiture',
     obligation: 'Vérifier conformité code construction',
+    severity: 'critical',
+    weight: 15,
     source: 'Code construction français',
   },
   {
     id: 'TOIT_DECENNALE',
     category: 'toiture',
     obligation: 'Vérifier couverture assurance décennale',
+    severity: 'high',
+    weight: 10,
     source: 'Loi LATREILLE',
   },
 
@@ -79,12 +97,16 @@ export const RULE_REGISTRY: Rule[] = [
     id: 'GENERIC_DEVIS',
     category: 'generic',
     obligation: 'Établir devis détaillé',
+    severity: 'low',
+    weight: 3,
     source: 'Bonne pratique',
   },
   {
     id: 'GENERIC_GARANTIES',
     category: 'generic',
     obligation: 'Vérifier garanties décennales',
+    severity: 'high',
+    weight: 10,
     source: 'Obligation légale',
   },
 ];

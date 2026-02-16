@@ -1,14 +1,14 @@
 /**
  * Scoring Engine v1.0
- * Minimal scoring engine for project risk assessment
+ * Weighted scoring engine for project risk assessment
  * Pure calculation - no AI, no external APIs, no Supabase
- * Based on obligation count and complexity metrics
+ * Based on severity-weighted obligations and complexity metrics
  */
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 
 /**
- * Scoring result structure
+ * Scoring result structure with weighted scoring
  */
 export interface ScoringEngineResult {
   riskScore: number;
@@ -16,7 +16,14 @@ export interface ScoringEngineResult {
   globalScore: number;
   scoreBreakdown: {
     obligationCount: number;
+    totalWeight: number; // Sum of all rule weights
     complexityCount: number;
+    severityBreakdown?: {
+      critical: number;
+      high: number;
+      medium: number;
+      low: number;
+    };
     obligationWeight: number; // riskScore
     complexityWeight: number; // complexityImpact
     scoreReduction: number; // total reduction from 100
@@ -40,20 +47,28 @@ export async function runScoringEngine(
   const startTime = Date.now();
 
   try {
-    console.log('[ScoringEngine] Starting project scoring');
+    console.log('[ScoringEngine] Starting project scoring with weighted rules');
 
     // Extract metrics from execution context
     const obligationCount = executionContext.rules?.obligationCount || 0;
+    const totalWeight = executionContext.rules?.totalWeight || 0;
+    const severityBreakdown = executionContext.rules?.severityBreakdown || {
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+    };
     const complexityScore = executionContext.lots?.complexityScore || 0;
 
     // Calculate scoring components
-    // Risk score: 5 points per obligation (higher obligations = higher risk)
-    const riskScore = obligationCount * 5;
+    // Risk score: weighted sum of all rule obligations (based on severity)
+    // Instead of simple count * 5, we use actual weights assigned by severity
+    const riskScore = totalWeight;
 
     // Complexity impact: 2 points per lot (more lots = more complexity)
     const complexityImpact = complexityScore * 2;
 
-    // Global score: starts at 100, reduced by risk and complexity
+    // Global score: starts at 100, reduced by weighted risk and complexity
     // Clamped to 0 minimum (no negative scores)
     const totalReduction = riskScore + complexityImpact;
     const globalScore = Math.max(0, 100 - totalReduction);
@@ -78,7 +93,9 @@ export async function runScoringEngine(
       globalScore,
       scoreBreakdown: {
         obligationCount,
+        totalWeight,
         complexityCount: complexityScore,
+        severityBreakdown,
         obligationWeight: riskScore,
         complexityWeight: complexityImpact,
         scoreReduction: totalReduction,
@@ -95,6 +112,8 @@ export async function runScoringEngine(
       globalScore: result.globalScore,
       riskLevel: result.riskLevel,
       obligationCount,
+      totalWeight,
+      severityBreakdown,
       complexityScore,
       processingTime,
     });
@@ -111,7 +130,14 @@ export async function runScoringEngine(
       globalScore: 100,
       scoreBreakdown: {
         obligationCount: 0,
+        totalWeight: 0,
         complexityCount: 0,
+        severityBreakdown: {
+          critical: 0,
+          high: 0,
+          medium: 0,
+          low: 0,
+        },
         obligationWeight: 0,
         complexityWeight: 0,
         scoreReduction: 0,
@@ -134,25 +160,41 @@ export function getScoringEngineMetadata() {
   return {
     id: 'scoringEngine',
     name: 'Scoring Engine',
-    version: '1.0',
-    description: 'Calculate project risk score based on obligations and complexity',
+    version: '1.1',
+    description: 'Calculate project risk score with severity-weighted obligations and complexity',
     capabilities: [
-      'Risk score calculation',
+      'Weighted risk score calculation',
+      'Severity-based obligation weighting',
       'Complexity impact assessment',
       'Global score generation',
       'Risk level classification',
+      'Severity breakdown reporting',
     ],
     inputs: [
-      'obligationCount from ruleEngine',
+      'totalWeight from ruleEngine (sum of all rule weights)',
+      'severityBreakdown from ruleEngine (critical/high/medium/low counts)',
+      'detailedObligations from ruleEngine (weighted obligations)',
       'complexityScore from lotEngine',
     ],
-    outputs: ['riskScore', 'complexityImpact', 'globalScore', 'riskLevel'],
+    outputs: [
+      'riskScore (totalWeight)',
+      'complexityImpact',
+      'globalScore',
+      'riskLevel',
+      'scoreBreakdown with severity details',
+    ],
     dependencies: ['ruleEngine', 'lotEngine', 'contextEngine'],
+    weightingStrategy: {
+      critical: 15,
+      high: 10,
+      medium: 7,
+      low: 3,
+    },
     scoringAlgorithm: {
       baseScore: 100,
-      riskFormula: 'obligationCount * 5',
+      riskFormula: 'totalWeight (sum of weighted rules)',
       complexityFormula: 'complexityScore * 2',
-      globalFormula: 'Math.max(0, 100 - riskScore - complexityImpact)',
+      globalFormula: 'Math.max(0, 100 - totalWeight - complexityImpact)',
       riskLevels: {
         low: '75-100',
         medium: '50-74',
