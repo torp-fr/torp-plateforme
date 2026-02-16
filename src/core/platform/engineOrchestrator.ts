@@ -6,6 +6,7 @@
 
 import { ENGINE_REGISTRY, EngineRegistryEntry } from '@/core/platform/engineRegistry';
 import { runContextEngine, ContextEngineResult } from '@/core/engines/context.engine';
+import { runLotEngine, LotEngineResult } from '@/core/engines/lot.engine';
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 
 /**
@@ -108,6 +109,23 @@ export async function runOrchestration(
             spaces: contextResult.spaces,
             flags: contextResult.flags,
             summary: contextResult.summary,
+          };
+
+          engineExecutionResult.status = 'completed';
+          engineExecutionResult.endTime = new Date().toISOString();
+        }
+        // Execute Lot Engine if active (depends on Context Engine)
+        else if (engine.id === 'lotEngine') {
+          console.log('[EngineOrchestrator] Executing Lot Engine');
+          const lotResult: LotEngineResult = await runLotEngine(executionContext);
+          engineResults['lotEngine'] = lotResult;
+
+          // Populate shared execution context with Lot Engine results
+          executionContext.lots = {
+            normalizedLots: lotResult.normalizedLots,
+            primaryLots: lotResult.primaryLots,
+            complexityScore: lotResult.complexityScore,
+            categorySummary: lotResult.categorySummary,
           };
 
           engineExecutionResult.status = 'completed';
