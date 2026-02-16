@@ -5,7 +5,6 @@
  */
 
 import { logger } from '@/core/platform/logger';
-import crypto from 'crypto';
 
 export interface CacheEntry<T> {
   key: string;
@@ -50,11 +49,18 @@ class IntelligentCacheService {
 
   /**
    * Generate cache key from parameters
+   * Simple hash function that works in browser (no crypto module needed)
    */
   private generateCacheKey(source: string, params: Record<string, any>): string {
     const paramString = JSON.stringify(params);
-    const hash = crypto.createHash('sha256').update(paramString).digest('hex');
-    return `${source}:${hash}`;
+    // Simple hash function for browser compatibility
+    let hash = 0;
+    for (let i = 0; i < paramString.length; i++) {
+      const char = paramString.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return `${source}:${Math.abs(hash).toString(16)}`;
   }
 
   /**
