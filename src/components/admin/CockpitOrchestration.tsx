@@ -1,7 +1,7 @@
 /**
  * Cockpit d'Orchestration TORP (Phase 29.1)
  * Main admin dashboard with real-time platform metrics
- * Displays: Global KPIs, Engine Status, Knowledge Health, Fraud Distribution, Adaptive Impact, Recent Logs
+ * Displays: Global KPIs, Engine Status, Knowledge Health, Fraud Distribution, Adaptive Impact, Recent Logs, Health & Resilience
  */
 
 import React, { useState, useEffect } from 'react';
@@ -23,6 +23,7 @@ import {
   FraudDistribution,
   RecentOrchestrationTable,
 } from './DashboardMetrics';
+import { SystemHealthPanel } from './SystemHealthPanel';
 import { ENGINE_REGISTRY } from '@/core/platform/engineRegistry';
 
 interface CockpitMetrics {
@@ -513,6 +514,9 @@ export function CockpitOrchestration({ metrics, loading = false }: CockpitProps)
           </CardContent>
         </Card>
       </div>
+
+      {/* SECTION 8: SYSTEM HEALTH & RESILIENCE (Phase 30.3) */}
+      <SystemHealthPanel loading={loading} refreshInterval={30000} />
 
       {/* Footer */}
       <div className="flex items-center justify-between py-4 border-t text-sm text-muted-foreground">
