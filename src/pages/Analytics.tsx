@@ -15,10 +15,17 @@ import {
   AlertCircle,
   Database,
   Settings,
+  Zap,
+  Cpu,
+  ExternalLink,
+  BookOpen,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ENGINE_REGISTRY, getEngineStats } from '@/core/platform/engineRegistry';
+import { API_REGISTRY, getAPIStats } from '@/core/platform/apiRegistry';
 
 type TabType = 'overview' | 'upload-kb' | 'users' | 'settings';
 
@@ -97,80 +104,185 @@ export function Analytics() {
 }
 
 /**
- * Overview Tab Component
+ * Overview Tab Component - Platform Control Center
  */
 function OverviewTab() {
+  const engineStats = getEngineStats();
+  const apiStats = getAPIStats();
+
   return (
     <div className="space-y-8">
       {/* Admin Stats Cards */}
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {/* Total Users */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Total Users */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-muted-foreground text-sm">Utilisateurs</p>
+                <p className="text-4xl font-bold text-foreground mt-2">0</p>
+              </div>
+              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Users className="h-6 w-6 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Total Analyses */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-muted-foreground text-sm">Analyses complétées</p>
+                <p className="text-4xl font-bold text-foreground mt-2">0</p>
+              </div>
+              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <FileText className="h-6 w-6 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Growth - Analyses (30 jours) */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-muted-foreground text-sm">Croissance analyses (30j)</p>
+                <p className="text-4xl font-bold text-foreground mt-2">+0%</p>
+              </div>
+              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <TrendingUp className="h-6 w-6 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Platform Health */}
       <Card>
-        <CardContent className="p-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-muted-foreground text-sm">Utilisateurs</p>
-              <p className="text-4xl font-bold text-foreground mt-2">0</p>
-            </div>
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Users className="h-6 w-6 text-primary" />
-            </div>
+        <CardHeader>
+          <CardTitle className="text-primary font-display">Santé de la plateforme</CardTitle>
+          <CardDescription>Monitoring et alertes système</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">API Status</span>
+            <span className="text-sm font-semibold text-success">✓ Opérationnel</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Database</span>
+            <span className="text-sm font-semibold text-success">✓ Opérationnel</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Storage</span>
+            <span className="text-sm font-semibold text-success">✓ Opérationnel</span>
           </div>
         </CardContent>
       </Card>
 
-      {/* Total Analyses */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-muted-foreground text-sm">Analyses complétées</p>
-              <p className="text-4xl font-bold text-foreground mt-2">0</p>
+      {/* ========== PLATFORM CONTROL CENTER ========== */}
+
+      {/* Platform Engines Section */}
+      <Card className="border-l-4 border-l-blue-500">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Cpu className="h-5 w-5 text-blue-600" />
+              <CardTitle className="text-primary font-display">Platform Engines</CardTitle>
             </div>
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <FileText className="h-6 w-6 text-primary" />
-            </div>
+            <Badge variant="outline">{engineStats.total} engines</Badge>
+          </div>
+          <CardDescription>Orchestration engines pour analyse et enrichissement</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {ENGINE_REGISTRY.map((engine) => (
+              <div key={engine.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                <div>
+                  <p className="font-medium text-sm">{engine.name}</p>
+                  <p className="text-xs text-muted-foreground">{engine.description}</p>
+                </div>
+                <Badge
+                  variant="outline"
+                  className={
+                    engine.status === 'active'
+                      ? 'bg-green-100 text-green-700 border-green-300'
+                      : engine.status === 'error'
+                        ? 'bg-red-100 text-red-700 border-red-300'
+                        : 'bg-gray-100 text-gray-700 border-gray-300'
+                  }
+                >
+                  {engine.status}
+                </Badge>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
 
-      {/* Growth - Analyses (30 jours) */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-muted-foreground text-sm">Croissance analyses (30j)</p>
-              <p className="text-4xl font-bold text-foreground mt-2">+0%</p>
+      {/* External APIs Section */}
+      <Card className="border-l-4 border-l-purple-500">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ExternalLink className="h-5 w-5 text-purple-600" />
+              <CardTitle className="text-primary font-display">External APIs</CardTitle>
             </div>
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <TrendingUp className="h-6 w-6 text-primary" />
-            </div>
+            <Badge variant="outline">{apiStats.total} APIs</Badge>
+          </div>
+          <CardDescription>Services externes intégrés à la plateforme</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {API_REGISTRY.map((api) => (
+              <div key={api.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                <div>
+                  <p className="font-medium text-sm">{api.name}</p>
+                  <p className="text-xs text-muted-foreground">{api.description}</p>
+                </div>
+                <Badge
+                  variant="outline"
+                  className={
+                    api.status === 'active'
+                      ? 'bg-green-100 text-green-700 border-green-300'
+                      : api.status === 'configured'
+                        ? 'bg-blue-100 text-blue-700 border-blue-300'
+                        : 'bg-gray-100 text-gray-700 border-gray-300'
+                  }
+                >
+                  {api.status}
+                </Badge>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
-    </div>
 
-    {/* Platform Health */}
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-primary font-display">Santé de la plateforme</CardTitle>
-        <CardDescription>Monitoring et alertes système</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">API Status</span>
-          <span className="text-sm font-semibold text-success">✓ Opérationnel</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Database</span>
-          <span className="text-sm font-semibold text-success">✓ Opérationnel</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Storage</span>
-          <span className="text-sm font-semibold text-success">✓ Opérationnel</span>
-        </div>
-      </CardContent>
-    </Card>
+      {/* Knowledge Base Section */}
+      <Card className="border-l-4 border-l-amber-500">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <BookOpen className="h-5 w-5 text-amber-600" />
+            <CardTitle className="text-primary font-display">Knowledge Base</CardTitle>
+          </div>
+          <CardDescription>Documents ingérés et sources d'enrichissement</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="p-4 rounded-lg bg-muted">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Documents ingérés</span>
+                <span className="text-2xl font-bold">0</span>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Aucun document n'a été ingéré dans la Knowledge Base pour le moment. Les documents seront utilisés pour enrichir les analyses par RAG.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
