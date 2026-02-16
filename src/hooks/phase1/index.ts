@@ -1,41 +1,7 @@
 /**
- * Hooks Phase 1 - Consultation des entreprises
- * Export centralisé de tous les hooks Phase 1
+ * Phase 1 Hooks - DEPRECATED
+ * These hooks are no longer used and have been removed as part of the cleanup.
+ * This file is kept for backwards compatibility purposes.
  */
 
-// Appels d'offres
-export {
-  useTenders,
-} from './useTenders';
-
-export type {
-  Tender,
-  TenderResponse,
-  TenderStats,
-  CreateTenderData,
-  UseTendersOptions,
-} from './useTenders';
-
-// Entreprises
-export {
-  useEntreprises,
-} from './useEntreprises';
-
-export type {
-  Entreprise,
-  EntrepriseInvitation,
-  SearchParams,
-  UseEntreprisesOptions,
-} from './useEntreprises';
-
-// Offres
-export {
-  useOffres,
-} from './useOffres';
-
-export type {
-  Offre,
-  OffreStats,
-  OffreComparaison,
-  UseOffresOptions,
-} from './useOffres';
+// Legacy exports removed in cleanup phase

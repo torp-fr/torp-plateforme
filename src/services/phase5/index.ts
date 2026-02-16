@@ -1,6 +1,7 @@
 /**
- * Services Phase 5 - Maintenance & Exploitation
- * Export centralisé des services Phase 5
+ * Phase 5 Services - Redirects to Legacy
+ * These services have been moved to src/legacy/phase5/services/
+ * This file is kept for backwards compatibility.
  */
 
-export { carnetService } from './carnet.service';
+export * from '@/legacy/phase5/services/carnet.service';

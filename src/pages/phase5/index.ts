@@ -1,9 +1,7 @@
 /**
- * Pages Phase 5 - Maintenance & Exploitation
- * Export centralisé des pages Phase 5
+ * Phase 5 Pages - Redirects to Legacy
+ * These pages have been moved to src/legacy/phase5/pages/
+ * This file is kept for backwards compatibility.
  */
 
-export { default as Phase5Dashboard } from './Phase5Dashboard';
-export { DiagnosticsPage } from './DiagnosticsPage';
-export { EntretienPage } from './EntretienPage';
-export { SinistresPage } from './SinistresPage';
+export * from '@/legacy/phase5/pages/index';

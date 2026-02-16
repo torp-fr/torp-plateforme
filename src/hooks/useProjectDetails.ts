@@ -100,134 +100,53 @@ export function useProjectDetails({
   const { toast } = useToast();
 
   // -------------------------------------------------------------------------
-  // Query: Projet principal (phase0_projects)
+  // Query: Projet principal (DEPRECATED - phase0 tables removed)
   // -------------------------------------------------------------------------
+  // NOTE: This hook references phase0_projects and phase0_works which were
+  // removed in migration 034. This hook is kept for backwards compatibility
+  // but returns null to prevent runtime errors.
   const projectQuery = useQuery({
     queryKey: ['project-details', projectId],
     queryFn: async (): Promise<ProjectDetails | null> => {
-      // 1. Récupérer le projet phase0
-      const { data: project, error: projectError } = await supabase
-        .from('phase0_projects')
-        .select('*')
-        .eq('project_id', projectId)
-        .single();
-
-      if (projectError && projectError.code !== 'PGRST116') {
-        console.error('[useProjectDetails] Project error:', projectError);
-      }
-
-      // 2. Récupérer les lots de travaux
-      const { data: works } = await supabase
-        .from('phase0_works')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('ordre', { ascending: true });
-
-      // 3. Récupérer les tâches de planning
-      const { data: tasks } = await supabase
-        .from('planning_tasks')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('start_date', { ascending: true });
-
-      // 4. Récupérer les situations de travaux (avancement)
-      const { data: situations } = await supabase
-        .from('situations_travaux')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('date_situation', { ascending: false });
-
-      // 5. Récupérer les acteurs du projet
-      const { data: actors } = await supabase
-        .from('project_actors')
-        .select('*')
-        .eq('project_id', projectId);
-
-      // 6. Récupérer les documents
-      const { data: documents } = await supabase
-        .from('project_documents')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      // 7. Récupérer les alertes (notifications non lues)
-      const { data: notifications } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      // Transformer les données
-      return transformToProjectDetails(
-        project,
-        works || [],
-        tasks || [],
-        situations || [],
-        actors || [],
-        documents || [],
-        notifications || []
-      );
+      console.warn('[useProjectDetails] This hook is deprecated. Phase 0 tables have been removed.');
+      return null;
     },
     enabled: enabled && !!projectId,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
   // -------------------------------------------------------------------------
-  // Query: Budget détaillé
+  // Query: Budget détaillé (DEPRECATED)
   // -------------------------------------------------------------------------
+  // NOTE: Budget queries are deprecated as they reference legacy schemas
   const budgetQuery = useQuery({
     queryKey: ['project-budget', projectId],
     queryFn: async (): Promise<ProjectBudget> => {
-      // Récupérer les situations de travaux pour le budget réel
-      const { data: situations } = await supabase
-        .from('situations_travaux')
-        .select('*')
-        .eq('project_id', projectId);
-
-      // Récupérer les contrats pour le budget prévu
-      const { data: contracts } = await supabase
-        .from('project_contracts')
-        .select('*')
-        .eq('project_id', projectId);
-
-      // Récupérer les jalons de paiement
-      const { data: milestones } = await supabase
-        .from('payment_milestones')
-        .select('*')
-        .eq('project_id', projectId);
-
-      return calculateBudget(situations || [], contracts || [], milestones || []);
+      console.warn('[useProjectDetails] Budget query is deprecated');
+      return {
+        total: 0,
+        spent: 0,
+        remaining: 0,
+        breakdown: [],
+      };
     },
     enabled: enabled && !!projectId,
     staleTime: 1000 * 60 * 5,
   });
 
   // -------------------------------------------------------------------------
-  // Mutation: Mettre à jour le statut du projet
+  // Mutation: Mettre à jour le statut du projet (DEPRECATED)
   // -------------------------------------------------------------------------
+  // NOTE: This mutation references phase0_projects which was removed in migration 034.
   const updateStatusMutation = useMutation({
     mutationFn: async (newStatus: string) => {
-      const { error } = await supabase
-        .from('phase0_projects')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq('project_id', projectId);
-
-      if (error) throw error;
-      return newStatus;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['project-details', projectId] });
-      toast({
-        title: 'Statut mis à jour',
-        description: 'Le statut du projet a été modifié.',
-      });
+      console.warn('[useProjectDetails] updateStatus mutation is disabled - phase0_projects table removed');
+      throw new Error('Cette fonctionnalité n\'est plus disponible après la refonte de l\'architecture.');
     },
     onError: (error: Error) => {
       toast({
-        title: 'Erreur',
-        description: error.message,
+        title: 'Fonctionnalité indisponible',
+        description: 'Cette fonctionnalité n\'est pas disponible avec la nouvelle architecture.',
         variant: 'destructive',
       });
     },
