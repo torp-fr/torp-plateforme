@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ENGINE_REGISTRY, getEngineStats } from '@/core/platform/engineRegistry';
 import { API_REGISTRY, getAPIStats } from '@/core/platform/apiRegistry';
+import { getOrchestrationStatus, getOrchestrationStats } from '@/core/platform/engineOrchestrator';
 
 type TabType = 'overview' | 'upload-kb' | 'users' | 'settings';
 
@@ -197,6 +198,16 @@ function OverviewTab() {
           <CardDescription>Orchestration engines pour analyse et enrichissement</CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Orchestration Status */}
+          <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-blue-900">Orchestration Status</span>
+              <Badge className="bg-blue-100 text-blue-700 border-blue-300">
+                {getOrchestrationStatus()}
+              </Badge>
+            </div>
+          </div>
+
           <div className="space-y-3">
             {ENGINE_REGISTRY.map((engine) => (
               <div key={engine.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
