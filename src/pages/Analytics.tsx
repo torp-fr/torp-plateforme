@@ -103,7 +103,7 @@ function OverviewTab() {
   return (
     <div className="space-y-8">
       {/* Admin Stats Cards */}
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {/* Total Users */}
       <Card>
         <CardContent className="p-6">
@@ -134,27 +134,12 @@ function OverviewTab() {
         </CardContent>
       </Card>
 
-      {/* Average Score */}
+      {/* Growth - Analyses (30 jours) */}
       <Card>
         <CardContent className="p-6">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-muted-foreground text-sm">Score moyen</p>
-              <p className="text-4xl font-bold text-foreground mt-2">0</p>
-            </div>
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <BarChart3 className="h-6 w-6 text-primary" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Growth */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-muted-foreground text-sm">Croissance (30j)</p>
+              <p className="text-muted-foreground text-sm">Croissance analyses (30j)</p>
               <p className="text-4xl font-bold text-foreground mt-2">+0%</p>
             </div>
             <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">

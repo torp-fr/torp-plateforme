@@ -23,6 +23,9 @@ import {
   Hammer,
   User,
   Scale,
+  BarChart3,
+  Database,
+  Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
@@ -70,6 +73,15 @@ const B2B_NAV_ITEMS: NavItem[] = [
   { href: '/pro/settings', icon: Settings, label: 'Paramètres' },
 ];
 
+// Navigation pour Admin
+const ADMIN_NAV_ITEMS: NavItem[] = [
+  { href: '/analytics', icon: BarChart3, label: 'Panel d\'Administration', exact: true },
+  { href: '/analytics', icon: LayoutDashboard, label: 'Vue d\'ensemble' },
+  { href: '/analytics', icon: Database, label: 'Base de Connaissances' },
+  { href: '/analytics', icon: Users, label: 'Utilisateurs' },
+  { href: '/analytics', icon: Settings, label: 'Paramètres' },
+];
+
 // Configuration par type d'utilisateur
 const USER_TYPE_CONFIG = {
   B2C: {
@@ -93,19 +105,19 @@ const USER_TYPE_CONFIG = {
     label: 'Administrateur',
     badge: 'ADMIN',
     badgeColor: 'bg-orange-100 text-orange-700',
-    navItems: B2B_NAV_ITEMS, // Admins can access B2B features
-    newProjectLink: '/admin-dashboard',
-    newProjectLabel: 'Administration',
-    dashboardLink: '/admin-dashboard',
+    navItems: ADMIN_NAV_ITEMS,
+    newProjectLink: '/analytics',
+    newProjectLabel: 'Panel Administration',
+    dashboardLink: '/analytics',
   },
   super_admin: {
     label: 'Super Admin',
     badge: 'SUPER',
     badgeColor: 'bg-red-100 text-red-700',
-    navItems: B2B_NAV_ITEMS, // Super admins can access all features
-    newProjectLink: '/admin/analytics',
-    newProjectLabel: 'Administration',
-    dashboardLink: '/admin/analytics',
+    navItems: ADMIN_NAV_ITEMS,
+    newProjectLink: '/analytics',
+    newProjectLabel: 'Panel Administration',
+    dashboardLink: '/analytics',
   },
 };
 

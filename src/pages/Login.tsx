@@ -31,7 +31,7 @@ export default function Login() {
         password,
       });
 
-      console.log('[Login] Connexion réussie:', response.user.email, 'Role:', response.user.role, 'isAdmin:', response.user.isAdmin);
+      console.log('[Login] Connexion réussie:', response.user.email, 'Role:', response.user.role, 'isAdmin:', response.user.isAdmin, 'type:', response.user.type, '(typeof isAdmin:', typeof response.user.isAdmin, ')');
 
       setUser(response.user);
 
