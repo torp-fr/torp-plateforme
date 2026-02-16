@@ -5,6 +5,7 @@
  */
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
+import { getRulesByCategory } from '@/core/rules/ruleRegistry';
 
 /**
  * Rule obligation structure
@@ -57,29 +58,13 @@ export async function runRuleEngine(
       // Track which categories trigger rules
       categoryTriggers[category] = (categoryTriggers[category] || 0) + 1;
 
-      // Declarative rules: category → obligations
-      if (category === 'electricite') {
-        obligations.push('Vérifier conformité NFC 15-100');
-        obligations.push('Vérifier déclaration conformité électrique');
-        obligations.push('Vérifier assurance responsabilité civile');
-      }
+      // Get rules for this category from the centralized registry
+      const rules = getRulesByCategory(category);
 
-      if (category === 'plomberie') {
-        obligations.push('Vérifier conformité normes eau potable');
-        obligations.push('Vérifier assurance dommages');
-      }
-
-      if (category === 'toiture') {
-        obligations.push('Vérifier déclaration préalable en mairie');
-        obligations.push('Vérifier conformité code construction');
-        obligations.push('Vérifier couverture assurance décennale');
-      }
-
-      // Generic obligation for all work
-      if (category !== 'unknown') {
-        obligations.push('Établir devis détaillé');
-        obligations.push('Vérifier garanties décennales');
-      }
+      // Collect obligations from matching rules
+      rules.forEach((rule) => {
+        obligations.push(rule.obligation);
+      });
     });
 
     // Deduplicate obligations while preserving order
