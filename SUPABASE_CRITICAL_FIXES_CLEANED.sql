@@ -227,22 +227,28 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION create_user_profile TO authenticated, anon;
 
 -- ============================================================================
--- STEP 8: FIX RLS POLICY on system_alerts that references public.user_roles
+-- STEP 8: FIX RLS POLICY (skipped if system_health_status doesn't exist)
 -- ============================================================================
--- This view references public.user_roles which doesn't exist in all cases
+-- Only creates policy if table exists
+-- This avoids errors if the table was never created in migrations
 
-DROP POLICY IF EXISTS system_health_admin_read ON public.system_health_status;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'system_health_status') THEN
+    DROP POLICY IF EXISTS system_health_admin_read ON public.system_health_status;
 
-CREATE POLICY system_health_admin_read ON public.system_health_status
-  FOR SELECT
-  USING (
-    -- Check if user is admin directly from profiles table
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE id = auth.uid()
-      AND (role = 'admin' OR role = 'super_admin')
-    )
-  );
+    CREATE POLICY system_health_admin_read ON public.system_health_status
+      FOR SELECT
+      USING (
+        -- Check if user is admin directly from profiles table
+        EXISTS (
+          SELECT 1 FROM public.profiles
+          WHERE id = auth.uid()
+          AND (role = 'admin' OR role = 'super_admin')
+        )
+      );
+  END IF;
+END $$;
 
 -- ============================================================================
 -- STEP 9: SYNC all existing auth.users to profiles if not already there
