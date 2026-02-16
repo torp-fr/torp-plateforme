@@ -4,12 +4,7 @@
  * Supports live intelligence integration for cockpit dashboard
  */
 
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL || '',
-  process.env.REACT_APP_SUPABASE_ANON_KEY || ''
-);
+import { supabase } from '@/lib/supabase';
 
 export interface AnalyticsMetrics {
   totalAnalyses: number;
