@@ -303,16 +303,17 @@ export class PermissionService {
       return cached.context;
     }
 
-    // Récupérer les données utilisateur
+    // Récupérer les données utilisateur depuis profiles
     const { data: user } = await supabase
-      .from('users')
-      .select('id, user_type')
+      .from('profiles')
+      .select('id, role')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     if (!user) return null;
 
-    const userType = user.user_type as UserType;
+    // Map role to userType for compatibility
+    const userType: UserType = user.role === 'admin' || user.role === 'super_admin' ? 'admin' : 'B2C';
 
     // Récupérer les rôles sur les projets
     const { data: projectRoles } = await supabase

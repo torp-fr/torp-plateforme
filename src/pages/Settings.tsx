@@ -54,11 +54,10 @@ export default function Settings() {
     try {
       // Update user in database
       const { error } = await supabase
-        .from('users')
+        .from('profiles')
         .update({
           name,
           phone,
-          user_type: userType,
         })
         .eq('id', user.id);
 

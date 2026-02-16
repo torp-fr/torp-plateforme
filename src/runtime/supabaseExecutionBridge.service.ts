@@ -4,7 +4,7 @@
  * Loads quote data → builds context → executes all engines → persists results
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 
 /**
@@ -46,19 +46,6 @@ interface SupabaseDevis {
   updated_at: string;
 }
 
-/**
- * Initialize Supabase client
- */
-function getSupabaseClient() {
-  const supabaseUrl = process.env.SUPABASE_URL || '';
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase configuration (URL or SERVICE_ROLE_KEY)');
-  }
-
-  return createClient(supabaseUrl, supabaseKey);
-}
 
 /**
  * Load devis from Supabase
@@ -67,7 +54,7 @@ async function loadDevisFromSupabase(devisId: string): Promise<SupabaseDevis> {
   try {
     console.log(`[Bridge] Loading devis: ${devisId}`);
 
-    const supabase = getSupabaseClient();
+    // Use shared supabase client
     const { data, error } = await supabase
       .from('devis')
       .select('*')
@@ -280,7 +267,7 @@ async function persistResultsToSupabase(
 
   try {
     console.log(`[Bridge] Starting persistence to Supabase`);
-    const supabase = getSupabaseClient();
+    // Use shared supabase client
 
     // Step 1: Update devis table
     try {

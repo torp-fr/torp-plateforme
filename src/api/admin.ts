@@ -74,10 +74,10 @@ export async function getCurrentUserAdminStatus() {
       return null;
     }
 
-    // Fetch user profile with role info
+    // Fetch user profile with role info from profiles table
     const { data: userData, error: dataError } = await supabase
-      .from('users')
-      .select('id, email, role, is_admin, can_upload_kb')
+      .from('profiles')
+      .select('id, email, role')
       .eq('id', user.id)
       .single();
 
@@ -87,9 +87,9 @@ export async function getCurrentUserAdminStatus() {
     }
 
     return {
-      isAdmin: userData.is_admin || false,
+      isAdmin: userData.role === 'admin' || userData.role === 'super_admin',
       role: userData.role || 'user',
-      canUploadKb: userData.can_upload_kb || false,
+      canUploadKb: userData.role === 'admin' || userData.role === 'super_admin',
     };
   } catch (error) {
     console.error('[User Admin Status] Exception:', error);
@@ -113,8 +113,8 @@ export async function listUsersWithRoles() {
     }
 
     const { data, error } = await supabase
-      .from('users')
-      .select('id, email, name, role, is_admin, can_upload_kb, created_at')
+      .from('profiles')
+      .select('id, email, name, role, created_at')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -154,36 +154,12 @@ export async function updateUserRole(userId: string, newRole: 'user' | 'admin' |
       };
     }
 
-    const isAdmin = newRole === 'admin' || newRole === 'super_admin';
-
+    // Update profiles table only (users table no longer exists)
     const { data, error } = await supabase
-      .from('users')
-      .update({
-        role: newRole,
-        is_admin: isAdmin,
-        can_upload_kb: isAdmin,
-        updated_role_date: new Date().toISOString(),
-      })
-      .eq('id', userId)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('[Update Role] Error:', error);
-      return {
-        success: false,
-        error: error.message,
-      };
-    }
-
-    // Also sync to profiles table
-    await supabase
       .from('profiles')
       .update({
         role: newRole,
-        is_admin: isAdmin,
-        can_upload_kb: isAdmin,
-        updated_role_date: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .eq('id', userId)
       .catch(() => {

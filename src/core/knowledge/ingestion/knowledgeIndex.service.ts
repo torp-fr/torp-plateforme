@@ -5,7 +5,7 @@
 
 import type { KnowledgeChunk as ChunkerChunk } from './knowledgeChunker.service';
 import { generateEmbeddingsForChunks } from './knowledgeEmbedding.service';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 
 /**
  * Index statistics
@@ -18,27 +18,13 @@ export interface IndexStats {
 }
 
 /**
- * Initialize Supabase client
- */
-function getSupabaseClient() {
-  const supabaseUrl = process.env.SUPABASE_URL || '';
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase configuration');
-  }
-
-  return createClient(supabaseUrl, supabaseKey);
-}
-
-/**
  * Index chunks by generating embeddings
  */
 export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): Promise<boolean> {
   try {
     console.log('[KnowledgeIndex] Indexing', chunks.length, 'chunks for document:', documentId);
 
-    const supabase = getSupabaseClient();
+    // Use shared supabase client
 
     // Step 1: Generate embeddings
     const embeddings = await generateEmbeddingsForChunks(chunks);
@@ -104,7 +90,7 @@ export async function semanticSearch(
 
     const queryEmbedding = queryEmbeddingResult.embedding;
 
-    const supabase = getSupabaseClient();
+    // Use shared supabase client
 
     // Fetch all chunks with embeddings
     const { data: chunks, error } = await supabase
@@ -142,7 +128,7 @@ export async function semanticSearch(
  */
 export async function getIndexStats(): Promise<IndexStats> {
   try {
-    const supabase = getSupabaseClient();
+    // Use shared supabase client
 
     const { data: chunks, error } = await supabase
       .from('knowledge_chunks')
@@ -179,7 +165,7 @@ export async function rebuildIndex(documentId: string): Promise<boolean> {
   try {
     console.log('[KnowledgeIndex] Rebuilding index for document:', documentId);
 
-    const supabase = getSupabaseClient();
+    // Use shared supabase client
 
     // Fetch chunks
     const { data: chunks, error } = await supabase

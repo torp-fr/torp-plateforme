@@ -3,22 +3,9 @@
  * Migre localStorage → Supabase pgvector
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import type { CCFData } from '@/components/guided-ccf/GuidedCCF';
 import type { EnrichedClientData } from '@/types/enrichment';
-
-// ============================================================================
-// CLIENT SUPABASE
-// ============================================================================
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.warn('⚠️ Supabase not configured');
-}
-
-const supabase = createClient(SUPABASE_URL || '', SUPABASE_KEY || '');
 
 // ============================================================================
 // TYPES

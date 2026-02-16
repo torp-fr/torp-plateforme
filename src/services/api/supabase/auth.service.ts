@@ -88,10 +88,10 @@ export class SupabaseAuthService {
       throw new Error('Authentication failed');
     }
 
-    // Fetch user profile from users table (all columns for profile pre-fill)
+    // Fetch user profile from profiles table (all columns for profile pre-fill)
     // If no profile exists yet, create a basic user object from auth data
     const { data: userData, error: userError } = await supabase
-      .from('users')
+      .from('profiles')
       .select('*')
       .eq('id', authData.user.id)
       .maybeSingle();
@@ -235,7 +235,7 @@ export class SupabaseAuthService {
 
       // Fetch user profile (all columns for profile pre-fill)
       const { data: userData, error: userError } = await supabase
-        .from('users')
+        .from('profiles')
         .select('*')
         .eq('id', authUser.id)
         .maybeSingle();
@@ -357,11 +357,11 @@ export class SupabaseAuthService {
    */
   async updateProfile(userId: string, updates: Partial<DbUser>): Promise<User> {
     const { data, error } = await supabase
-      .from('users')
+      .from('profiles')
       .update(updates)
       .eq('id', userId)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       throw new Error(`Failed to update profile: ${error.message}`);
@@ -380,7 +380,7 @@ export class SupabaseAuthService {
       if (session?.user) {
         try {
           const { data, error } = await supabase
-            .from('users')
+            .from('profiles')
             .select('*')
             .eq('id', session.user.id)
             .maybeSingle();

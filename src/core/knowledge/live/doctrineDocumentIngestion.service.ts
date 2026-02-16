@@ -4,7 +4,7 @@
  * Orchestrates normalization, classification, and storage
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import { normalizeDoctrineDocument, type NormalizedDocument } from './doctrineNormalization.service';
 import { getDoctrineSource, type DoctrineSource } from './doctrineSourceRegistry';
 
@@ -28,19 +28,6 @@ export interface DoctrineIngestionResult {
   extractedSanctions: number;
 }
 
-/**
- * Initialize Supabase client
- */
-function getSupabaseClient() {
-  const supabaseUrl = process.env.SUPABASE_URL || '';
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase configuration');
-  }
-
-  return createClient(supabaseUrl, supabaseKey);
-}
 
 /**
  * Extract text from file buffer (simplified - assumes UTF-8 text)
@@ -121,7 +108,7 @@ async function storeNormalizedDocument(
   metadata: DoctrineDocumentMetadata
 ): Promise<string | null> {
   try {
-    const supabase = getSupabaseClient();
+    // Use shared supabase client
 
     // Store in knowledge_documents
     const { data: docData, error: docError } = await supabase
@@ -192,7 +179,7 @@ async function storeDoctrineSource(
   metadata: DoctrineDocumentMetadata
 ): Promise<boolean> {
   try {
-    const supabase = getSupabaseClient();
+    // Use shared supabase client
 
     const { error } = await supabase.from('doctrine_sources').upsert({
       source_id: sourceId,
@@ -371,7 +358,7 @@ export async function getDoctrineIngestionStats(): Promise<{
   totalSanctions: number;
 }> {
   try {
-    const supabase = getSupabaseClient();
+    // Use shared supabase client
 
     const { count: sourceCount } = await supabase
       .from('doctrine_sources')
