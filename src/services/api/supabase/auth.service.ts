@@ -33,13 +33,24 @@ type DbUser = Database['public']['Tables']['users']['Row'];
  * Convert Supabase user to app User format with all profile fields
  */
 function mapDbUserToAppUser(dbUser: DbUser): User {
+  const isAdmin = Boolean((dbUser as Record<string, unknown>).is_admin);
+  const role = (dbUser as Record<string, unknown>).role as string || 'user';
+
+  // Determine correct user type based on is_admin and role
+  let userType = dbUser.user_type;
+  if (isAdmin || role === 'admin') {
+    userType = 'admin' as UserType;
+  } else if (role === 'super_admin') {
+    userType = 'super_admin' as UserType;
+  }
+
   return {
     id: dbUser.id,
     email: dbUser.email,
     name: dbUser.name || undefined,
-    type: dbUser.user_type,
-    isAdmin: Boolean((dbUser as Record<string, unknown>).is_admin),
-    role: (dbUser as Record<string, unknown>).role as string || 'user',
+    type: userType,
+    isAdmin: isAdmin,
+    role: role,
     canUploadKb: (dbUser as Record<string, unknown>).can_upload_kb as boolean || false,
     phone: dbUser.phone || undefined,
     city: (dbUser as Record<string, unknown>).city as string || undefined,
