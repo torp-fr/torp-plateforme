@@ -110,6 +110,13 @@ export interface EngineExecutionContext {
   globalScore?: any;
 
   /**
+   * Trust Capping Results
+   * Intelligent grade capping based on Trust Framework Registry
+   * Contains coherence checks, price anomalies, and blocking obligations
+   */
+  trustCappingResult?: any;
+
+  /**
    * Timestamp when execution started (ISO 8601)
    */
   executionStartTime?: string;

@@ -15,6 +15,7 @@ import { runEnterpriseEngine, EnterpriseEngineResult } from '@/core/engines/ente
 import { runPricingEngine, PricingEngineResult } from '@/core/engines/pricing.engine';
 import { runQualityEngine, QualityEngineResult } from '@/core/engines/quality.engine';
 import { runGlobalScoringEngine, GlobalScoringEngineResult } from '@/core/engines/globalScoring.engine';
+import { runTrustCappingEngine, TrustCappingResult } from '@/core/trust/trustCapping.engine';
 import { createAuditSnapshot } from '@/core/platform/auditSnapshot.manager';
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 
@@ -266,6 +267,15 @@ export async function runOrchestration(
           const globalScoringResult: GlobalScoringEngineResult = await runGlobalScoringEngine(executionContext);
           engineResults['globalScoringEngine'] = globalScoringResult;
           executionContext.globalScore = globalScoringResult;
+          engineExecutionResult.status = 'completed';
+          engineExecutionResult.endTime = new Date().toISOString();
+        }
+        // Execute Trust Capping Engine if active (intelligent grade capping)
+        else if (engine.id === 'trustCappingEngine') {
+          console.log('[EngineOrchestrator] Executing Trust Capping Engine');
+          const trustCappingResult: TrustCappingResult = await runTrustCappingEngine(executionContext);
+          engineResults['trustCappingEngine'] = trustCappingResult;
+          executionContext.trustCappingResult = trustCappingResult;
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
         } else {
