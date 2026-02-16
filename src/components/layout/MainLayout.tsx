@@ -3,7 +3,7 @@
  * Le sidebar ne change JAMAIS - navigation stable et prévisible
  */
 
-import React, { ReactNode, useState } from 'react';
+import React, { ReactNode, useState, useMemo } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -120,6 +120,9 @@ export function MainLayout({ children }: MainLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const isB2B = userType === 'B2B';
+
+  // Hide sidebar for analytics page (full width)
+  const hideSidebar = useMemo(() => location.pathname === '/analytics', [location.pathname]);
 
   const handleLogout = async () => {
     try {
@@ -287,10 +290,12 @@ export function MainLayout({ children }: MainLayoutProps) {
       </header>
 
       <div className="flex">
-        {/* Sidebar Desktop - FIXE */}
-        <aside className="hidden md:flex md:flex-col w-64 bg-sidebar text-sidebar-foreground min-h-screen fixed left-0 top-0 border-r border-sidebar-border">
-          <SidebarContent />
-        </aside>
+        {/* Sidebar Desktop - FIXE - Hidden on /analytics */}
+        {!hideSidebar && (
+          <aside className="hidden md:flex md:flex-col w-64 bg-sidebar text-sidebar-foreground min-h-screen fixed left-0 top-0 border-r border-sidebar-border">
+            <SidebarContent />
+          </aside>
+        )}
 
         {/* Sidebar Mobile */}
         {sidebarOpen && (
@@ -308,7 +313,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         )}
 
         {/* Main content */}
-        <main className="flex-1 md:ml-64 min-h-screen bg-background">
+        <main className={cn("flex-1 min-h-screen bg-background", !hideSidebar && "md:ml-64")}>
           {/* Header Desktop */}
           <header className="hidden md:flex bg-background border-b h-14 items-center justify-between px-6 sticky top-0 z-40">
             <div className="flex items-center gap-4">
