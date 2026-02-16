@@ -5,6 +5,7 @@
  */
 
 import { ENGINE_REGISTRY, EngineRegistryEntry } from '@/core/platform/engineRegistry';
+import { runContextEngine, ContextEngineResult } from '@/core/engines/context.engine';
 
 /**
  * Statut d'orchestration
@@ -67,15 +68,47 @@ export async function runOrchestration(
   orchestrationState = 'running';
 
   try {
-    // Simuler une orchestration
+    // Get active engines
     const activeEngines = getActiveEngines();
-    const executedEngines = activeEngines.map(
-      (engine): EngineExecutionResult => ({
+    const engineResults: Record<string, any> = {};
+    const executedEngines: EngineExecutionResult[] = [];
+
+    // Execute each active engine
+    for (const engine of activeEngines) {
+      const engineStartTime = new Date().toISOString();
+      const engineExecutionResult: EngineExecutionResult = {
         engineId: engine.id,
-        status: 'pending',
-        startTime,
-      })
-    );
+        status: 'running',
+        startTime: engineStartTime,
+      };
+
+      try {
+        // Execute Context Engine if active
+        if (engine.id === 'contextEngine') {
+          console.log('[EngineOrchestrator] Executing Context Engine');
+          const contextResult: ContextEngineResult = await runContextEngine({
+            projectId: context.projectId,
+            data: context.data,
+            options: context.options,
+          });
+          engineResults['contextEngine'] = contextResult;
+          engineExecutionResult.status = 'completed';
+          engineExecutionResult.endTime = new Date().toISOString();
+        } else {
+          // Other engines not yet implemented
+          engineExecutionResult.status = 'skipped';
+          engineExecutionResult.endTime = new Date().toISOString();
+        }
+      } catch (engineError) {
+        const errorMessage = engineError instanceof Error ? engineError.message : 'Unknown error';
+        console.error(`[EngineOrchestrator] Engine ${engine.id} failed`, engineError);
+        engineExecutionResult.status = 'failed';
+        engineExecutionResult.error = errorMessage;
+        engineExecutionResult.endTime = new Date().toISOString();
+      }
+
+      executedEngines.push(engineExecutionResult);
+    }
 
     const result: OrchestrationResult = {
       id: orchestrationId,
@@ -85,7 +118,7 @@ export async function runOrchestration(
       executedEngines,
       totalEngines: ENGINE_REGISTRY.length,
       activeEngines: activeEngines.length,
-      results: {},
+      results: engineResults,
     };
 
     lastOrchestration = result;
