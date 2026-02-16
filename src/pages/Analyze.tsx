@@ -44,6 +44,18 @@ export default function Analyze() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Load devis from query params if provided
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const devisId = params.get('devisId');
+
+    if (devisId) {
+      setCurrentDevisId(devisId);
+      // Set step to 2 (project details) since file is already uploaded
+      setStep(2);
+    }
+  }, [location.search]);
+
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -316,7 +328,6 @@ export default function Analyze() {
   if (isAnalyzing) {
     return (
       <div className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-4 py-12">
           <div className="max-w-2xl mx-auto text-center">
             <div className="mb-8">

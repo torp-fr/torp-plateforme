@@ -9,23 +9,17 @@ import {
   LayoutDashboard,
   FileSearch,
   PlusCircle,
-  FolderOpen,
   Settings,
   Building2,
   LogOut,
   Menu,
   X,
   ChevronDown,
-  Briefcase,
-  Hammer,
   User,
-  Search,
-  ChevronRight,
   Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
-import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -38,6 +32,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import torpLogo from '@/assets/torp-logo-red.png';
+import { AdminInitializer } from '@/components/admin/AdminInitializer';
 
 interface MainLayoutProps {
   children?: ReactNode;
@@ -76,48 +71,21 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    id: 'projects',
-    title: 'Projets',
+    id: 'valorization',
+    title: 'Valorisation',
     items: [
       {
-        id: 'new-project',
-        href: '/projet/nouveau',
+        id: 'new-valorization',
+        href: '/analyze',
         icon: PlusCircle,
         label: 'Nouveau projet',
         show: 'always',
       },
       {
-        id: 'my-projects',
+        id: 'my-analyses',
         href: '/projets',
-        icon: FolderOpen,
-        label: 'Mes projets',
-        show: 'always',
-      },
-      {
-        id: 'my-chantiers',
-        href: '/chantiers',
-        icon: Hammer,
-        label: 'Mes chantiers',
-        show: 'always',
-      },
-    ],
-  },
-  {
-    id: 'tools',
-    title: 'Outils IA',
-    items: [
-      {
-        id: 'analyze',
-        href: '/analyze',
         icon: FileSearch,
-        label: 'Analyser un devis',
-        show: 'always',
-      },
-      {
-        id: 'search-companies',
-        href: '/recherche-entreprises',
-        icon: Search,
-        label: 'Trouver des entreprises',
+        label: 'Mes projets & analyses',
         show: 'always',
       },
     ],
@@ -131,7 +99,7 @@ const NAV_SECTIONS: NavSection[] = [
         href: '/pro/company',
         icon: Building2,
         label: 'Mon entreprise',
-        show: 'b2b-only',
+        show: 'always',
       },
       {
         id: 'settings',
@@ -195,8 +163,8 @@ export function MainLayout({ children }: MainLayoutProps) {
         className={cn(
           'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
           isActive
-            ? 'bg-primary text-white font-medium'
-            : 'text-gray-700 hover:bg-gray-100'
+            ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium'
+            : 'text-sidebar-foreground hover:bg-sidebar-accent'
         )}
       >
         <Icon className={cn('h-5 w-5', isActive && 'text-white')} />
@@ -217,7 +185,7 @@ export function MainLayout({ children }: MainLayoutProps) {
     return (
       <div key={section.id} className="mb-4">
         {section.title && (
-          <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          <div className="px-3 py-2 text-xs font-semibold text-sidebar-foreground/60 uppercase tracking-wider">
             {section.title}
           </div>
         )}
@@ -231,17 +199,17 @@ export function MainLayout({ children }: MainLayoutProps) {
   const SidebarContent = () => (
     <>
       {/* Logo */}
-      <div className="p-4 border-b">
+      <div className="p-4 border-b border-sidebar-border">
         <Link to="/dashboard" className="flex items-center gap-3">
           <img src={torpLogo} alt="TORP" className="h-10 w-auto" />
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-lg">TORP</span>
+              <span className="font-bold text-lg text-sidebar-foreground">TORP</span>
               {isB2B && (
-                <Badge className="bg-blue-100 text-blue-700 text-xs">PRO</Badge>
+                <Badge className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">PRO</Badge>
               )}
             </div>
-            <span className="text-xs text-gray-500">Gestion BTP Intelligente</span>
+            <span className="text-xs text-sidebar-foreground/60">Gestion BTP Intelligente</span>
           </div>
         </Link>
       </div>
@@ -252,24 +220,24 @@ export function MainLayout({ children }: MainLayoutProps) {
       </ScrollArea>
 
       {/* Footer utilisateur */}
-      <div className="p-3 border-t bg-gray-50">
+      <div className="p-3 border-t border-sidebar-border bg-sidebar-accent">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white transition-colors text-left">
-              <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-sm font-medium text-primary">
+            <button className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-sidebar-accent/80 transition-colors text-left">
+              <div className="h-9 w-9 rounded-full bg-sidebar-primary/20 flex items-center justify-center">
+                <span className="text-sm font-medium text-sidebar-primary-foreground">
                   {user?.email?.charAt(0).toUpperCase() || 'U'}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate">
+                <div className="text-sm font-medium truncate text-sidebar-foreground">
                   {user?.name || user?.email || 'Utilisateur'}
                 </div>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-sidebar-foreground/60">
                   {isB2B ? 'Professionnel' : 'Particulier'}
                 </div>
               </div>
-              <ChevronDown className="h-4 w-4 text-gray-400" />
+              <ChevronDown className="h-4 w-4 text-sidebar-foreground/60" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
@@ -277,12 +245,12 @@ export function MainLayout({ children }: MainLayoutProps) {
               <User className="h-4 w-4 mr-2" />
               Mon profil
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/parametres')}>
+            <DropdownMenuItem onClick={() => navigate('/settings')}>
               <Settings className="h-4 w-4 mr-2" />
               Paramètres
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+            <DropdownMenuItem onClick={handleLogout} className="text-destructive">
               <LogOut className="h-4 w-4 mr-2" />
               Déconnexion
             </DropdownMenuItem>
@@ -294,8 +262,11 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Admin Initializer Dialog */}
+      {user?.email && <AdminInitializer userEmail={user.email} />}
+
       {/* Header mobile */}
-      <header className="md:hidden bg-white border-b sticky top-0 z-50">
+      <header className="md:hidden bg-background border-b sticky top-0 z-50">
         <div className="flex items-center justify-between h-14 px-4">
           <div className="flex items-center gap-3">
             <button
@@ -311,14 +282,13 @@ export function MainLayout({ children }: MainLayoutProps) {
             </Link>
           </div>
           <div className="flex items-center gap-2">
-            <NotificationBell />
           </div>
         </div>
       </header>
 
       <div className="flex">
         {/* Sidebar Desktop - FIXE */}
-        <aside className="hidden md:flex md:flex-col w-64 bg-white border-r min-h-screen fixed left-0 top-0">
+        <aside className="hidden md:flex md:flex-col w-64 bg-sidebar text-sidebar-foreground min-h-screen fixed left-0 top-0 border-r border-sidebar-border">
           <SidebarContent />
         </aside>
 
@@ -329,7 +299,7 @@ export function MainLayout({ children }: MainLayoutProps) {
               className="fixed inset-0 bg-black/50"
               onClick={() => setSidebarOpen(false)}
             />
-            <aside className="fixed left-0 top-14 bottom-0 w-64 bg-white border-r z-50 flex flex-col">
+            <aside className="fixed left-0 top-14 bottom-0 w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border z-50 flex flex-col">
               <ScrollArea className="flex-1 p-3">
                 {NAV_SECTIONS.map(renderSection)}
               </ScrollArea>
@@ -338,21 +308,14 @@ export function MainLayout({ children }: MainLayoutProps) {
         )}
 
         {/* Main content */}
-        <main className="flex-1 md:ml-64 min-h-screen">
+        <main className="flex-1 md:ml-64 min-h-screen bg-background">
           {/* Header Desktop */}
-          <header className="hidden md:flex bg-white border-b h-14 items-center justify-between px-6 sticky top-0 z-40">
+          <header className="hidden md:flex bg-background border-b h-14 items-center justify-between px-6 sticky top-0 z-40">
             <div className="flex items-center gap-4">
               <Sparkles className="h-5 w-5 text-primary" />
-              <span className="text-sm text-gray-600">
-                Automatisation IA pour vos projets BTP
+              <span className="text-sm text-muted-foreground">
+                Valorisation intelligente de vos devis BTP
               </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <NotificationBell />
-              <Button size="sm" onClick={() => navigate('/projet/nouveau')}>
-                <PlusCircle className="h-4 w-4 mr-2" />
-                Nouveau projet
-              </Button>
             </div>
           </header>
 

@@ -19,10 +19,6 @@ export interface RegisterData {
   type: UserType;
   company?: string;
   phone?: string;
-  // B2G specific fields
-  entityName?: string;
-  siret?: string;
-  entityType?: 'commune' | 'departement' | 'region' | 'epci' | 'other';
 }
 
 export interface AuthResponse {
@@ -42,6 +38,9 @@ function mapDbUserToAppUser(dbUser: DbUser): User {
     email: dbUser.email,
     name: dbUser.name || undefined,
     type: dbUser.user_type,
+    isAdmin: Boolean((dbUser as Record<string, unknown>).is_admin),
+    role: (dbUser as Record<string, unknown>).role as string || 'user',
+    canUploadKb: (dbUser as Record<string, unknown>).can_upload_kb as boolean || false,
     phone: dbUser.phone || undefined,
     city: (dbUser as Record<string, unknown>).city as string || undefined,
     postal_code: (dbUser as Record<string, unknown>).postal_code as string || undefined,
@@ -62,17 +61,6 @@ function mapDbUserToAppUser(dbUser: DbUser): User {
     company_address: (dbUser as Record<string, unknown>).company_address as string || undefined,
     company_code_ape: (dbUser as Record<string, unknown>).company_code_ape as string || undefined,
     company_rcs: (dbUser as Record<string, unknown>).company_rcs as string || undefined,
-    // B2G
-    entity_name: (dbUser as Record<string, unknown>).entity_name as string || undefined,
-    entity_type: (dbUser as Record<string, unknown>).entity_type as string || undefined,
-    entity_address: (dbUser as Record<string, unknown>).entity_address as string || undefined,
-    siret: (dbUser as Record<string, unknown>).siret as string || undefined,
-    entity_function: (dbUser as Record<string, unknown>).entity_function as string || undefined,
-    entity_code_insee: (dbUser as Record<string, unknown>).entity_code_insee as string || undefined,
-    entity_code_ape: (dbUser as Record<string, unknown>).entity_code_ape as string || undefined,
-    entity_strate: (dbUser as Record<string, unknown>).entity_strate as string || undefined,
-    entity_service_name: (dbUser as Record<string, unknown>).entity_service_name as string || undefined,
-    entity_service_email: (dbUser as Record<string, unknown>).entity_service_email as string || undefined,
   };
 }
 
@@ -101,17 +89,27 @@ export class SupabaseAuthService {
     }
 
     // Fetch user profile from users table (all columns for profile pre-fill)
+    // If no profile exists yet, create a basic user object from auth data
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('*')
       .eq('id', authData.user.id)
-      .single();
+      .maybeSingle();
 
-    if (userError) {
-      throw new Error('Failed to fetch user profile');
+    let mappedUser: User;
+
+    if (userError || !userData) {
+      // User profile doesn't exist yet, create basic user from auth data
+      console.warn('User profile not found, creating from auth data:', authData.user.email);
+      mappedUser = {
+        id: authData.user.id,
+        email: authData.user.email || '',
+        name: authData.user.user_metadata?.name || undefined,
+        type: (authData.user.user_metadata?.user_type as UserType) || 'B2C',
+      };
+    } else {
+      mappedUser = mapDbUserToAppUser(userData);
     }
-
-    const mappedUser = mapDbUserToAppUser(userData);
 
     console.log('✓ Login réussi:', mappedUser.email, '- Type:', mappedUser.type);
 
@@ -146,10 +144,6 @@ export class SupabaseAuthService {
           user_type: data.type,
           company: data.company,
           phone: data.phone,
-          // B2G specific metadata
-          entity_name: data.entityName,
-          siret: data.siret,
-          entity_type: data.entityType,
         },
       },
     });
@@ -237,16 +231,35 @@ export class SupabaseAuthService {
         .from('users')
         .select('*')
         .eq('id', authUser.id)
-        .single();
+        .maybeSingle();
 
       if (userError) {
-        console.error('[getCurrentUser] Error fetching user profile:', userError);
-        return null;
+        console.warn('[getCurrentUser] Error fetching user profile:', userError);
+        // If profile doesn't exist, create temporary user from auth data
+        const tempUser: User = {
+          id: authUser.id,
+          email: authUser.email || '',
+          name: authUser.user_metadata?.name || 'User',
+          type: (authUser.user_metadata?.user_type as UserType) || 'B2C',
+          company: authUser.user_metadata?.company,
+          phone: authUser.user_metadata?.phone,
+        };
+        console.log('[getCurrentUser] Error occurred, returning temporary user:', tempUser.email);
+        return tempUser;
       }
 
       if (!userData) {
-        console.warn('[getCurrentUser] No user profile found for auth user');
-        return null;
+        console.warn('[getCurrentUser] No user profile found, creating temporary from auth data');
+        // Create temporary user from auth metadata
+        const tempUser: User = {
+          id: authUser.id,
+          email: authUser.email || '',
+          name: authUser.user_metadata?.name || 'User',
+          type: (authUser.user_metadata?.user_type as UserType) || 'B2C',
+          company: authUser.user_metadata?.company,
+          phone: authUser.user_metadata?.phone,
+        };
+        return tempUser;
       }
 
       const mappedUser = mapDbUserToAppUser(userData);
@@ -363,11 +376,22 @@ export class SupabaseAuthService {
             .from('users')
             .select('*')
             .eq('id', session.user.id)
-            .single();
+            .maybeSingle();
 
           if (error) {
-            console.error('[Auth State Change] Error fetching user profile:', error);
-            callback(null);
+            console.warn('[Auth State Change] Error fetching user profile:', error);
+            // If profile doesn't exist yet, create temporary user from auth data
+            // This handles newly registered users waiting for profile creation
+            const tempUser: User = {
+              id: session.user.id,
+              email: session.user.email || '',
+              name: session.user.user_metadata?.name || 'User',
+              type: (session.user.user_metadata?.user_type as UserType) || 'B2C',
+              company: session.user.user_metadata?.company,
+              phone: session.user.user_metadata?.phone,
+            };
+            console.log('[Auth State Change] Using temporary user profile:', tempUser.email);
+            callback(tempUser);
             return;
           }
 
@@ -376,12 +400,31 @@ export class SupabaseAuthService {
             console.log('[Auth State Change] User profile loaded:', mappedUser.email);
             callback(mappedUser);
           } else {
-            console.warn('[Auth State Change] No user profile found for session');
-            callback(null);
+            // Profile doesn't exist - create temporary user from auth metadata
+            const tempUser: User = {
+              id: session.user.id,
+              email: session.user.email || '',
+              name: session.user.user_metadata?.name || 'User',
+              type: (session.user.user_metadata?.user_type as UserType) || 'B2C',
+              company: session.user.user_metadata?.company,
+              phone: session.user.user_metadata?.phone,
+            };
+            console.log('[Auth State Change] No profile found, using temporary user:', tempUser.email);
+            callback(tempUser);
           }
         } catch (error) {
           console.error('[Auth State Change] Exception:', error);
-          callback(null);
+          // Fallback: create temporary user from auth data instead of disconnecting
+          const tempUser: User = {
+            id: session.user.id,
+            email: session.user.email || '',
+            name: session.user.user_metadata?.name || 'User',
+            type: (session.user.user_metadata?.user_type as UserType) || 'B2C',
+            company: session.user.user_metadata?.company,
+            phone: session.user.user_metadata?.phone,
+          };
+          console.log('[Auth State Change] Error occurred, using temporary user:', tempUser.email);
+          callback(tempUser);
         }
       } else {
         console.log('[Auth State Change] No session, calling callback with null');

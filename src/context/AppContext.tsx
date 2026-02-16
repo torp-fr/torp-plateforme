@@ -2,14 +2,17 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { authService } from '@/services/api/supabase/auth.service';
 import { devisService } from '@/services/api/supabase/devis.service';
 
-// User types - Particulier (B2C), Professionnel (B2B), Secteur Public (B2G), Admin
-export type UserType = 'B2C' | 'B2B' | 'B2G' | 'admin' | 'super_admin';
+// User types - Particulier (B2C), Professionnel (B2B), Admin
+export type UserType = 'B2C' | 'B2B' | 'admin' | 'super_admin';
 
 export interface User {
   id: string;
   email: string;
   name: string;
   type: UserType;
+  isAdmin?: boolean;
+  role?: 'user' | 'admin' | 'super_admin';
+  canUploadKb?: boolean;
   phone?: string;
   city?: string;
   postal_code?: string;
@@ -43,17 +46,6 @@ export interface User {
   company_certifications?: CompanyCertification[];
   company_references?: CompanyReference[];
   company_documents?: CompanyDocument[];
-  // B2G
-  entity_name?: string;
-  entity_type?: string;
-  entity_address?: string;
-  siret?: string;
-  entity_function?: string;
-  entity_code_insee?: string;
-  entity_code_ape?: string;
-  entity_strate?: string;
-  entity_service_name?: string;
-  entity_service_email?: string;
 }
 
 // Types pour les données B2B enrichies
@@ -104,6 +96,7 @@ export interface Project {
 interface AppContextType {
   user: User | null;
   userType: UserType;
+  isAdmin: boolean;
   projects: Project[]; // Analyses de devis
   currentProject: Project | null;
   isAnalyzing: boolean;
@@ -127,6 +120,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isLoading, setIsLoading] = useState(true); // Chargement initial de l'auth
+
+  // Compute isAdmin from user
+  const isAdmin = user?.isAdmin === true;
 
   // Check for existing session on mount and listen for auth changes
   useEffect(() => {
@@ -286,6 +282,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     <AppContext.Provider value={{
       user,
       userType,
+      isAdmin,
       projects,
       currentProject,
       isAnalyzing,
