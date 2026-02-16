@@ -7,6 +7,7 @@
 import { ENGINE_REGISTRY, EngineRegistryEntry } from '@/core/platform/engineRegistry';
 import { runContextEngine, ContextEngineResult } from '@/core/engines/context.engine';
 import { runLotEngine, LotEngineResult } from '@/core/engines/lot.engine';
+import { runRuleEngine, RuleEngineResult } from '@/core/engines/rule.engine';
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 
 /**
@@ -126,6 +127,23 @@ export async function runOrchestration(
             primaryLots: lotResult.primaryLots,
             complexityScore: lotResult.complexityScore,
             categorySummary: lotResult.categorySummary,
+          };
+
+          engineExecutionResult.status = 'completed';
+          engineExecutionResult.endTime = new Date().toISOString();
+        }
+        // Execute Rule Engine if active (depends on Lot Engine)
+        else if (engine.id === 'ruleEngine') {
+          console.log('[EngineOrchestrator] Executing Rule Engine');
+          const ruleResult: RuleEngineResult = await runRuleEngine(executionContext);
+          engineResults['ruleEngine'] = ruleResult;
+
+          // Populate shared execution context with Rule Engine results
+          executionContext.rules = {
+            obligations: ruleResult.obligations,
+            uniqueObligations: ruleResult.uniqueObligations,
+            obligationCount: ruleResult.obligationCount,
+            ruleCount: ruleResult.ruleCount,
           };
 
           engineExecutionResult.status = 'completed';
