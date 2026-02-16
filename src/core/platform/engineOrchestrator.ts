@@ -9,6 +9,7 @@ import { runContextEngine, ContextEngineResult } from '@/core/engines/context.en
 import { runLotEngine, LotEngineResult } from '@/core/engines/lot.engine';
 import { runRuleEngine, RuleEngineResult } from '@/core/engines/rule.engine';
 import { runScoringEngine, ScoringEngineResult } from '@/core/engines/scoring.engine';
+import { runEnrichmentEngine, EnrichmentEngineResult } from '@/core/engines/enrichment.engine';
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 
 /**
@@ -167,6 +168,25 @@ export async function runOrchestration(
             globalScore: scoringResult.globalScore,
             riskLevel: scoringResult.riskLevel,
             scoreBreakdown: scoringResult.scoreBreakdown,
+          };
+
+          engineExecutionResult.status = 'completed';
+          engineExecutionResult.endTime = new Date().toISOString();
+        }
+        // Execute Enrichment Engine if active (depends on all prior engines)
+        else if (engine.id === 'enrichmentEngine') {
+          console.log('[EngineOrchestrator] Executing Enrichment Engine');
+          const enrichmentResult: EnrichmentEngineResult = await runEnrichmentEngine(executionContext);
+          engineResults['enrichmentEngine'] = enrichmentResult;
+
+          // Populate shared execution context with Enrichment Engine results
+          executionContext.enrichments = {
+            actions: enrichmentResult.actions,
+            recommendations: enrichmentResult.recommendations,
+            actionCount: enrichmentResult.actionCount,
+            recommendationCount: enrichmentResult.recommendationCount,
+            riskProfile: enrichmentResult.riskProfile,
+            processingStrategy: enrichmentResult.processingStrategy,
           };
 
           engineExecutionResult.status = 'completed';
