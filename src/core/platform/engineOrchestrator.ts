@@ -8,6 +8,7 @@ import { ENGINE_REGISTRY, EngineRegistryEntry } from '@/core/platform/engineRegi
 import { runContextEngine, ContextEngineResult } from '@/core/engines/context.engine';
 import { runLotEngine, LotEngineResult } from '@/core/engines/lot.engine';
 import { runRuleEngine, RuleEngineResult } from '@/core/engines/rule.engine';
+import { runScoringEngine, ScoringEngineResult } from '@/core/engines/scoring.engine';
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 
 /**
@@ -144,6 +145,24 @@ export async function runOrchestration(
             uniqueObligations: ruleResult.uniqueObligations,
             obligationCount: ruleResult.obligationCount,
             ruleCount: ruleResult.ruleCount,
+          };
+
+          engineExecutionResult.status = 'completed';
+          engineExecutionResult.endTime = new Date().toISOString();
+        }
+        // Execute Scoring Engine if active (depends on Rule Engine and Lot Engine)
+        else if (engine.id === 'scoringEngine') {
+          console.log('[EngineOrchestrator] Executing Scoring Engine');
+          const scoringResult: ScoringEngineResult = await runScoringEngine(executionContext);
+          engineResults['scoringEngine'] = scoringResult;
+
+          // Populate shared execution context with Scoring Engine results
+          executionContext.audit = {
+            riskScore: scoringResult.riskScore,
+            complexityImpact: scoringResult.complexityImpact,
+            globalScore: scoringResult.globalScore,
+            riskLevel: scoringResult.riskLevel,
+            scoreBreakdown: scoringResult.scoreBreakdown,
           };
 
           engineExecutionResult.status = 'completed';
