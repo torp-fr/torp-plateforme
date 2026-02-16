@@ -348,7 +348,8 @@ export function runNarrativeEngine(
     console.log('[NarrativeEngine] Generating public narrative');
 
     // Extract data from context
-    const grade = certification.grade || 'C';
+    // Official grade source: finalProfessionalGrade (from trust capping), fall back to certification.grade
+    const grade = executionContext.finalProfessionalGrade || certification.grade || 'C';
     const riskLevel = certification.riskLevel || 'medium';
     const typeBreakdown = executionContext.rules?.typeBreakdown || {};
     const severityBreakdown = executionContext.rules?.severityBreakdown || {};

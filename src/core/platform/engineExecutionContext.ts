@@ -117,6 +117,12 @@ export interface EngineExecutionContext {
   trustCappingResult?: any;
 
   /**
+   * Official professional grade after trust capping.
+   * This is the only grade that should be used externally.
+   */
+  finalProfessionalGrade?: string;
+
+  /**
    * Timestamp when execution started (ISO 8601)
    */
   executionStartTime?: string;

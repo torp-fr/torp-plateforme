@@ -276,6 +276,17 @@ export async function runOrchestration(
           const trustCappingResult: TrustCappingResult = await runTrustCappingEngine(executionContext);
           engineResults['trustCappingEngine'] = trustCappingResult;
           executionContext.trustCappingResult = trustCappingResult;
+
+          // Official grade authority: set finalProfessionalGrade from trust capping result
+          if (trustCappingResult?.finalGrade) {
+            executionContext.finalProfessionalGrade = trustCappingResult.finalGrade;
+            console.log('[EngineOrchestrator] Official grade set', {
+              finalGrade: trustCappingResult.finalGrade,
+              originalGrade: trustCappingResult.originalGrade,
+              cappingApplied: trustCappingResult.cappingApplied,
+            });
+          }
+
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
         } else {
