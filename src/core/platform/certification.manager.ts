@@ -135,11 +135,13 @@ function generateIssuerSignature(): string {
 /**
  * Create new certification from audit snapshot
  * Immutable once created
+ * Optional finalProfessionalGrade: official grade from trust capping (if available)
  */
 export function createCertification(
   projectId: string,
   snapshot: AuditSnapshot,
-  devisHash: string
+  devisHash: string,
+  finalProfessionalGrade?: string
 ): CertificationRecord {
   if (!projectId) {
     throw new Error('projectId is required for certification');
@@ -154,8 +156,8 @@ export function createCertification(
   }
 
   try {
-    // Calculate grade from score
-    const grade = mapScoreToGrade(snapshot.globalScore);
+    // Use official grade from trust capping if available, otherwise calculate from score
+    const grade = (finalProfessionalGrade as any) || mapScoreToGrade(snapshot.globalScore);
 
     // Calculate expiration (30 days from now)
     const now = new Date();

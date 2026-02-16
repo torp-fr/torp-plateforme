@@ -11,6 +11,12 @@ import { runRuleEngine, RuleEngineResult } from '@/core/engines/rule.engine';
 import { runScoringEngine, ScoringEngineResult } from '@/core/engines/scoring.engine';
 import { runEnrichmentEngine, EnrichmentEngineResult } from '@/core/engines/enrichment.engine';
 import { runAuditEngine, AuditEngineResult } from '@/core/engines/audit.engine';
+import { runEnterpriseEngine, EnterpriseEngineResult } from '@/core/engines/enterprise.engine';
+import { runPricingEngine, PricingEngineResult } from '@/core/engines/pricing.engine';
+import { runQualityEngine, QualityEngineResult } from '@/core/engines/quality.engine';
+import { runGlobalScoringEngine, GlobalScoringEngineResult } from '@/core/engines/globalScoring.engine';
+import { runTrustCappingEngine, TrustCappingResult } from '@/core/trust/trustCapping.engine';
+import { runStructuralConsistencyEngine, StructuralConsistencyResult } from '@/core/trust/structuralConsistency.engine';
 import { createAuditSnapshot } from '@/core/platform/auditSnapshot.manager';
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 
@@ -226,6 +232,71 @@ export async function runOrchestration(
             }
           }
 
+          engineExecutionResult.status = 'completed';
+          engineExecutionResult.endTime = new Date().toISOString();
+        }
+        // Execute Enterprise Engine if active (global scoring pillar)
+        else if (engine.id === 'enterpriseEngine') {
+          console.log('[EngineOrchestrator] Executing Enterprise Engine');
+          const enterpriseResult: EnterpriseEngineResult = await runEnterpriseEngine(executionContext);
+          engineResults['enterpriseEngine'] = enterpriseResult;
+          executionContext.enterprise = enterpriseResult;
+          engineExecutionResult.status = 'completed';
+          engineExecutionResult.endTime = new Date().toISOString();
+        }
+        // Execute Pricing Engine if active (global scoring pillar)
+        else if (engine.id === 'pricingEngine') {
+          console.log('[EngineOrchestrator] Executing Pricing Engine');
+          const pricingResult: PricingEngineResult = await runPricingEngine(executionContext);
+          engineResults['pricingEngine'] = pricingResult;
+          executionContext.pricing = pricingResult;
+          engineExecutionResult.status = 'completed';
+          engineExecutionResult.endTime = new Date().toISOString();
+        }
+        // Execute Quality Engine if active (global scoring pillar)
+        else if (engine.id === 'qualityEngine') {
+          console.log('[EngineOrchestrator] Executing Quality Engine');
+          const qualityResult: QualityEngineResult = await runQualityEngine(executionContext);
+          engineResults['qualityEngine'] = qualityResult;
+          executionContext.quality = qualityResult;
+          engineExecutionResult.status = 'completed';
+          engineExecutionResult.endTime = new Date().toISOString();
+        }
+        // Execute Global Scoring Engine if active (final scoring consolidation)
+        else if (engine.id === 'globalScoringEngine') {
+          console.log('[EngineOrchestrator] Executing Global Scoring Engine');
+          const globalScoringResult: GlobalScoringEngineResult = await runGlobalScoringEngine(executionContext);
+          engineResults['globalScoringEngine'] = globalScoringResult;
+          executionContext.globalScore = globalScoringResult;
+          engineExecutionResult.status = 'completed';
+          engineExecutionResult.endTime = new Date().toISOString();
+        }
+        // Execute Trust Capping Engine if active (intelligent grade capping)
+        else if (engine.id === 'trustCappingEngine') {
+          console.log('[EngineOrchestrator] Executing Trust Capping Engine');
+          const trustCappingResult: TrustCappingResult = await runTrustCappingEngine(executionContext);
+          engineResults['trustCappingEngine'] = trustCappingResult;
+          executionContext.trustCappingResult = trustCappingResult;
+
+          // Official grade authority: set finalProfessionalGrade from trust capping result
+          if (trustCappingResult?.finalGrade) {
+            executionContext.finalProfessionalGrade = trustCappingResult.finalGrade;
+            console.log('[EngineOrchestrator] Official grade set', {
+              finalGrade: trustCappingResult.finalGrade,
+              originalGrade: trustCappingResult.originalGrade,
+              cappingApplied: trustCappingResult.cappingApplied,
+            });
+          }
+
+          engineExecutionResult.status = 'completed';
+          engineExecutionResult.endTime = new Date().toISOString();
+        }
+        // Execute Structural Consistency Engine if active (analytical pillar balance)
+        else if (engine.id === 'structuralConsistencyEngine') {
+          console.log('[EngineOrchestrator] Executing Structural Consistency Engine');
+          const structuralConsistencyResult: StructuralConsistencyResult = await runStructuralConsistencyEngine(executionContext);
+          engineResults['structuralConsistencyEngine'] = structuralConsistencyResult;
+          executionContext.structuralConsistency = structuralConsistencyResult;
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
         } else {
