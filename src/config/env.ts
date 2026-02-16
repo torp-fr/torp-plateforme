@@ -192,8 +192,8 @@ export const validateEnv = (): void => {
     }
 
     if (env.auth.provider === 'supabase') {
-      if (!env.auth.supabase?.url) requiredVars.push('VITE_AUTH_SUPABASE_URL');
-      if (!env.auth.supabase?.anonKey) requiredVars.push('VITE_AUTH_SUPABASE_ANON_KEY');
+      if (!env.auth.supabase?.url) requiredVars.push('VITE_SUPABASE_URL or VITE_AUTH_SUPABASE_URL');
+      if (!env.auth.supabase?.anonKey) requiredVars.push('VITE_SUPABASE_ANON_KEY or VITE_AUTH_SUPABASE_ANON_KEY');
     }
   }
 
@@ -226,9 +226,15 @@ export const logEnvInfo = (): void => {
 export const isFreeMode = (): boolean => env.freeMode.enabled;
 export const getDefaultCredits = (): number => env.freeMode.enabled ? env.freeMode.defaultCredits : 0;
 
-// Auto-validate on import (only in production)
+// Auto-validate on import (only in production, but catch errors gracefully)
 if (env.app.env === 'production') {
-  validateEnv();
+  try {
+    validateEnv();
+  } catch (error) {
+    console.error('[ENV] Validation error in production:', error);
+    // Don't throw - allow app to load with fallbacks
+    // Errors will be caught by ErrorBoundary or main.tsx try-catch
+  }
 }
 
 export default env;
