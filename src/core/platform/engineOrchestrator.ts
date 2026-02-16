@@ -7,6 +7,11 @@
 import { ENGINE_REGISTRY, EngineRegistryEntry } from '@/core/platform/engineRegistry';
 import { runContextEngine, ContextEngineResult } from '@/core/engines/context.engine';
 import { runLotEngine, LotEngineResult } from '@/core/engines/lot.engine';
+import { runRuleEngine, RuleEngineResult } from '@/core/engines/rule.engine';
+import { runScoringEngine, ScoringEngineResult } from '@/core/engines/scoring.engine';
+import { runEnrichmentEngine, EnrichmentEngineResult } from '@/core/engines/enrichment.engine';
+import { runAuditEngine, AuditEngineResult } from '@/core/engines/audit.engine';
+import { createAuditSnapshot } from '@/core/platform/auditSnapshot.manager';
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 
 /**
@@ -127,6 +132,99 @@ export async function runOrchestration(
             complexityScore: lotResult.complexityScore,
             categorySummary: lotResult.categorySummary,
           };
+
+          engineExecutionResult.status = 'completed';
+          engineExecutionResult.endTime = new Date().toISOString();
+        }
+        // Execute Rule Engine if active (depends on Lot Engine)
+        else if (engine.id === 'ruleEngine') {
+          console.log('[EngineOrchestrator] Executing Rule Engine');
+          const ruleResult: RuleEngineResult = await runRuleEngine(executionContext);
+          engineResults['ruleEngine'] = ruleResult;
+
+          // Populate shared execution context with Rule Engine results
+          executionContext.rules = {
+            obligations: ruleResult.obligations,
+            uniqueObligations: ruleResult.uniqueObligations,
+            detailedObligations: ruleResult.uniqueDetailedObligations,
+            obligationCount: ruleResult.obligationCount,
+            ruleCount: ruleResult.ruleCount,
+            totalWeight: ruleResult.totalWeight,
+            severityBreakdown: ruleResult.severityBreakdown,
+            typeBreakdown: ruleResult.typeBreakdown,
+          };
+
+          engineExecutionResult.status = 'completed';
+          engineExecutionResult.endTime = new Date().toISOString();
+        }
+        // Execute Scoring Engine if active (depends on Rule Engine and Lot Engine)
+        else if (engine.id === 'scoringEngine') {
+          console.log('[EngineOrchestrator] Executing Scoring Engine');
+          const scoringResult: ScoringEngineResult = await runScoringEngine(executionContext);
+          engineResults['scoringEngine'] = scoringResult;
+
+          // Populate shared execution context with Scoring Engine results
+          executionContext.audit = {
+            riskScore: scoringResult.riskScore,
+            complexityImpact: scoringResult.complexityImpact,
+            globalScore: scoringResult.globalScore,
+            riskLevel: scoringResult.riskLevel,
+            scoreBreakdown: scoringResult.scoreBreakdown,
+          };
+
+          engineExecutionResult.status = 'completed';
+          engineExecutionResult.endTime = new Date().toISOString();
+        }
+        // Execute Enrichment Engine if active (depends on all prior engines)
+        else if (engine.id === 'enrichmentEngine') {
+          console.log('[EngineOrchestrator] Executing Enrichment Engine');
+          const enrichmentResult: EnrichmentEngineResult = await runEnrichmentEngine(executionContext);
+          engineResults['enrichmentEngine'] = enrichmentResult;
+
+          // Populate shared execution context with Enrichment Engine results
+          executionContext.enrichments = {
+            actions: enrichmentResult.actions,
+            recommendations: enrichmentResult.recommendations,
+            actionCount: enrichmentResult.actionCount,
+            recommendationCount: enrichmentResult.recommendationCount,
+            riskProfile: enrichmentResult.riskProfile,
+            processingStrategy: enrichmentResult.processingStrategy,
+          };
+
+          engineExecutionResult.status = 'completed';
+          engineExecutionResult.endTime = new Date().toISOString();
+        }
+        // Execute Audit Engine if active (depends on all prior engines - final pipeline stage)
+        else if (engine.id === 'auditEngine') {
+          console.log('[EngineOrchestrator] Executing Audit Engine');
+          const auditResult: AuditEngineResult = await runAuditEngine(executionContext);
+          engineResults['auditEngine'] = auditResult;
+
+          // Populate shared execution context with Audit Engine results
+          executionContext.auditReport = auditResult.report;
+
+          // Create audit snapshot for lifecycle versioning (if projectId available)
+          if (executionContext.context?.projectId) {
+            try {
+              const snapshot = createAuditSnapshot(
+                executionContext.context.projectId,
+                auditResult.report
+              );
+              executionContext.auditSnapshot = snapshot;
+              console.log('[EngineOrchestrator] Audit snapshot created', {
+                projectId: executionContext.context.projectId,
+                snapshotId: snapshot.id,
+                version: snapshot.version,
+              });
+            } catch (snapshotError) {
+              const errorMsg = snapshotError instanceof Error ? snapshotError.message : 'Unknown error';
+              console.warn('[EngineOrchestrator] Failed to create audit snapshot', {
+                projectId: executionContext.context.projectId,
+                error: errorMsg,
+              });
+              // Snapshot creation failure is non-critical - continue
+            }
+          }
 
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
