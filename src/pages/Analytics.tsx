@@ -1,12 +1,14 @@
 /**
- * Analytics - Panel d'administration TORP
+ * Analytics - Cockpit d'Administration TORP (Phase 29.1)
  * Réservé aux comptes admin - suivi et gestion de la plateforme
+ * Displays: Global KPIs, Engine Status, Knowledge Health, Fraud Distribution, Recent Logs
  */
 
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '@/context/AppContext';
 import { KnowledgeBaseUpload } from '@/components/KnowledgeBaseUpload';
+import { CockpitOrchestration } from '@/components/admin/CockpitOrchestration';
 import {
   BarChart3,
   Users,
@@ -19,6 +21,7 @@ import {
   Cpu,
   ExternalLink,
   BookOpen,
+  Zap as ZapIcon,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -29,12 +32,22 @@ import { API_REGISTRY, getAPIStats } from '@/core/platform/apiRegistry';
 import { getOrchestrationStatus, getOrchestrationStats, getLastOrchestration } from '@/core/platform/engineOrchestrator';
 import type { ContextEngineResult } from '@/core/engines/context.engine';
 
-type TabType = 'overview' | 'upload-kb' | 'users' | 'settings';
+type TabType = 'overview' | 'orchestration' | 'kb' | 'doctrine' | 'fraud' | 'adaptive' | 'apis' | 'logs' | 'upload-kb' | 'users' | 'config';
 
 export function Analytics() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { userType } = useApp();
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>('orchestration');
+  const [loading, setLoading] = useState(false);
+
+  // Get tab from URL query parameter
+  useEffect(() => {
+    const tab = searchParams.get('tab') as TabType;
+    if (tab) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   // Check if user is admin
   if (userType !== 'admin' && userType !== 'super_admin') {
@@ -52,55 +65,256 @@ export function Analytics() {
     );
   }
 
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    setSearchParams({ tab });
+  };
+
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground font-display">Panel d'Administration</h1>
-        <p className="text-muted-foreground mt-1">Suivi et gestion de la plateforme TORP</p>
-      </div>
-
       {/* Tab Navigation */}
       <div className="flex gap-2 border-b overflow-x-auto">
         <Button
-          variant={activeTab === 'overview' ? 'default' : 'ghost'}
-          onClick={() => setActiveTab('overview')}
+          variant={activeTab === 'orchestration' ? 'default' : 'ghost'}
+          onClick={() => handleTabChange('orchestration')}
           className="rounded-b-none"
         >
-          <BarChart3 className="h-4 w-4 mr-2" />
-          Vue d'ensemble
+          <Zap className="h-4 w-4 mr-2" />
+          Cockpit d'Orchestration
         </Button>
         <Button
-          variant={activeTab === 'upload-kb' ? 'default' : 'ghost'}
-          onClick={() => setActiveTab('upload-kb')}
+          variant={activeTab === 'fraud' ? 'default' : 'ghost'}
+          onClick={() => handleTabChange('fraud')}
+          className="rounded-b-none"
+        >
+          <AlertCircle className="h-4 w-4 mr-2" />
+          Surveillance Fraude
+        </Button>
+        <Button
+          variant={activeTab === 'kb' ? 'default' : 'ghost'}
+          onClick={() => handleTabChange('kb')}
           className="rounded-b-none"
         >
           <Database className="h-4 w-4 mr-2" />
           Base de Connaissances
         </Button>
         <Button
+          variant={activeTab === 'doctrine' ? 'default' : 'ghost'}
+          onClick={() => handleTabChange('doctrine')}
+          className="rounded-b-none"
+        >
+          <BookOpen className="h-4 w-4 mr-2" />
+          Doctrine & Normes
+        </Button>
+        <Button
+          variant={activeTab === 'adaptive' ? 'default' : 'ghost'}
+          onClick={() => handleTabChange('adaptive')}
+          className="rounded-b-none"
+        >
+          <TrendingUp className="h-4 w-4 mr-2" />
+          Adaptatif
+        </Button>
+        <Button
+          variant={activeTab === 'apis' ? 'default' : 'ghost'}
+          onClick={() => handleTabChange('apis')}
+          className="rounded-b-none"
+        >
+          <ExternalLink className="h-4 w-4 mr-2" />
+          APIs
+        </Button>
+        <Button
           variant={activeTab === 'users' ? 'default' : 'ghost'}
-          onClick={() => setActiveTab('users')}
+          onClick={() => handleTabChange('users')}
           className="rounded-b-none"
         >
           <Users className="h-4 w-4 mr-2" />
           Utilisateurs
         </Button>
         <Button
-          variant={activeTab === 'settings' ? 'default' : 'ghost'}
-          onClick={() => setActiveTab('settings')}
+          variant={activeTab === 'logs' ? 'default' : 'ghost'}
+          onClick={() => handleTabChange('logs')}
           className="rounded-b-none"
         >
-          <Settings className="h-4 w-4 mr-2" />
-          Paramètres
+          <FileText className="h-4 w-4 mr-2" />
+          Logs
         </Button>
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'overview' && <OverviewTab />}
-      {activeTab === 'upload-kb' && <UploadKBTab />}
+      {activeTab === 'orchestration' && <CockpitOrchestration loading={loading} />}
+      {activeTab === 'fraud' && <FraudMonitoringTab />}
+      {activeTab === 'kb' && <UploadKBTab />}
+      {activeTab === 'doctrine' && <DoctrineTab />}
+      {activeTab === 'adaptive' && <AdaptiveTab />}
+      {activeTab === 'apis' && <APIsTab />}
       {activeTab === 'users' && <UsersTab navigate={navigate} />}
-      {activeTab === 'settings' && <SettingsTab />}
+      {activeTab === 'logs' && <LogsTab />}
+    </div>
+  );
+}
+
+/**
+ * Fraud Monitoring Tab Component
+ */
+function FraudMonitoringTab() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold">Surveillance Fraude</h2>
+        <p className="text-muted-foreground">Détection et monitoring des patterns de fraude</p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Détection Fraude en Temps Réel</CardTitle>
+          <CardDescription>4 vecteurs d'analyse: pricing, compliance, enterprise, structural</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-muted-foreground">
+            Section détaillée en développement. Les données de fraude sont visibles dans le Cockpit d'Orchestration.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * Doctrine Tab Component
+ */
+function DoctrineTab() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold">Doctrine & Normes</h2>
+        <p className="text-muted-foreground">Gestion des règles normatives et jurisprudence</p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Knowledge Core</CardTitle>
+          <CardDescription>40+ items: Norms, Pricing References, Jurisprudence, Risks</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
+              <p className="text-sm text-muted-foreground">Règles Normatives</p>
+              <p className="text-2xl font-bold text-blue-700">10</p>
+            </div>
+            <div className="p-4 rounded-lg bg-purple-50 border border-purple-200">
+              <p className="text-sm text-muted-foreground">Références Pricing</p>
+              <p className="text-2xl font-bold text-purple-700">10</p>
+            </div>
+            <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
+              <p className="text-sm text-muted-foreground">Jurisprudence</p>
+              <p className="text-2xl font-bold text-amber-700">5</p>
+            </div>
+            <div className="p-4 rounded-lg bg-green-50 border border-green-200">
+              <p className="text-sm text-muted-foreground">Facteurs Risque</p>
+              <p className="text-2xl font-bold text-green-700">5</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * Adaptive Tab Component
+ */
+function AdaptiveTab() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold">Monitoring Adaptatif</h2>
+        <p className="text-muted-foreground">Impacts et ajustements dynamiques des scores</p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Moteur Adaptatif</CardTitle>
+          <CardDescription>Ajustements sectoriels et pénalités métier</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-muted-foreground">
+            Section détaillée en développement. Les données adaptatives sont visibles dans le Cockpit d'Orchestration.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * APIs Tab Component
+ */
+function APIsTab() {
+  const apiStats = getAPIStats();
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold">APIs Externes</h2>
+        <p className="text-muted-foreground">Services externes intégrés à la plateforme</p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>État des APIs</CardTitle>
+          <Badge variant="outline" className="w-fit">{apiStats.total} APIs</Badge>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {API_REGISTRY.map((api) => (
+              <div key={api.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                <div>
+                  <p className="font-medium text-sm">{api.name}</p>
+                  <p className="text-xs text-muted-foreground">{api.description}</p>
+                </div>
+                <Badge
+                  variant="outline"
+                  className={
+                    api.status === 'active'
+                      ? 'bg-green-100 text-green-700 border-green-300'
+                      : api.status === 'configured'
+                        ? 'bg-blue-100 text-blue-700 border-blue-300'
+                        : 'bg-gray-100 text-gray-700 border-gray-300'
+                  }
+                >
+                  {api.status}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+/**
+ * Logs Tab Component
+ */
+function LogsTab() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold">Logs Système</h2>
+        <p className="text-muted-foreground">Audit trail et historique des opérations</p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Historique Récent</CardTitle>
+          <CardDescription>Dernières opérations système</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground text-sm">
+            Les logs système seront disponibles après intégration de la persistence d'audit.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

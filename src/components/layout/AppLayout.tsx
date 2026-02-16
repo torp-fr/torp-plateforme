@@ -30,6 +30,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
 import { Button } from '@/components/ui/button';
+import { AdminSidebar } from './AdminSidebar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -236,37 +237,41 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       <div className="flex">
         {/* Sidebar - Desktop */}
-        <aside className="w-64 bg-white border-r min-h-[calc(100vh-4rem)] hidden md:block">
-          <nav className="p-4 space-y-1">
-            {navItems.map((item) => {
-              const isActive = isActiveRoute(item);
-              const Icon = item.icon;
+        <aside className="w-64 bg-white border-r min-h-[calc(100vh-4rem)] hidden md:flex">
+          {userType === 'admin' || userType === 'super_admin' ? (
+            <AdminSidebar userEmail={user?.email} />
+          ) : (
+            <nav className="p-4 space-y-1 w-full flex flex-col">
+              {navItems.map((item) => {
+                const isActive = isActiveRoute(item);
+                const Icon = item.icon;
 
-              return (
-                <Link
-                  key={item.href}
-                  to={item.href}
-                  className={cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
-                    isActive
-                      ? 'bg-primary text-white'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  )}
-                >
-                  <Icon className="h-5 w-5" />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
+                return (
+                  <Link
+                    key={item.href}
+                    to={item.href}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
+                      isActive
+                        ? 'bg-primary text-white'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    )}
+                  >
+                    <Icon className="h-5 w-5" />
+                    {item.label}
+                  </Link>
+                );
+              })}
 
-          {/* CTA */}
-          <div className="p-4 border-t mt-4">
-            <Button className="w-full" onClick={() => navigate(config.newProjectLink)}>
-              <PlusCircle className="h-4 w-4 mr-2" />
-              {config.newProjectLabel}
-            </Button>
-          </div>
+              {/* CTA */}
+              <div className="p-4 border-t mt-auto">
+                <Button className="w-full" onClick={() => navigate(config.newProjectLink)}>
+                  <PlusCircle className="h-4 w-4 mr-2" />
+                  {config.newProjectLabel}
+                </Button>
+              </div>
+            </nav>
+          )}
         </aside>
 
         {/* Sidebar - Mobile */}
@@ -276,44 +281,50 @@ export function AppLayout({ children }: AppLayoutProps) {
               className="fixed inset-0 bg-black/50"
               onClick={() => setSidebarOpen(false)}
             />
-            <aside className="fixed left-0 top-16 bottom-0 w-64 bg-white border-r z-50 overflow-y-auto">
-              <nav className="p-4 space-y-1">
-                {navItems.map((item) => {
-                  const isActive = isActiveRoute(item);
-                  const Icon = item.icon;
+            <aside className="fixed left-0 top-16 bottom-0 w-64 bg-white border-r z-50 overflow-y-auto flex flex-col">
+              {userType === 'admin' || userType === 'super_admin' ? (
+                <AdminSidebar userEmail={user?.email} onClose={() => setSidebarOpen(false)} />
+              ) : (
+                <>
+                  <nav className="p-4 space-y-1 flex-1">
+                    {navItems.map((item) => {
+                      const isActive = isActiveRoute(item);
+                      const Icon = item.icon;
 
-                  return (
-                    <Link
-                      key={item.href}
-                      to={item.href}
-                      onClick={() => setSidebarOpen(false)}
-                      className={cn(
-                        'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
-                        isActive
-                          ? 'bg-primary text-white'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      )}
+                      return (
+                        <Link
+                          key={item.href}
+                          to={item.href}
+                          onClick={() => setSidebarOpen(false)}
+                          className={cn(
+                            'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
+                            isActive
+                              ? 'bg-primary text-white'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          )}
+                        >
+                          <Icon className="h-5 w-5" />
+                          {item.label}
+                        </Link>
+                      );
+                    })}
+                  </nav>
+
+                  {/* CTA Mobile */}
+                  <div className="p-4 border-t">
+                    <Button
+                      className="w-full"
+                      onClick={() => {
+                        setSidebarOpen(false);
+                        navigate(config.newProjectLink);
+                      }}
                     >
-                      <Icon className="h-5 w-5" />
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </nav>
-
-              {/* CTA Mobile */}
-              <div className="p-4 border-t">
-                <Button
-                  className="w-full"
-                  onClick={() => {
-                    setSidebarOpen(false);
-                    navigate(config.newProjectLink);
-                  }}
-                >
-                  <PlusCircle className="h-4 w-4 mr-2" />
-                  {config.newProjectLabel}
-                </Button>
-              </div>
+                      <PlusCircle className="h-4 w-4 mr-2" />
+                      {config.newProjectLabel}
+                    </Button>
+                  </div>
+                </>
+              )}
             </aside>
           </div>
         )}
