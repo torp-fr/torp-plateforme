@@ -261,6 +261,13 @@ interface RecentOrchestrationTableProps {
     coherenceScore?: number;
     timestamp: string;
     duration?: number;
+    // Phase 30.2: Live Intelligence enrichment columns
+    enrichmentStatus?: 'complete' | 'partial' | 'degraded' | 'none';
+    legalRiskScore?: number;
+    doctrineConfidenceScore?: number;
+    enterpriseVerified?: boolean;
+    rgeCertified?: boolean;
+    geoRiskScore?: number;
   }>;
   loading?: boolean;
 }
@@ -296,6 +303,7 @@ export function RecentOrchestrationTable({
             <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Adaptatif</th>
             <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Fraude</th>
             <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Cohérence</th>
+            <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Enrichissement</th>
             <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Durée</th>
             <th className="text-left py-3 px-4 font-semibold text-muted-foreground">Date</th>
           </tr>
@@ -303,52 +311,73 @@ export function RecentOrchestrationTable({
         <tbody>
           {loading ? (
             <tr>
-              <td colSpan={7} className="text-center py-6 text-muted-foreground">
+              <td colSpan={8} className="text-center py-6 text-muted-foreground">
                 Chargement...
               </td>
             </tr>
           ) : orchestrations.length === 0 ? (
             <tr>
-              <td colSpan={7} className="text-center py-6 text-muted-foreground">
+              <td colSpan={8} className="text-center py-6 text-muted-foreground">
                 Aucune orchestration récente
               </td>
             </tr>
           ) : (
-            orchestrations.map((orch) => (
-              <tr key={orch.id} className="border-b hover:bg-muted/50">
-                <td className="py-3 px-4 font-mono text-xs">
-                  {orch.projectId.substring(0, 8)}...
-                </td>
-                <td className="py-3 px-4">
-                  {orch.finalGrade ? (
-                    <Badge className={`${getGradeColor(orch.finalGrade)} font-bold`}>
-                      {orch.finalGrade}
-                    </Badge>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )}
-                </td>
-                <td className="py-3 px-4">
-                  {orch.adaptiveScore !== undefined
-                    ? orch.adaptiveScore.toFixed(1)
-                    : '-'}
-                </td>
-                <td className="py-3 px-4">
-                  {orch.fraudScore !== undefined ? orch.fraudScore.toFixed(1) : '-'}
-                </td>
-                <td className="py-3 px-4">
-                  {orch.coherenceScore !== undefined
-                    ? orch.coherenceScore.toFixed(1)
-                    : '-'}
-                </td>
-                <td className="py-3 px-4">
-                  {orch.duration ? `${orch.duration}ms` : '-'}
-                </td>
-                <td className="py-3 px-4 text-xs text-muted-foreground">
-                  {new Date(orch.timestamp).toLocaleString('fr-FR')}
-                </td>
-              </tr>
-            ))
+            orchestrations.map((orch) => {
+              const enrichmentColors = {
+                complete: 'bg-green-100 text-green-800 border-green-300',
+                partial: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+                degraded: 'bg-orange-100 text-orange-800 border-orange-300',
+                none: 'bg-gray-100 text-gray-800 border-gray-300',
+              };
+              const enrichmentBadgeClass = enrichmentColors[
+                (orch.enrichmentStatus || 'none') as keyof typeof enrichmentColors
+              ] || enrichmentColors.none;
+              return (
+                <tr key={orch.id} className="border-b hover:bg-muted/50">
+                  <td className="py-3 px-4 font-mono text-xs">
+                    {orch.projectId.substring(0, 8)}...
+                  </td>
+                  <td className="py-3 px-4">
+                    {orch.finalGrade ? (
+                      <Badge className={`${getGradeColor(orch.finalGrade)} font-bold`}>
+                        {orch.finalGrade}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4">
+                    {orch.adaptiveScore !== undefined ? orch.adaptiveScore.toFixed(1) : '-'}
+                  </td>
+                  <td className="py-3 px-4">
+                    {orch.fraudScore !== undefined ? orch.fraudScore.toFixed(1) : '-'}
+                  </td>
+                  <td className="py-3 px-4">
+                    {orch.coherenceScore !== undefined ? orch.coherenceScore.toFixed(1) : '-'}
+                  </td>
+                  <td className="py-3 px-4">
+                    <div
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${enrichmentBadgeClass}`}
+                      title={`Risque juridique: ${orch.legalRiskScore?.toFixed(1) || 'N/A'} | Confiance doctrine: ${orch.doctrineConfidenceScore?.toFixed(1) || 'N/A'}%`}
+                    >
+                      {orch.enrichmentStatus === 'complete'
+                        ? '✓ Complet'
+                        : orch.enrichmentStatus === 'partial'
+                          ? '⚙ Partiel'
+                          : orch.enrichmentStatus === 'degraded'
+                            ? '⚠ Dégradé'
+                            : '○ Aucun'}
+                    </div>
+                  </td>
+                  <td className="py-3 px-4">
+                    {orch.duration ? `${orch.duration}ms` : '-'}
+                  </td>
+                  <td className="py-3 px-4 text-xs text-muted-foreground">
+                    {new Date(orch.timestamp).toLocaleString('fr-FR')}
+                  </td>
+                </tr>
+              );
+            })
           )}
         </tbody>
       </table>

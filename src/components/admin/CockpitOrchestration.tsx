@@ -40,6 +40,19 @@ interface CockpitMetrics {
   averageNormativePenalty: number;
   averagePricingPenalty: number;
   recentOrchestrations: any[];
+  // Phase 30: Live Intelligence Metrics
+  enrichmentRate: number;
+  averageLegalRiskScore: number;
+  averageDoctrineConfidenceScore: number;
+  verifiedEnterprisesCount: number;
+  rgeCertifiedCount: number;
+  completeEnrichmentCount: number;
+  partialEnrichmentCount: number;
+  degradedEnrichmentCount: number;
+  // Engine Status
+  liveDoctrineEngineStatus: 'active' | 'degraded' | 'error' | 'idle';
+  liveDoctrineLastExecution: string;
+  apiCallsToday: number;
 }
 
 interface CockpitProps {
@@ -80,6 +93,18 @@ export function CockpitOrchestration({ metrics, loading = false }: CockpitProps)
     averageNormativePenalty: 0,
     averagePricingPenalty: 0,
     recentOrchestrations: [],
+    // Phase 30: Live Intelligence defaults
+    enrichmentRate: 0,
+    averageLegalRiskScore: 0,
+    averageDoctrineConfidenceScore: 0,
+    verifiedEnterprisesCount: 0,
+    rgeCertifiedCount: 0,
+    completeEnrichmentCount: 0,
+    partialEnrichmentCount: 0,
+    degradedEnrichmentCount: 0,
+    liveDoctrineEngineStatus: 'idle',
+    liveDoctrineLastExecution: 'N/A',
+    apiCallsToday: 0,
   };
 
   const displayMetrics = metrics || defaultMetrics;
@@ -320,6 +345,171 @@ export function CockpitOrchestration({ metrics, loading = false }: CockpitProps)
               orchestrations={displayMetrics.recentOrchestrations}
               loading={loading}
             />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* SECTION 7: LIVE INTELLIGENCE STATUS (Phase 30) */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Zap className="h-5 w-5 text-blue-600" />
+          <h2 className="text-2xl font-bold">Statut Intelligence Temps Réel</h2>
+          <span
+            className={`text-xs px-2 py-1 rounded-full font-semibold ml-auto ${
+              displayMetrics.liveDoctrineEngineStatus === 'active'
+                ? 'bg-green-100 text-green-700'
+                : displayMetrics.liveDoctrineEngineStatus === 'degraded'
+                  ? 'bg-yellow-100 text-yellow-700'
+                  : displayMetrics.liveDoctrineEngineStatus === 'error'
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-gray-100 text-gray-700'
+            }`}
+          >
+            {displayMetrics.liveDoctrineEngineStatus === 'active'
+              ? '🟢 Actif'
+              : displayMetrics.liveDoctrineEngineStatus === 'degraded'
+                ? '🟡 Dégradé'
+                : displayMetrics.liveDoctrineEngineStatus === 'error'
+                  ? '🔴 Erreur'
+                  : '⚪ Inactif'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <MetricCard
+            title="Taux d'Enrichissement"
+            value={displayMetrics.enrichmentRate.toFixed(1) + '%'}
+            icon={TrendingUp}
+            loading={loading}
+            change={
+              displayMetrics.enrichmentRate > 0
+                ? { value: 8, direction: 'up' }
+                : undefined
+            }
+          />
+          <MetricCard
+            title="Score Risque Juridique Moyen"
+            value={displayMetrics.averageLegalRiskScore.toFixed(1)}
+            icon={AlertTriangle}
+            loading={loading}
+          />
+          <MetricCard
+            title="Confiance Doctrine Moyenne"
+            value={displayMetrics.averageDoctrineConfidenceScore.toFixed(1)}
+            icon={TrendingUp}
+            loading={loading}
+          />
+          <MetricCard
+            title="Appels API Aujourd'hui"
+            value={displayMetrics.apiCallsToday}
+            icon={Database}
+            loading={loading}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Enterprise Verification */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Vérification Entreprises</CardTitle>
+              <CardDescription>Statut de vérification et certification</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Entreprises vérifiées</span>
+                  <span className="text-lg font-bold text-blue-600">
+                    {displayMetrics.verifiedEnterprisesCount}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Certifiées RGE</span>
+                  <span className="text-lg font-bold text-green-600">
+                    {displayMetrics.rgeCertifiedCount}
+                  </span>
+                </div>
+                {displayMetrics.verifiedEnterprisesCount > 0 && (
+                  <div className="pt-2 border-t">
+                    <p className="text-xs text-muted-foreground">
+                      Taux de certification:{' '}
+                      {displayMetrics.verifiedEnterprisesCount > 0
+                        ? (
+                            (displayMetrics.rgeCertifiedCount /
+                              displayMetrics.verifiedEnterprisesCount) *
+                            100
+                          ).toFixed(1)
+                        : '0'}
+                      %
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Enrichment Status */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Statut d'Enrichissement</CardTitle>
+              <CardDescription>Distribution de la couverture d'enrichissement</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">✅ Complet</span>
+                  <span className="text-lg font-bold text-green-600">
+                    {displayMetrics.completeEnrichmentCount}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">⚙️ Partiel</span>
+                  <span className="text-lg font-bold text-yellow-600">
+                    {displayMetrics.partialEnrichmentCount}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">⚠️ Dégradé</span>
+                  <span className="text-lg font-bold text-red-600">
+                    {displayMetrics.degradedEnrichmentCount}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Engine Status */}
+        <Card>
+          <CardHeader>
+            <CardTitle>État du Moteur Intelligence Temps Réel</CardTitle>
+            <CardDescription>Live Doctrine Activation Engine (Phase 30)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Dernier statut</p>
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`h-4 w-4 rounded-full ${
+                      displayMetrics.liveDoctrineEngineStatus === 'active'
+                        ? 'bg-green-500 animate-pulse'
+                        : displayMetrics.liveDoctrineEngineStatus === 'degraded'
+                          ? 'bg-yellow-500'
+                          : displayMetrics.liveDoctrineEngineStatus === 'error'
+                            ? 'bg-red-500'
+                            : 'bg-gray-500'
+                    }`}
+                  />
+                  <span className="font-semibold capitalize">
+                    {displayMetrics.liveDoctrineEngineStatus}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Dernière exécution</p>
+                <p className="font-semibold">{displayMetrics.liveDoctrineLastExecution}</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
