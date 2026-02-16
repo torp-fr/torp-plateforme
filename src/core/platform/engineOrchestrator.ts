@@ -11,6 +11,7 @@ import { runRuleEngine, RuleEngineResult } from '@/core/engines/rule.engine';
 import { runScoringEngine, ScoringEngineResult } from '@/core/engines/scoring.engine';
 import { runEnrichmentEngine, EnrichmentEngineResult } from '@/core/engines/enrichment.engine';
 import { runAuditEngine, AuditEngineResult } from '@/core/engines/audit.engine';
+import { createAuditSnapshot } from '@/core/platform/auditSnapshot.manager';
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 
 /**
@@ -201,6 +202,29 @@ export async function runOrchestration(
 
           // Populate shared execution context with Audit Engine results
           executionContext.auditReport = auditResult.report;
+
+          // Create audit snapshot for lifecycle versioning (if projectId available)
+          if (executionContext.context?.projectId) {
+            try {
+              const snapshot = createAuditSnapshot(
+                executionContext.context.projectId,
+                auditResult.report
+              );
+              executionContext.auditSnapshot = snapshot;
+              console.log('[EngineOrchestrator] Audit snapshot created', {
+                projectId: executionContext.context.projectId,
+                snapshotId: snapshot.id,
+                version: snapshot.version,
+              });
+            } catch (snapshotError) {
+              const errorMsg = snapshotError instanceof Error ? snapshotError.message : 'Unknown error';
+              console.warn('[EngineOrchestrator] Failed to create audit snapshot', {
+                projectId: executionContext.context.projectId,
+                error: errorMsg,
+              });
+              // Snapshot creation failure is non-critical - continue
+            }
+          }
 
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();

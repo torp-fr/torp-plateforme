@@ -74,6 +74,18 @@ export interface EngineExecutionContext {
   audit?: any;
 
   /**
+   * Audit Report - Structured output from Audit Engine
+   * Contains executive summary, risk assessment, compliance findings, and recommendations
+   */
+  auditReport?: any;
+
+  /**
+   * Audit Snapshot - Point-in-time version record from Audit Snapshot Manager
+   * Captures immutable audit state for versioning and trend analysis
+   */
+  auditSnapshot?: any;
+
+  /**
    * Timestamp when execution started (ISO 8601)
    */
   executionStartTime?: string;
