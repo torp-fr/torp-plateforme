@@ -101,11 +101,18 @@ export class SupabaseAuthService {
     if (userError || !userData) {
       // User profile doesn't exist yet, create basic user from auth data
       console.warn('User profile not found, creating from auth data:', authData.user.email);
+
+      // Check if user is admin (hardcoded list)
+      const adminEmails = ['admin@admin.com', 'admin@torp.fr', 'super@torp.fr'];
+      const isAdminEmail = adminEmails.includes(authData.user.email || '');
+
       mappedUser = {
         id: authData.user.id,
         email: authData.user.email || '',
         name: authData.user.user_metadata?.name || undefined,
         type: (authData.user.user_metadata?.user_type as UserType) || 'B2C',
+        isAdmin: isAdminEmail,
+        role: isAdminEmail ? 'admin' : 'user',
       };
     } else {
       mappedUser = mapDbUserToAppUser(userData);
