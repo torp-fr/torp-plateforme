@@ -8,19 +8,20 @@ import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 import { getRulesByCategory, getRuleById } from '@/core/rules/ruleRegistry';
 
 /**
- * Rule obligation structure with severity and weight
+ * Rule obligation structure with type, severity and weight
  */
 export interface RuleObligation {
   id: string;
   category: string;
   obligation: string;
+  ruleType: 'legal' | 'regulatory' | 'advisory' | 'commercial';
   severity: 'low' | 'medium' | 'high' | 'critical';
   weight: number;
   source?: string;
 }
 
 /**
- * Rule Engine result with weighted obligations
+ * Rule Engine result with weighted obligations and type classification
  */
 export interface RuleEngineResult {
   obligations: string[];
@@ -35,6 +36,12 @@ export interface RuleEngineResult {
     high: number;
     medium: number;
     low: number;
+  };
+  typeBreakdown: {
+    legal: number;
+    regulatory: number;
+    advisory: number;
+    commercial: number;
   };
   categorySummary: Record<string, number>;
   meta: {
@@ -73,6 +80,13 @@ export async function runRuleEngine(
       low: 0,
     };
 
+    const typeBreakdown = {
+      legal: 0,
+      regulatory: 0,
+      advisory: 0,
+      commercial: 0,
+    };
+
     normalizedLots.forEach((lot: any) => {
       const category = lot.category || 'unknown';
 
@@ -82,7 +96,7 @@ export async function runRuleEngine(
       // Get rules for this category from the centralized registry
       const rules = getRulesByCategory(category);
 
-      // Collect obligations from matching rules with severity and weight
+      // Collect obligations from matching rules with type, severity and weight
       rules.forEach((rule) => {
         obligations.push(rule.obligation);
 
@@ -90,6 +104,7 @@ export async function runRuleEngine(
           id: rule.id,
           category: rule.category,
           obligation: rule.obligation,
+          ruleType: rule.ruleType,
           severity: rule.severity,
           weight: rule.weight,
           source: rule.source,
@@ -98,6 +113,7 @@ export async function runRuleEngine(
         detailedObligations.push(detailedObligation);
         totalWeight += rule.weight;
         severityBreakdown[rule.severity]++;
+        typeBreakdown[rule.ruleType]++;
       });
     });
 
@@ -129,6 +145,7 @@ export async function runRuleEngine(
       ruleCount: uniqueObligations.length,
       totalWeight,
       severityBreakdown,
+      typeBreakdown,
       categorySummary,
       meta: {
         engineVersion: '1.0',
@@ -142,6 +159,7 @@ export async function runRuleEngine(
       uniqueRules: uniqueObligations.length,
       totalWeight,
       severityBreakdown,
+      typeBreakdown,
       categories: Object.keys(categoryTriggers),
       processingTime,
     });
@@ -165,6 +183,12 @@ export async function runRuleEngine(
         high: 0,
         medium: 0,
         low: 0,
+      },
+      typeBreakdown: {
+        legal: 0,
+        regulatory: 0,
+        advisory: 0,
+        commercial: 0,
       },
       categorySummary: {},
       meta: {

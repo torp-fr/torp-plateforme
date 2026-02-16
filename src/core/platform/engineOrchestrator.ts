@@ -148,6 +148,7 @@ export async function runOrchestration(
             ruleCount: ruleResult.ruleCount,
             totalWeight: ruleResult.totalWeight,
             severityBreakdown: ruleResult.severityBreakdown,
+            typeBreakdown: ruleResult.typeBreakdown,
           };
 
           engineExecutionResult.status = 'completed';

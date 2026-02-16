@@ -5,12 +5,13 @@
  */
 
 /**
- * Individual rule definition
+ * Individual rule definition with type classification
  */
 export interface Rule {
   id: string;
   category: 'electricite' | 'plomberie' | 'toiture' | 'generic';
   obligation: string;
+  ruleType: 'legal' | 'regulatory' | 'advisory' | 'commercial';
   severity: 'low' | 'medium' | 'high' | 'critical';
   weight: number;
   source?: string;
@@ -27,6 +28,7 @@ export const RULE_REGISTRY: Rule[] = [
     id: 'ELEC_NFC15100',
     category: 'electricite',
     obligation: 'Vérifier conformité NFC 15-100',
+    ruleType: 'legal',
     severity: 'critical',
     weight: 15,
     source: 'Code construction français',
@@ -35,6 +37,7 @@ export const RULE_REGISTRY: Rule[] = [
     id: 'ELEC_DECLARATION',
     category: 'electricite',
     obligation: 'Vérifier déclaration conformité électrique',
+    ruleType: 'regulatory',
     severity: 'high',
     weight: 10,
     source: 'Norme AFNOR',
@@ -43,6 +46,7 @@ export const RULE_REGISTRY: Rule[] = [
     id: 'ELEC_ASSURANCE',
     category: 'electricite',
     obligation: 'Vérifier assurance responsabilité civile',
+    ruleType: 'regulatory',
     severity: 'high',
     weight: 10,
     source: 'Obligation légale',
@@ -53,6 +57,7 @@ export const RULE_REGISTRY: Rule[] = [
     id: 'PLOMB_EAU',
     category: 'plomberie',
     obligation: 'Vérifier conformité normes eau potable',
+    ruleType: 'regulatory',
     severity: 'high',
     weight: 10,
     source: 'Code sanitaire',
@@ -61,6 +66,7 @@ export const RULE_REGISTRY: Rule[] = [
     id: 'PLOMB_ASSURANCE',
     category: 'plomberie',
     obligation: 'Vérifier assurance dommages',
+    ruleType: 'regulatory',
     severity: 'medium',
     weight: 7,
     source: 'Obligation légale',
@@ -71,6 +77,7 @@ export const RULE_REGISTRY: Rule[] = [
     id: 'TOIT_DECLARATION',
     category: 'toiture',
     obligation: 'Vérifier déclaration préalable en mairie',
+    ruleType: 'legal',
     severity: 'high',
     weight: 10,
     source: 'Code urbanisme',
@@ -79,6 +86,7 @@ export const RULE_REGISTRY: Rule[] = [
     id: 'TOIT_CODE',
     category: 'toiture',
     obligation: 'Vérifier conformité code construction',
+    ruleType: 'legal',
     severity: 'critical',
     weight: 15,
     source: 'Code construction français',
@@ -87,6 +95,7 @@ export const RULE_REGISTRY: Rule[] = [
     id: 'TOIT_DECENNALE',
     category: 'toiture',
     obligation: 'Vérifier couverture assurance décennale',
+    ruleType: 'regulatory',
     severity: 'high',
     weight: 10,
     source: 'Loi LATREILLE',
@@ -97,6 +106,7 @@ export const RULE_REGISTRY: Rule[] = [
     id: 'GENERIC_DEVIS',
     category: 'generic',
     obligation: 'Établir devis détaillé',
+    ruleType: 'commercial',
     severity: 'low',
     weight: 3,
     source: 'Bonne pratique',
@@ -105,6 +115,7 @@ export const RULE_REGISTRY: Rule[] = [
     id: 'GENERIC_GARANTIES',
     category: 'generic',
     obligation: 'Vérifier garanties décennales',
+    ruleType: 'regulatory',
     severity: 'high',
     weight: 10,
     source: 'Obligation légale',
