@@ -86,6 +86,30 @@ export interface EngineExecutionContext {
   auditSnapshot?: any;
 
   /**
+   * Enterprise Engine Results
+   * Evaluation of structural reliability of the enterprise
+   */
+  enterprise?: any;
+
+  /**
+   * Pricing Engine Results
+   * Evaluation of pricing coherence relative to complexity
+   */
+  pricing?: any;
+
+  /**
+   * Quality Engine Results
+   * Evaluation of quote professional quality
+   */
+  quality?: any;
+
+  /**
+   * Global Scoring Results
+   * Combined weighted TORP score from all pillars
+   */
+  globalScore?: any;
+
+  /**
    * Timestamp when execution started (ISO 8601)
    */
   executionStartTime?: string;
