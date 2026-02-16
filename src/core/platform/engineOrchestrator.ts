@@ -10,6 +10,7 @@ import { runLotEngine, LotEngineResult } from '@/core/engines/lot.engine';
 import { runRuleEngine, RuleEngineResult } from '@/core/engines/rule.engine';
 import { runScoringEngine, ScoringEngineResult } from '@/core/engines/scoring.engine';
 import { runEnrichmentEngine, EnrichmentEngineResult } from '@/core/engines/enrichment.engine';
+import { runAuditEngine, AuditEngineResult } from '@/core/engines/audit.engine';
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 
 /**
@@ -188,6 +189,18 @@ export async function runOrchestration(
             riskProfile: enrichmentResult.riskProfile,
             processingStrategy: enrichmentResult.processingStrategy,
           };
+
+          engineExecutionResult.status = 'completed';
+          engineExecutionResult.endTime = new Date().toISOString();
+        }
+        // Execute Audit Engine if active (depends on all prior engines - final pipeline stage)
+        else if (engine.id === 'auditEngine') {
+          console.log('[EngineOrchestrator] Executing Audit Engine');
+          const auditResult: AuditEngineResult = await runAuditEngine(executionContext);
+          engineResults['auditEngine'] = auditResult;
+
+          // Populate shared execution context with Audit Engine results
+          executionContext.auditReport = auditResult.report;
 
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
