@@ -16,6 +16,7 @@ import { runPricingEngine, PricingEngineResult } from '@/core/engines/pricing.en
 import { runQualityEngine, QualityEngineResult } from '@/core/engines/quality.engine';
 import { runGlobalScoringEngine, GlobalScoringEngineResult } from '@/core/engines/globalScoring.engine';
 import { runTrustCappingEngine, TrustCappingResult } from '@/core/trust/trustCapping.engine';
+import { runStructuralConsistencyEngine, StructuralConsistencyResult } from '@/core/trust/structuralConsistency.engine';
 import { createAuditSnapshot } from '@/core/platform/auditSnapshot.manager';
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 
@@ -287,6 +288,15 @@ export async function runOrchestration(
             });
           }
 
+          engineExecutionResult.status = 'completed';
+          engineExecutionResult.endTime = new Date().toISOString();
+        }
+        // Execute Structural Consistency Engine if active (analytical pillar balance)
+        else if (engine.id === 'structuralConsistencyEngine') {
+          console.log('[EngineOrchestrator] Executing Structural Consistency Engine');
+          const structuralConsistencyResult: StructuralConsistencyResult = await runStructuralConsistencyEngine(executionContext);
+          engineResults['structuralConsistencyEngine'] = structuralConsistencyResult;
+          executionContext.structuralConsistency = structuralConsistencyResult;
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
         } else {

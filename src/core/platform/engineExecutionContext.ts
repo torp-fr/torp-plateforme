@@ -123,6 +123,13 @@ export interface EngineExecutionContext {
   finalProfessionalGrade?: string;
 
   /**
+   * Structural Consistency Results
+   * Analytical detection of imbalances between pillars
+   * Pure analysis - no impact on scoring or grading
+   */
+  structuralConsistency?: any;
+
+  /**
    * Timestamp when execution started (ISO 8601)
    */
   executionStartTime?: string;
