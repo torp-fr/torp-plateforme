@@ -6,6 +6,7 @@
 
 import { ENGINE_REGISTRY, EngineRegistryEntry } from '@/core/platform/engineRegistry';
 import { runContextEngine, ContextEngineResult } from '@/core/engines/context.engine';
+import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 
 /**
  * Statut d'orchestration
@@ -73,6 +74,14 @@ export async function runOrchestration(
     const engineResults: Record<string, any> = {};
     const executedEngines: EngineExecutionResult[] = [];
 
+    // Create shared execution context for sequential engine pipeline
+    const executionContext: EngineExecutionContext = {
+      projectId: context.projectId || '',
+      projectData: context.data || {},
+      executionStartTime: startTime,
+      currentPhase: 'context',
+    };
+
     // Execute each active engine
     for (const engine of activeEngines) {
       const engineStartTime = new Date().toISOString();
@@ -92,6 +101,15 @@ export async function runOrchestration(
             options: context.options,
           });
           engineResults['contextEngine'] = contextResult;
+
+          // Populate shared execution context with Context Engine results
+          executionContext.context = {
+            detectedLots: contextResult.detectedLots,
+            spaces: contextResult.spaces,
+            flags: contextResult.flags,
+            summary: contextResult.summary,
+          };
+
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
         } else {
@@ -118,7 +136,10 @@ export async function runOrchestration(
       executedEngines,
       totalEngines: ENGINE_REGISTRY.length,
       activeEngines: activeEngines.length,
-      results: engineResults,
+      results: {
+        ...engineResults,
+        executionContext, // Store shared context for pipeline access
+      },
     };
 
     lastOrchestration = result;
