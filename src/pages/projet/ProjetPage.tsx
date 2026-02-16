@@ -30,14 +30,6 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// Import des contenus de phase
-import Phase0Dashboard from '@/pages/phase0/Phase0Dashboard';
-import Phase1Consultation from '@/pages/phase1/Phase1Consultation';
-import Phase2Dashboard from '@/pages/phase2/Phase2Dashboard';
-import Phase3Dashboard from '@/pages/phase3/Phase3Dashboard';
-import Phase4Dashboard from '@/pages/phase4/Phase4Dashboard';
-import Phase5Dashboard from '@/pages/phase5/Phase5Dashboard';
-
 interface Phase {
   id: number;
   key: string;
