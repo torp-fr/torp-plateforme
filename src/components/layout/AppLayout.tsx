@@ -75,11 +75,7 @@ const B2B_NAV_ITEMS: NavItem[] = [
 
 // Navigation pour Admin
 const ADMIN_NAV_ITEMS: NavItem[] = [
-  { href: '/analytics', icon: BarChart3, label: 'Panel d\'Administration', exact: true },
-  { href: '/analytics', icon: LayoutDashboard, label: 'Vue d\'ensemble' },
-  { href: '/analytics', icon: Database, label: 'Base de Connaissances' },
-  { href: '/analytics', icon: Users, label: 'Utilisateurs' },
-  { href: '/analytics', icon: Settings, label: 'Paramètres' },
+  { href: '/analytics', icon: BarChart3, label: 'Tableau de bord', exact: true },
 ];
 
 // Configuration par type d'utilisateur
@@ -265,13 +261,15 @@ export function AppLayout({ children }: AppLayoutProps) {
             })}
           </nav>
 
-          {/* CTA */}
-          <div className="p-4 border-t mt-4">
-            <Button className="w-full" onClick={() => navigate(config.newProjectLink)}>
-              <PlusCircle className="h-4 w-4 mr-2" />
-              {config.newProjectLabel}
-            </Button>
-          </div>
+          {/* CTA - Hide for admin users */}
+          {userType !== 'admin' && userType !== 'super_admin' && (
+            <div className="p-4 border-t mt-4">
+              <Button className="w-full" onClick={() => navigate(config.newProjectLink)}>
+                <PlusCircle className="h-4 w-4 mr-2" />
+                {config.newProjectLabel}
+              </Button>
+            </div>
+          )}
         </aside>
 
         {/* Sidebar - Mobile */}
@@ -306,19 +304,21 @@ export function AppLayout({ children }: AppLayoutProps) {
                 })}
               </nav>
 
-              {/* CTA Mobile */}
-              <div className="p-4 border-t">
-                <Button
-                  className="w-full"
-                  onClick={() => {
-                    setSidebarOpen(false);
-                    navigate(config.newProjectLink);
-                  }}
-                >
-                  <PlusCircle className="h-4 w-4 mr-2" />
-                  {config.newProjectLabel}
-                </Button>
-              </div>
+              {/* CTA Mobile - Hide for admin users */}
+              {userType !== 'admin' && userType !== 'super_admin' && (
+                <div className="p-4 border-t">
+                  <Button
+                    className="w-full"
+                    onClick={() => {
+                      setSidebarOpen(false);
+                      navigate(config.newProjectLink);
+                    }}
+                  >
+                    <PlusCircle className="h-4 w-4 mr-2" />
+                    {config.newProjectLabel}
+                  </Button>
+                </div>
+              )}
             </aside>
           </div>
         )}
