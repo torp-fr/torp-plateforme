@@ -55,31 +55,22 @@ interface NavItem {
 // Navigation pour B2C (particuliers)
 const B2C_NAV_ITEMS: NavItem[] = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord', exact: true },
-  { href: '/phase0/dashboard', icon: Briefcase, label: 'Mes projets' },
-  { href: '/chantiers', icon: Hammer, label: 'Mes chantiers' },
+  { href: '/projets', icon: Briefcase, label: 'Mes projets' },
   { href: '/analyze', icon: FileSearch, label: 'Analyser un devis' },
-  { href: '/compare', icon: Scale, label: 'Comparer devis' },
   { href: '/profile', icon: User, label: 'Mon profil' },
 ];
 
 // Navigation pour B2B (professionnels)
 const B2B_NAV_ITEMS: NavItem[] = [
-  { href: '/pro', icon: LayoutDashboard, label: 'Tableau de bord', exact: true },
-  { href: '/pro/projects', icon: Briefcase, label: 'Mes projets' },
-  { href: '/chantiers', icon: Hammer, label: 'Mes chantiers' },
-  { href: '/pro/documents', icon: FileText, label: 'Documents' },
-  { href: '/b2b/ao', icon: FolderOpen, label: 'Appels d\'offres' },
-  { href: '/pro/analyses', icon: FileSearch, label: 'Analyses devis' },
-  { href: '/pro/settings', icon: Settings, label: 'Paramètres' },
+  { href: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord', exact: true },
+  { href: '/projets', icon: Briefcase, label: 'Mes projets' },
+  { href: '/analyze', icon: FileSearch, label: 'Analyser un devis' },
+  { href: '/profile', icon: User, label: 'Mon profil' },
 ];
 
 // Navigation pour Admin
 const ADMIN_NAV_ITEMS: NavItem[] = [
-  { href: '/analytics', icon: BarChart3, label: 'Panel d\'Administration', exact: true },
-  { href: '/analytics', icon: LayoutDashboard, label: 'Vue d\'ensemble' },
-  { href: '/analytics', icon: Database, label: 'Base de Connaissances' },
-  { href: '/analytics', icon: Users, label: 'Utilisateurs' },
-  { href: '/analytics', icon: Settings, label: 'Paramètres' },
+  { href: '/analytics', icon: BarChart3, label: 'Tableau de bord', exact: true },
 ];
 
 // Configuration par type d'utilisateur
@@ -88,8 +79,8 @@ const USER_TYPE_CONFIG = {
     label: 'Particulier',
     badge: null,
     navItems: B2C_NAV_ITEMS,
-    newProjectLink: '/phase0/new',
-    newProjectLabel: 'Nouveau projet',
+    newProjectLink: '/projets',
+    newProjectLabel: 'Mes projets',
     dashboardLink: '/dashboard',
   },
   B2B: {
@@ -97,9 +88,9 @@ const USER_TYPE_CONFIG = {
     badge: 'PRO',
     badgeColor: 'bg-blue-100 text-blue-700',
     navItems: B2B_NAV_ITEMS,
-    newProjectLink: '/pro/projects/new',
-    newProjectLabel: 'Nouveau projet',
-    dashboardLink: '/pro',
+    newProjectLink: '/projets',
+    newProjectLabel: 'Mes projets',
+    dashboardLink: '/dashboard',
   },
   admin: {
     label: 'Administrateur',
@@ -265,13 +256,15 @@ export function AppLayout({ children }: AppLayoutProps) {
             })}
           </nav>
 
-          {/* CTA */}
-          <div className="p-4 border-t mt-4">
-            <Button className="w-full" onClick={() => navigate(config.newProjectLink)}>
-              <PlusCircle className="h-4 w-4 mr-2" />
-              {config.newProjectLabel}
-            </Button>
-          </div>
+          {/* CTA - Hide for admin users */}
+          {userType !== 'admin' && userType !== 'super_admin' && (
+            <div className="p-4 border-t mt-4">
+              <Button className="w-full" onClick={() => navigate(config.newProjectLink)}>
+                <PlusCircle className="h-4 w-4 mr-2" />
+                {config.newProjectLabel}
+              </Button>
+            </div>
+          )}
         </aside>
 
         {/* Sidebar - Mobile */}
@@ -306,19 +299,21 @@ export function AppLayout({ children }: AppLayoutProps) {
                 })}
               </nav>
 
-              {/* CTA Mobile */}
-              <div className="p-4 border-t">
-                <Button
-                  className="w-full"
-                  onClick={() => {
-                    setSidebarOpen(false);
-                    navigate(config.newProjectLink);
-                  }}
-                >
-                  <PlusCircle className="h-4 w-4 mr-2" />
-                  {config.newProjectLabel}
-                </Button>
-              </div>
+              {/* CTA Mobile - Hide for admin users */}
+              {userType !== 'admin' && userType !== 'super_admin' && (
+                <div className="p-4 border-t">
+                  <Button
+                    className="w-full"
+                    onClick={() => {
+                      setSidebarOpen(false);
+                      navigate(config.newProjectLink);
+                    }}
+                  >
+                    <PlusCircle className="h-4 w-4 mr-2" />
+                    {config.newProjectLabel}
+                  </Button>
+                </div>
+              )}
             </aside>
           </div>
         )}

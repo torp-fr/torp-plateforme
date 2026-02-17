@@ -79,14 +79,14 @@ const NAV_SECTIONS: NavSection[] = [
         href: '/analyze',
         icon: PlusCircle,
         label: 'Nouveau projet',
-        show: 'always',
+        show: 'b2c-only',
       },
       {
         id: 'my-analyses',
         href: '/projets',
         icon: FileSearch,
         label: 'Mes projets & analyses',
-        show: 'always',
+        show: 'b2c-only',
       },
     ],
   },
@@ -99,14 +99,14 @@ const NAV_SECTIONS: NavSection[] = [
         href: '/pro/company',
         icon: Building2,
         label: 'Mon entreprise',
-        show: 'always',
+        show: 'b2c-only',
       },
       {
         id: 'settings',
         href: '/parametres',
         icon: Settings,
         label: 'Paramètres',
-        show: 'always',
+        show: 'b2c-only',
       },
     ],
   },
@@ -120,6 +120,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const isB2B = userType === 'B2B';
+  const isAdmin = userType === 'admin' || userType === 'super_admin';
 
   const handleLogout = async () => {
     try {
@@ -145,7 +146,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const shouldShowItem = (item: NavItem) => {
     if (item.show === 'always') return true;
     if (item.show === 'b2b-only' && isB2B) return true;
-    if (item.show === 'b2c-only' && !isB2B) return true;
+    if (item.show === 'b2c-only' && !isB2B && !isAdmin) return true;
     return false;
   };
 
@@ -234,7 +235,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                   {user?.name || user?.email || 'Utilisateur'}
                 </div>
                 <div className="text-xs text-sidebar-foreground/60">
-                  {isB2B ? 'Professionnel' : 'Particulier'}
+                  {userType === 'admin' ? 'Administrateur' : userType === 'super_admin' ? 'Super Admin' : userType === 'B2B' ? 'Professionnel' : 'Particulier'}
                 </div>
               </div>
               <ChevronDown className="h-4 w-4 text-sidebar-foreground/60" />

@@ -59,35 +59,14 @@ export function useChantiers({
   const { toast } = useToast();
 
   // -------------------------------------------------------------------------
-  // Query: Liste des chantiers
+  // Query: Liste des chantiers (DEPRECATED)
   // -------------------------------------------------------------------------
+  // NOTE: This hook references phase0_projects which was removed in migration 034
   const chantiersQuery = useQuery({
     queryKey: ['chantiers', userType, statusFilter],
     queryFn: async (): Promise<ChantierCard[]> => {
-      // 1. Récupérer les chantiers depuis la table dédiée si elle existe
-      const { data: chantiers, error: chantiersError } = await supabase
-        .from('chantiers')
-        .select('*')
-        .order('updated_at', { ascending: false });
-
-      // Si la table chantiers existe et a des données
-      if (!chantiersError && chantiers && chantiers.length > 0) {
-        return await enrichChantiers(chantiers);
-      }
-
-      // 2. Sinon, construire depuis phase0_projects (projets en exécution)
-      const { data: projects, error: projectsError } = await supabase
-        .from('phase0_projects')
-        .select('*')
-        .in('status', ['validated', 'in_consultation', 'published', 'in_progress'])
-        .order('updated_at', { ascending: false });
-
-      if (projectsError) {
-        console.error('[useChantiers] Error:', projectsError);
-        return [];
-      }
-
-      return await transformProjectsToChantiers(projects || []);
+      console.warn('[useChantiers] This hook is deprecated. Phase 0 tables have been removed.');
+      return [];
     },
     enabled,
     staleTime: 1000 * 60 * 2, // 2 minutes
@@ -106,46 +85,18 @@ export function useChantiers({
   });
 
   // -------------------------------------------------------------------------
-  // Mutation: Mettre à jour le statut d'un chantier
+  // Mutation: Mettre à jour le statut d'un chantier (DEPRECATED)
   // -------------------------------------------------------------------------
+  // NOTE: This mutation references phase0_projects which was removed in migration 034
   const updateStatusMutation = useMutation({
     mutationFn: async ({ chantierId, newStatus }: { chantierId: string; newStatus: ChantierStatus }) => {
-      // Essayer d'abord la table chantiers
-      const { error: chantierError } = await supabase
-        .from('chantiers')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq('id', chantierId);
-
-      if (chantierError && chantierError.code !== 'PGRST116') {
-        // Si pas dans chantiers, mettre à jour phase0_projects
-        const statusMap: Record<ChantierStatus, string> = {
-          preparation: 'in_consultation',
-          en_cours: 'validated',
-          suspendu: 'draft',
-          termine: 'published',
-        };
-
-        const { error } = await supabase
-          .from('phase0_projects')
-          .update({ status: statusMap[newStatus], updated_at: new Date().toISOString() })
-          .eq('project_id', chantierId);
-
-        if (error) throw error;
-      }
-
-      return newStatus;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chantiers'] });
-      toast({
-        title: 'Statut mis à jour',
-        description: 'Le statut du chantier a été modifié.',
-      });
+      console.warn('[useChantiers] updateStatus mutation is disabled - phase0_projects table removed');
+      throw new Error('Cette fonctionnalité n\'est plus disponible après la refonte de l\'architecture.');
     },
     onError: (error: Error) => {
       toast({
-        title: 'Erreur',
-        description: error.message,
+        title: 'Fonctionnalité indisponible',
+        description: 'Cette fonctionnalité n\'est pas disponible avec la nouvelle architecture.',
         variant: 'destructive',
       });
     },
