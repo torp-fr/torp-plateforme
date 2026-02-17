@@ -39,6 +39,12 @@ import Results from "./pages/Results";
 // Admin Pages
 import Analytics from "./pages/Analytics";
 import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
+import { SystemHealthPage } from "./pages/admin/SystemHealthPage";
+import { LiveIntelligencePage } from "./pages/admin/LiveIntelligencePage";
+import { OrchestrationsPage } from "./pages/admin/OrchestrationsPage";
+import { KnowledgeBasePage } from "./pages/admin/KnowledgeBasePage";
+import { SecurityPage } from "./pages/admin/SecurityPage";
+import { AdminSettingsPage } from "./pages/admin/AdminSettingsPage";
 
 const queryClient = new QueryClient();
 
@@ -67,7 +73,13 @@ const AppContent = () => {
           {/* ============================================ */}
           <Route element={<AdminRoute><AdminLayout /></AdminRoute>}>
             <Route path="/analytics" element={<Analytics />} />
-            <Route path="/admin/users" element={<AdminUsersPage />} />
+            <Route path="/analytics/system" element={<SystemHealthPage />} />
+            <Route path="/analytics/intelligence" element={<LiveIntelligencePage />} />
+            <Route path="/analytics/orchestrations" element={<OrchestrationsPage />} />
+            <Route path="/analytics/knowledge" element={<KnowledgeBasePage />} />
+            <Route path="/analytics/security" element={<SecurityPage />} />
+            <Route path="/analytics/settings" element={<AdminSettingsPage />} />
+            <Route path="/analytics/users" element={<AdminUsersPage />} />
           </Route>
 
           {/* ============================================ */}
