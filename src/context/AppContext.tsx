@@ -101,6 +101,7 @@ interface AppContextType {
   currentProject: Project | null;
   isAnalyzing: boolean;
   isLoading: boolean; // État de chargement de l'authentification
+  isAuthenticated: boolean; // Session exists (auth token valid)
   setUser: (user: User | null) => void;
   setUserType: (type: UserType) => void;
   setProjects: (projects: Project[]) => void;
@@ -120,6 +121,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isLoading, setIsLoading] = useState(true); // Chargement initial de l'auth
+  const [isAuthenticated, setIsAuthenticated] = useState(false); // Session exists (auth token valid)
 
   // Compute isAdmin from user
   const isAdmin = user?.isAdmin === true;
@@ -137,13 +139,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         if (currentUser) {
           console.log('✓ Session restaurée:', currentUser.email);
+          setIsAuthenticated(true);
           setUser(currentUser);
           setUserType(currentUser.type);
         } else {
           console.log('ℹ️ Aucune session active');
+          setIsAuthenticated(false);
         }
       } catch (error) {
         console.error('⚠️ Erreur lors de la restauration de session:', error);
+        setIsAuthenticated(false);
         // Ne pas crasher, continuer sans session
       } finally {
         if (isMounted) {
@@ -159,11 +164,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (!isMounted) return;
 
           if (sessionUser) {
-            console.log('✓ Utilisateur connecté:', sessionUser.email);
+            console.log('✓ SIGNED_IN event:', sessionUser.email);
+            // Session exists - user is authenticated
+            setIsAuthenticated(true);
             setUser(sessionUser);
             setUserType(sessionUser.type);
           } else {
-            console.log('ℹ️ Utilisateur déconnecté');
+            console.log('ℹ️ SIGNED_OUT event');
+            // Session cleared - user is not authenticated
+            setIsAuthenticated(false);
             setUser(null);
             setProjects([]);
             setCurrentProject(null);
@@ -287,6 +296,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       currentProject,
       isAnalyzing,
       isLoading,
+      isAuthenticated,
       setUser,
       setUserType,
       setProjects,

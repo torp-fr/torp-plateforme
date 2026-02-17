@@ -23,7 +23,7 @@ export const ProRoute = ({
   redirectTo = '/login',
   allowAdmin = true,
 }: ProRouteProps) => {
-  const { user, isLoading } = useApp();
+  const { user, isLoading, isAuthenticated } = useApp();
   const location = useLocation();
 
   // Show nothing while checking authentication
@@ -39,26 +39,29 @@ export const ProRoute = ({
   }
 
   // Not authenticated - redirect to login
-  if (!user) {
+  if (!isAuthenticated) {
     return <Navigate to={redirectTo} state={{ from: location }} replace />;
   }
 
-  // Check if user is B2B or admin (if allowed)
-  const isAuthorized =
-    user.type === 'B2B' || (allowAdmin && user.type === 'admin');
+  // If we have a profile, check authorization
+  if (user) {
+    // Check if user is B2B or admin (if allowed)
+    const isAuthorized =
+      user.type === 'B2B' || (allowAdmin && user.type === 'admin');
 
-  if (!isAuthorized) {
-    // User is B2C, redirect to B2C dashboard with a message
-    return (
-      <Navigate
-        to="/dashboard"
-        state={{
-          message: 'Cette page est réservée aux professionnels.',
-          from: location,
-        }}
-        replace
-      />
-    );
+    if (!isAuthorized) {
+      // User is B2C, redirect to B2C dashboard with a message
+      return (
+        <Navigate
+          to="/dashboard"
+          state={{
+            message: 'Cette page est réservée aux professionnels.',
+            from: location,
+          }}
+          replace
+        />
+      );
+    }
   }
 
   return <>{children}</>;
@@ -77,7 +80,7 @@ export const ProtectedRoute = ({
   children,
   redirectTo = '/login',
 }: ProtectedRouteProps) => {
-  const { user, isLoading } = useApp();
+  const { isLoading, isAuthenticated } = useApp();
   const location = useLocation();
 
   if (isLoading) {
@@ -91,7 +94,8 @@ export const ProtectedRoute = ({
     );
   }
 
-  if (!user) {
+  // Check session authentication, not profile existence
+  if (!isAuthenticated) {
     return <Navigate to={redirectTo} state={{ from: location }} replace />;
   }
 
@@ -111,7 +115,7 @@ export const AdminRoute = ({
   children,
   redirectTo = '/dashboard',
 }: AdminRouteProps) => {
-  const { user, isLoading } = useApp();
+  const { user, isLoading, isAuthenticated } = useApp();
   const location = useLocation();
 
   if (isLoading) {
@@ -125,11 +129,13 @@ export const AdminRoute = ({
     );
   }
 
-  if (!user) {
+  // Check session authentication first
+  if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (user.type !== 'admin') {
+  // Then check admin role if we have a profile
+  if (user && user.type !== 'admin') {
     return (
       <Navigate
         to={redirectTo}

@@ -166,39 +166,37 @@ export class SupabaseAuthService {
       // Get current session
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
 
-      if (authError) {
-        console.error('[getCurrentUser] Auth error:', authError);
-        return null;
-      }
-
-      if (!authUser) {
-        console.log('[getCurrentUser] No auth user found');
+      // If not authenticated (including 401 Unauthorized), just return null
+      if (authError || !authUser) {
+        console.log('[getCurrentUser] Not authenticated (normal on public pages)');
         return null;
       }
 
       console.log('[getCurrentUser] Auth user found:', authUser.email);
 
-      // Fetch user profile from profiles table
+      // Only try to fetch profile if we have an authenticated user
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', authUser.id)
         .single();
 
+      // If profile doesn't exist (e.g., user pending email confirmation), return null
       if (profileError) {
-        console.error('[getCurrentUser] Profile load error:', profileError);
-        throw new Error('Failed to load user profile');
+        console.log('[getCurrentUser] Profile not found (user pending confirmation):', profileError.message);
+        return null;
       }
 
       if (!profileData) {
-        throw new Error('User profile not found');
+        console.log('[getCurrentUser] Profile data is empty');
+        return null;
       }
 
       const mappedUser = mapDbProfileToAppUser(profileData);
-      console.log('[getCurrentUser] Profile loaded:', mappedUser.email, '- Admin:', mappedUser.isAdmin, '- Role:', mappedUser.role);
+      console.log('[getCurrentUser] Profile loaded:', mappedUser.email);
       return mappedUser;
     } catch (error) {
-      console.error('[getCurrentUser] Exception:', error);
+      console.log('[getCurrentUser] Exception handled gracefully:', error instanceof Error ? error.message : 'Unknown error');
       return null;
     }
   }
