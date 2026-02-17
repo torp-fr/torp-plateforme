@@ -21,7 +21,8 @@ import type {
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const DPE_API_KEY = import.meta.env.VITE_DPE_API_KEY;
-const PAPPERS_API_KEY = import.meta.env.VITE_PAPPERS_API_KEY;
+// NOTE: PAPPERS_API_KEY moved to server-side only (Supabase Edge Function)
+// const PAPPERS_API_KEY = import.meta.env.VITE_PAPPERS_API_KEY;
 
 const APICARTO_URL = 'https://api.apicarto.gouv.fr';
 const GOOGLE_MAPS_URL = 'https://maps.googleapis.com/maps/api';
