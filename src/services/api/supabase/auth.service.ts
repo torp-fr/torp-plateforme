@@ -137,34 +137,51 @@ export class SupabaseAuthService {
       throw new Error('Registration failed');
     }
 
-    // Phase 32.3: Profile creation now happens automatically via database trigger
-    // The trigger (on_auth_user_created) creates a profile when auth user is created
-    // Wait a small moment for the trigger to execute
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Wait for JWT session to be established before profile insert
+    // RLS policies require auth.uid() to be set, which happens when session is active
+    const MAX_SESSION_RETRIES = 10;
+    const SESSION_RETRY_DELAY = 200;
+    let session = authData.session;
 
-    // Fetch the auto-created profile from the profiles table
+    for (let attempt = 0; attempt < MAX_SESSION_RETRIES && !session; attempt++) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session) {
+        session = sessionData.session;
+        break;
+      }
+      if (attempt < MAX_SESSION_RETRIES - 1) {
+        await new Promise(res => setTimeout(res, SESSION_RETRY_DELAY));
+      }
+    }
+
+    if (!session) {
+      throw new Error('Failed to establish session after registration');
+    }
+
+    // Create profile with active session (RLS enabled)
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
-      .select('*')
-      .eq('id', authData.user.id)
+      .insert({
+        id: authData.user.id,
+        email: data.email,
+        full_name: data.name,
+        role: 'user',
+        can_upload_kb: false,
+      })
+      .select()
       .single();
 
     if (profileError) {
-      console.error('[Register] Profile fetch error:', profileError);
-      throw new Error('Failed to load user profile after registration');
-    }
-
-    if (!profileData) {
-      throw new Error('User profile was not created');
+      console.error('[Register] Profile insert error:', profileError);
+      throw new Error('Failed to create user profile');
     }
 
     const mappedUser = mapDbProfileToAppUser(profileData as DbProfile);
-    console.log('✓ Registration successful:', mappedUser.email, '- Profile auto-created by trigger');
 
     return {
       user: mappedUser,
-      token: authData.session?.access_token || '',
-      refreshToken: authData.session?.refresh_token,
+      token: session.access_token || '',
+      refreshToken: session.refresh_token,
     };
   }
 
