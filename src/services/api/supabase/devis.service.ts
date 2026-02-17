@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { env } from '@/config/env';
 import { DevisData, TorpAnalysisResult } from '@/types/torp';
 import type { Database } from '@/types/supabase';
+import { STORAGE_BUCKETS } from '@/constants/storage';
 import { pdfExtractorService } from '@/services/pdf/pdf-extractor.service';
 import { torpAnalyzerService } from '@/services/ai/torp-analyzer.service';
 import {
@@ -110,134 +111,90 @@ export class SupabaseDevisService {
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
     const filePath = `${authenticatedUserId}/${timestamp}_${sanitizedFileName}`;
 
-    // Upload file to Supabase Storage
+    // Upload file to Supabase Storage using official SDK
     console.log('[DevisService] Uploading file to Storage:', {
-      bucket: 'devis-uploads',
+      bucket: STORAGE_BUCKETS.DEVIS,
       filePath,
       fileSize: file.size,
       fileType: file.type
     });
 
-    // Use direct REST API instead of SDK to avoid blocking issue
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    try {
+      const { data: uploadedFile, error: uploadError } = await supabase.storage
+        .from(STORAGE_BUCKETS.DEVIS)
+        .upload(filePath, file, {
+          contentType: file.type,
+          upsert: false,
+        });
 
-    // Get user session token from localStorage (where Supabase stores it)
-    const supabaseAuthKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
-    const sessionData = localStorage.getItem(supabaseAuthKey);
-
-    let accessToken;
-    if (sessionData) {
-      try {
-        const session = JSON.parse(sessionData);
-        accessToken = session.access_token;
-        console.log('[DevisService] Using user session token for upload');
-      } catch (e) {
-        console.error('[DevisService] Failed to parse session:', e);
+      if (uploadError) {
+        console.error('[DevisService] Storage upload error:', uploadError);
+        throw new Error(`Failed to upload file: ${uploadError.message}`);
       }
-    }
 
-    // Fallback to anon key if no session token
-    if (!accessToken) {
-      accessToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      console.log('[DevisService] Using anon key as fallback');
-    }
+      console.log('[DevisService] File uploaded successfully:', uploadedFile);
 
-    console.log('[DevisService] Using direct API upload...');
-    const uploadUrl = `${supabaseUrl}/storage/v1/object/devis-uploads/${filePath}`;
+      // Get public URL for the file
+      const { data: { publicUrl } } = supabase.storage
+        .from(STORAGE_BUCKETS.DEVIS)
+        .getPublicUrl(filePath);
 
-    const uploadResponse = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': file.type,
-      },
-      body: file,
-    });
+      // Create devis record in database using SDK
+      const devisInsert: DbDevisInsert = {
+        user_id: authenticatedUserId,
+        nom_projet: projectName,
+        type_travaux: metadata?.typeTravaux || null,
+        montant_total: 0, // Will be updated after analysis
+        file_url: publicUrl,
+        file_name: file.name,
+        file_size: file.size,
+        file_type: file.type,
+        status: 'uploaded',
+      };
 
-    if (!uploadResponse.ok) {
-      const errorText = await uploadResponse.text();
-      console.error('[DevisService] Storage upload error:', errorText);
-      throw new Error(`Failed to upload file: ${uploadResponse.status} ${errorText}`);
-    }
+      console.log('[DevisService] Inserting devis record:', devisInsert);
 
-    const uploadData = await uploadResponse.json();
-    console.log('[DevisService] File uploaded successfully:', uploadData);
-
-    // Get public URL for the file
-    const { data: { publicUrl } } = supabase.storage
-      .from('devis-uploads')
-      .getPublicUrl(filePath);
-
-    // Create devis record in database
-    const devisInsert: DbDevisInsert = {
-      user_id: authenticatedUserId,
-      nom_projet: projectName,
-      type_travaux: metadata?.typeTravaux || null,
-      montant_total: 0, // Will be updated after analysis
-      file_url: publicUrl,
-      file_name: file.name,
-      file_size: file.size,
-      file_type: file.type,
-      status: 'uploaded',
-    };
-
-    console.log('[DevisService] Inserting devis record:', devisInsert);
-
-    // Use direct REST API for insert as well (SDK blocks like storage.upload did)
-    const insertUrl = `${supabaseUrl}/rest/v1/devis`;
-    const insertResponse = await fetch(insertUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=representation',
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify(devisInsert),
-    });
-
-    if (!insertResponse.ok) {
-      const errorText = await insertResponse.text();
-      console.error('[DevisService] Database insert error:', errorText);
-      // Clean up uploaded file if database insert fails
-      const deleteUrl = `${supabaseUrl}/storage/v1/object/devis-uploads/${filePath}`;
-      await fetch(deleteUrl, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${accessToken}` },
-      });
-      throw new Error(`Failed to create devis record: ${insertResponse.status} ${errorText}`);
-    }
-
-    const devisDataArray = await insertResponse.json();
-    const devisData = devisDataArray[0];
-    console.log('[DevisService] Devis record created successfully:', devisData);
-
-    // Trigger async analysis - update status to analyzing
-    const updateUrl = `${supabaseUrl}/rest/v1/devis?id=eq.${devisData.id}`;
-    await fetch(updateUrl, {
-      method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({ status: 'analyzing' }),
-    });
-
-    // Start analysis in background (don't await to avoid blocking upload response)
-    this.analyzeDevisById(devisData.id, file, metadata).catch((error) => {
-      console.error(`[Devis] Analysis failed for ${devisData.id}:`, error);
-      // Update status to failed
-      supabase
+      const { data: devisData, error: insertError } = await supabase
         .from('devis')
-        .update({ status: 'uploaded' })
-        .eq('id', devisData.id);
-    });
+        .insert(devisInsert)
+        .select()
+        .single();
 
-    return {
-      id: devisData.id,
-      status: 'analyzing',
-    };
+      if (insertError) {
+        console.error('[DevisService] Database insert error:', insertError);
+        // Clean up uploaded file if database insert fails
+        await supabase.storage
+          .from(STORAGE_BUCKETS.DEVIS)
+          .remove([filePath]);
+        throw new Error(`Failed to create devis record: ${insertError.message}`);
+      }
+
+      console.log('[DevisService] Devis record created successfully:', devisData);
+
+      // Update status to analyzing
+      await supabase
+        .from('devis')
+        .update({ status: 'analyzing' })
+        .eq('id', devisData.id);
+
+      // Start analysis in background (don't await to avoid blocking upload response)
+      this.analyzeDevisById(devisData.id, file, metadata).catch((error) => {
+        console.error(`[Devis] Analysis failed for ${devisData.id}:`, error);
+        // Update status to failed
+        supabase
+          .from('devis')
+          .update({ status: 'uploaded' })
+          .eq('id', devisData.id);
+      });
+
+      return {
+        id: devisData.id,
+        status: 'analyzing',
+      };
+    } catch (error) {
+      console.error('[DevisService] Upload process error:', error);
+      throw error;
+    }
   }
 
   /**
@@ -266,7 +223,7 @@ export class SupabaseDevisService {
         // Download file from storage
         const filePath = new URL(devisData.file_url).pathname.split('/').slice(-3).join('/');
         const { data: fileData, error: downloadError } = await supabase.storage
-          .from('devis-uploads')
+          .from(STORAGE_BUCKETS.DEVIS)
           .download(filePath);
 
         if (downloadError || !fileData) {
@@ -763,7 +720,7 @@ The system will analyze the devis content, pricing, and recommendations to give 
 
     // Delete from storage
     const { error: storageError } = await supabase.storage
-      .from('devis-uploads')
+      .from(STORAGE_BUCKETS.DEVIS)
       .remove([filePath]);
 
     if (storageError) {
