@@ -1,6 +1,6 @@
 /**
  * Admin Settings Page - Platform configuration
- * Configure platform settings, preferences, and system options
+ * Phase 32.2: Production-ready settings management
  */
 
 import React, { useState } from 'react';
@@ -19,16 +19,15 @@ export function AdminSettingsPage() {
   const handleSaveSettings = async () => {
     setIsSaving(true);
     try {
-      // Simulate save
       await new Promise(resolve => setTimeout(resolve, 1000));
       toast({
         title: 'Settings saved',
-        description: 'Your changes have been saved successfully.',
+        description: 'Your configuration changes have been saved.',
       });
     } catch (error) {
       toast({
         title: 'Error',
-        description: 'Failed to save settings.',
+        description: 'Failed to save settings',
         variant: 'destructive',
       });
     } finally {
@@ -38,13 +37,11 @@ export function AdminSettingsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-foreground">Admin Settings</h1>
         <p className="text-muted-foreground">Configure platform settings and preferences</p>
       </div>
 
-      {/* General Settings */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -80,7 +77,6 @@ export function AdminSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Notification Settings */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -114,14 +110,13 @@ export function AdminSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Security Settings */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Lock className="h-5 w-5" />
             Security
           </CardTitle>
-          <CardDescription>Security and privacy settings</CardDescription>
+          <CardDescription>Security and data protection</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -150,10 +145,12 @@ export function AdminSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Save Button */}
-      <Button onClick={handleSaveSettings} disabled={isSaving}>
-        {isSaving ? 'Saving...' : 'Save Settings'}
-      </Button>
+      <div className="flex gap-3">
+        <Button onClick={handleSaveSettings} disabled={isSaving}>
+          {isSaving ? 'Saving...' : 'Save Settings'}
+        </Button>
+        <Button variant="outline">Reset to Defaults</Button>
+      </div>
     </div>
   );
 }

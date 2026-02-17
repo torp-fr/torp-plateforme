@@ -180,9 +180,18 @@ export const env: EnvConfig = {
 export const validateEnv = (): void => {
   const requiredVars: string[] = [];
 
+  // CRITICAL: Phase 32.2 - Block mocks in production
+  if (env.app.env === 'production' && env.api.useMock === true) {
+    throw new Error(
+      '🚫 CRITICAL: Mock data/API is strictly forbidden in production. Set VITE_MOCK_API=false in production environment.'
+    );
+  }
+
   // In production, require real auth configuration
   if (env.app.env === 'production' && env.auth.provider === 'mock') {
-    console.warn('⚠️  WARNING: Using mock authentication in production!');
+    throw new Error(
+      '🚫 CRITICAL: Mock authentication is forbidden in production. Set VITE_AUTH_PROVIDER to a real provider (supabase, auth0, firebase).'
+    );
   }
 
   // Validate production-specific requirements

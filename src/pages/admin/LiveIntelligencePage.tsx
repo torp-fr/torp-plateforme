@@ -1,13 +1,80 @@
 /**
  * Live Intelligence Page - Real-time analytics
- * Displays real-time platform insights and activity
+ * Phase 32.2: Real data from Supabase
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { TrendingUp, Users, FileText, MessageSquare } from 'lucide-react';
+import { TrendingUp, Users, FileText, Loader2 } from 'lucide-react';
+import { analyticsService } from '@/services/api/analytics.service';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { useToast } from '@/hooks/use-toast';
+
+interface GlobalStats {
+  userCount: number;
+  analysisCount: number;
+  analysisLast30: number;
+  growth: string;
+}
 
 export function LiveIntelligencePage() {
+  const [stats, setStats] = useState<GlobalStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setIsLoading(true);
+        const data = await analyticsService.getGlobalStats();
+        setStats(data);
+        setError(null);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to fetch statistics';
+        setError(message);
+        toast({
+          title: 'Erreur',
+          description: message,
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchStats();
+    // Refresh every 60 seconds
+    const interval = setInterval(fetchStats, 60000);
+    return () => clearInterval(interval);
+  }, [toast]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title="Impossible de charger les données"
+        description={error}
+      />
+    );
+  }
+
+  if (!stats) {
+    return (
+      <EmptyState
+        title="Aucune donnée disponible"
+        description="Les données apparaîtront ici lorsque le système sera utilisé"
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -20,79 +87,60 @@ export function LiveIntelligencePage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,247</div>
-            <p className="text-xs text-muted-foreground">+5% from last hour</p>
+            <div className="text-2xl font-bold">{stats.userCount.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">Platform users</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Devis Analyzed</CardTitle>
+            <CardTitle className="text-sm font-medium">Analyses Completed</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">3,891</div>
-            <p className="text-xs text-muted-foreground">+12% this week</p>
+            <div className="text-2xl font-bold">{stats.analysisCount.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">All time</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg. Score</CardTitle>
+            <CardTitle className="text-sm font-medium">Analyses (30d)</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">742</div>
-            <p className="text-xs text-muted-foreground">Out of 1000</p>
+            <div className="text-2xl font-bold">{stats.analysisLast30.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">Last month</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Messages</CardTitle>
-            <MessageSquare className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Growth</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">128</div>
-            <p className="text-xs text-muted-foreground">Awaiting response</p>
+            <div className="text-2xl font-bold">{stats.growth}</div>
+            <p className="text-xs text-muted-foreground">vs previous month</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Activity Stream */}
+      {/* Activity Info */}
       <Card>
         <CardHeader>
           <CardTitle>Recent Activity</CardTitle>
           <CardDescription>Latest platform events</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            <div className="flex items-start gap-3">
-              <div className="h-2 w-2 rounded-full bg-blue-500 mt-1.5" />
-              <div>
-                <p className="text-sm font-medium">New user registered</p>
-                <p className="text-xs text-muted-foreground">5 minutes ago</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <div className="h-2 w-2 rounded-full bg-green-500 mt-1.5" />
-              <div>
-                <p className="text-sm font-medium">Devis analysis completed</p>
-                <p className="text-xs text-muted-foreground">2 minutes ago</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <div className="h-2 w-2 rounded-full bg-orange-500 mt-1.5" />
-              <div>
-                <p className="text-sm font-medium">System backup executed</p>
-                <p className="text-xs text-muted-foreground">1 hour ago</p>
-              </div>
-            </div>
-          </div>
+          <EmptyState
+            title="No activity yet"
+            description="Platform activity will appear here as users interact with the system"
+          />
         </CardContent>
       </Card>
     </div>

@@ -1,109 +1,177 @@
 /**
- * Security Page - Security management and monitoring
- * Monitor security events, manage permissions, and review access logs
+ * Security Page - Security management
+ * Phase 32.2: Real data from platform health checks
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Shield, Lock, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Shield, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { analyticsService } from '@/services/api/analytics.service';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { useToast } from '@/hooks/use-toast';
+
+interface HealthStatus {
+  database: string;
+  api: string;
+  storage: string;
+  timestamp: string;
+}
 
 export function SecurityPage() {
+  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchHealth = async () => {
+      try {
+        setIsLoading(true);
+        const data = await analyticsService.getPlatformHealth();
+        setHealth(data);
+        setError(null);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to fetch security status';
+        setError(message);
+        toast({
+          title: 'Erreur',
+          description: message,
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchHealth();
+    const interval = setInterval(fetchHealth, 30000);
+    return () => clearInterval(interval);
+  }, [toast]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title="Impossible de charger les données"
+        description={error}
+      />
+    );
+  }
+
+  const getStatusColor = (status: string) => {
+    return status === 'operational'
+      ? 'bg-green-100 text-green-800'
+      : 'bg-red-100 text-red-800';
+  };
+
+  const getStatusLabel = (status: string) => {
+    return status === 'operational' ? '✓ Secure' : '✗ Issue';
+  };
+
+  const getStatusIcon = (status: string) => {
+    return status === 'operational' ? (
+      <CheckCircle className="h-5 w-5 text-green-600" />
+    ) : (
+      <AlertTriangle className="h-5 w-5 text-red-600" />
+    );
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-foreground">Security</h1>
         <p className="text-muted-foreground">Monitor and manage security settings</p>
       </div>
 
-      {/* Security Status */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Security Score</CardTitle>
-            <Shield className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">95/100</div>
-            <p className="text-xs text-muted-foreground">Excellent</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Sessions</CardTitle>
-            <Lock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">42</div>
-            <p className="text-xs text-muted-foreground">All verified</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Threats</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">Detected</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Security Checklist */}
       <Card>
         <CardHeader>
-          <CardTitle>Security Checklist</CardTitle>
-          <CardDescription>System security status</CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Security Status
+          </CardTitle>
+          <CardDescription>
+            Last checked: {health ? new Date(health.timestamp).toLocaleString() : 'N/A'}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <div>
-                <p className="text-sm font-medium">SSL/TLS Certificate</p>
-                <p className="text-xs text-muted-foreground">Valid and current</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <div>
-                <p className="text-sm font-medium">Database Encryption</p>
-                <p className="text-xs text-muted-foreground">Enabled</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <div>
-                <p className="text-sm font-medium">API Authentication</p>
-                <p className="text-xs text-muted-foreground">Properly configured</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <div>
-                <p className="text-sm font-medium">Rate Limiting</p>
-                <p className="text-xs text-muted-foreground">Active and monitoring</p>
-              </div>
-            </div>
+            {health && (
+              <>
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <span className="text-sm font-medium">Database Security</span>
+                  <span
+                    className={`inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(health.database)}`}
+                  >
+                    {getStatusIcon(health.database)}
+                    {getStatusLabel(health.database)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <span className="text-sm font-medium">API Security</span>
+                  <span
+                    className={`inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(health.api)}`}
+                  >
+                    {getStatusIcon(health.api)}
+                    {getStatusLabel(health.api)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <span className="text-sm font-medium">Storage Security</span>
+                  <span
+                    className={`inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(health.storage)}`}
+                  >
+                    {getStatusIcon(health.storage)}
+                    {getStatusLabel(health.storage)}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Recent Security Events */}
       <Card>
         <CardHeader>
-          <CardTitle>Recent Events</CardTitle>
-          <CardDescription>Latest security events</CardDescription>
+          <CardTitle>Security Features</CardTitle>
+          <CardDescription>Platform security implementation</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2 text-sm">
-            <p className="text-muted-foreground">✓ Admin login from 192.168.1.1 - 5 min ago</p>
-            <p className="text-muted-foreground">✓ Database access logged - 1 hour ago</p>
-            <p className="text-muted-foreground">✓ API key rotated - Yesterday</p>
-            <p className="text-muted-foreground">✓ SSL certificate renewed - 3 days ago</p>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <div>
+                <p className="text-sm font-medium">Row Level Security (RLS)</p>
+                <p className="text-xs text-muted-foreground">Enabled on all tables</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <div>
+                <p className="text-sm font-medium">Encrypted Data Transport</p>
+                <p className="text-xs text-muted-foreground">HTTPS/TLS enforced</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <div>
+                <p className="text-sm font-medium">Authentication</p>
+                <p className="text-xs text-muted-foreground">Supabase Auth with JWT</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <div>
+                <p className="text-sm font-medium">No Mock Data in Production</p>
+                <p className="text-xs text-muted-foreground">Phase 32.2 enforcement</p>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>

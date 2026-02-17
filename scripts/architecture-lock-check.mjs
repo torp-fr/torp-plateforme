@@ -310,6 +310,68 @@ if (VIOLATIONS.critical.filter((v) => v.type === 'USERS_TABLE_REFERENCE').length
 }
 
 // ============================================================================
+// CHECK 6: No Mock Data In Production (PHASE 32.2)
+// ============================================================================
+console.log('\n🔍 CHECK 6: No Mock Data In Production');
+console.log('-'.repeat(80));
+
+function scanMockDataReferences(dir) {
+  const mockPatterns = [
+    'mockData',
+    'mockAnalytics',
+    'mockEngine',
+    'mockIntelligence',
+    'fakeData',
+    'useMock',
+    "from('users')", // Ensure no mock users table
+  ];
+
+  for (const file of fs.readdirSync(dir)) {
+    const full = path.join(dir, file);
+    const stat = fs.statSync(full);
+
+    if (stat.isDirectory() && !file.startsWith('.') && file !== 'node_modules') {
+      scanMockDataReferences(full);
+    } else if ((file.endsWith('.ts') || file.endsWith('.tsx')) && !file.endsWith('.d.ts')) {
+      // Skip test and config files
+      if (file.includes('.test.') || file.includes('.spec.') || file.includes('config/')) {
+        continue;
+      }
+
+      const content = fs.readFileSync(full, 'utf-8');
+
+      // Check for mock data in active code (not in services/api/mock/ folder)
+      if (!full.includes('services/api/mock/')) {
+        mockPatterns.forEach((pattern) => {
+          if (content.includes(pattern)) {
+            VIOLATIONS.critical.push({
+              file: full,
+              type: 'MOCK_DATA_IN_PRODUCTION',
+              message: `Mock data pattern detected: ${pattern}. Use real analytics.service.ts instead.`,
+              severity: 'CRITICAL',
+            });
+          }
+        });
+      }
+    }
+  }
+}
+
+scanMockDataReferences(ROOT);
+
+if (VIOLATIONS.critical.filter((v) => v.type === 'MOCK_DATA_IN_PRODUCTION').length === 0) {
+  console.log('✅ PASS: No mock data detected in production code');
+  console.log('   All analytics use real Supabase queries (Phase 32.2)');
+} else {
+  console.log('❌ FAIL: Mock data detected in production code');
+  VIOLATIONS.critical
+    .filter((v) => v.type === 'MOCK_DATA_IN_PRODUCTION')
+    .forEach((v) => {
+      console.log(`   ${v.file}: ${v.message}`);
+    });
+}
+
+// ============================================================================
 // SUMMARY
 // ============================================================================
 console.log('\n' + '='.repeat(80));
@@ -322,6 +384,7 @@ console.log('  • External API calls (from frontend) blocked');
 console.log('  • Sensitive environment variables prohibited');
 console.log('  • Service layer access enforced');
 console.log('  • "users" table references eliminated (profiles table only)');
+console.log('  • No mock data in production code');
 
 if (VIOLATIONS.critical.length > 0) {
   console.log('\n❌ CRITICAL VIOLATIONS:');
