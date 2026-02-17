@@ -5,14 +5,11 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '@/context/AppContext';
 import { adminService, type AdminUser } from '@/services/api/supabase/admin.service';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  AlertCircle,
   Users,
   Shield,
   ShieldOff,
@@ -24,25 +21,10 @@ import {
 
 export function AdminUsersPage() {
   const navigate = useNavigate();
-  const { userType } = useApp();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // Check if user is admin
-  if (userType !== 'admin' && userType !== 'super_admin') {
-    return (
-      <div className="space-y-8">
-        <Alert className="bg-destructive/10 border-destructive/20">
-          <AlertCircle className="h-4 w-4 text-destructive" />
-          <AlertDescription className="text-destructive">
-            <strong>Accès refusé</strong> - Cette page est réservée aux administrateurs.
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
 
   // Load users
   useEffect(() => {
