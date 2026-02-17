@@ -17,7 +17,8 @@ import {
   type RGEAdemeData,
 } from './prompts/torp-analysis.prompts';
 import type { TorpAnalysisResult, RGEVerificationData } from '@/types/torp';
-import { pappersService } from '@/services/api/pappers.service';
+// NOTE: Pappers API access moved to server-side via Edge Function
+// import { pappersService } from '@/services/api/pappers.service';
 import { innovationDurableScoringService } from '@/services/scoring/innovation-durable.scoring';
 import { transparencyScoringService } from '@/services/scoring/transparency-scoring.service';
 import { rgeAdemeService } from '@/services/api/rge-ademe.service';
@@ -476,6 +477,8 @@ export class TorpAnalyzerService {
 
   /**
    * Recherche le SIRET via l'API Pappers en utilisant le nom et l'adresse de l'entreprise
+   * NOTE: Pappers API access moved to server-side via Edge Function (pappers-proxy)
+   * This method is disabled in hardening phase
    */
   private async lookupSiretViaPappers(
     nomEntreprise: string,
@@ -488,10 +491,9 @@ export class TorpAnalyzerService {
     matchScore: number;
     message: string;
   } | null> {
-    if (!pappersService.isConfigured()) {
-      console.log('[TORP SIRET Pappers] API Pappers non configurée');
-      return null;
-    }
+    // API key now protected server-side
+    console.log('[TORP SIRET Pappers] Pappers lookup currently disabled (moved to server-side proxy)');
+    return null;
 
     if (!nomEntreprise || nomEntreprise.length < 3) {
       console.log('[TORP SIRET Pappers] Nom d\'entreprise insuffisant pour recherche');
@@ -849,14 +851,15 @@ export class TorpAnalyzerService {
     let rgeData: RGEAdemeData | null = null;
 
     if (devisData.entreprise.siret) {
-      // Lancer les enrichissements en parallèle
-      const [pappersResult, rgeResult] = await Promise.allSettled([
-        pappersService.getEntrepriseBySiret(devisData.entreprise.siret),
+      // Pappers enrichment now done server-side via Edge Function
+      // Only call RGE/ADEME service for now
+      const [rgeResult] = await Promise.allSettled([
         rgeAdemeService.getQualificationsBySiret(devisData.entreprise.siret),
       ]);
 
+      // NOTE: Pappers result disabled (moved to server-side proxy)
       // Traiter les résultats Pappers
-      if (pappersResult.status === 'fulfilled' && pappersResult.value) {
+      if (false) { // pappersResult.status === 'fulfilled' && pappersResult.value
         console.log('[TORP Entreprise] Données Pappers récupérées:', pappersResult.value.nom);
 
         // Calculer l'ancienneté

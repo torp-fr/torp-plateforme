@@ -1,24 +1,15 @@
 /**
  * Service Supabase - Gestion données enrichies, CCF, analyses
- * Migre localStorage → Supabase pgvector
+ * REFACTORED: Uses centralized Supabase client from /lib/supabase.ts
+ *
+ * ⚠️ SINGLE SOURCE OF TRUTH
+ * This service does NOT instantiate Supabase.
+ * It imports the centralized client instead.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import type { CCFData } from '@/components/guided-ccf/GuidedCCF';
 import type { EnrichedClientData } from '@/types/enrichment';
-
-// ============================================================================
-// CLIENT SUPABASE
-// ============================================================================
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.warn('⚠️ Supabase not configured');
-}
-
-const supabase = createClient(SUPABASE_URL || '', SUPABASE_KEY || '');
 
 // ============================================================================
 // TYPES
@@ -455,5 +446,8 @@ export async function migrateFromLocalStorage(): Promise<boolean> {
     return false;
   }
 }
+
+// Re-export centralized client for backwards compatibility
+export { supabase };
 
 export default supabase;
