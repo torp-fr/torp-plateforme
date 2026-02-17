@@ -28,6 +28,16 @@ export interface AnalysisRequest {
  * 1. Upload devis file
  * 2. Create analysis job
  * 3. Return job ID for status tracking
+ *
+ * @deprecated PHASE 34.4: This function is replaced by the cleaner architecture using:
+ * - devisService.uploadDevis() for Step 1 (file upload)
+ * - devisService.analyzeDevisById() for Step 2 (analysis)
+ *
+ * The new architecture separates concerns: upload happens in Step 1,
+ * analysis happens in Step 2 using the devisId, avoiding file re-upload.
+ *
+ * This function is kept for backward compatibility but should not be used
+ * for new code. See PHASE_34_4_CLEAN_ARCHITECTURE.md for details.
  */
 export async function requestAnalysis(request: AnalysisRequest): Promise<string> {
   const startTime = Date.now();

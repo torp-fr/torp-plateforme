@@ -9,7 +9,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, FileText, Clock, Shield, CheckCircle, Home, Zap, Droplet, Paintbrush, Download, Loader2 } from 'lucide-react';
-import { analysisService } from '@/services/api/analysis.service';
+import { devisService } from '@/services/api/supabase/devis.service';
+import type { DevisMetadata } from '@/services/api/supabase/devis.service';
 
 const projectTypes = [
   { id: 'plomberie', label: 'Plomberie', icon: Droplet },
@@ -94,21 +95,69 @@ export default function Analyze() {
     }
   }, [handleFileUpload]);
 
+  // PHASE 34.4: Upload file and move to Step 2 (new clean architecture)
+  const handleContinueToStep2 = async () => {
+    console.log('[PHASE 34.4] handleContinueToStep2 called');
+
+    if (!uploadedFile || !user) {
+      console.error('[PHASE 34.4] Missing file or user');
+      toast({
+        title: 'Erreur',
+        description: 'Fichier manquant ou utilisateur non authentifié',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    try {
+      setIsAnalyzing(true);
+      setAnalysisProgress(['Upload du devis en cours...']);
+
+      console.log('[PHASE 34.4] Uploading file:', uploadedFile.name);
+
+      // Upload and get devisId
+      const uploadResult = await devisService.uploadDevis(
+        user.id,
+        uploadedFile,
+        projectData.name || 'Sans titre'
+      );
+
+      console.log('[PHASE 34.4] Upload complete, devisId:', uploadResult.id);
+
+      // Store devisId and move to Step 2
+      setCurrentDevisId(uploadResult.id);
+      setAnalysisProgress(prev => [...prev, 'Devis uploadé avec succès!']);
+
+      // Small delay for UX feedback
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      setIsAnalyzing(false);
+      setStep(2);
+    } catch (error) {
+      console.error('[PHASE 34.4] Upload error:', error);
+      setIsAnalyzing(false);
+      toast({
+        title: 'Erreur d\'upload',
+        description: error instanceof Error ? error.message : 'Une erreur est survenue',
+        variant: 'destructive'
+      });
+    }
+  };
+
   const handleAnalyze = async () => {
-    console.log('[STEP 2] FUNCTION ENTERED - handleAnalyze called');
-    console.log('[STEP 2] Current state:', {
-      uploadedFile: !!uploadedFile,
+    console.log('[PHASE 34.4] handleAnalyze called - CLEAN ARCHITECTURE');
+    console.log('[PHASE 34.4] Current state:', {
+      devisId: currentDevisId,
       projectName: projectData.name,
       projectType: projectData.type,
       isAnalyzing,
       userExists: !!user,
     });
 
-    // Validation check
-    if (!uploadedFile || !projectData.name || !projectData.type) {
-      console.log('[STEP 2] Validation failed - missing required fields');
-      console.log('[STEP 2] Validation details:', {
-        uploadedFile: !!uploadedFile,
+    // PHASE 34.4: Validation - NO LONGER check uploadedFile (it's lost after navigation)
+    if (!projectData.name || !projectData.type) {
+      console.warn('[PHASE 34.4] Validation failed - missing required fields');
+      console.log('[PHASE 34.4] Validation details:', {
         projectName: !!projectData.name,
         projectType: !!projectData.type,
       });
@@ -120,14 +169,26 @@ export default function Analyze() {
       return;
     }
 
+    // PHASE 34.4: Verify devisId exists (the file was uploaded in Step 1)
+    if (!currentDevisId) {
+      console.error('[PHASE 34.4] No devisId found - cannot analyze');
+      toast({
+        title: 'Erreur',
+        description: 'Devis non trouvé. Veuillez retourner à l\'étape 1.',
+        variant: 'destructive'
+      });
+      setStep(1);
+      return;
+    }
+
     try {
-      console.log('[STEP 2] Validation passed - proceeding with analysis');
+      console.log('[PHASE 34.4] Validation passed - proceeding with analysis');
       setIsAnalyzing(true);
       setAnalysisProgress(['Préparation de l\'analyse...']);
 
       // Check if user is authenticated
       if (!user) {
-        console.log('[STEP 2] User not authenticated - redirecting to login');
+        console.log('[PHASE 34.4] User not authenticated - redirecting to login');
         toast({
           title: 'Non authentifié',
           description: 'Veuillez vous connecter pour analyser un devis.',
@@ -137,47 +198,53 @@ export default function Analyze() {
         return;
       }
 
-      console.log('[STEP 2] User authenticated:', user.id);
-      console.log('[STEP 2] Calling analysisService.requestAnalysis()');
-      setAnalysisProgress(prev => [...prev, 'Upload du devis en cours...']);
+      console.log('[PHASE 34.4] User authenticated:', user.id);
+      console.log('[PHASE 34.4] Using devisId:', currentDevisId);
 
-      // Phase 32.1: Request async analysis instead of synchronous
-      const jobId = await analysisService.requestAnalysis({
-        userId: user.id,
-        file: uploadedFile,
-        projectName: projectData.name,
-        projectType: projectData.type,
+      // Build metadata from form data
+      const metadata: DevisMetadata = {
+        nom: projectData.name,
+        typeTravaux: projectData.type,
         budget: projectData.budget,
         surface: projectData.surface ? parseFloat(projectData.surface) : undefined,
         description: projectData.description,
-        startDate: projectData.startDate,
-        urgency: projectData.urgency,
-        constraints: projectData.constraints,
-        userType: userType as 'B2C' | 'B2B' | 'B2G',
-      });
+        delaiSouhaite: projectData.startDate,
+        urgence: projectData.urgency,
+        contraintes: projectData.constraints,
+        userType: userType as 'B2C' | 'B2B' | 'admin',
+      };
 
-      console.log('[STEP 2] Analysis job created successfully:', jobId);
-      setAnalysisProgress(prev => [...prev, 'Devis uploadé avec succès', 'Redirection vers le statut d\'analyse...']);
+      console.log('[PHASE 34.4] Calling devisService.analyzeDevisById()');
+      setAnalysisProgress(prev => [...prev, 'Analyse du devis en cours...']);
+
+      // PHASE 34.4: Call analyzeDevisById with devisId (no file re-upload)
+      await devisService.analyzeDevisById(
+        currentDevisId,
+        undefined, // No file - it's already in storage
+        metadata
+      );
+
+      console.log('[PHASE 34.4] Analysis complete for devisId:', currentDevisId);
+      setAnalysisProgress(prev => [...prev, 'Analyse terminée avec succès', 'Redirection vers le résultat...']);
 
       // Small delay for UX feedback
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Phase 32.1: Redirect to job status page
       setAnalysisProgress(prev => [...prev, 'Redirection en cours...']);
       setIsAnalyzing(false);
 
-      // Navigate to job status page
+      // PHASE 34.4: Navigate to devis details page (analysis result)
       setTimeout(() => {
-        console.log('[STEP 2] Navigating to job status page:', jobId);
-        navigate(`/analysis/job/${jobId}`);
+        console.log('[PHASE 34.4] Navigating to devis page:', currentDevisId);
+        navigate(`/devis/${currentDevisId}`);
       }, 500);
 
     } catch (error) {
-      console.error('[STEP 2] ===== ERROR IN ANALYSIS =====');
-      console.error('[STEP 2] Error object:', error);
-      console.error('[STEP 2] Error type:', typeof error);
-      console.error('[STEP 2] Error message:', error instanceof Error ? error.message : String(error));
-      console.error('[STEP 2] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+      console.error('[PHASE 34.4] ===== ERROR IN ANALYSIS =====');
+      console.error('[PHASE 34.4] Error object:', error);
+      console.error('[PHASE 34.4] Error type:', typeof error);
+      console.error('[PHASE 34.4] Error message:', error instanceof Error ? error.message : String(error));
+      console.error('[PHASE 34.4] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
 
       setIsAnalyzing(false);
       toast({
@@ -308,7 +375,7 @@ export default function Analyze() {
 
               {uploadedFile && (
               <div className="mt-8 text-center">
-                <Button onClick={() => setStep(2)} size="lg">
+                <Button onClick={handleContinueToStep2} size="lg" disabled={isAnalyzing}>
                   Continuer vers les détails du projet
                 </Button>
               </div>
