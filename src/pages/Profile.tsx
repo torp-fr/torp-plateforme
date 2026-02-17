@@ -207,7 +207,7 @@ export default function Profile() {
 
       try {
         const { data, error } = await supabase
-          .from('users')
+          .from('profiles')
           .select('*')
           .eq('id', user.id)
           .single();
@@ -216,7 +216,7 @@ export default function Profile() {
 
         if (data) {
           setFormData({
-            name: data.name || '',
+            name: data.full_name || '',
             email: data.email || '',
             phone: data.phone || '',
             city: data.city || '',
@@ -321,7 +321,7 @@ export default function Profile() {
       }
 
       const { data, error } = await supabase
-        .from('users')
+        .from('profiles')
         .update(updates)
         .eq('id', user.id)
         .select()

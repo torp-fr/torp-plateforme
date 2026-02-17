@@ -430,8 +430,8 @@ export class SupabaseDevisService {
 
         if (devisInfo?.user_id) {
           const { data: userInfo } = await supabase
-            .from('users')
-            .select('email, name')
+            .from('profiles')
+            .select('email, full_name')
             .eq('id', devisInfo.user_id)
             .single();
 
