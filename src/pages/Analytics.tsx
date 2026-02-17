@@ -5,7 +5,6 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '@/context/AppContext';
 import { KnowledgeBaseUpload } from '@/components/KnowledgeBaseUpload';
 import {
   BarChart3,
@@ -33,24 +32,7 @@ type TabType = 'overview' | 'upload-kb' | 'users' | 'settings';
 
 export function Analytics() {
   const navigate = useNavigate();
-  const { userType } = useApp();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
-
-  // Check if user is admin
-  if (userType !== 'admin' && userType !== 'super_admin') {
-    return (
-      <div className="space-y-8">
-        <Alert className="bg-destructive/10 border-destructive/20">
-          <AlertCircle className="h-4 w-4 text-destructive" />
-          <AlertDescription className="text-destructive">
-            <strong>Accès refusé</strong> - Cette page est réservée aux administrateurs.
-            <br />
-            Vous avez été redirigé vers votre tableau de bord personnel.
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-8">
