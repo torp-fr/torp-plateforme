@@ -137,7 +137,28 @@ export class SupabaseAuthService {
       throw new Error('Registration failed');
     }
 
-    // Create profile immediately after successful signup
+    // Wait for JWT session to be established before profile insert
+    // RLS policies require auth.uid() to be set, which happens when session is active
+    const MAX_SESSION_RETRIES = 10;
+    const SESSION_RETRY_DELAY = 200;
+    let session = authData.session;
+
+    for (let attempt = 0; attempt < MAX_SESSION_RETRIES && !session; attempt++) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session) {
+        session = sessionData.session;
+        break;
+      }
+      if (attempt < MAX_SESSION_RETRIES - 1) {
+        await new Promise(res => setTimeout(res, SESSION_RETRY_DELAY));
+      }
+    }
+
+    if (!session) {
+      throw new Error('Failed to establish session after registration');
+    }
+
+    // Create profile with active session (RLS enabled)
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
       .insert({
@@ -159,8 +180,8 @@ export class SupabaseAuthService {
 
     return {
       user: mappedUser,
-      token: authData.session?.access_token || '',
-      refreshToken: authData.session?.refresh_token,
+      token: session.access_token || '',
+      refreshToken: session.refresh_token,
     };
   }
 
