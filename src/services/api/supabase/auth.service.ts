@@ -137,36 +137,25 @@ export class SupabaseAuthService {
       throw new Error('Registration failed');
     }
 
-    // Phase 32.3.1: Deterministic profile fetch with retry mechanism
-    // Profile creation happens automatically via database trigger
-    // Use retry loop to handle trigger execution timing
-    const MAX_RETRIES = 10;
-    const RETRY_DELAY = 300;
-    let profileData = null;
+    // Create profile immediately after successful signup
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .insert({
+        id: authData.user.id,
+        email: data.email,
+        full_name: data.name,
+        role: 'user',
+        can_upload_kb: false,
+      })
+      .select()
+      .single();
 
-    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authData.user.id)
-        .maybeSingle();
-
-      if (data) {
-        profileData = data;
-        break;
-      }
-
-      if (attempt < MAX_RETRIES - 1) {
-        await new Promise(res => setTimeout(res, RETRY_DELAY));
-      }
-    }
-
-    if (!profileData) {
-      throw new Error('Profile was not created after registration');
+    if (profileError) {
+      console.error('[Register] Profile insert error:', profileError);
+      throw new Error('Failed to create user profile');
     }
 
     const mappedUser = mapDbProfileToAppUser(profileData as DbProfile);
-    console.log('✓ Registration successful:', mappedUser.email, '- Profile auto-created by trigger');
 
     return {
       user: mappedUser,
