@@ -85,16 +85,14 @@ export class SupabaseDevisService {
     projectName: string,
     metadata?: DevisMetadata
   ): Promise<{ id: string; status: string }> {
-    console.log('[DevisService] uploadDevis called with userId:', userId);
+    console.log('[SAFE MODE] Upload START');
 
     // Use the userId passed from the authenticated context
-    // Note: Session check was causing timeout on Vercel, so we trust the React context authentication
     if (!userId) {
       throw new Error('User ID is required to upload a devis');
     }
 
     const authenticatedUserId = userId;
-    console.log('[DevisService] Using authenticated userId:', authenticatedUserId);
 
     // Validate file
     if (file.size > env.upload.maxFileSize) {
@@ -111,65 +109,64 @@ export class SupabaseDevisService {
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
     const filePath = `${authenticatedUserId}/${timestamp}_${sanitizedFileName}`;
 
-    // Upload file to Supabase Storage using official SDK
-    console.log('[DevisService] Uploading file to Storage:', {
-      bucket: STORAGE_BUCKETS.DEVIS,
-      filePath,
-      fileSize: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
-      fileType: file.type,
-      authenticatedUserId,
-    });
+    console.log('[SAFE MODE] Uploading to storage:', { filePath, fileSize: file.size });
 
     try {
-      const uploadStartTime = performance.now();
+      // DIAGNOSTIC: Test bucket access
+      console.log('[SAFE MODE] Testing bucket access...');
+      const { data: testList, error: testError } = await supabase.storage
+        .from(STORAGE_BUCKETS.DEVIS)
+        .list('', { limit: 1 });
+      console.log('[SAFE MODE] Bucket test result:', {
+        testListCount: testList?.length ?? null,
+        testError: testError?.message ?? null,
+      });
 
-      // Upload with 10-second timeout protection
-      const uploadPromise = supabase.storage
+      // STEP 1: Upload file to storage (NO timeout wrapper)
+      console.log('[SAFE MODE] About to call storage.upload()');
+      const uploadStart = performance.now();
+
+      // Detect if upload hangs
+      const hangDetector = setTimeout(() => {
+        console.warn('[SAFE MODE] ⚠️ Upload still pending after 8 seconds - possible freeze');
+      }, 8000);
+
+      const { data: uploadedFile, error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKETS.DEVIS)
         .upload(filePath, file, {
           contentType: file.type,
           upsert: false,
         });
 
-      const timeoutPromise = new Promise<any>((_, reject) =>
-        setTimeout(
-          () => reject(new Error('Upload timeout - request took longer than 10 seconds')),
-          10000
-        )
-      );
+      clearTimeout(hangDetector);
+      const uploadEnd = performance.now();
+      const uploadDuration = uploadEnd - uploadStart;
 
-      const { data: uploadedFile, error: uploadError } = await Promise.race([
-        uploadPromise,
-        timeoutPromise,
-      ]);
-
-      const uploadDuration = performance.now() - uploadStartTime;
+      console.log('[SAFE MODE] Upload finished in ms:', uploadDuration.toFixed(0));
 
       if (uploadError) {
-        console.error('[DevisService] Storage upload error:', {
+        console.error('[SAFE MODE] Upload FULL ERROR:', uploadError);
+        console.error('[SAFE MODE] Error details:', {
           message: uploadError.message,
-          code: uploadError?.statusCode || 'UNKNOWN',
-          durationMs: uploadDuration.toFixed(0),
+          statusCode: uploadError.statusCode,
+          status: uploadError.status,
         });
-        throw new Error(`Failed to upload file: ${uploadError.message}`);
+        throw uploadError;
       }
 
-      console.log('[DevisService] File uploaded successfully', {
-        durationMs: uploadDuration.toFixed(0),
-        filePath,
-      });
+      console.log('[SAFE MODE] Upload DONE');
 
       // Get public URL for the file
       const { data: { publicUrl } } = supabase.storage
         .from(STORAGE_BUCKETS.DEVIS)
         .getPublicUrl(filePath);
 
-      // Create devis record in database using SDK
+      // STEP 2: Insert DB record (NO analysis trigger)
       const devisInsert: DbDevisInsert = {
         user_id: authenticatedUserId,
         nom_projet: projectName,
         type_travaux: metadata?.typeTravaux || null,
-        montant_total: 0, // Will be updated after analysis
+        montant_total: 0,
         file_url: publicUrl,
         file_name: file.name,
         file_size: file.size,
@@ -177,7 +174,7 @@ export class SupabaseDevisService {
         status: 'uploaded',
       };
 
-      console.log('[DevisService] Inserting devis record:', devisInsert);
+      console.log('[SAFE MODE] Inserting DB record');
 
       const { data: devisData, error: insertError } = await supabase
         .from('devis')
@@ -186,38 +183,19 @@ export class SupabaseDevisService {
         .single();
 
       if (insertError) {
-        console.error('[DevisService] Database insert error:', insertError);
-        // Clean up uploaded file if database insert fails
-        await supabase.storage
-          .from(STORAGE_BUCKETS.DEVIS)
-          .remove([filePath]);
+        console.error('[SAFE MODE] DB INSERT FAILED:', insertError);
         throw new Error(`Failed to create devis record: ${insertError.message}`);
       }
 
-      console.log('[DevisService] Devis record created successfully:', devisData);
+      console.log('[SAFE MODE] DB INSERT DONE');
 
-      // Update status to analyzing
-      await supabase
-        .from('devis')
-        .update({ status: 'analyzing' })
-        .eq('id', devisData.id);
-
-      // Start analysis in background (don't await to avoid blocking upload response)
-      this.analyzeDevisById(devisData.id, file, metadata).catch((error) => {
-        console.error(`[Devis] Analysis failed for ${devisData.id}:`, error);
-        // Update status to failed
-        supabase
-          .from('devis')
-          .update({ status: 'uploaded' })
-          .eq('id', devisData.id);
-      });
-
+      // Return uploaded status (NO "analyzing")
       return {
         id: devisData.id,
-        status: 'analyzing',
+        status: 'uploaded',
       };
     } catch (error) {
-      console.error('[DevisService] Upload process error:', error);
+      console.error('[SAFE MODE] Upload process error:', error);
       throw error;
     }
   }
