@@ -10,6 +10,7 @@ import { torpAnalyzerService } from '@/services/ai/torp-analyzer.service';
 import { structuredLogger } from '@/services/observability/structured-logger';
 import { errorTracking } from '@/services/observability/error-tracking';
 import { pdfExtractorService } from '@/services/pdf/pdf-extractor.service';
+import { STORAGE_BUCKETS } from '@/constants/storage';
 
 interface ProcessJobOptions {
   maxRetries?: number;
@@ -73,7 +74,7 @@ export async function processAnalysisJob(
 
     const filePath = new URL(devisData.file_url).pathname.split('/').slice(-3).join('/');
     const { data: fileData, error: downloadError } = await supabase.storage
-      .from('devis-uploads')
+      .from(STORAGE_BUCKETS.DEVIS)
       .download(filePath);
 
     if (downloadError || !fileData) {

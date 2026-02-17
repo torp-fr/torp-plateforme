@@ -3,7 +3,7 @@
  * Réservé aux comptes admin - suivi et gestion de la plateforme
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { KnowledgeBaseUpload } from '@/components/KnowledgeBaseUpload';
 import {
@@ -26,9 +26,179 @@ import { Badge } from '@/components/ui/badge';
 import { ENGINE_REGISTRY, getEngineStats } from '@/core/platform/engineRegistry';
 import { API_REGISTRY, getAPIStats } from '@/core/platform/apiRegistry';
 import { getOrchestrationStatus, getOrchestrationStats, getLastOrchestration } from '@/core/platform/engineOrchestrator';
+import { analyticsService } from '@/services/api/analytics.service';
 import type { ContextEngineResult } from '@/core/engines/context.engine';
 
 type TabType = 'overview' | 'upload-kb' | 'users' | 'settings';
+
+/**
+ * Knowledge Base Stats Card - Fetch real document count
+ */
+function KnowledgeBaseStatsCard() {
+  const [docCount, setDocCount] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchDocCount = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        // Query knowledge base document count
+        const { supabase } = await import('@/lib/supabase');
+        const { count, error: dbError } = await supabase
+          .from('documents')
+          .select('id', { count: 'exact', head: true });
+
+        if (dbError) throw dbError;
+        console.log('[Analytics] Knowledge base docs:', count);
+        setDocCount(count || 0);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to load document count';
+        console.error('[Analytics] Document count error:', message);
+        setError(message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDocCount();
+  }, []);
+
+  return (
+    <Card className="border-l-4 border-l-amber-500">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <BookOpen className="h-5 w-5 text-amber-600" />
+          <CardTitle className="text-primary font-display">Knowledge Base</CardTitle>
+        </div>
+        <CardDescription>Documents ingérés et sources d'enrichissement</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div className="p-4 rounded-lg bg-muted">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Documents ingérés</span>
+              <span className="text-2xl font-bold">
+                {loading ? '—' : (error ? 'Erreur' : docCount)}
+              </span>
+            </div>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {error
+              ? `Erreur: ${error}`
+              : docCount === 0
+                ? 'Aucun document n\'a été ingéré dans la Knowledge Base pour le moment.'
+                : `${docCount} document${docCount > 1 ? 's' : ''} ingéré${docCount > 1 ? 's' : ''} pour enrichissement RAG.`}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Analytics Stats Cards - Fetch real data from Supabase
+ */
+function AnalyticsStatsCards() {
+  const [stats, setStats] = useState<{
+    userCount: number;
+    analysisCount: number;
+    growth: number;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await analyticsService.getGlobalStats();
+        console.log('[Analytics] Global stats loaded:', data);
+        setStats(data);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to load analytics';
+        console.error('[Analytics] Stats error:', message);
+        setError(message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          Impossible de charger les métriques: {error}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  const userCount = stats?.userCount ?? 0;
+  const analysisCount = stats?.analysisCount ?? 0;
+  const growth = stats?.growth ?? 0;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Total Users */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-muted-foreground text-sm">Utilisateurs</p>
+              <p className="text-4xl font-bold text-foreground mt-2">
+                {loading ? '—' : userCount}
+              </p>
+            </div>
+            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Users className="h-6 w-6 text-primary" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Total Analyses */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-muted-foreground text-sm">Analyses complétées</p>
+              <p className="text-4xl font-bold text-foreground mt-2">
+                {loading ? '—' : analysisCount}
+              </p>
+            </div>
+            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <FileText className="h-6 w-6 text-primary" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Growth - Analyses (30 jours) */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-muted-foreground text-sm">Croissance analyses (30j)</p>
+              <p className="text-4xl font-bold text-foreground mt-2">
+                {loading ? '—' : `${growth >= 0 ? '+' : ''}${growth}%`}
+              </p>
+            </div>
+            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <TrendingUp className="h-6 w-6 text-primary" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export function Analytics() {
   const navigate = useNavigate();
@@ -96,53 +266,9 @@ function OverviewTab() {
 
   return (
     <div className="space-y-8">
-      {/* Admin Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Total Users */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-muted-foreground text-sm">Utilisateurs</p>
-                <p className="text-4xl font-bold text-foreground mt-2">0</p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Users className="h-6 w-6 text-primary" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Admin Stats Cards - Real Data from Analytics Service */}
+      <AnalyticsStatsCards />
 
-        {/* Total Analyses */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-muted-foreground text-sm">Analyses complétées</p>
-                <p className="text-4xl font-bold text-foreground mt-2">0</p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <FileText className="h-6 w-6 text-primary" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Growth - Analyses (30 jours) */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-muted-foreground text-sm">Croissance analyses (30j)</p>
-                <p className="text-4xl font-bold text-foreground mt-2">+0%</p>
-              </div>
-              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-primary" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Platform Health */}
       <Card>
@@ -258,28 +384,7 @@ function OverviewTab() {
       </Card>
 
       {/* Knowledge Base Section */}
-      <Card className="border-l-4 border-l-amber-500">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-amber-600" />
-            <CardTitle className="text-primary font-display">Knowledge Base</CardTitle>
-          </div>
-          <CardDescription>Documents ingérés et sources d'enrichissement</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="p-4 rounded-lg bg-muted">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Documents ingérés</span>
-                <span className="text-2xl font-bold">0</span>
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Aucun document n'a été ingéré dans la Knowledge Base pour le moment. Les documents seront utilisés pour enrichir les analyses par RAG.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <KnowledgeBaseStatsCard />
     </div>
   );
 }

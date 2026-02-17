@@ -29,7 +29,15 @@ export function OrchestrationsPage() {
       try {
         setIsLoading(true);
         const data = await analyticsService.getJobStatusDistribution();
-        setStats(data as any);
+        // Type-safe casting to JobStats
+        const stats: JobStats = {
+          pending: data.pending ?? 0,
+          processing: data.processing ?? 0,
+          completed: data.completed ?? 0,
+          failed: data.failed ?? 0,
+          cancelled: data.cancelled ?? 0,
+        };
+        setStats(stats);
         setError(null);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to fetch stats';

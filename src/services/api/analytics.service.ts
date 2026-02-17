@@ -19,62 +19,72 @@ export async function getGlobalStats() {
     });
 
     // Get total users from profiles
-    const { count: userCount, error: userError } = await supabase
-      .from('profiles')
-      .select('id', { count: 'exact', head: true });
-
-    if (userError) {
-      throw userError;
-    }
-
-    // Get total completed analyses
-    const { count: analysisCount, error: analysisError } = await supabase
-      .from('analysis_jobs')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'completed');
-
-    if (analysisError) {
-      throw analysisError;
-    }
-
-    // Get analyses from last 30 days
+    // Calculate date ranges
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const { count: analysisLast30, error: analysis30Error } = await supabase
-      .from('analysis_jobs')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'completed')
-      .gte('completed_at', thirtyDaysAgo.toISOString());
-
-    if (analysis30Error) {
-      throw analysis30Error;
-    }
-
-    // Calculate growth percentage
     const previousMonthStart = new Date(thirtyDaysAgo);
     previousMonthStart.setDate(previousMonthStart.getDate() - 30);
 
-    const { count: analysisPrevious30, error: analysisPrevError } = await supabase
-      .from('analysis_jobs')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'completed')
-      .gte('completed_at', previousMonthStart.toISOString())
-      .lt('completed_at', thirtyDaysAgo.toISOString());
+    console.log('[AnalyticsService] Fetching global stats with parallelized queries', {
+      thirtyDaysAgo: thirtyDaysAgo.toISOString(),
+      previousMonthStart: previousMonthStart.toISOString(),
+    });
 
-    if (analysisPrevError) {
-      throw analysisPrevError;
-    }
+    // Parallelize all 4 queries with Promise.all()
+    const [userResult, analysisResult, analysisLast30Result, analysisPrevious30Result] = await Promise.all([
+      // Query 1: Total users
+      supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true }),
+      // Query 2: Total completed analyses
+      supabase
+        .from('analysis_jobs')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'completed'),
+      // Query 3: Analyses last 30 days
+      supabase
+        .from('analysis_jobs')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'completed')
+        .gte('completed_at', thirtyDaysAgo.toISOString()),
+      // Query 4: Analyses previous 30 days
+      supabase
+        .from('analysis_jobs')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'completed')
+        .gte('completed_at', previousMonthStart.toISOString())
+        .lt('completed_at', thirtyDaysAgo.toISOString()),
+    ]);
 
-    const growth = analysisPrevious30 && analysisLast30
+    // Check for errors
+    if (userResult.error) throw userResult.error;
+    if (analysisResult.error) throw analysisResult.error;
+    if (analysisLast30Result.error) throw analysisLast30Result.error;
+    if (analysisPrevious30Result.error) throw analysisPrevious30Result.error;
+
+    const userCount = userResult.count || 0;
+    const analysisCount = analysisResult.count || 0;
+    const analysisLast30 = analysisLast30Result.count || 0;
+    const analysisPrevious30 = analysisPrevious30Result.count || 0;
+
+    // Calculate growth percentage
+    const growth = analysisPrevious30 > 0
       ? Math.round(((analysisLast30 - analysisPrevious30) / analysisPrevious30) * 100)
-      : 0;
+      : (analysisLast30 > 0 ? 100 : 0);  // 100% growth if previous was 0 and current > 0, else 0%
+
+    console.log('[AnalyticsService] Global stats fetched successfully', {
+      userCount,
+      analysisCount,
+      analysisLast30,
+      analysisPrevious30,
+      growth,
+    });
 
     return {
-      userCount: userCount || 0,
-      analysisCount: analysisCount || 0,
-      analysisLast30: analysisLast30 || 0,
-      growth: growth >= 0 ? `+${growth}%` : `${growth}%`,
+      userCount,
+      analysisCount,
+      analysisLast30,
+      growth,
     };
   } catch (error) {
     structuredLogger.error({
@@ -89,35 +99,17 @@ export async function getGlobalStats() {
 
 /**
  * Engine performance status (latest score snapshot)
+ *
+ * ❌ NOT IMPLEMENTED - Scheduled for Phase 35
+ * Requires:
+ * 1. Create score_snapshots table in Supabase
+ * 2. Set up scheduled job to record engine metrics
+ * 3. Implement query to fetch latest metrics
+ *
+ * @throws Error - This endpoint is not yet implemented
  */
 export async function getEngineStatus() {
-  try {
-    structuredLogger.info({
-      service: 'AnalyticsService',
-      method: 'getEngineStatus',
-      message: 'Fetching engine status',
-    });
-
-    // This would query score_snapshots if available
-    // For now, return placeholder that indicates data source
-    return {
-      status: 'operational',
-      lastUpdate: new Date().toISOString(),
-      engineMetrics: {
-        avgScore: 0,
-        totalProcessed: 0,
-        errorRate: 0,
-      },
-    };
-  } catch (error) {
-    structuredLogger.error({
-      service: 'AnalyticsService',
-      method: 'getEngineStatus',
-      message: 'Failed to fetch engine status',
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
+  throw new Error('[AnalyticsService] getEngineStatus() not implemented - scheduled for Phase 35. Need score_snapshots table.');
 }
 
 /**
@@ -156,28 +148,20 @@ export async function getRecentJobs(limit: number = 10) {
 
 /**
  * Live intelligence data (latest snapshots)
+ *
+ * ❌ NOT IMPLEMENTED - Scheduled for Phase 35
+ * Requires:
+ * 1. Create live_intelligence_snapshots table
+ * 2. Verify data structure with Product team
+ * 3. Set up real-time data pipeline
+ * 4. Implement WebSocket for real-time updates
+ *
+ * @throws Error - This endpoint is not yet implemented
  */
 export async function getLiveIntelligence(limit: number = 10) {
-  try {
-    structuredLogger.info({
-      service: 'AnalyticsService',
-      method: 'getLiveIntelligence',
-      message: 'Fetching live intelligence',
-      limit,
-    });
-
-    // Query live_intelligence_snapshots if available
-    // Return empty for now as we verify data structure
-    return [];
-  } catch (error) {
-    structuredLogger.error({
-      service: 'AnalyticsService',
-      method: 'getLiveIntelligence',
-      message: 'Failed to fetch live intelligence',
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
+  throw new Error(
+    `[AnalyticsService] getLiveIntelligence(${limit}) not implemented - scheduled for Phase 35. Need live_intelligence_snapshots table.`
+  );
 }
 
 /**
@@ -192,21 +176,30 @@ export async function getJobStatusDistribution() {
     });
 
     const statuses = ['pending', 'processing', 'completed', 'failed', 'cancelled'];
+
+    console.log('[AnalyticsService] Fetching job status distribution with parallelized queries');
+
+    // Parallelize all 5 status queries with Promise.all()
+    const results = await Promise.all(
+      statuses.map((status) =>
+        supabase
+          .from('analysis_jobs')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', status)
+      )
+    );
+
+    // Check for errors and build distribution object
     const distribution: Record<string, number> = {};
-
-    for (const status of statuses) {
-      const { count, error } = await supabase
-        .from('analysis_jobs')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', status);
-
-      if (error) {
-        throw error;
+    results.forEach((result, index) => {
+      const status = statuses[index];
+      if (result.error) {
+        throw result.error;
       }
+      distribution[status] = result.count || 0;
+    });
 
-      distribution[status] = count || 0;
-    }
-
+    console.log('[AnalyticsService] Job distribution fetched:', distribution);
     return distribution;
   } catch (error) {
     structuredLogger.error({
