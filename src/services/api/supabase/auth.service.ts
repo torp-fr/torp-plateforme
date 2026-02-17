@@ -137,22 +137,29 @@ export class SupabaseAuthService {
       throw new Error('Registration failed');
     }
 
-    // Create user profile using RPC function
-    const { data: profileData, error: profileError } = await supabase.rpc('create_user_profile', {
-      p_user_id: authData.user.id,
-      p_email: data.email,
-      p_name: data.name,
-      p_user_type: data.type,
-      p_company: data.company || null,
-      p_phone: data.phone || null,
-    });
+    // Phase 32.3: Profile creation now happens automatically via database trigger
+    // The trigger (on_auth_user_created) creates a profile when auth user is created
+    // Wait a small moment for the trigger to execute
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-    if (profileError || !profileData) {
-      console.error('Failed to create user profile after registration:', profileError);
-      throw new Error('Failed to create user profile');
+    // Fetch the auto-created profile from the profiles table
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', authData.user.id)
+      .single();
+
+    if (profileError) {
+      console.error('[Register] Profile fetch error:', profileError);
+      throw new Error('Failed to load user profile after registration');
+    }
+
+    if (!profileData) {
+      throw new Error('User profile was not created');
     }
 
     const mappedUser = mapDbProfileToAppUser(profileData as DbProfile);
+    console.log('✓ Registration successful:', mappedUser.email, '- Profile auto-created by trigger');
 
     return {
       user: mappedUser,
