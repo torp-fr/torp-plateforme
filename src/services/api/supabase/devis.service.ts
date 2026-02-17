@@ -115,24 +115,49 @@ export class SupabaseDevisService {
     console.log('[DevisService] Uploading file to Storage:', {
       bucket: STORAGE_BUCKETS.DEVIS,
       filePath,
-      fileSize: file.size,
-      fileType: file.type
+      fileSize: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
+      fileType: file.type,
+      authenticatedUserId,
     });
 
     try {
-      const { data: uploadedFile, error: uploadError } = await supabase.storage
+      const uploadStartTime = performance.now();
+
+      // Upload with 10-second timeout protection
+      const uploadPromise = supabase.storage
         .from(STORAGE_BUCKETS.DEVIS)
         .upload(filePath, file, {
           contentType: file.type,
           upsert: false,
         });
 
+      const timeoutPromise = new Promise<any>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('Upload timeout - request took longer than 10 seconds')),
+          10000
+        )
+      );
+
+      const { data: uploadedFile, error: uploadError } = await Promise.race([
+        uploadPromise,
+        timeoutPromise,
+      ]);
+
+      const uploadDuration = performance.now() - uploadStartTime;
+
       if (uploadError) {
-        console.error('[DevisService] Storage upload error:', uploadError);
+        console.error('[DevisService] Storage upload error:', {
+          message: uploadError.message,
+          code: uploadError?.statusCode || 'UNKNOWN',
+          durationMs: uploadDuration.toFixed(0),
+        });
         throw new Error(`Failed to upload file: ${uploadError.message}`);
       }
 
-      console.log('[DevisService] File uploaded successfully:', uploadedFile);
+      console.log('[DevisService] File uploaded successfully', {
+        durationMs: uploadDuration.toFixed(0),
+        filePath,
+      });
 
       // Get public URL for the file
       const { data: { publicUrl } } = supabase.storage
