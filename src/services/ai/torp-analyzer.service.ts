@@ -886,109 +886,145 @@ export class TorpAnalyzerService {
 
   /**
    * Analyze entreprise (250 points)
-   * Enrichit automatiquement les données entreprise via Pappers et RGE ADEME si SIRET disponible
+   * PHASE 34.7: DEFINITIVE STABILIZATION - No ReferenceError possible
+   * Enriches company data via RGE ADEME if SIRET available
    * Returns both AI analysis and raw RGE data for frontend display
+   * GUARANTEES: Always returns valid result, never crashes, all variables safe
    */
   private async analyzeEntreprise(devisData: ExtractedDevisData): Promise<{
     analysis: any;
     rgeData: RGEVerificationData | null;
   }> {
-    // PHASE 34.6: Initialize all variables to prevent ReferenceError
-    let enrichedData: EnrichedCompanyData | null = null;
-    let rgeData: RGEAdemeData | null = null;
-    let rgeResult: PromiseSettledResult<any> | undefined;
+    try {
+      console.log('[TORP] Step 2/9: Analyzing entreprise...');
 
-    if (devisData.entreprise.siret && this.ENABLE_EXTERNAL_APIS) {
-      // PHASE 34.6: Wrap external API calls with proper error handling
-      try {
-        console.log('[TORP Entreprise] Fetching RGE/ADEME data...');
-        const results = await Promise.allSettled([
-          rgeAdemeService.getQualificationsBySiret(devisData.entreprise.siret),
-        ]);
-        rgeResult = results[0];
-      } catch (apiError) {
-        console.warn('[TORP HARDENING] RGE/ADEME API error - using fallback:', apiError);
-        rgeResult = undefined;
+      // 🔹 PHASE 34.7: Secure initialization - ALL variables declared upfront
+      let enrichedData: EnrichedCompanyData | null = null;
+      let rgeData: RGEAdemeData | null = null;
+      let rgeResult: PromiseSettledResult<any> | undefined = undefined;
+
+      const siret = devisData?.entreprise?.siret || null;
+
+      // 🔹 PHASE 34.7: Protected external API calls (optional)
+      if (siret && this.ENABLE_EXTERNAL_APIS) {
+        try {
+          console.log('[TORP Entreprise] Fetching RGE/ADEME data...');
+          const results = await Promise.allSettled([
+            rgeAdemeService.getQualificationsBySiret(siret),
+          ]);
+          rgeResult = results[0];
+          console.log('[TORP Entreprise] RGE/ADEME call completed with status:', rgeResult?.status);
+        } catch (apiError) {
+          console.warn('[TORP HARDENING] RGE/ADEME API error - continuing without enrichment:', apiError);
+          rgeResult = undefined;
+        }
+      } else {
+        console.log('[TORP Entreprise] Skipping RGE/ADEME - no SIRET or APIs disabled');
       }
-    }
 
-    // NOTE: Pappers API disabled since Phase 34.5 - enrichedData remains null
-    // This allows graceful degradation if pappers data unavailable
+      // 🔹 PHASE 34.7: Safe RGE analysis - explicit null checks BEFORE property access
+      if (
+        rgeResult &&
+        rgeResult.status === 'fulfilled' &&
+        rgeResult.value &&
+        rgeResult.value.success &&
+        rgeResult.value.data
+      ) {
+        const rge = rgeResult.value.data;
+        console.log('[TORP Entreprise] Données RGE ADEME récupérées:', rge.estRGE ? 'CERTIFIÉ' : 'NON RGE');
+        console.log('[TORP Entreprise] Score RGE:', rge.scoreRGE, '| Qualifications actives:', rge.nombreQualificationsActives);
 
-    // PHASE 34.6: Properly check rgeResult before using it
-    // Traiter les résultats RGE ADEME
-    if (rgeResult && rgeResult.status === 'fulfilled' && rgeResult.value.success && rgeResult.value.data) {
-      const rge = rgeResult.value.data;
-      console.log('[TORP Entreprise] Données RGE ADEME récupérées:', rge.estRGE ? 'CERTIFIÉ' : 'NON RGE');
-      console.log('[TORP Entreprise] Score RGE:', rge.scoreRGE, '| Qualifications actives:', rge.nombreQualificationsActives);
+        // Build RGE data structure
+        rgeData = {
+          estRGE: rge.estRGE,
+          scoreRGE: rge.scoreRGE,
+          nombreQualificationsActives: rge.nombreQualificationsActives,
+          nombreQualificationsTotales: rge.nombreQualificationsTotales,
+          domainesActifs: rge.domainesActifs,
+          metaDomainesActifs: rge.metaDomainesActifs,
+          organismesCertificateurs: rge.organismesCertificateurs,
+          qualificationsActives: rge.qualificationsActives.map(q => ({
+            nomQualification: q.nomQualification,
+            codeQualification: q.codeQualification,
+            domaine: q.domaine,
+            metaDomaine: q.metaDomaine,
+            organisme: q.organisme,
+            dateFin: q.dateFin,
+            joursRestants: q.joursRestants,
+          })),
+          prochaineExpiration: rge.prochaineExpiration,
+          alertes: rge.alertes.map(a => ({
+            type: a.type,
+            message: a.message,
+          })),
+        };
+      } else if (rgeResult && rgeResult.status === 'rejected') {
+        console.error('[TORP Entreprise] Erreur vérification RGE:', rgeResult.reason);
+      } else if (rgeResult && rgeResult.status === 'fulfilled' && rgeResult.value && !rgeResult.value.success) {
+        console.log('[TORP Entreprise] RGE non vérifié:', rgeResult.value.error);
+      }
 
-      rgeData = {
-        estRGE: rge.estRGE,
-        scoreRGE: rge.scoreRGE,
-        nombreQualificationsActives: rge.nombreQualificationsActives,
-        nombreQualificationsTotales: rge.nombreQualificationsTotales,
-        domainesActifs: rge.domainesActifs,
-        metaDomainesActifs: rge.metaDomainesActifs,
-        organismesCertificateurs: rge.organismesCertificateurs,
-        qualificationsActives: rge.qualificationsActives.map(q => ({
-          nomQualification: q.nomQualification,
-          codeQualification: q.codeQualification,
-          domaine: q.domaine,
-          metaDomaine: q.metaDomaine,
-          organisme: q.organisme,
-          dateFin: q.dateFin,
-          joursRestants: q.joursRestants,
-        })),
-        prochaineExpiration: rge.prochaineExpiration,
-        alertes: rge.alertes.map(a => ({
-          type: a.type,
-          message: a.message,
-        })),
+      // 🔹 PHASE 34.7: Generate AI analysis (note: enrichedData remains null - Pappers disabled)
+      console.log('[TORP Entreprise] Generating AI analysis with RGE data:', !!rgeData);
+      const prompt = buildEntrepriseAnalysisPrompt(JSON.stringify(devisData, null, 2), enrichedData, rgeData);
+
+      const { data } = await hybridAIService.generateJSON(prompt, {
+        systemPrompt: TORP_SYSTEM_PROMPT,
+        temperature: 0.4,
+      });
+
+      // 🔹 PHASE 34.7: Convert internal RGE data to exported type (safe - rgeData null-checked)
+      let rgeVerificationData: RGEVerificationData | null = null;
+      if (rgeData) {
+        rgeVerificationData = {
+          estRGE: rgeData.estRGE,
+          scoreRGE: rgeData.scoreRGE,
+          nombreQualificationsActives: rgeData.nombreQualificationsActives,
+          nombreQualificationsTotales: rgeData.nombreQualificationsTotales,
+          domainesActifs: rgeData.domainesActifs,
+          metaDomainesActifs: rgeData.metaDomainesActifs,
+          organismesCertificateurs: rgeData.organismesCertificateurs,
+          qualificationsActives: rgeData.qualificationsActives.map(q => ({
+            nomQualification: q.nomQualification,
+            codeQualification: q.codeQualification,
+            domaine: q.domaine,
+            metaDomaine: q.metaDomaine,
+            organisme: q.organisme,
+            dateFin: q.dateFin,
+            joursRestants: q.joursRestants,
+          })),
+          prochaineExpiration: rgeData.prochaineExpiration,
+          alertes: rgeData.alertes.map(a => ({
+            type: a.type as 'expiration_proche' | 'qualification_expiree' | 'aucune_qualification',
+            message: a.message,
+          })),
+          lastUpdate: new Date().toISOString(),
+          source: 'ademe_rge',
+        };
+      }
+
+      console.log('[TORP Entreprise] Analysis completed safely ✓');
+      return { analysis: data, rgeData: rgeVerificationData };
+    } catch (error) {
+      // 🔹 PHASE 34.7: Fallback - never crash on internal error
+      console.error('[TORP HARDENING] analyzeEntreprise crashed - fallback activated:', error);
+
+      // Return minimal valid analysis structure
+      const fallbackAnalysis = {
+        scoreTotal: 0,
+        details: {
+          fiabilite: { score: 0, details: { description: 'Analyse partielle' } },
+          santeFinnaciere: { score: 0, details: { description: 'Analyse partielle' } },
+          assurances: { score: 0, details: { description: 'Analyse partielle' } },
+          certifications: { score: 0, details: { description: 'Analyse partielle' } },
+          reputation: { score: 0, details: { description: 'Analyse partielle' } },
+        },
+        risques: ['Analyse entreprise partielle - erreur interne'],
+        benefices: [],
       };
-    } else if (rgeResult && rgeResult.status === 'rejected') {
-      console.error('[TORP Entreprise] Erreur vérification RGE:', rgeResult.reason);
-    } else if (rgeResult && rgeResult.status === 'fulfilled' && !rgeResult.value.success) {
-      console.log('[TORP Entreprise] RGE non vérifié:', rgeResult.value.error);
+
+      return { analysis: fallbackAnalysis, rgeData: null };
     }
-
-    const prompt = buildEntrepriseAnalysisPrompt(JSON.stringify(devisData, null, 2), enrichedData, rgeData);
-
-    const { data } = await hybridAIService.generateJSON(prompt, {
-      systemPrompt: TORP_SYSTEM_PROMPT,
-      temperature: 0.4,
-    });
-
-    // Convert internal RGE data to the exported type for frontend
-    let rgeVerificationData: RGEVerificationData | null = null;
-    if (rgeData) {
-      rgeVerificationData = {
-        estRGE: rgeData.estRGE,
-        scoreRGE: rgeData.scoreRGE,
-        nombreQualificationsActives: rgeData.nombreQualificationsActives,
-        nombreQualificationsTotales: rgeData.nombreQualificationsTotales,
-        domainesActifs: rgeData.domainesActifs,
-        metaDomainesActifs: rgeData.metaDomainesActifs,
-        organismesCertificateurs: rgeData.organismesCertificateurs,
-        qualificationsActives: rgeData.qualificationsActives.map(q => ({
-          nomQualification: q.nomQualification,
-          codeQualification: q.codeQualification,
-          domaine: q.domaine,
-          metaDomaine: q.metaDomaine,
-          organisme: q.organisme,
-          dateFin: q.dateFin,
-          joursRestants: q.joursRestants,
-        })),
-        prochaineExpiration: rgeData.prochaineExpiration,
-        alertes: rgeData.alertes.map(a => ({
-          type: a.type as 'expiration_proche' | 'qualification_expiree' | 'aucune_qualification',
-          message: a.message,
-        })),
-        lastUpdate: new Date().toISOString(),
-        source: 'ademe_rge',
-      };
-    }
-
-    return { analysis: data, rgeData: rgeVerificationData };
   }
 
   /**
