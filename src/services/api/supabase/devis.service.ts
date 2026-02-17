@@ -168,6 +168,7 @@ export class SupabaseDevisService {
         type_travaux: metadata?.typeTravaux || null,
         montant_total: 0,
         file_url: publicUrl,
+        file_path: filePath,
         file_name: file.name,
         file_size: file.size,
         file_type: file.type,
@@ -213,27 +214,40 @@ export class SupabaseDevisService {
       // If file not provided, fetch it from storage
       let devisFile = file;
       if (!devisFile) {
-        const { data: devisData } = await supabase
+        console.log('[Devis] Fetching devis from database');
+        const { data: devisData, error: devisError } = await supabase
           .from('devis')
-          .select('file_url, file_name')
+          .select('file_path, file_name, status')
           .eq('id', devisId)
           .single();
 
-        if (!devisData) {
-          throw new Error('Devis not found');
+        if (devisError || !devisData) {
+          throw new Error(`Devis not found: ${devisError?.message || 'No data'}`);
         }
 
-        // Download file from storage
-        const filePath = new URL(devisData.file_url).pathname.split('/').slice(-3).join('/');
+        // Safety guard: prevent re-analyzing
+        if (devisData.status === 'analyzed') {
+          console.warn('[Devis] Devis already analyzed - returning early');
+          return;
+        }
+
+        // Verify file_path exists
+        if (!devisData.file_path) {
+          throw new Error('Missing file_path in devis record - cannot download file');
+        }
+
+        console.log('[Devis] Downloading file from storage:', devisData.file_path);
         const { data: fileData, error: downloadError } = await supabase.storage
           .from(STORAGE_BUCKETS.DEVIS)
-          .download(filePath);
+          .download(devisData.file_path);
 
         if (downloadError || !fileData) {
-          throw new Error('Failed to download devis file');
+          console.error('[Devis] Storage download error:', downloadError);
+          throw new Error(`Failed to download devis file: ${downloadError?.message || 'No data'}`);
         }
 
-        devisFile = new File([fileData], devisData.file_name, { type: 'application/pdf' });
+        devisFile = new File([fileData], devisData.file_name || 'devis.pdf', { type: 'application/pdf' });
+        console.log('[Devis] File downloaded successfully');
       }
 
       // Step 1: Extract text from PDF
@@ -319,12 +333,6 @@ export class SupabaseDevisService {
       // Step 3: Save results to database
       console.log(`[Devis] Saving analysis results...`);
 
-      // Get user session token (same approach as uploadDevis)
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAuthKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
-      const sessionData = localStorage.getItem(supabaseAuthKey);
-
-      let accessToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
       // Use official Supabase SDK to update analysis results
       const analysisUpdate = {
         status: 'analyzed',
@@ -395,25 +403,23 @@ export class SupabaseDevisService {
     } catch (error) {
       console.error(`[Devis] Analysis failed for ${devisId}:`, error);
 
-      // Update status to indicate failure using REST API
+      // Update status back to uploaded if analysis fails
       try {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseAuthKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
-        const sessionData = localStorage.getItem(supabaseAuthKey);
-
-        // Update status back to uploaded using SDK
-        await supabase
+        const { error: statusError } = await supabase
           .from('devis')
           .update({
             status: 'uploaded',
             updated_at: new Date().toISOString(),
           })
-          .eq('id', devisId)
-          .catch(updateError => {
-            console.error('[DevisService] Failed to update status after error:', updateError);
-          });
+          .eq('id', devisId);
+
+        if (statusError) {
+          console.error('[Devis] Failed to update status after error:', statusError);
+        } else {
+          console.log('[Devis] Status reverted to uploaded after error');
+        }
       } catch (updateError) {
-        console.error('[DevisService] Failed to update status after error:', updateError);
+        console.error('[Devis] Failed to update status after error:', updateError);
       }
 
       throw error;
