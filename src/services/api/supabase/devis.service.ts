@@ -322,56 +322,42 @@ export class SupabaseDevisService {
       const sessionData = localStorage.getItem(supabaseAuthKey);
 
       let accessToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      if (sessionData) {
-        try {
-          const session = JSON.parse(sessionData);
-          accessToken = session.access_token;
-        } catch (e) {
-          console.error('[DevisService] Failed to parse session:', e);
-        }
-      }
-
-      // Use direct REST API to avoid blocking issue
-      const updateUrl = `${supabaseUrl}/rest/v1/devis?id=eq.${devisId}`;
-      const updateResponse = await fetch(updateUrl, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      // Use official Supabase SDK to update analysis results
+      const analysisUpdate = {
+        status: 'analyzed',
+        analyzed_at: new Date().toISOString(),
+        analysis_duration: analysis.dureeAnalyse,
+        score_total: analysis.scoreGlobal,
+        grade: analysis.grade,
+        score_entreprise: analysis.scoreEntreprise,
+        score_prix: analysis.scorePrix,
+        score_completude: analysis.scoreCompletude,
+        score_conformite: analysis.scoreConformite,
+        score_delais: analysis.scoreDelais,
+        score_innovation_durable: analysis.scoreInnovationDurable || null,
+        score_transparence: analysis.scoreTransparence || null,
+        recommendations: {
+          ...analysis.recommandations,
+          budgetRealEstime: analysis.budgetRealEstime || 0,
+          margeNegociation: analysis.margeNegociation,
         },
-        body: JSON.stringify({
-          status: 'analyzed',
-          analyzed_at: new Date().toISOString(),
-          analysis_duration: analysis.dureeAnalyse,
-          score_total: analysis.scoreGlobal,
-          grade: analysis.grade,
-          score_entreprise: analysis.scoreEntreprise,
-          score_prix: analysis.scorePrix,
-          score_completude: analysis.scoreCompletude,
-          score_conformite: analysis.scoreConformite,
-          score_delais: analysis.scoreDelais,
-          score_innovation_durable: analysis.scoreInnovationDurable || null,
-          score_transparence: analysis.scoreTransparence || null,
-          recommendations: {
-            ...analysis.recommandations,
-            budgetRealEstime: analysis.budgetRealEstime || 0,
-            margeNegociation: analysis.margeNegociation,
-          },
-          // Sauvegarder les données extraites pour enrichissement et géocodage
-          extracted_data: analysis.extractedData || null,
-          // Sauvegarder l'adresse du chantier directement
-          adresse_chantier: analysis.extractedData?.travaux?.adresseChantier || null,
-          detected_overcosts: analysis.surcoutsDetectes,
-          potential_savings: analysis.scorePrix.economiesPotentielles || 0,
-          updated_at: new Date().toISOString(),
-        }),
-      });
+        // Sauvegarder les données extraites pour enrichissement et géocodage
+        extracted_data: analysis.extractedData || null,
+        // Sauvegarder l'adresse du chantier directement
+        adresse_chantier: analysis.extractedData?.travaux?.adresseChantier || null,
+        detected_overcosts: analysis.surcoutsDetectes,
+        potential_savings: analysis.scorePrix.economiesPotentielles || 0,
+        updated_at: new Date().toISOString(),
+      };
 
-      if (!updateResponse.ok) {
-        const errorText = await updateResponse.text();
-        console.error('[DevisService] Database update error:', errorText);
-        throw new Error(`Failed to save analysis: ${updateResponse.status} ${errorText}`);
+      const { error: updateError } = await supabase
+        .from('devis')
+        .update(analysisUpdate)
+        .eq('id', devisId);
+
+      if (updateError) {
+        console.error('[DevisService] Database update error:', updateError);
+        throw new Error(`Failed to save analysis: ${updateError.message}`);
       }
 
       console.log('[DevisService] Analysis results saved successfully');
@@ -412,29 +398,17 @@ export class SupabaseDevisService {
         const supabaseAuthKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
         const sessionData = localStorage.getItem(supabaseAuthKey);
 
-        let accessToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
-        if (sessionData) {
-          try {
-            const session = JSON.parse(sessionData);
-            accessToken = session.access_token;
-          } catch (e) {
-            console.error('[DevisService] Failed to parse session:', e);
-          }
-        }
-
-        const updateUrl = `${supabaseUrl}/rest/v1/devis?id=eq.${devisId}`;
-        await fetch(updateUrl, {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({
+        // Update status back to uploaded using SDK
+        await supabase
+          .from('devis')
+          .update({
             status: 'uploaded',
             updated_at: new Date().toISOString(),
-          }),
-        });
+          })
+          .eq('id', devisId)
+          .catch(updateError => {
+            console.error('[DevisService] Failed to update status after error:', updateError);
+          });
       } catch (updateError) {
         console.error('[DevisService] Failed to update status after error:', updateError);
       }
