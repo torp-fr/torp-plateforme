@@ -95,7 +95,23 @@ export default function Analyze() {
   }, [handleFileUpload]);
 
   const handleAnalyze = async () => {
+    console.log('[STEP 2] FUNCTION ENTERED - handleAnalyze called');
+    console.log('[STEP 2] Current state:', {
+      uploadedFile: !!uploadedFile,
+      projectName: projectData.name,
+      projectType: projectData.type,
+      isAnalyzing,
+      userExists: !!user,
+    });
+
+    // Validation check
     if (!uploadedFile || !projectData.name || !projectData.type) {
+      console.log('[STEP 2] Validation failed - missing required fields');
+      console.log('[STEP 2] Validation details:', {
+        uploadedFile: !!uploadedFile,
+        projectName: !!projectData.name,
+        projectType: !!projectData.type,
+      });
       toast({
         title: 'Informations manquantes',
         description: 'Veuillez remplir tous les champs obligatoires.',
@@ -105,11 +121,13 @@ export default function Analyze() {
     }
 
     try {
+      console.log('[STEP 2] Validation passed - proceeding with analysis');
       setIsAnalyzing(true);
       setAnalysisProgress(['Préparation de l\'analyse...']);
 
       // Check if user is authenticated
       if (!user) {
+        console.log('[STEP 2] User not authenticated - redirecting to login');
         toast({
           title: 'Non authentifié',
           description: 'Veuillez vous connecter pour analyser un devis.',
@@ -119,7 +137,8 @@ export default function Analyze() {
         return;
       }
 
-      console.log('[Analyze] Requesting async analysis with user:', user.id);
+      console.log('[STEP 2] User authenticated:', user.id);
+      console.log('[STEP 2] Calling analysisService.requestAnalysis()');
       setAnalysisProgress(prev => [...prev, 'Upload du devis en cours...']);
 
       // Phase 32.1: Request async analysis instead of synchronous
@@ -137,7 +156,7 @@ export default function Analyze() {
         userType: userType as 'B2C' | 'B2B' | 'B2G',
       });
 
-      console.log('[Analyze] Analysis job created:', jobId);
+      console.log('[STEP 2] Analysis job created successfully:', jobId);
       setAnalysisProgress(prev => [...prev, 'Devis uploadé avec succès', 'Redirection vers le statut d\'analyse...']);
 
       // Small delay for UX feedback
@@ -149,16 +168,16 @@ export default function Analyze() {
 
       // Navigate to job status page
       setTimeout(() => {
-        console.log('[Analyze] Navigating to job status page:', jobId);
+        console.log('[STEP 2] Navigating to job status page:', jobId);
         navigate(`/analysis/job/${jobId}`);
       }, 500);
 
     } catch (error) {
-      console.error('[Analyze] ===== CATCH BLOCK REACHED =====');
-      console.error('[Analyze] Analysis error:', error);
-      console.error('[Analyze] Error type:', typeof error);
-      console.error('[Analyze] Error message:', error instanceof Error ? error.message : String(error));
-      console.error('[Analyze] Error stack:', error instanceof Error ? error.stack : 'No stack');
+      console.error('[STEP 2] ===== ERROR IN ANALYSIS =====');
+      console.error('[STEP 2] Error object:', error);
+      console.error('[STEP 2] Error type:', typeof error);
+      console.error('[STEP 2] Error message:', error instanceof Error ? error.message : String(error));
+      console.error('[STEP 2] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
 
       setIsAnalyzing(false);
       toast({

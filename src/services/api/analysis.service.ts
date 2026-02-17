@@ -33,6 +33,13 @@ export async function requestAnalysis(request: AnalysisRequest): Promise<string>
   const startTime = Date.now();
 
   try {
+    console.log('[STEP 2] requestAnalysis() CALLED');
+    console.log('[STEP 2] Request details:', {
+      userId: request.userId,
+      projectName: request.projectName,
+      fileSize: request.file.size,
+    });
+
     structuredLogger.info({
       service: 'AnalysisService',
       method: 'requestAnalysis',
@@ -42,6 +49,7 @@ export async function requestAnalysis(request: AnalysisRequest): Promise<string>
     });
 
     // Step 1: Upload devis file
+    console.log('[STEP 2] Step 1: Uploading devis file');
     structuredLogger.info({
       service: 'AnalysisService',
       message: 'Uploading devis file',
@@ -49,6 +57,7 @@ export async function requestAnalysis(request: AnalysisRequest): Promise<string>
       fileName: request.file.name,
     });
 
+    const uploadStart = performance.now();
     const devisResult = await devisService.uploadDevis(
       request.userId,
       request.file,
@@ -64,7 +73,12 @@ export async function requestAnalysis(request: AnalysisRequest): Promise<string>
         userType: request.userType,
       }
     );
+    const uploadDuration = performance.now() - uploadStart;
 
+    console.log('[STEP 2] Devis uploaded successfully:', {
+      devisId: devisResult.id,
+      duration: uploadDuration.toFixed(0),
+    });
     structuredLogger.info({
       service: 'AnalysisService',
       message: 'Devis uploaded successfully',
@@ -72,6 +86,7 @@ export async function requestAnalysis(request: AnalysisRequest): Promise<string>
     });
 
     // Step 2: Create analysis job
+    console.log('[STEP 2] Step 2: Creating analysis job');
     structuredLogger.info({
       service: 'AnalysisService',
       message: 'Creating analysis job',
@@ -79,10 +94,21 @@ export async function requestAnalysis(request: AnalysisRequest): Promise<string>
       devisId: devisResult.id,
     });
 
+    const jobStart = performance.now();
     const job = await jobService.createJob({
       user_id: request.userId,
       devis_id: devisResult.id,
     });
+    const jobDuration = performance.now() - jobStart;
+
+    console.log('[STEP 2] Analysis job created:', {
+      jobId: job.id,
+      duration: jobDuration.toFixed(0),
+    });
+
+    const totalDuration = Date.now() - startTime;
+    console.log('[STEP 2] requestAnalysis() COMPLETED successfully');
+    console.log('[STEP 2] Total duration:', totalDuration, 'ms');
 
     structuredLogger.info({
       service: 'AnalysisService',
@@ -90,7 +116,7 @@ export async function requestAnalysis(request: AnalysisRequest): Promise<string>
       message: 'Analysis job created successfully',
       jobId: job.id,
       devisId: devisResult.id,
-      duration: Date.now() - startTime,
+      duration: totalDuration,
     });
 
     // Step 3: Return job ID
@@ -98,6 +124,9 @@ export async function requestAnalysis(request: AnalysisRequest): Promise<string>
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const duration = Date.now() - startTime;
+
+    console.error('[STEP 2] requestAnalysis() ERROR after', duration, 'ms');
+    console.error('[STEP 2] Error:', error);
 
     structuredLogger.error({
       service: 'AnalysisService',

@@ -40,6 +40,16 @@ export class JobService {
    * Returns job with initial 'pending' status
    */
   async createJob(input: CreateJobInput): Promise<AnalysisJob> {
+    console.log('[STEP 2] JobService.createJob() ENTERED');
+    console.log('[STEP 2] createJob input:', {
+      user_id: input.user_id,
+      project_id: input.project_id,
+      devis_id: input.devis_id,
+    });
+
+    console.log('[STEP 2] About to insert into analysis_jobs table');
+    const insertStart = performance.now();
+
     const { data, error } = await supabase
       .from('analysis_jobs')
       .insert({
@@ -53,7 +63,11 @@ export class JobService {
       .select()
       .single();
 
+    const insertDuration = performance.now() - insertStart;
+    console.log('[STEP 2] Insert completed in ms:', insertDuration.toFixed(0));
+
     if (error) {
+      console.error('[STEP 2] createJob INSERT FAILED:', error);
       structuredLogger.error({
         service: 'JobService',
         method: 'createJob',
@@ -65,6 +79,7 @@ export class JobService {
       throw new Error(`Failed to create job: ${error.message}`);
     }
 
+    console.log('[STEP 2] Job created successfully:', data.id);
     structuredLogger.info({
       service: 'JobService',
       method: 'createJob',
