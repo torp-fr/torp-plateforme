@@ -35,6 +35,7 @@ import ProjetsListePage from "./pages/projet/ProjetsListePage";
 import Profile from "./pages/Profile";
 import Analyze from "./pages/Analyze";
 import Results from "./pages/Results";
+import JobStatusPage from "./pages/analysis/JobStatusPage";
 
 // Admin Pages
 import Analytics from "./pages/Analytics";
@@ -88,6 +89,7 @@ const AppContent = () => {
           <Route element={<ProtectedRoute><UserLayout /></ProtectedRoute>}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/analyze" element={<Analyze />} />
+            <Route path="/analysis/job/:jobId" element={<JobStatusPage />} />
             <Route path="/projects" element={<ProjetsListePage />} />
             <Route path="/project/:projectId" element={<ProjetPage />} />
             <Route path="/company" element={<Settings />} />

@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, FileText, Clock, Shield, CheckCircle, Home, Zap, Droplet, Paintbrush, Download, Loader2 } from 'lucide-react';
-import { devisService } from '@/services/api/supabase/devis.service';
+import { analysisService } from '@/services/api/analysis.service';
 
 const projectTypes = [
   { id: 'plomberie', label: 'Plomberie', icon: Droplet },
@@ -109,10 +109,7 @@ export default function Analyze() {
       setAnalysisProgress(['Préparation de l\'analyse...']);
 
       // Check if user is authenticated
-      console.log('[Analyze] User check:', { hasUser: !!user, userId: user?.id, email: user?.email });
-
       if (!user) {
-        console.error('[Analyze] No user found in context');
         toast({
           title: 'Non authentifié',
           description: 'Veuillez vous connecter pour analyser un devis.',
@@ -122,191 +119,39 @@ export default function Analyze() {
         return;
       }
 
-      console.log('[Analyze] Starting upload with user:', user.id);
-      console.log('[Analyze] File:', { name: uploadedFile.name, size: uploadedFile.size, type: uploadedFile.type });
-      console.log('[Analyze] Project data:', projectData);
-      console.log('[Analyze] devisService:', devisService);
-      console.log('[Analyze] About to call uploadDevis...');
-
-      // Upload devis and start analysis
+      console.log('[Analyze] Requesting async analysis with user:', user.id);
       setAnalysisProgress(prev => [...prev, 'Upload du devis en cours...']);
-      console.log('[Analyze] Calling uploadDevis NOW...');
 
-      // Add timeout to avoid infinite wait
-      const uploadPromise = devisService.uploadDevis(
-        user.id,
-        uploadedFile,
-        projectData.name,
-        {
-          typeTravaux: projectData.type,
-          budget: projectData.budget,
-          surface: projectData.surface ? parseFloat(projectData.surface) : undefined,
-          description: projectData.description,
-          delaiSouhaite: projectData.startDate,
-          urgence: projectData.urgency,
-          contraintes: projectData.constraints,
-          userType: userType, // Pass user type for differentiated analysis
-        }
-      );
-
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Upload timeout after 30 seconds')), 30000);
+      // Phase 32.1: Request async analysis instead of synchronous
+      const jobId = await analysisService.requestAnalysis({
+        userId: user.id,
+        file: uploadedFile,
+        projectName: projectData.name,
+        projectType: projectData.type,
+        budget: projectData.budget,
+        surface: projectData.surface ? parseFloat(projectData.surface) : undefined,
+        description: projectData.description,
+        startDate: projectData.startDate,
+        urgency: projectData.urgency,
+        constraints: projectData.constraints,
+        userType: userType as 'B2C' | 'B2B' | 'B2G',
       });
 
-      const devis = await Promise.race([uploadPromise, timeoutPromise]);
+      console.log('[Analyze] Analysis job created:', jobId);
+      setAnalysisProgress(prev => [...prev, 'Devis uploadé avec succès', 'Redirection vers le statut d\'analyse...']);
 
-      setCurrentDevisId(devis.id);
-      setAnalysisProgress(prev => [...prev, 'Devis uploadé avec succès', 'Analyse TORP en cours...']);
+      // Small delay for UX feedback
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Poll for analysis completion
-      const checkAnalysisStatus = async () => {
-        try {
-          // Use direct REST API to avoid SDK blocking issues
-          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-          const supabaseAuthKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
-          const sessionData = localStorage.getItem(supabaseAuthKey);
+      // Phase 32.1: Redirect to job status page
+      setAnalysisProgress(prev => [...prev, 'Redirection en cours...']);
+      setIsAnalyzing(false);
 
-          let accessToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
-          if (sessionData) {
-            try {
-              const session = JSON.parse(sessionData);
-              accessToken = session.access_token;
-            } catch (e) {
-              console.error('Failed to parse session:', e);
-            }
-          }
-
-          const queryUrl = `${supabaseUrl}/rest/v1/devis?id=eq.${devis.id}&select=*`;
-          const response = await fetch(queryUrl, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-            },
-          });
-
-          if (!response.ok) {
-            console.error('Error checking analysis status:', response.status);
-            return null;
-          }
-
-          const dataArray = await response.json();
-          return dataArray[0] || null;
-        } catch (error) {
-          console.error('Error checking analysis status:', error);
-          return null;
-        }
-      };
-
-      // Poll every 3 seconds with error tracking
-      let pollErrorCount = 0;
-      let analyzedConfirmCount = 0;
-      let pollIntervalCleared = false;
-
-      const pollInterval = setInterval(async () => {
-        if (pollIntervalCleared) return;
-
-        const devisData = await checkAnalysisStatus();
-
-        if (!devisData) {
-          pollErrorCount++;
-          console.warn(`[Analyze] Polling error ${pollErrorCount}/10`);
-
-          // After 10 consecutive errors (30 seconds), show warning but continue polling
-          if (pollErrorCount >= 10 && pollErrorCount % 10 === 0) {
-            console.error('[Analyze] Multiple polling errors, checking if still analyzing...');
-            setAnalysisProgress(prev => {
-              const errMsg = 'Vérification du statut en cours...';
-              if (!prev.includes(errMsg)) {
-                return [...prev, errMsg];
-              }
-              return prev;
-            });
-          }
-          return;
-        }
-
-        // Reset error count on successful poll
-        pollErrorCount = 0;
-
-        console.log('[Analyze] Polling status:', devisData.status, '| Score:', devisData.score_total);
-
-        // Update progress based on status
-        if (devisData.status === 'analyzing') {
-          analyzedConfirmCount = 0; // Reset confirmation count
-          // Show random progress step
-          const steps = [
-            'Extraction des données du devis...',
-            'Analyse de l\'entreprise (250 pts)...',
-            'Vérification des prix du marché (300 pts)...',
-            'Analyse de la complétude technique (200 pts)...',
-            'Vérification de la conformité (150 pts)...',
-            'Analyse des délais (100 pts)...',
-            'Génération de la synthèse finale...'
-          ];
-          const randomStep = steps[Math.floor(Math.random() * steps.length)];
-          setAnalysisProgress(prev => {
-            if (!prev.includes(randomStep)) {
-              return [...prev, randomStep];
-            }
-            return prev;
-          });
-        } else if (devisData.status === 'analyzed') {
-          analyzedConfirmCount++;
-          console.log(`[Analyze] Status is 'analyzed' (confirmation ${analyzedConfirmCount}/2)`);
-
-          // Wait for 2 confirmations to avoid race conditions
-          if (analyzedConfirmCount >= 2) {
-            console.log('[Analyze] Analysis CONFIRMED complete! Navigating to results...');
-            pollIntervalCleared = true;
-            clearInterval(pollInterval);
-            setAnalysisProgress(prev => [...prev, 'Analyse terminée !']);
-
-            // Navigate directly to results page - let it load the data
-            setIsAnalyzing(false);
-
-            // Toast supprimé - la navigation vers les résultats est suffisante
-
-            // Use a small delay to ensure state is updated
-            setTimeout(() => {
-              console.log('[Analyze] Navigating NOW to /results?devisId=' + devis.id);
-              navigate(`/results?devisId=${devis.id}`);
-            }, 100);
-          }
-        } else if (devisData.status === 'uploaded') {
-          analyzedConfirmCount = 0;
-          // Still waiting for analysis to start
-          setAnalysisProgress(prev => {
-            const lastMsg = 'En attente de traitement...';
-            if (!prev.includes(lastMsg)) {
-              return [...prev, lastMsg];
-            }
-            return prev;
-          });
-        }
-      }, 3000);
-
-      // Timeout after 10 minutes (analysis can take 6+ minutes)
-      const timeoutId = setTimeout(() => {
-        if (!pollIntervalCleared) {
-          pollIntervalCleared = true;
-          clearInterval(pollInterval);
-          setIsAnalyzing(false);
-          toast({
-            title: 'Délai d\'analyse dépassé',
-            description: 'L\'analyse prend plus de temps que prévu. Consultez votre dashboard.',
-            variant: 'destructive'
-          });
-          navigate('/dashboard');
-        }
-      }, 600000); // 10 minutes instead of 5
-
-      // Store cleanup function
-      (window as any).__analyzeCleanup = () => {
-        pollIntervalCleared = true;
-        clearInterval(pollInterval);
-        clearTimeout(timeoutId);
-      };
+      // Navigate to job status page
+      setTimeout(() => {
+        console.log('[Analyze] Navigating to job status page:', jobId);
+        navigate(`/analysis/job/${jobId}`);
+      }, 500);
 
     } catch (error) {
       console.error('[Analyze] ===== CATCH BLOCK REACHED =====');
