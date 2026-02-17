@@ -267,6 +267,49 @@ if (VIOLATIONS.warnings.filter((v) => v.type === 'DIRECT_DB_ACCESS').length === 
 }
 
 // ============================================================================
+// CHECK 5: USERS TABLE MIGRATION (PHASE 31.7)
+// ============================================================================
+console.log('\n🔍 CHECK 5: Users Table Migration Complete');
+console.log('-'.repeat(80));
+
+function scanUsersTableReferences(dir) {
+  for (const file of fs.readdirSync(dir)) {
+    const full = path.join(dir, file);
+    const stat = fs.statSync(full);
+
+    if (stat.isDirectory() && !file.startsWith('.') && file !== 'node_modules') {
+      scanUsersTableReferences(full);
+    } else if ((file.endsWith('.ts') || file.endsWith('.tsx')) && !file.endsWith('.d.ts')) {
+      const content = fs.readFileSync(full, 'utf-8');
+
+      // Check for .from('users') - the deleted table
+      if (content.includes("from('users')") || content.includes('from("users")')) {
+        VIOLATIONS.critical.push({
+          file: full,
+          type: 'USERS_TABLE_REFERENCE',
+          message: 'Reference to deleted "users" table found. Use "profiles" table instead.',
+          severity: 'CRITICAL',
+        });
+      }
+    }
+  }
+}
+
+scanUsersTableReferences(ROOT);
+
+if (VIOLATIONS.critical.filter((v) => v.type === 'USERS_TABLE_REFERENCE').length === 0) {
+  console.log('✅ PASS: No references to deleted "users" table found');
+  console.log('   All code migrated to "profiles" table (Phase 31.7)');
+} else {
+  console.log('❌ FAIL: References to deleted "users" table detected');
+  VIOLATIONS.critical
+    .filter((v) => v.type === 'USERS_TABLE_REFERENCE')
+    .forEach((v) => {
+      console.log(`   ${v.file}: ${v.message}`);
+    });
+}
+
+// ============================================================================
 // SUMMARY
 // ============================================================================
 console.log('\n' + '='.repeat(80));
@@ -278,6 +321,7 @@ console.log('  • Supabase client instantiation locked');
 console.log('  • External API calls (from frontend) blocked');
 console.log('  • Sensitive environment variables prohibited');
 console.log('  • Service layer access enforced');
+console.log('  • "users" table references eliminated (profiles table only)');
 
 if (VIOLATIONS.critical.length > 0) {
   console.log('\n❌ CRITICAL VIOLATIONS:');

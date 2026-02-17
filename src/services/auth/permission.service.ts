@@ -303,16 +303,17 @@ export class PermissionService {
       return cached.context;
     }
 
-    // Récupérer les données utilisateur
+    // Récupérer les données utilisateur depuis profiles
     const { data: user } = await supabase
-      .from('users')
-      .select('id, user_type')
+      .from('profiles')
+      .select('id, full_name, role, company_name')
       .eq('id', userId)
       .single();
 
     if (!user) return null;
 
-    const userType = user.user_type as UserType;
+    // Determine user type based on company info
+    const userType: UserType = user.company_name ? 'B2B' : 'B2C';
 
     // Récupérer les rôles sur les projets
     const { data: projectRoles } = await supabase
@@ -326,17 +327,9 @@ export class PermissionService {
       roleMap.set(pr.project_id, pr.role as UserRole);
     });
 
-    // Déterminer le rôle global
-    let globalRole: UserRole = 'viewer';
-    if (userType === 'admin' || userType === 'super_admin') {
-      globalRole = 'admin';
-    } else if (userType === 'B2B') {
-      globalRole = 'entreprise';
-    } else if (userType === 'B2G') {
-      globalRole = 'client';
-    } else {
-      globalRole = 'client';
-    }
+    // Determine global role from profile.role
+    const globalRole = user.role === 'admin' || user.role === 'super_admin' ? 'admin' :
+                       user.role === 'user' ? 'client' : 'viewer';
 
     const context: UserPermissionContext = {
       userId,

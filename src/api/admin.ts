@@ -74,9 +74,9 @@ export async function getCurrentUserAdminStatus() {
       return null;
     }
 
-    // Fetch user profile with role info
+    // Fetch user profile with role info from profiles table
     const { data: userData, error: dataError } = await supabase
-      .from('users')
+      .from('profiles')
       .select('id, email, role, is_admin, can_upload_kb')
       .eq('id', user.id)
       .single();
@@ -113,8 +113,8 @@ export async function listUsersWithRoles() {
     }
 
     const { data, error } = await supabase
-      .from('users')
-      .select('id, email, name, role, is_admin, can_upload_kb, created_at')
+      .from('profiles')
+      .select('id, email, full_name as name, role, is_admin, can_upload_kb, created_at')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -157,7 +157,7 @@ export async function updateUserRole(userId: string, newRole: 'user' | 'admin' |
     const isAdmin = newRole === 'admin' || newRole === 'super_admin';
 
     const { data, error } = await supabase
-      .from('users')
+      .from('profiles')
       .update({
         role: newRole,
         is_admin: isAdmin,
@@ -176,19 +176,7 @@ export async function updateUserRole(userId: string, newRole: 'user' | 'admin' |
       };
     }
 
-    // Also sync to profiles table
-    await supabase
-      .from('profiles')
-      .update({
-        role: newRole,
-        is_admin: isAdmin,
-        can_upload_kb: isAdmin,
-        updated_role_date: new Date().toISOString(),
-      })
-      .eq('id', userId)
-      .catch(() => {
-        // profiles table may not have all users, so ignore errors
-      });
+    // profiles table is now the source of truth, no syncing needed
 
     return {
       success: true,
