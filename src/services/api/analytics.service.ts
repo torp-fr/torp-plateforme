@@ -19,62 +19,72 @@ export async function getGlobalStats() {
     });
 
     // Get total users from profiles
-    const { count: userCount, error: userError } = await supabase
-      .from('profiles')
-      .select('id', { count: 'exact', head: true });
-
-    if (userError) {
-      throw userError;
-    }
-
-    // Get total completed analyses
-    const { count: analysisCount, error: analysisError } = await supabase
-      .from('analysis_jobs')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'completed');
-
-    if (analysisError) {
-      throw analysisError;
-    }
-
-    // Get analyses from last 30 days
+    // Calculate date ranges
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const { count: analysisLast30, error: analysis30Error } = await supabase
-      .from('analysis_jobs')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'completed')
-      .gte('completed_at', thirtyDaysAgo.toISOString());
-
-    if (analysis30Error) {
-      throw analysis30Error;
-    }
-
-    // Calculate growth percentage
     const previousMonthStart = new Date(thirtyDaysAgo);
     previousMonthStart.setDate(previousMonthStart.getDate() - 30);
 
-    const { count: analysisPrevious30, error: analysisPrevError } = await supabase
-      .from('analysis_jobs')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'completed')
-      .gte('completed_at', previousMonthStart.toISOString())
-      .lt('completed_at', thirtyDaysAgo.toISOString());
+    console.log('[AnalyticsService] Fetching global stats with parallelized queries', {
+      thirtyDaysAgo: thirtyDaysAgo.toISOString(),
+      previousMonthStart: previousMonthStart.toISOString(),
+    });
 
-    if (analysisPrevError) {
-      throw analysisPrevError;
-    }
+    // Parallelize all 4 queries with Promise.all()
+    const [userResult, analysisResult, analysisLast30Result, analysisPrevious30Result] = await Promise.all([
+      // Query 1: Total users
+      supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true }),
+      // Query 2: Total completed analyses
+      supabase
+        .from('analysis_jobs')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'completed'),
+      // Query 3: Analyses last 30 days
+      supabase
+        .from('analysis_jobs')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'completed')
+        .gte('completed_at', thirtyDaysAgo.toISOString()),
+      // Query 4: Analyses previous 30 days
+      supabase
+        .from('analysis_jobs')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'completed')
+        .gte('completed_at', previousMonthStart.toISOString())
+        .lt('completed_at', thirtyDaysAgo.toISOString()),
+    ]);
 
-    const growth = analysisPrevious30 && analysisLast30
+    // Check for errors
+    if (userResult.error) throw userResult.error;
+    if (analysisResult.error) throw analysisResult.error;
+    if (analysisLast30Result.error) throw analysisLast30Result.error;
+    if (analysisPrevious30Result.error) throw analysisPrevious30Result.error;
+
+    const userCount = userResult.count || 0;
+    const analysisCount = analysisResult.count || 0;
+    const analysisLast30 = analysisLast30Result.count || 0;
+    const analysisPrevious30 = analysisPrevious30Result.count || 0;
+
+    // Calculate growth percentage
+    const growth = analysisPrevious30 > 0
       ? Math.round(((analysisLast30 - analysisPrevious30) / analysisPrevious30) * 100)
-      : 0;
+      : (analysisLast30 > 0 ? 100 : 0);  // 100% growth if previous was 0 and current > 0, else 0%
+
+    console.log('[AnalyticsService] Global stats fetched successfully', {
+      userCount,
+      analysisCount,
+      analysisLast30,
+      analysisPrevious30,
+      growth,
+    });
 
     return {
-      userCount: userCount || 0,
-      analysisCount: analysisCount || 0,
-      analysisLast30: analysisLast30 || 0,
-      growth: growth >= 0 ? `+${growth}%` : `${growth}%`,
+      userCount,
+      analysisCount,
+      analysisLast30,
+      growth,
     };
   } catch (error) {
     structuredLogger.error({
