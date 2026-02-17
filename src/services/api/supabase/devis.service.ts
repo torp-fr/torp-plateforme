@@ -112,7 +112,25 @@ export class SupabaseDevisService {
     console.log('[SAFE MODE] Uploading to storage:', { filePath, fileSize: file.size });
 
     try {
+      // DIAGNOSTIC: Test bucket access
+      console.log('[SAFE MODE] Testing bucket access...');
+      const { data: testList, error: testError } = await supabase.storage
+        .from(STORAGE_BUCKETS.DEVIS)
+        .list('', { limit: 1 });
+      console.log('[SAFE MODE] Bucket test result:', {
+        testListCount: testList?.length ?? null,
+        testError: testError?.message ?? null,
+      });
+
       // STEP 1: Upload file to storage (NO timeout wrapper)
+      console.log('[SAFE MODE] About to call storage.upload()');
+      const uploadStart = performance.now();
+
+      // Detect if upload hangs
+      const hangDetector = setTimeout(() => {
+        console.warn('[SAFE MODE] ⚠️ Upload still pending after 8 seconds - possible freeze');
+      }, 8000);
+
       const { data: uploadedFile, error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKETS.DEVIS)
         .upload(filePath, file, {
@@ -120,9 +138,20 @@ export class SupabaseDevisService {
           upsert: false,
         });
 
+      clearTimeout(hangDetector);
+      const uploadEnd = performance.now();
+      const uploadDuration = uploadEnd - uploadStart;
+
+      console.log('[SAFE MODE] Upload finished in ms:', uploadDuration.toFixed(0));
+
       if (uploadError) {
-        console.error('[SAFE MODE] Upload FAILED:', uploadError);
-        throw new Error(`Failed to upload file: ${uploadError.message}`);
+        console.error('[SAFE MODE] Upload FULL ERROR:', uploadError);
+        console.error('[SAFE MODE] Error details:', {
+          message: uploadError.message,
+          statusCode: uploadError.statusCode,
+          status: uploadError.status,
+        });
+        throw uploadError;
       }
 
       console.log('[SAFE MODE] Upload DONE');
