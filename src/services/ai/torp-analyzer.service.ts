@@ -22,6 +22,9 @@ import type { TorpAnalysisResult, RGEVerificationData } from '@/types/torp';
 import { innovationDurableScoringService } from '@/services/scoring/innovation-durable.scoring';
 import { transparencyScoringService } from '@/services/scoring/transparency-scoring.service';
 import { rgeAdemeService } from '@/services/api/rge-ademe.service';
+// PHASE 35: Knowledge Brain Integration
+import { knowledgeBrainService } from './knowledge-brain.service';
+import { marketIntelligenceService } from './market-intelligence.service';
 
 // Statut de vérification du SIRET
 export interface SiretVerification {
@@ -1029,58 +1032,131 @@ export class TorpAnalyzerService {
 
   /**
    * Analyze prix (300 points)
+   * PHASE 35: Enhanced with market intelligence and knowledge context
    */
   private async analyzePrix(devisData: ExtractedDevisData, typeTravaux: string, region: string): Promise<any> {
-    const prompt = buildPrixAnalysisPrompt(JSON.stringify(devisData, null, 2), typeTravaux, region);
+    try {
+      console.log('[TORP Prix] Starting price analysis with knowledge context...');
 
-    const { data } = await hybridAIService.generateJSON(prompt, {
-      systemPrompt: TORP_SYSTEM_PROMPT,
-      temperature: 0.4,
-    });
+      let prompt = buildPrixAnalysisPrompt(JSON.stringify(devisData, null, 2), typeTravaux, region);
 
-    return data;
+      // PHASE 35: Inject knowledge context (market data, references)
+      prompt = await knowledgeBrainService.injectKnowledgeContext(prompt, {
+        category: 'pricing',
+        region,
+        type_travaux: typeTravaux,
+      });
+
+      const { data } = await hybridAIService.generateJSON(prompt, {
+        systemPrompt: TORP_SYSTEM_PROMPT,
+        temperature: 0.4,
+      });
+
+      // PHASE 35: Adjust score based on market intelligence
+      if (data?.scoreTotal && devisData.devis?.montantTotal) {
+        const adjustedScore = await marketIntelligenceService.adjustPriceScore(
+          devisData.devis.montantTotal,
+          typeTravaux,
+          region,
+          data.scoreTotal
+        );
+        data.scoreTotal = adjustedScore;
+        console.log('[TORP Prix] Score adjusted with market intelligence:', {
+          original: data.scoreTotal,
+          adjusted: adjustedScore,
+        });
+      }
+
+      return data;
+    } catch (error) {
+      console.error('[TORP Prix] Analysis error:', error);
+      // Return minimal valid price analysis
+      return { scoreTotal: 0, details: { description: 'Price analysis failed - using defaults' } };
+    }
   }
 
   /**
    * Analyze complétude (200 points)
+   * PHASE 35: Enhanced with best practices from knowledge base
    */
   private async analyzeCompletude(devisData: ExtractedDevisData, typeTravaux: string): Promise<any> {
-    const prompt = buildCompletudeAnalysisPrompt(JSON.stringify(devisData, null, 2), typeTravaux);
+    try {
+      console.log('[TORP Complétude] Starting completeness analysis with knowledge context...');
 
-    const { data } = await hybridAIService.generateJSON(prompt, {
-      systemPrompt: TORP_SYSTEM_PROMPT,
-      temperature: 0.4,
-    });
+      let prompt = buildCompletudeAnalysisPrompt(JSON.stringify(devisData, null, 2), typeTravaux);
 
-    return data;
+      // PHASE 35: Inject knowledge context (best practices)
+      prompt = await knowledgeBrainService.injectKnowledgeContext(prompt, {
+        category: 'best_practices',
+        type_travaux: typeTravaux,
+      });
+
+      const { data } = await hybridAIService.generateJSON(prompt, {
+        systemPrompt: TORP_SYSTEM_PROMPT,
+        temperature: 0.4,
+      });
+
+      return data;
+    } catch (error) {
+      console.error('[TORP Complétude] Analysis error:', error);
+      return { scoreTotal: 0, details: { description: 'Completeness analysis failed - using defaults' } };
+    }
   }
 
   /**
    * Analyze conformité (150 points)
+   * PHASE 35: Enhanced with regulatory standards from knowledge base
    */
   private async analyzeConformite(devisData: ExtractedDevisData, typeProjet: string): Promise<any> {
-    const prompt = buildConformiteAnalysisPrompt(JSON.stringify(devisData, null, 2), typeProjet);
+    try {
+      console.log('[TORP Conformité] Starting compliance analysis with regulatory context...');
 
-    const { data } = await hybridAIService.generateJSON(prompt, {
-      systemPrompt: TORP_SYSTEM_PROMPT,
-      temperature: 0.3,
-    });
+      let prompt = buildConformiteAnalysisPrompt(JSON.stringify(devisData, null, 2), typeProjet);
 
-    return data;
+      // PHASE 35: Inject knowledge context (regulatory standards)
+      prompt = await knowledgeBrainService.injectKnowledgeContext(prompt, {
+        category: 'regulations',
+        type_travaux: typeProjet,
+      });
+
+      const { data } = await hybridAIService.generateJSON(prompt, {
+        systemPrompt: TORP_SYSTEM_PROMPT,
+        temperature: 0.3,
+      });
+
+      return data;
+    } catch (error) {
+      console.error('[TORP Conformité] Analysis error:', error);
+      return { scoreTotal: 0, details: { description: 'Compliance analysis failed - using defaults' } };
+    }
   }
 
   /**
    * Analyze délais (100 points)
+   * PHASE 35: Enhanced with realistic timeline benchmarks from knowledge base
    */
   private async analyzeDelais(devisData: ExtractedDevisData, typeTravaux: string): Promise<any> {
-    const prompt = buildDelaisAnalysisPrompt(JSON.stringify(devisData, null, 2), typeTravaux);
+    try {
+      console.log('[TORP Délais] Starting timeline analysis with industry benchmarks...');
 
-    const { data } = await hybridAIService.generateJSON(prompt, {
-      systemPrompt: TORP_SYSTEM_PROMPT,
-      temperature: 0.4,
-    });
+      let prompt = buildDelaisAnalysisPrompt(JSON.stringify(devisData, null, 2), typeTravaux);
 
-    return data;
+      // PHASE 35: Inject knowledge context (timeline benchmarks)
+      prompt = await knowledgeBrainService.injectKnowledgeContext(prompt, {
+        category: 'best_practices',
+        type_travaux: typeTravaux,
+      });
+
+      const { data } = await hybridAIService.generateJSON(prompt, {
+        systemPrompt: TORP_SYSTEM_PROMPT,
+        temperature: 0.4,
+      });
+
+      return data;
+    } catch (error) {
+      console.error('[TORP Délais] Analysis error:', error);
+      return { scoreTotal: 0, details: { description: 'Timeline analysis failed - using defaults' } };
+    }
   }
 
   /**
