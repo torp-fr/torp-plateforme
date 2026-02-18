@@ -112,7 +112,7 @@ export function KnowledgeBaseUpload() {
       const reliabilityScore = SOURCES[state.source].reliability;
       console.log('🧠 [UPLOAD] Using reliability score:', reliabilityScore);
 
-      // PHASE 36.3: Use knowledgeBrainService with schema-compliant payload
+      // PHASE 36.4: Use knowledgeBrainService with schema-compliant payload (no metadata)
       console.log('🧠 [UPLOAD] Calling knowledgeBrainService.addKnowledgeDocumentWithTimeout...');
       const result = await knowledgeBrainService.addKnowledgeDocumentWithTimeout(
         state.source, // source: 'internal', 'external', or 'official'
@@ -122,10 +122,7 @@ export function KnowledgeBaseUpload() {
           title: finalTitle,  // ✅ PHASE 36.3: Always provide title
           region: state.region,
           reliability_score: reliabilityScore,
-          metadata: {
-            filename: state.file.name,
-            uploaded_at: new Date().toISOString(),
-          },
+          // PHASE 36.4: Removed metadata (column doesn't exist in schema)
         }
       );
 

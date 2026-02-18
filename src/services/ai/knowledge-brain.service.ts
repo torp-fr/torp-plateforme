@@ -53,7 +53,6 @@ class KnowledgeBrainService {
       title?: string;
       region?: string;
       reliability_score?: number;
-      metadata?: any;
     }
   ): Promise<KnowledgeDocument | null> {
     try {
@@ -73,19 +72,24 @@ class KnowledgeBrainService {
 
       // PHASE 35.1: Explicit insert step with error throwing
       console.log('[KNOWLEDGE BRAIN] 📝 Inserting document to knowledge_documents table...');
+
+      // PHASE 36.4: Schema-compliant insert payload (no ghost columns)
+      const insertPayload = {
+        title: safeTitle,
+        category,
+        source,
+        region: options?.region || null,
+        content,
+        reliability_score: options?.reliability_score || 50,
+        is_active: true,
+        version_number: 1,
+      };
+
+      console.log('[KNOWLEDGE BRAIN] 📋 Final payload keys:', Object.keys(insertPayload));
+
       const { data: doc, error: docError } = await supabase
         .from('knowledge_documents')
-        .insert({
-          title: safeTitle,  // ✅ PHASE 36.3: Always provide title
-          category,
-          source,
-          region: options?.region,
-          content,
-          reliability_score: options?.reliability_score || 50,
-          metadata: options?.metadata || {},
-          is_active: true,
-          version_number: 1,
-        })
+        .insert(insertPayload)
         .select()
         .single();
 
@@ -147,7 +151,6 @@ class KnowledgeBrainService {
       title?: string;
       region?: string;
       reliability_score?: number;
-      metadata?: any;
     }
   ): Promise<KnowledgeDocument | null> {
     try {
@@ -166,23 +169,19 @@ class KnowledgeBrainService {
 
       console.log('[KNOWLEDGE BRAIN] 📝 Using title:', safeTitle);
 
-      // PHASE 36.3: Build complete insert payload with all required columns
+      // PHASE 36.4: Build schema-compliant insert payload (only existing columns)
+      // Removed ghost columns: metadata (doesn't exist in schema)
       const insertPayload = {
-        title: safeTitle,  // ✅ REQUIRED - NOT NULL
-        category,          // ✅ REQUIRED - NOT NULL
-        source,            // ✅ REQUIRED - NOT NULL
+        title: safeTitle,          // ✅ REQUIRED - NOT NULL
+        category,                  // ✅ REQUIRED - NOT NULL
+        source,                    // ✅ REQUIRED - NOT NULL
         content,
         region: options?.region || null,
         reliability_score: options?.reliability_score || 50,
-        metadata: options?.metadata || {},
         is_active: true,
-        version_number: 1,
-        usage_count: 0,
-        quality_score: 50,
-        is_pricing_reference: category === 'PRICING_REFERENCE',
-        pricing_data: null,
       };
 
+      console.log('[KNOWLEDGE BRAIN] 📋 Final payload keys:', Object.keys(insertPayload));
       console.log('[KNOWLEDGE BRAIN] 📋 Insert payload:', {
         title: insertPayload.title,
         category: insertPayload.category,
