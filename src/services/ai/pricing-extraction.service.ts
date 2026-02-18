@@ -182,13 +182,13 @@ class PricingExtractionService {
     try {
       console.log('[PRICING] 📊 Fetching pricing statistics...');
 
+      // PHASE 36.2 FIX: Remove is_active filter (column doesn't exist in market_price_references)
       const { data: references, error } = await supabase
         .from('market_price_references')
-        .select('*')
-        .eq('is_active', true);
+        .select('*');
 
       if (error || !references) {
-        console.error('[PRICING] ❌ Fetch error:', error);
+        console.error('[PRICING] ❌ Fetch error:', error?.message || 'Unknown error');
         return null;
       }
 
@@ -217,7 +217,7 @@ class PricingExtractionService {
       console.log('[PRICING] ✅ Statistics fetched:', stats);
       return stats;
     } catch (error) {
-      console.error('[PRICING] 💥 Stats error:', error);
+      console.error('[PRICING] 💥 Stats error:', error instanceof Error ? error.message : error);
       return null;
     }
   }
