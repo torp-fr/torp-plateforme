@@ -54,9 +54,15 @@ class KnowledgeBrainService {
     }
   ): Promise<KnowledgeDocument | null> {
     try {
-      console.log('[KNOWLEDGE BRAIN] Adding document:', { source, category, length: content.length });
+      console.log('[KNOWLEDGE BRAIN] 🧠 Starting document addition...', {
+        source,
+        category,
+        length: content.length,
+        region: options?.region,
+      });
 
-      // Insert document
+      // PHASE 35.1: Explicit insert step with error throwing
+      console.log('[KNOWLEDGE BRAIN] 📝 Inserting document to knowledge_documents table...');
       const { data: doc, error: docError } = await supabase
         .from('knowledge_documents')
         .insert({
@@ -70,14 +76,24 @@ class KnowledgeBrainService {
         .select()
         .single();
 
-      if (docError || !doc) {
-        console.error('[KNOWLEDGE BRAIN] Failed to insert document:', docError);
-        return null;
+      if (docError) {
+        const errorMsg = docError.message || 'Unknown error';
+        console.error('[KNOWLEDGE BRAIN] ❌ Insert failed:', { error: errorMsg, code: docError.code });
+        throw new Error(`Insert failed: ${errorMsg}`);
       }
 
+      if (!doc) {
+        console.error('[KNOWLEDGE BRAIN] ❌ No document returned after insert');
+        throw new Error('No document returned after insert');
+      }
+
+      console.log('[KNOWLEDGE BRAIN] ✅ Document inserted successfully:', doc.id);
+
       // Generate and store embedding
+      console.log('[KNOWLEDGE BRAIN] 🔢 Generating embedding...');
       const embedding = await this.generateEmbedding(content);
       if (embedding) {
+        console.log('[KNOWLEDGE BRAIN] 💾 Storing embedding...');
         const { error: embError } = await supabase
           .from('knowledge_embeddings')
           .insert({
@@ -87,16 +103,21 @@ class KnowledgeBrainService {
           });
 
         if (embError) {
-          console.warn('[KNOWLEDGE BRAIN] Failed to store embedding:', embError);
+          console.warn('[KNOWLEDGE BRAIN] ⚠️ Failed to store embedding:', embError.message);
           // Don't fail - document still useful without embedding
+        } else {
+          console.log('[KNOWLEDGE BRAIN] ✅ Embedding stored successfully');
         }
+      } else {
+        console.log('[KNOWLEDGE BRAIN] ⏭️ Skipping embedding (vector search disabled or generation failed)');
       }
 
-      console.log('[KNOWLEDGE BRAIN] Document added successfully:', doc.id);
+      console.log('[KNOWLEDGE BRAIN] 🎉 Document added completely:', doc.id);
       return doc;
     } catch (error) {
-      console.error('[KNOWLEDGE BRAIN] Error adding document:', error);
-      return null;
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[KNOWLEDGE BRAIN] 💥 Fatal error:', errorMsg, error);
+      throw error; // PHASE 35.1: Throw instead of returning null for better error handling
     }
   }
 
@@ -257,6 +278,7 @@ class KnowledgeBrainService {
 
   /**
    * Inject knowledge context into analysis prompt
+   * PHASE 35.1: Enhanced logging, graceful fallback, safe mode
    */
   async injectKnowledgeContext(
     prompt: string,
@@ -267,7 +289,11 @@ class KnowledgeBrainService {
     }
   ): Promise<string> {
     try {
-      console.log('[KNOWLEDGE BRAIN] Injecting knowledge context...');
+      console.log('[KNOWLEDGE BRAIN] 🔍 Searching for relevant knowledge...', {
+        category: options?.category,
+        region: options?.region,
+        type_travaux: options?.type_travaux,
+      });
 
       // Search for relevant knowledge
       const knowledge = await this.searchRelevantKnowledge(prompt, {
@@ -277,31 +303,40 @@ class KnowledgeBrainService {
       });
 
       if (knowledge.length === 0) {
-        console.log('[KNOWLEDGE BRAIN] No relevant knowledge found - using base prompt');
+        console.warn('[KNOWLEDGE BRAIN] ⚠️ No relevant knowledge found - fallback mode (brain empty or no matches)');
+        // PHASE 35.1: Safe mode - continue without knowledge
         return prompt;
       }
+
+      console.log('[KNOWLEDGE BRAIN] ✅ Found', knowledge.length, 'relevant documents');
 
       // Get market price reference
       let priceContext = '';
       if (options?.type_travaux && options?.region) {
+        console.log('[KNOWLEDGE BRAIN] 💰 Fetching market pricing...', { type_travaux: options.type_travaux, region: options.region });
         const pricing = await this.getMarketPricing(options.type_travaux, options.region);
         if (pricing) {
-          priceContext = `\n\nMARKET CONTEXT:\nWork Type: ${options.type_travaux}\nRegion: ${options.region}\nMarket Price Range: €${pricing.min_price} - €${pricing.max_price}\nAverage: €${pricing.avg_price}`;
+          priceContext = `\n\nMARKET CONTEXT:\nWork Type: ${options.type_travaux}\nRegion: ${options.region}\nMarket Price Range: €${pricing.min_price} - €${pricing.max_price}\nAverage: €${pricing.avg_price}\nReliability: ${pricing.reliability_score}%`;
+          console.log('[KNOWLEDGE BRAIN] ✅ Market context added');
+        } else {
+          console.log('[KNOWLEDGE BRAIN] ℹ️ No market pricing available - continuing without price context');
         }
       }
 
       // Build context section
-      const contextSection = `\n\nRELEVANT KNOWLEDGE BASE:\n${knowledge
-        .map((k, i) => `[${i + 1}] ${k.category.toUpperCase()}: ${k.content.substring(0, 200)}...`)
+      const contextSection = `\n\nRELEVANT KNOWLEDGE BASE (${knowledge.length} documents):\n${knowledge
+        .map((k, i) => `[${i + 1}] [${k.source}] ${k.category.toUpperCase()}: ${k.content.substring(0, 200)}...`)
         .join('\n')}`;
 
       const enrichedPrompt = prompt + contextSection + priceContext;
 
-      console.log('[KNOWLEDGE BRAIN] Context injected successfully -', knowledge.length, 'documents');
+      console.log('[KNOWLEDGE BRAIN] 🎉 Context injected successfully - Enhanced prompt ready');
       return enrichedPrompt;
     } catch (error) {
-      console.error('[KNOWLEDGE BRAIN] Context injection error:', error);
-      return prompt; // Return original prompt on error
+      // PHASE 35.1: Never crash - always return usable prompt
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[KNOWLEDGE BRAIN] 💥 Context injection error (safe mode active):', errorMsg);
+      return prompt; // Return original prompt - analysis continues
     }
   }
 

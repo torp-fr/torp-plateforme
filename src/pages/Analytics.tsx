@@ -44,11 +44,12 @@ function KnowledgeBaseStatsCard() {
       try {
         setLoading(true);
         setError(null);
-        // Query knowledge base document count
+        // PHASE 35.1: Query knowledge_documents table (correct table name)
         const { supabase } = await import('@/lib/supabase');
         const { count, error: dbError } = await supabase
-          .from('documents')
-          .select('id', { count: 'exact', head: true });
+          .from('knowledge_documents')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true);
 
         if (dbError) throw dbError;
         console.log('[Analytics] Knowledge base docs:', count);
@@ -57,6 +58,7 @@ function KnowledgeBaseStatsCard() {
         const message = err instanceof Error ? err.message : 'Failed to load document count';
         console.error('[Analytics] Document count error:', message);
         setError(message);
+        setDocCount(0); // Default to 0 on error
       } finally {
         setLoading(false);
       }
@@ -584,7 +586,7 @@ function UsersTab({ navigate }: { navigate: any }) {
           <h2 className="text-2xl font-bold">Gestion des Utilisateurs</h2>
           <p className="text-muted-foreground">Gérez les rôles et permissions</p>
         </div>
-        <Button onClick={() => navigate('/admin/users')}>
+        <Button onClick={() => navigate('/analytics/users')}>
           Gérer les utilisateurs
         </Button>
       </div>
