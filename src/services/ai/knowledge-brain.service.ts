@@ -7,6 +7,8 @@
 import { supabase } from '@/lib/supabase';
 import { hybridAIService } from './hybrid-ai.service';
 import { pricingExtractionService } from './pricing-extraction.service';
+// PHASE 36.6: Unicode sanitizer for safe database insertion
+import { sanitizeAndTruncate, getSanitizationStats } from '@/utils/text-sanitizer';
 
 export interface KnowledgeDocument {
   id: string;
@@ -68,6 +70,12 @@ class KnowledgeBrainService {
           ? options.title.trim()
           : `Document ${category || 'Unknown'} - ${new Date().toISOString().split('T')[0]}`;
 
+      // PHASE 36.6: Sanitize content for safe Unicode insertion
+      console.log('[KNOWLEDGE BRAIN] 🧹 Sanitizing content for database insertion...');
+      const safeContent = sanitizeAndTruncate(content);
+      const sanitizationStats = getSanitizationStats(content, safeContent);
+      console.log('[KNOWLEDGE BRAIN] 📊 Sanitization stats:', sanitizationStats);
+
       // PHASE 35.1: Explicit insert step with error throwing
       console.log('[KNOWLEDGE BRAIN] 📝 Inserting document to knowledge_documents table...');
 
@@ -76,7 +84,7 @@ class KnowledgeBrainService {
         title: safeTitle,
         category,
         source,
-        content,
+        content: safeContent,  // ✅ PHASE 36.6: Use sanitized content
         is_active: true,
       };
 
@@ -108,8 +116,9 @@ class KnowledgeBrainService {
       console.log('[KNOWLEDGE BRAIN] ✅ Document inserted successfully:', doc.id);
 
       // Generate and store embedding
+      // PHASE 36.6: Use sanitized content for embedding
       console.log('[KNOWLEDGE BRAIN] 🔢 Generating embedding...');
-      const embedding = await this.generateEmbedding(content);
+      const embedding = await this.generateEmbedding(safeContent);
       if (embedding) {
         console.log('[KNOWLEDGE BRAIN] 💾 Storing embedding...');
         const { error: embError } = await supabase
@@ -168,13 +177,23 @@ class KnowledgeBrainService {
 
       console.log('[KNOWLEDGE BRAIN] 📝 Using title:', safeTitle);
 
+      // PHASE 36.6: Sanitize content for safe Unicode insertion
+      console.log('[KNOWLEDGE BRAIN] 🧹 Sanitizing content (Unicode cleanup, size protection)...');
+      const safeContent = sanitizeAndTruncate(content);
+      const sanitizationStats = getSanitizationStats(content, safeContent);
+      console.log('[KNOWLEDGE BRAIN] 📊 Sanitization stats:', {
+        original_bytes: sanitizationStats.original_bytes,
+        sanitized_bytes: sanitizationStats.sanitized_bytes,
+        removed_bytes: sanitizationStats.removed_bytes,
+      });
+
       // PHASE 36.5: Minimal schema-compliant payload (ONLY verified existing columns)
-      // Removed ghost columns: metadata, region, reliability_score, version_number
+      // PHASE 36.6: Use sanitized content
       const insertPayload = {
         title: safeTitle,          // ✅ REQUIRED - NOT NULL
         category,                  // ✅ REQUIRED - NOT NULL
         source,                    // ✅ REQUIRED - NOT NULL
-        content,
+        content: safeContent,      // ✅ PHASE 36.6: Sanitized content
         is_active: true,
       };
 
@@ -227,8 +246,9 @@ class KnowledgeBrainService {
       }
 
       // PHASE 36: Generate embedding ASYNCHRONOUSLY (non-blocking)
+      // PHASE 36.6: Use sanitized content for embedding
       console.log('[KNOWLEDGE BRAIN] 🚀 Starting async embedding generation...');
-      this.generateEmbeddingAsync(doc.id, content).catch((err) =>
+      this.generateEmbeddingAsync(doc.id, safeContent).catch((err) =>
         console.warn('[KNOWLEDGE BRAIN] Async embedding error (ignored):', err)
       );
 
