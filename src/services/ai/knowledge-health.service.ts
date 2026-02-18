@@ -4,7 +4,7 @@
  * Status: Industrial-Grade Monitoring
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 
 interface SystemHealthStatus {
   total_documents: number;
@@ -97,11 +97,6 @@ interface SystemStatusView {
 }
 
 export class KnowledgeHealthService {
-  private readonly supabase = createClient(
-    process.env.SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-  );
-
   /**
    * 🏥 GET SYSTEM HEALTH STATUS
    * Comprehensive health report of the entire knowledge base system
@@ -110,7 +105,7 @@ export class KnowledgeHealthService {
     try {
       const startTime = Date.now();
 
-      const { data, error } = await this.supabase.rpc(
+      const { data, error } = await supabase.rpc(
         'system_health_status'
       );
 
@@ -147,7 +142,7 @@ export class KnowledgeHealthService {
     try {
       const startTime = Date.now();
 
-      const { data, error } = await this.supabase.rpc(
+      const { data, error } = await supabase.rpc(
         'vector_dimension_diagnostic'
       );
 
@@ -198,7 +193,7 @@ export class KnowledgeHealthService {
     try {
       const startTime = Date.now();
 
-      const { data, error } = await this.supabase.rpc(
+      const { data, error } = await supabase.rpc(
         'detect_stalled_ingestion',
         { stall_threshold_minutes: thresholdMinutes }
       );
@@ -248,7 +243,7 @@ export class KnowledgeHealthService {
     try {
       const startTime = Date.now();
 
-      const { data, error } = await this.supabase.rpc(
+      const { data, error } = await supabase.rpc(
         'detect_embedding_gaps'
       );
 
@@ -290,7 +285,7 @@ export class KnowledgeHealthService {
     try {
       const startTime = Date.now();
 
-      const { data, error } = await this.supabase.rpc(
+      const { data, error } = await supabase.rpc(
         'get_rpc_performance_stats',
         { time_window_hours: timeWindowHours }
       );
@@ -332,7 +327,7 @@ export class KnowledgeHealthService {
     try {
       const startTime = Date.now();
 
-      const { data, error } = await this.supabase.rpc(
+      const { data, error } = await supabase.rpc(
         'get_embedding_performance_stats',
         { time_window_hours: timeWindowHours }
       );
@@ -374,7 +369,7 @@ export class KnowledgeHealthService {
     try {
       const startTime = Date.now();
 
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from('knowledge_system_status')
         .select('*');
 
@@ -422,7 +417,7 @@ export class KnowledgeHealthService {
     errorMessage?: string
   ): Promise<string | null> {
     try {
-      const { data, error: dbError } = await this.supabase.rpc(
+      const { data, error: dbError } = await supabase.rpc(
         'log_rpc_metric',
         {
           p_rpc_name: rpcName,
@@ -459,7 +454,7 @@ export class KnowledgeHealthService {
     provider: string = 'openai'
   ): Promise<string | null> {
     try {
-      const { data, error } = await this.supabase.rpc(
+      const { data, error } = await supabase.rpc(
         'log_embedding_metric',
         {
           p_document_id: documentId,
