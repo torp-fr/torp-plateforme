@@ -27,30 +27,6 @@ export function sanitizeText(input: string): string {
     .normalize('NFC');
 }
 
-/**
- * Sanitize and truncate text for safe storage
- * Maximum content size: 500KB
- */
-export function sanitizeAndTruncate(input: string, maxBytes: number = 500000): string {
-  if (!input) return '';
-
-  const sanitized = sanitizeText(input);
-
-  // Check byte size (not character count, as UTF-8 chars can be multi-byte)
-  const encoded = new TextEncoder().encode(sanitized);
-  if (encoded.length > maxBytes) {
-    console.warn(
-      `[TEXT-SANITIZER] Content too large (${encoded.length} bytes), truncating to ${maxBytes} bytes`
-    );
-    // Decode back carefully to avoid cutting multi-byte chars
-    const truncated = new TextDecoder('utf-8', { fatal: false }).decode(
-      encoded.slice(0, maxBytes)
-    );
-    return truncated;
-  }
-
-  return sanitized;
-}
 
 /**
  * Get sanitization statistics
