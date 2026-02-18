@@ -1219,47 +1219,6 @@ class KnowledgeBrainService {
     };
   }
 
-  /**
-   * Get knowledge statistics for analytics
-   */
-  async getKnowledgeStats(): Promise<{
-    total_documents: number;
-    by_category: Record<string, number>;
-    by_source: Record<string, number>;
-    avg_reliability: number;
-  } | null> {
-    try {
-      const { data: documents, error: docError } = await supabase
-        .from('knowledge_documents')
-        .select('*')
-        .eq('is_active', true);
-
-      if (docError || !documents) {
-        console.error('[KNOWLEDGE BRAIN] Failed to get stats:', docError);
-        return null;
-      }
-
-      const by_category: Record<string, number> = {};
-      const by_source: Record<string, number> = {};
-      let total_reliability = 0;
-
-      documents.forEach((doc: KnowledgeDocument) => {
-        by_category[doc.category] = (by_category[doc.category] || 0) + 1;
-        by_source[doc.source] = (by_source[doc.source] || 0) + 1;
-        total_reliability += doc.reliability_score;
-      });
-
-      return {
-        total_documents: documents.length,
-        by_category,
-        by_source,
-        avg_reliability: documents.length > 0 ? total_reliability / documents.length : 0,
-      };
-    } catch (error) {
-      console.error('[KNOWLEDGE BRAIN] Stats error:', error);
-      return null;
-    }
-  }
 }
 
 export const knowledgeBrainService = new KnowledgeBrainService();

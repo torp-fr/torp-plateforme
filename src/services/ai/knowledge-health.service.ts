@@ -5,7 +5,6 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { Logger } from '@nestjs/common';
 
 interface SystemHealthStatus {
   total_documents: number;
@@ -98,7 +97,6 @@ interface SystemStatusView {
 }
 
 export class KnowledgeHealthService {
-  private readonly logger = new Logger(KnowledgeHealthService.name);
   private readonly supabase = createClient(
     process.env.SUPABASE_URL || '',
     process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -117,12 +115,12 @@ export class KnowledgeHealthService {
       );
 
       if (error) {
-        this.logger.error(`[HEALTH] system_health_status RPC failed: ${error.message}`);
+        console.error(`[HEALTH] system_health_status RPC failed: ${error.message}`);
         throw new Error(`Health check failed: ${error.message}`);
       }
 
       const executionTime = Date.now() - startTime;
-      this.logger.log(
+      console.log(
         `[HEALTH] System health check completed in ${executionTime}ms`
       );
 
@@ -136,7 +134,7 @@ export class KnowledgeHealthService {
 
       return health;
     } catch (error) {
-      this.logger.error(`[HEALTH] 🔴 Failed to get system health: ${error}`);
+      console.error(`[HEALTH] 🔴 Failed to get system health: ${error}`);
       throw error;
     }
   }
@@ -154,7 +152,7 @@ export class KnowledgeHealthService {
       );
 
       if (error) {
-        this.logger.error(
+        console.error(
           `[VECTOR] vector_dimension_diagnostic RPC failed: ${error.message}`
         );
         throw new Error(`Vector diagnostic failed: ${error.message}`);
@@ -169,7 +167,7 @@ export class KnowledgeHealthService {
       const diagnostic = data[0] as VectorDimensionDiagnostic;
 
       // Log vector health
-      this.logger.log(
+      console.log(
         `[VECTOR] Dimension check: avg=${diagnostic.avg_dimension}, ` +
         `min=${diagnostic.min_dimension}, max=${diagnostic.max_dimension}, ` +
         `uniform=${diagnostic.dimension_uniform}, ` +
@@ -177,7 +175,7 @@ export class KnowledgeHealthService {
       );
 
       if (!diagnostic.dimension_uniform) {
-        this.logger.warn(
+        console.warn(
           `[VECTOR] ⚠️ Non-uniform vector dimensions detected! ` +
           `Invalid chunks: ${diagnostic.invalid_chunks}`
         );
@@ -185,7 +183,7 @@ export class KnowledgeHealthService {
 
       return diagnostic;
     } catch (error) {
-      this.logger.error(`[VECTOR] 🔴 Vector diagnostic failed: ${error}`);
+      console.error(`[VECTOR] 🔴 Vector diagnostic failed: ${error}`);
       throw error;
     }
   }
@@ -206,7 +204,7 @@ export class KnowledgeHealthService {
       );
 
       if (error) {
-        this.logger.error(
+        console.error(
           `[STALL] detect_stalled_ingestion RPC failed: ${error.message}`
         );
         throw new Error(`Stall detection failed: ${error.message}`);
@@ -216,7 +214,7 @@ export class KnowledgeHealthService {
       const stalledCount = (data || []).length;
 
       if (stalledCount > 0) {
-        this.logger.warn(
+        console.warn(
           `[STALL] ⚠️ Found ${stalledCount} stalled documents, ` +
           `query time=${executionTime}ms`
         );
@@ -226,18 +224,18 @@ export class KnowledgeHealthService {
           (d) => d.stall_severity === 'CRITICAL'
         );
         if (criticalStalls.length > 0) {
-          this.logger.error(
+          console.error(
             `[STALL] 🔴 CRITICAL: ${criticalStalls.length} documents ` +
             `stuck >60min: ${criticalStalls.map((d) => d.document_id).join(', ')}`
           );
         }
       } else {
-        this.logger.log(`[STALL] ✅ No stalled documents detected, time=${executionTime}ms`);
+        console.log(`[STALL] ✅ No stalled documents detected, time=${executionTime}ms`);
       }
 
       return (data as StalledDocument[]) || [];
     } catch (error) {
-      this.logger.error(`[STALL] 🔴 Stall detection failed: ${error}`);
+      console.error(`[STALL] 🔴 Stall detection failed: ${error}`);
       throw error;
     }
   }
@@ -255,7 +253,7 @@ export class KnowledgeHealthService {
       );
 
       if (error) {
-        this.logger.error(
+        console.error(
           `[EMBEDDINGS] detect_embedding_gaps RPC failed: ${error.message}`
         );
         throw new Error(`Gap detection failed: ${error.message}`);
@@ -265,19 +263,19 @@ export class KnowledgeHealthService {
       const gapCount = (data || []).length;
 
       if (gapCount > 0) {
-        this.logger.warn(
+        console.warn(
           `[EMBEDDINGS] ⚠️ Found ${gapCount} documents with embedding gaps, ` +
           `time=${executionTime}ms`
         );
       } else {
-        this.logger.log(
+        console.log(
           `[EMBEDDINGS] ✅ No embedding gaps detected, time=${executionTime}ms`
         );
       }
 
       return (data as EmbeddingGap[]) || [];
     } catch (error) {
-      this.logger.error(`[EMBEDDINGS] 🔴 Gap detection failed: ${error}`);
+      console.error(`[EMBEDDINGS] 🔴 Gap detection failed: ${error}`);
       throw error;
     }
   }
@@ -298,7 +296,7 @@ export class KnowledgeHealthService {
       );
 
       if (error) {
-        this.logger.error(
+        console.error(
           `[PERF] get_rpc_performance_stats RPC failed: ${error.message}`
         );
         throw new Error(`Performance stats failed: ${error.message}`);
@@ -307,7 +305,7 @@ export class KnowledgeHealthService {
       const executionTime = Date.now() - startTime;
 
       if (data && data.length > 0) {
-        this.logger.log(
+        console.log(
           `[PERF] RPC Performance (${timeWindowHours}h window):` +
           ` ${data.map((d: RpcPerformanceStat) =>
               `${d.rpc_name}: avg=${d.avg_execution_time_ms}ms, ` +
@@ -319,7 +317,7 @@ export class KnowledgeHealthService {
 
       return (data as RpcPerformanceStat[]) || [];
     } catch (error) {
-      this.logger.error(`[PERF] 🔴 Performance stats failed: ${error}`);
+      console.error(`[PERF] 🔴 Performance stats failed: ${error}`);
       throw error;
     }
   }
@@ -340,7 +338,7 @@ export class KnowledgeHealthService {
       );
 
       if (error) {
-        this.logger.error(
+        console.error(
           `[EMBED_PERF] get_embedding_performance_stats RPC failed: ${error.message}`
         );
         throw new Error(`Embedding perf stats failed: ${error.message}`);
@@ -350,7 +348,7 @@ export class KnowledgeHealthService {
 
       if (data && data.length > 0) {
         const stats = data[0] as EmbeddingPerformanceStat;
-        this.logger.log(
+        console.log(
           `[EMBED_PERF] Embedding Performance (${timeWindowHours}h window): ` +
           `total=${stats.total_embeddings_generated}, ` +
           `avg=${stats.avg_time_ms}ms, ` +
@@ -363,7 +361,7 @@ export class KnowledgeHealthService {
 
       return null;
     } catch (error) {
-      this.logger.error(`[EMBED_PERF] 🔴 Embedding perf stats failed: ${error}`);
+      console.error(`[EMBED_PERF] 🔴 Embedding perf stats failed: ${error}`);
       throw error;
     }
   }
@@ -381,7 +379,7 @@ export class KnowledgeHealthService {
         .select('*');
 
       if (error) {
-        this.logger.error(
+        console.error(
           `[STATUS_VIEW] Failed to query system status view: ${error.message}`
         );
         throw new Error(`Status view query failed: ${error.message}`);
@@ -396,7 +394,7 @@ export class KnowledgeHealthService {
       const status = data[0] as SystemStatusView;
 
       // Log summary
-      this.logger.log(
+      console.log(
         `[STATUS_VIEW] System Status Summary: ` +
         `total=${status.total_documents}, ` +
         `complete=${status.complete_documents} (${status.completion_percentage}%), ` +
@@ -407,7 +405,7 @@ export class KnowledgeHealthService {
 
       return status;
     } catch (error) {
-      this.logger.error(`[STATUS_VIEW] 🔴 Status view query failed: ${error}`);
+      console.error(`[STATUS_VIEW] 🔴 Status view query failed: ${error}`);
       throw error;
     }
   }
@@ -436,7 +434,7 @@ export class KnowledgeHealthService {
       );
 
       if (dbError) {
-        this.logger.warn(
+        console.warn(
           `[METRICS] Failed to log RPC metric: ${dbError.message}`
         );
         return null;
@@ -444,7 +442,7 @@ export class KnowledgeHealthService {
 
       return (data as string) || null;
     } catch (error) {
-      this.logger.warn(`[METRICS] Failed to log RPC metric: ${error}`);
+      console.warn(`[METRICS] Failed to log RPC metric: ${error}`);
       return null;
     }
   }
@@ -473,7 +471,7 @@ export class KnowledgeHealthService {
       );
 
       if (error) {
-        this.logger.warn(
+        console.warn(
           `[METRICS] Failed to log embedding metric: ${error.message}`
         );
         return null;
@@ -481,7 +479,7 @@ export class KnowledgeHealthService {
 
       return (data as string) || null;
     } catch (error) {
-      this.logger.warn(`[METRICS] Failed to log embedding metric: ${error}`);
+      console.warn(`[METRICS] Failed to log embedding metric: ${error}`);
       return null;
     }
   }
@@ -500,7 +498,7 @@ export class KnowledgeHealthService {
 
       // Fail-safe checks
       if (!health.vector_dimension_valid) {
-        this.logger.error(
+        console.error(
           `[GUARD] 🔴 BLOCKING RETRIEVAL: Vector dimension invalid`
         );
         return {
@@ -511,7 +509,7 @@ export class KnowledgeHealthService {
       }
 
       if (health.documents_missing_embeddings > 0) {
-        this.logger.warn(
+        console.warn(
           `[GUARD] ⚠️ WARNING: ${health.documents_missing_embeddings} complete ` +
           `documents with missing embeddings`
         );
@@ -519,14 +517,14 @@ export class KnowledgeHealthService {
       }
 
       if (health.ingestion_stalled_documents > 0) {
-        this.logger.warn(
+        console.warn(
           `[GUARD] ⚠️ WARNING: ${health.ingestion_stalled_documents} stalled documents`
         );
         // Not blocking - just warning
       }
 
       if (!health.system_healthy) {
-        this.logger.warn(
+        console.warn(
           `[GUARD] ⚠️ System not fully healthy, but retrieval permitted`
         );
       }
@@ -536,7 +534,7 @@ export class KnowledgeHealthService {
         details: health
       };
     } catch (error) {
-      this.logger.error(`[GUARD] 🔴 Health validation failed: ${error}`);
+      console.error(`[GUARD] 🔴 Health validation failed: ${error}`);
       // Fail-safe: block retrieval if we can't validate
       return {
         healthy: false,
@@ -561,7 +559,7 @@ export class KnowledgeHealthService {
     overallStatus: 'HEALTHY' | 'DEGRADED' | 'CRITICAL';
   }> {
     try {
-      this.logger.log('[DIAGNOSTICS] Starting full system diagnostics...');
+      console.log('[DIAGNOSTICS] Starting full system diagnostics...');
       const startTime = Date.now();
 
       const [
@@ -596,7 +594,7 @@ export class KnowledgeHealthService {
 
       const executionTime = Date.now() - startTime;
 
-      this.logger.log(
+      console.log(
         `[DIAGNOSTICS] Full diagnostics completed: ` +
         `status=${overallStatus}, time=${executionTime}ms`
       );
@@ -613,7 +611,7 @@ export class KnowledgeHealthService {
         overallStatus
       };
     } catch (error) {
-      this.logger.error(`[DIAGNOSTICS] 🔴 Full diagnostics failed: ${error}`);
+      console.error(`[DIAGNOSTICS] 🔴 Full diagnostics failed: ${error}`);
       throw error;
     }
   }
