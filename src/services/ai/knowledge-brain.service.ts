@@ -345,6 +345,14 @@ class KnowledgeBrainService {
 
       console.log('[KNOWLEDGE BRAIN] ✅ Document inserted:', doc.id);
 
+      // ✅ PHASE 36.10 STEP 5: Update state to 'processing'
+      await this.updateDocumentState(doc.id, {
+        ingestion_status: 'processing',
+        ingestion_started_at: new Date(),
+        ingestion_progress: 5,
+        last_ingestion_step: 'document_inserted',
+      });
+
       // ✅ PHASE 36.9 STEP 5: RETURN IMMEDIATELY TO UI
       // All heavy lifting happens in background via setTimeout(..., 0)
       console.log('[KNOWLEDGE BRAIN] 🚀 Document returned to UI - background processing started');
@@ -403,6 +411,7 @@ class KnowledgeBrainService {
       const BATCH_SIZE = 50;
       console.log('[KNOWLEDGE BRAIN] 📚 Inserting chunks in batches (batch size: ' + BATCH_SIZE + ')...');
 
+      let insertedChunks = 0;
       for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
         const batch = chunks.slice(i, i + BATCH_SIZE);
         const payload = batch.map((chunk, batchIndex) => ({
@@ -418,6 +427,7 @@ class KnowledgeBrainService {
           console.error('[KNOWLEDGE BRAIN] ❌ Batch insert failed at index ' + i + ':', error);
           throw new Error(`Chunk batch insert failed at ${i}: ${error.message}`);
         } else {
+          insertedChunks += payload.length;
           console.log('[KNOWLEDGE BRAIN] ✅ Batch ' + (Math.floor(i / BATCH_SIZE) + 1) + ' inserted (' + payload.length + ' chunks)');
         }
       }
@@ -437,7 +447,7 @@ class KnowledgeBrainService {
             console.log('[KNOWLEDGE BRAIN] ✅ Pricing data stored');
           }
         } catch (pricingErr) {
-          console.warn('[KNOWLEDGE BRAIN] ⚠️ Pricing extraction error:', pricingErr);
+          console.warn('[KNOWLEDGE BRAIN] ⚠️ Pricing extraction error (non-blocking):', pricingErr);
         }
       }
 
@@ -487,6 +497,7 @@ class KnowledgeBrainService {
       console.log('[KNOWLEDGE BRAIN] 🎉 Background processing complete:', {
         document_id: documentId,
         chunks: chunks.length,
+        inserted_chunks: insertedChunks,
         time_ms: totalTime,
         integrity_verified: true,
       });
@@ -509,6 +520,7 @@ class KnowledgeBrainService {
    * NEW: Strict integrity check - all chunks MUST get embeddings or throw error
    * Each chunk gets its own embedding in the knowledge_chunks table
    * Uses Chunk objects with pre-calculated metadata
+   * Updates document state on error
    */
   private async generateChunkEmbeddingsAsync(document_id: string, chunks: any[]): Promise<void> {
     try {
