@@ -63,14 +63,12 @@ class KnowledgeBrainService {
   }
 
   /**
-   * PHASE 36.8: Add knowledge document with intelligent chunking pipeline
-   * New flow:
-   * 1. Validate & sanitize full content
-   * 2. Chunk text intelligently
-   * 3. Insert document with preview (max 10KB)
-   * 4. Batch insert chunks to knowledge_chunks
-   * 5. Launch async embedding generation per chunk
-   * 6. Extract pricing data if applicable
+   * PHASE 36.9: Add knowledge document with NON-BLOCKING pipeline
+   * New flow for 0-freeze UI:
+   * 1. Sanitize + create preview (FAST)
+   * 2. INSERT document immediately (RETURN to UI)
+   * 3. Background async: chunk → batch insert → embeddings
+   * 4. NO chunking before insert - eliminates freeze!
    */
   async addKnowledgeDocumentWithTimeout(
     source: string,
@@ -81,10 +79,8 @@ class KnowledgeBrainService {
       region?: string;
     }
   ): Promise<KnowledgeDocument | null> {
-    const startTime = Date.now();
-
     try {
-      // PHASE 36.8 SAFETY: Check document size
+      // PHASE 36.9 SAFETY: Check document size EARLY
       const contentBytes = new TextEncoder().encode(content).length;
       if (contentBytes > 50 * 1024 * 1024) {
         // 50MB hard limit
@@ -93,142 +89,73 @@ class KnowledgeBrainService {
         throw new Error(errorMsg);
       }
       if (contentBytes > 20 * 1024 * 1024) {
-        // 20MB warning - would need confirmation
+        // 20MB warning
         console.warn(
           `[KNOWLEDGE BRAIN] ⚠️ Large document: ${(contentBytes / 1024 / 1024).toFixed(2)}MB (>20MB threshold)`
         );
       }
 
-      console.log('[KNOWLEDGE BRAIN] 🧠 START PHASE 36.8 CHUNKED INSERT', {
+      console.log('[KNOWLEDGE BRAIN] 🧠 START PHASE 36.9 NON-BLOCKING INSERT', {
         source,
         category,
-        content_length: content.length,
         content_bytes: `${(contentBytes / 1024).toFixed(2)}KB`,
-        hasTitle: !!options?.title,
-        region: options?.region,
       });
 
-      // PHASE 36.8 STEP 1: Generate safe title
+      // ✅ PHASE 36.9 STEP 1: Generate safe title
       const safeTitle =
         options?.title && options.title.trim().length > 0
           ? options.title.trim()
           : `Document ${category || 'Unknown'} - ${new Date().toISOString().split('T')[0]}`;
 
-      // PHASE 36.8 STEP 2: Sanitize full content
-      console.log('[KNOWLEDGE BRAIN] 🧹 STEP 2: Sanitizing content (Unicode + control chars)...');
+      // ✅ PHASE 36.9 STEP 2: Sanitize content (FAST - Unicode cleanup only)
+      console.log('[KNOWLEDGE BRAIN] 🧹 Sanitizing content...');
       const sanitized = sanitizeText(content);
-      const sanitizationStats = getSanitizationStats(content, sanitized);
-      console.log('[KNOWLEDGE BRAIN] 📊 Sanitization complete:', {
-        original_bytes: sanitizationStats.original_bytes,
-        sanitized_bytes: sanitizationStats.sanitized_bytes,
-        removed_bytes: sanitizationStats.removed_bytes,
-      });
 
-      // PHASE 36.8 STEP 3: Chunk text intelligently
-      console.log('[KNOWLEDGE BRAIN] ✂️ STEP 3: Chunking sanitized content...');
-      const chunks = chunkText(sanitized, 1000); // 1000 tokens per chunk ≈ 4000 chars
-      const chunkingStats = getChunkingStats(sanitized, chunks);
-
-      // Validate chunks
-      const validation = validateChunks(chunks);
-      if (!validation.valid) {
-        throw new Error(`Invalid chunks: ${validation.errors.join(', ')}`);
-      }
-
-      console.log('[CHUNKING] 📊 Chunking complete:', {
-        total_chunks: chunkingStats.total_chunks,
-        total_tokens: chunkingStats.total_tokens,
-        largest_chunk_tokens: chunkingStats.largest_chunk_tokens,
-        average_chunk_tokens: chunkingStats.average_chunk_tokens,
-      });
-
-      // PHASE 36.8 STEP 4: Create preview (max 10KB)
+      // ✅ PHASE 36.9 STEP 3: Create preview (max 10KB) - INSTANT
       const preview = sanitized.slice(0, 10000);
-      console.log('[KNOWLEDGE BRAIN] 📄 STEP 4: Created preview:', `${preview.length} chars (${(new TextEncoder().encode(preview).length / 1024).toFixed(2)}KB)`);
+      console.log('[KNOWLEDGE BRAIN] 📄 Created preview: ' + preview.length + ' chars');
 
-      // PHASE 36.8 STEP 5: Insert document with preview
-      console.log('[KNOWLEDGE BRAIN] 📝 STEP 5: Inserting document to knowledge_documents...');
-      const insertPayload = {
-        title: safeTitle,
-        category,
-        source,
-        content: preview, // ✅ PHASE 36.8: Store only preview (max 10KB)
-        is_active: true,
-      };
-
+      // ✅ PHASE 36.9 STEP 4: INSERT DOCUMENT IMMEDIATELY (NON-BLOCKING)
+      console.log('[KNOWLEDGE BRAIN] 📝 Inserting document FIRST...');
       const { data: doc, error: docError } = await supabase
         .from('knowledge_documents')
-        .insert(insertPayload)
+        .insert({
+          title: safeTitle,
+          category,
+          source,
+          content: preview, // ✅ Only 10KB preview
+          is_active: true,
+        })
         .select()
         .single();
 
-      if (docError) {
-        const errorMsg = docError.message || 'Unknown error';
-        console.error('[KNOWLEDGE BRAIN] ❌ Document insert failed:', { error: errorMsg, code: docError.code });
-        throw new Error(`Document insert failed: ${errorMsg}`);
-      }
-
-      if (!doc) {
-        console.error('[KNOWLEDGE BRAIN] ❌ No document returned after insert');
-        throw new Error('No document returned after insert');
+      if (docError || !doc) {
+        const errorMsg = docError?.message || 'No document returned';
+        console.error('[KNOWLEDGE BRAIN] ❌ Insert failed:', errorMsg);
+        throw new Error(`Insert failed: ${errorMsg}`);
       }
 
       console.log('[KNOWLEDGE BRAIN] ✅ Document inserted:', doc.id);
 
-      // PHASE 36.8 STEP 6: Batch insert chunks
-      console.log('[KNOWLEDGE BRAIN] 📚 STEP 6: Inserting chunks to knowledge_chunks table...');
-      const chunkPayloads = chunks.map((chunk, index) => ({
-        document_id: doc.id,
-        chunk_index: index,
-        content: chunk,
-        token_count: Math.ceil(chunk.length / 4),
-      }));
-
-      const chunkInsertStart = Date.now();
-      const { error: chunksError } = await supabase.from('knowledge_chunks').insert(chunkPayloads);
-
-      if (chunksError) {
-        console.error('[KNOWLEDGE BRAIN] ❌ Chunks insert failed:', chunksError.message);
-        throw new Error(`Chunks insert failed: ${chunksError.message}`);
-      }
-
-      const chunkInsertTime = Date.now() - chunkInsertStart;
-      console.log('[KNOWLEDGE BRAIN] ✅ All chunks inserted:', {
-        count: chunks.length,
-        insert_time_ms: chunkInsertTime,
-        avg_time_per_chunk_ms: (chunkInsertTime / chunks.length).toFixed(2),
+      // ✅ PHASE 36.10 STEP 5: Update state to 'processing'
+      await this.updateDocumentState(doc.id, {
+        ingestion_status: 'processing',
+        ingestion_started_at: new Date(),
+        ingestion_progress: 5,
+        last_ingestion_step: 'document_inserted',
       });
 
-      // PHASE 36.8 STEP 7: Extract pricing if applicable
-      if (category === 'PRICING_REFERENCE' && options?.region) {
-        console.log('[KNOWLEDGE BRAIN] 💰 STEP 7: Extracting pricing data...');
-        try {
-          const pricingData = pricingExtractionService.extractPricingData(content, category, options.region);
-          if (pricingData) {
-            const pricingStored = await pricingExtractionService.storePricingReference(doc.id, pricingData, options.region);
-            if (pricingStored) {
-              console.log('[KNOWLEDGE BRAIN] ✅ Pricing data extracted and stored');
-            }
-          } else {
-            console.log('[KNOWLEDGE BRAIN] ℹ️ No pricing data found to extract');
-          }
-        } catch (pricingErr) {
-          console.warn('[KNOWLEDGE BRAIN] ⚠️ Pricing extraction error (non-blocking):', pricingErr);
-        }
-      }
+      // ✅ PHASE 36.9 STEP 5: RETURN IMMEDIATELY TO UI
+      // All heavy lifting happens in background via setTimeout(..., 0)
+      console.log('[KNOWLEDGE BRAIN] 🚀 Document returned to UI - background processing started');
 
-      // PHASE 36.8 STEP 8: Launch async embedding generation for each chunk
-      console.log('[EMBEDDING] 🚀 STEP 8: Starting async embedding generation for chunks...');
-      this.generateChunkEmbeddingsAsync(doc.id, chunks).catch((err) =>
-        console.warn('[EMBEDDING] ⚠️ Async embedding error (non-blocking):', err)
-      );
-
-      const totalTime = Date.now() - startTime;
-      console.log('[KNOWLEDGE BRAIN] 🎉 Document added successfully (embeddings async):', {
-        document_id: doc.id,
-        chunks_count: chunks.length,
-        total_time_ms: totalTime,
-      });
+      // ✅ PHASE 36.9 STEP 6: Schedule background processing (non-blocking)
+      // This yields control back to browser immediately
+      setTimeout(() => {
+        this.processChunksAsync(doc.id, sanitized, category, options?.region, content).catch((err) =>
+          console.warn('[KNOWLEDGE BRAIN] ⚠️ Background processing error:', err)
+        );
+      }, 0);
 
       return doc;
     } catch (error) {
@@ -239,10 +166,129 @@ class KnowledgeBrainService {
   }
 
   /**
-   * PHASE 36.8: Generate embeddings for all chunks asynchronously (non-blocking)
-   * Each chunk gets its own embedding in the knowledge_chunks table
+   * PHASE 36.10: Background processing with state machine
+   * Tracks progress through: chunking → embedding → complete/failed
+   * Runs AFTER document insert, non-blocking
    */
-  private async generateChunkEmbeddingsAsync(document_id: string, chunks: string[]): Promise<void> {
+  private async processChunksAsync(
+    documentId: string,
+    sanitizedContent: string,
+    category: string,
+    region: string | undefined,
+    originalContent: string
+  ): Promise<void> {
+    try {
+      console.log('[KNOWLEDGE BRAIN] 🧠 BACKGROUND: Starting chunking...');
+      const startTime = Date.now();
+
+      // ✅ PHASE 36.10 STEP 1: Update state to 'chunking'
+      await this.updateDocumentState(documentId, {
+        ingestion_status: 'chunking',
+        ingestion_progress: 20,
+        last_ingestion_step: 'chunking_started',
+      });
+
+      // ✅ STEP 1: Chunk text (happens now in background, not blocking)
+      console.log('[KNOWLEDGE BRAIN] ✂️ Chunking content...');
+      const chunks = chunkText(sanitizedContent, 1000); // Returns Chunk[]
+      console.log('[CHUNKING] Total chunks: ' + chunks.length);
+
+      // ✅ PHASE 36.10 STEP 2: Update state after chunking
+      await this.updateDocumentState(documentId, {
+        ingestion_progress: 50,
+        last_ingestion_step: 'chunking_complete',
+      });
+
+      // ✅ STEP 2: Batch insert chunks (50 max per batch)
+      const BATCH_SIZE = 50;
+      console.log('[KNOWLEDGE BRAIN] 📚 Inserting chunks in batches (batch size: ' + BATCH_SIZE + ')...');
+
+      let insertedChunks = 0;
+      for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+        const batch = chunks.slice(i, i + BATCH_SIZE);
+        const payload = batch.map((chunk, batchIndex) => ({
+          document_id: documentId,
+          chunk_index: i + batchIndex,
+          content: chunk.content,
+          token_count: chunk.tokenCount,
+        }));
+
+        const { error } = await supabase.from('knowledge_chunks').insert(payload);
+
+        if (error) {
+          console.error('[KNOWLEDGE BRAIN] ❌ Batch insert failed at index ' + i + ':', error);
+          await this.updateDocumentState(documentId, {
+            ingestion_status: 'failed',
+            last_ingestion_error: 'Batch insert failed: ' + error.message,
+            last_ingestion_step: 'chunk_batch_' + Math.floor(i / BATCH_SIZE),
+          });
+          return;
+        } else {
+          insertedChunks += payload.length;
+          console.log('[KNOWLEDGE BRAIN] ✅ Batch ' + (Math.floor(i / BATCH_SIZE) + 1) + ' inserted (' + payload.length + ' chunks)');
+        }
+      }
+
+      // ✅ STEP 3: Extract pricing if applicable (non-blocking)
+      if (category === 'PRICING_REFERENCE' && region) {
+        console.log('[KNOWLEDGE BRAIN] 💰 Extracting pricing data...');
+        try {
+          const pricingData = pricingExtractionService.extractPricingData(originalContent, category, region);
+          if (pricingData) {
+            await pricingExtractionService.storePricingReference(documentId, pricingData, region);
+            console.log('[KNOWLEDGE BRAIN] ✅ Pricing data stored');
+          }
+        } catch (pricingErr) {
+          console.warn('[KNOWLEDGE BRAIN] ⚠️ Pricing extraction error (non-blocking):', pricingErr);
+        }
+      }
+
+      // ✅ PHASE 36.10 STEP 3: Update state to 'embedding'
+      await this.updateDocumentState(documentId, {
+        ingestion_status: 'embedding',
+        ingestion_progress: 60,
+        last_ingestion_step: 'embedding_started',
+      });
+
+      // ✅ STEP 4: Generate embeddings async for chunks
+      console.log('[EMBEDDING] 🚀 Starting async embedding generation...');
+      await this.generateChunkEmbeddingsAsync(documentId, chunks);
+
+      // ✅ PHASE 36.10 STEP 4: Update state to 'complete'
+      await this.updateDocumentState(documentId, {
+        ingestion_status: 'complete',
+        ingestion_progress: 100,
+        ingestion_completed_at: new Date(),
+        last_ingestion_step: 'complete',
+      });
+
+      const totalTime = Date.now() - startTime;
+      console.log('[KNOWLEDGE BRAIN] 🎉 Background processing complete:', {
+        document_id: documentId,
+        chunks: chunks.length,
+        inserted_chunks: insertedChunks,
+        time_ms: totalTime,
+      });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[KNOWLEDGE BRAIN] 💥 Background processing failed:', errorMsg);
+
+      // ✅ PHASE 36.10: Update state to 'failed' with error details
+      await this.updateDocumentState(documentId, {
+        ingestion_status: 'failed',
+        last_ingestion_error: errorMsg,
+        last_ingestion_step: 'background_process_error',
+      });
+    }
+  }
+
+  /**
+   * PHASE 36.10: Generate embeddings for all chunks (with state tracking)
+   * Each chunk gets its own embedding in the knowledge_chunks table
+   * Uses Chunk objects with pre-calculated metadata
+   * Updates document state on error
+   */
+  private async generateChunkEmbeddingsAsync(document_id: string, chunks: any[]): Promise<void> {
     try {
       console.log('[EMBEDDING] 🔢 Starting chunk embedding generation async...', {
         document_id,
@@ -250,29 +296,31 @@ class KnowledgeBrainService {
       });
 
       if (!this.ENABLE_VECTOR_SEARCH) {
-        console.log('[EMBEDDING] ⏭️ Vector search disabled - skipping embedding generation');
+        console.log('[EMBEDDING] ⏭️ Vector search disabled');
         return;
       }
+
+      let successCount = 0;
+      let failCount = 0;
 
       // Process embeddings sequentially to avoid rate limiting
       for (let i = 0; i < chunks.length; i++) {
         try {
+          // Handle both Chunk objects and strings for backward compatibility
           const chunk = chunks[i];
-          const chunkTokens = Math.ceil(chunk.length / 4);
+          const chunkContent = typeof chunk === 'string' ? chunk : chunk.content;
+          const chunkTokens = typeof chunk === 'string' ? Math.ceil(chunk.length / 4) : chunk.tokenCount;
 
-          console.log('[EMBEDDING] 📝 Generating embedding for chunk:', {
-            index: i,
-            chunk_tokens: chunkTokens,
-          });
+          console.log('[EMBEDDING] 📝 Generating embedding for chunk ' + i + ' (' + chunkTokens + ' tokens)');
 
-          const embedding = await this.generateEmbedding(chunk);
+          const embedding = await this.generateEmbedding(chunkContent);
           if (!embedding) {
-            console.warn(`[EMBEDDING] ⏭️ Embedding generation skipped for chunk ${i}`);
+            console.warn('[EMBEDDING] ⏭️ Skipped chunk ' + i);
+            failCount++;
             continue;
           }
 
-          // Update the chunk with its embedding and timestamp
-          console.log('[EMBEDDING] 💾 Storing embedding for chunk', i);
+          // Store embedding
           const { error: embError } = await supabase
             .from('knowledge_chunks')
             .update({
@@ -283,23 +331,39 @@ class KnowledgeBrainService {
             .eq('chunk_index', i);
 
           if (embError) {
-            console.warn(`[EMBEDDING] ⚠️ Failed to store embedding for chunk ${i}:`, embError.message);
+            console.warn('[EMBEDDING] ⚠️ Chunk ' + i + ' failed:', embError.message);
+            failCount++;
+            // Update state on critical embedding error
+            if (i === 0) {
+              await this.updateDocumentState(document_id, {
+                ingestion_status: 'failed',
+                last_ingestion_error: 'Embedding generation failed: ' + embError.message,
+                last_ingestion_step: 'embedding_chunk_0',
+              });
+            }
           } else {
-            console.log(`[EMBEDDING] ✅ Embedding stored for chunk ${i}`);
+            successCount++;
+            console.log('[EMBEDDING] ✅ Chunk ' + i + ' embedded');
           }
         } catch (chunkErr) {
-          console.warn(`[EMBEDDING] ⚠️ Error processing chunk ${i}:`, chunkErr);
-          // Continue with next chunk on error
+          failCount++;
+          console.warn('[EMBEDDING] ⚠️ Chunk ' + i + ' error:', chunkErr);
         }
       }
 
-      console.log('[EMBEDDING] 🎉 Chunk embedding generation complete', {
-        document_id,
-        chunks_processed: chunks.length,
+      console.log('[EMBEDDING] 🎉 Embedding generation complete:', {
+        total: chunks.length,
+        success: successCount,
+        failed: failCount,
       });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      console.warn('[EMBEDDING] 💥 Async embedding batch error (non-blocking):', errorMsg);
+      console.warn('[EMBEDDING] 💥 Embedding batch failed:', errorMsg);
+      await this.updateDocumentState(document_id, {
+        ingestion_status: 'failed',
+        last_ingestion_error: 'Embedding batch error: ' + errorMsg,
+        last_ingestion_step: 'embedding_batch_error',
+      });
     }
   }
   async generateEmbedding(content: string): Promise<number[] | null> {
@@ -618,6 +682,153 @@ class KnowledgeBrainService {
       };
     } catch (error) {
       console.error('[KNOWLEDGE BRAIN] Stats error:', error);
+      return null;
+    }
+  }
+
+  /**
+   * PHASE 36.10: Update document ingestion state
+   * Tracks pipeline progress and enables recovery
+   */
+  private async updateDocumentState(
+    documentId: string,
+    state: {
+      ingestion_status?: string;
+      ingestion_progress?: number;
+      ingestion_started_at?: Date;
+      ingestion_completed_at?: Date;
+      last_ingestion_error?: string | null;
+      last_ingestion_step?: string;
+    }
+  ): Promise<boolean> {
+    try {
+      const payload: any = {};
+
+      if (state.ingestion_status !== undefined) payload.ingestion_status = state.ingestion_status;
+      if (state.ingestion_progress !== undefined) payload.ingestion_progress = state.ingestion_progress;
+      if (state.ingestion_started_at !== undefined)
+        payload.ingestion_started_at = state.ingestion_started_at.toISOString();
+      if (state.ingestion_completed_at !== undefined)
+        payload.ingestion_completed_at = state.ingestion_completed_at.toISOString();
+      if (state.last_ingestion_error !== undefined) payload.last_ingestion_error = state.last_ingestion_error;
+      if (state.last_ingestion_step !== undefined) payload.last_ingestion_step = state.last_ingestion_step;
+
+      const { error } = await supabase
+        .from('knowledge_documents')
+        .update(payload)
+        .eq('id', documentId);
+
+      if (error) {
+        console.warn('[KNOWLEDGE BRAIN] ⚠️ State update failed:', error.message);
+        return false;
+      }
+
+      return true;
+    } catch (err) {
+      console.warn('[KNOWLEDGE BRAIN] ⚠️ State update error:', err);
+      return false;
+    }
+  }
+
+  /**
+   * PHASE 36.10: Retry ingestion for a failed document
+   * Resets state and relaunches processing
+   */
+  async retryIngestion(documentId: string): Promise<boolean> {
+    try {
+      console.log('[KNOWLEDGE BRAIN] 🔄 Retrying ingestion for document:', documentId);
+
+      // Fetch document
+      const { data: doc, error: fetchError } = await supabase
+        .from('knowledge_documents')
+        .select('*')
+        .eq('id', documentId)
+        .single();
+
+      if (fetchError || !doc) {
+        console.error('[KNOWLEDGE BRAIN] ❌ Document not found:', documentId);
+        return false;
+      }
+
+      if (doc.ingestion_status === 'complete') {
+        console.log('[KNOWLEDGE BRAIN] ℹ️ Document already complete, skipping retry');
+        return true;
+      }
+
+      // Delete existing chunks
+      console.log('[KNOWLEDGE BRAIN] 🗑️ Deleting existing chunks...');
+      const { error: deleteError } = await supabase
+        .from('knowledge_chunks')
+        .delete()
+        .eq('document_id', documentId);
+
+      if (deleteError) {
+        console.warn('[KNOWLEDGE BRAIN] ⚠️ Chunk deletion warning:', deleteError.message);
+      }
+
+      // Reset document state
+      console.log('[KNOWLEDGE BRAIN] 🔄 Resetting document state...');
+      await this.updateDocumentState(documentId, {
+        ingestion_status: 'pending',
+        ingestion_progress: 0,
+        last_ingestion_error: null,
+        last_ingestion_step: 'retry_initiated',
+      });
+
+      // Get full content from preview (this is a limitation - we only have 10KB preview)
+      // For real retry, we'd need to store original content somewhere or re-upload
+      console.log('[KNOWLEDGE BRAIN] ⚠️ Note: Retrying with existing preview only (10KB)');
+      console.log('[KNOWLEDGE BRAIN] 🚀 Relaunching ingestion pipeline...');
+
+      // Relaunch pipeline with preview
+      setTimeout(() => {
+        this.processChunksAsync(documentId, doc.content, doc.category, doc.region, doc.content).catch((err) =>
+          console.warn('[KNOWLEDGE BRAIN] ⚠️ Retry processing error:', err)
+        );
+      }, 0);
+
+      return true;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[KNOWLEDGE BRAIN] ❌ Retry failed:', errorMsg);
+      return false;
+    }
+  }
+
+  /**
+   * PHASE 36.10: Get ingestion status for a document
+   */
+  async getIngestionStatus(documentId: string): Promise<{
+    status: string;
+    progress: number;
+    started_at: string | null;
+    completed_at: string | null;
+    error: string | null;
+    step: string | null;
+  } | null> {
+    try {
+      const { data, error } = await supabase
+        .from('knowledge_documents')
+        .select(
+          'ingestion_status, ingestion_progress, ingestion_started_at, ingestion_completed_at, last_ingestion_error, last_ingestion_step'
+        )
+        .eq('id', documentId)
+        .single();
+
+      if (error || !data) {
+        return null;
+      }
+
+      return {
+        status: data.ingestion_status,
+        progress: data.ingestion_progress,
+        started_at: data.ingestion_started_at,
+        completed_at: data.ingestion_completed_at,
+        error: data.last_ingestion_error,
+        step: data.last_ingestion_step,
+      };
+    } catch (error) {
+      console.error('[KNOWLEDGE BRAIN] Status fetch error:', error);
       return null;
     }
   }
