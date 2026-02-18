@@ -3,6 +3,12 @@
  * Splits large documents into manageable chunks while preserving semantic boundaries
  */
 
+export interface Chunk {
+  content: string;
+  tokenCount: number;
+  characterCount: number;
+}
+
 export interface ChunkingStats {
   total_text_length: number;
   total_chunks: number;
@@ -25,7 +31,7 @@ function estimateTokenCount(text: string): number {
 }
 
 /**
- * Split text into intelligent chunks
+ * Split text into intelligent chunks with metadata
  * Strategy:
  * 1. Split by double newlines (paragraphs)
  * 2. If still too large, split by single newlines (sentences)
@@ -34,15 +40,15 @@ function estimateTokenCount(text: string): number {
  *
  * @param text - Text to chunk
  * @param maxTokens - Maximum tokens per chunk (default: 1000 ≈ 4000 chars)
- * @returns Array of chunk strings
+ * @returns Array of Chunk objects with content and metadata
  */
-export function chunkText(text: string, maxTokens: number = 1000): string[] {
+export function chunkText(text: string, maxTokens: number = 1000): Chunk[] {
   if (!text || text.trim().length === 0) {
     return [];
   }
 
   const maxChars = maxTokens * 4; // Convert tokens to approximate character limit
-  const chunks: string[] = [];
+  const chunks: Chunk[] = [];
   let currentChunk = '';
   let currentTokens = 0;
 
@@ -60,7 +66,12 @@ export function chunkText(text: string, maxTokens: number = 1000): string[] {
       // If adding this sentence would exceed limit
       if (currentTokens + sentenceTokens > maxTokens && currentChunk.length > 0) {
         // Save current chunk and start new one
-        chunks.push(currentChunk.trim());
+        const trimmedChunk = currentChunk.trim();
+        chunks.push({
+          content: trimmedChunk,
+          tokenCount: estimateTokenCount(trimmedChunk),
+          characterCount: trimmedChunk.length,
+        });
         currentChunk = sentence;
         currentTokens = sentenceTokens;
       } else {
@@ -84,7 +95,12 @@ export function chunkText(text: string, maxTokens: number = 1000): string[] {
           const wordTokens = estimateTokenCount(word);
 
           if (currentTokens + wordTokens > maxTokens && currentChunk.length > 0) {
-            chunks.push(currentChunk.trim());
+            const trimmedChunk = currentChunk.trim();
+            chunks.push({
+              content: trimmedChunk,
+              tokenCount: estimateTokenCount(trimmedChunk),
+              characterCount: trimmedChunk.length,
+            });
             currentChunk = word;
             currentTokens = wordTokens;
           } else {
@@ -103,7 +119,12 @@ export function chunkText(text: string, maxTokens: number = 1000): string[] {
 
   // Don't forget the last chunk
   if (currentChunk.trim().length > 0) {
-    chunks.push(currentChunk.trim());
+    const trimmedChunk = currentChunk.trim();
+    chunks.push({
+      content: trimmedChunk,
+      tokenCount: estimateTokenCount(trimmedChunk),
+      characterCount: trimmedChunk.length,
+    });
   }
 
   return chunks;
@@ -112,8 +133,8 @@ export function chunkText(text: string, maxTokens: number = 1000): string[] {
 /**
  * Get detailed chunking statistics
  */
-export function getChunkingStats(text: string, chunks: string[]): ChunkingStats {
-  const tokenCounts = chunks.map((chunk) => estimateTokenCount(chunk));
+export function getChunkingStats(text: string, chunks: Chunk[]): ChunkingStats {
+  const tokenCounts = chunks.map((chunk) => chunk.tokenCount);
   const maxTokens = tokenCounts.length > 0 ? Math.max(...tokenCounts) : 0;
   const totalTokens = tokenCounts.reduce((sum, tokens) => sum + tokens, 0);
   const avgTokens = chunks.length > 0 ? Math.round(totalTokens / chunks.length) : 0;
@@ -126,8 +147,8 @@ export function getChunkingStats(text: string, chunks: string[]): ChunkingStats 
     average_chunk_tokens: avgTokens,
     chunks: chunks.map((chunk, index) => ({
       index,
-      length: chunk.length,
-      tokens: estimateTokenCount(chunk),
+      length: chunk.characterCount,
+      tokens: chunk.tokenCount,
     })),
   };
 }
@@ -135,8 +156,9 @@ export function getChunkingStats(text: string, chunks: string[]): ChunkingStats 
 /**
  * Validate chunks before insertion
  * Ensures no chunk is empty or malformed
+ * Accepts both Chunk[] and string[] for flexibility
  */
-export function validateChunks(chunks: string[]): { valid: boolean; errors: string[] } {
+export function validateChunks(chunks: Chunk[] | string[]): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
   if (!Array.isArray(chunks)) {
@@ -150,10 +172,19 @@ export function validateChunks(chunks: string[]): { valid: boolean; errors: stri
   }
 
   chunks.forEach((chunk, index) => {
-    if (typeof chunk !== 'string') {
-      errors.push(`Chunk ${index}: not a string (type: ${typeof chunk})`);
-    } else if (chunk.trim().length === 0) {
-      errors.push(`Chunk ${index}: empty or whitespace only`);
+    // Handle Chunk objects
+    if (typeof chunk === 'object' && chunk !== null && 'content' in chunk) {
+      if (chunk.content.trim().length === 0) {
+        errors.push(`Chunk ${index}: empty content`);
+      }
+    }
+    // Handle string chunks
+    else if (typeof chunk === 'string') {
+      if (chunk.trim().length === 0) {
+        errors.push(`Chunk ${index}: empty or whitespace only`);
+      }
+    } else {
+      errors.push(`Chunk ${index}: invalid type (not string or Chunk object)`);
     }
   });
 
