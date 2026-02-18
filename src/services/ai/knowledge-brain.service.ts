@@ -6,6 +6,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { hybridAIService } from './hybrid-ai.service';
+import { pricingExtractionService } from './pricing-extraction.service';
 
 export interface KnowledgeDocument {
   id: string;
@@ -122,8 +123,128 @@ class KnowledgeBrainService {
   }
 
   /**
-   * Generate embedding for content using AI
+   * PHASE 36: Add knowledge document with timeout protection
+   * DEFINITIVE FIX for upload freeze - uses Promise.race for timeout safety
    */
+  async addKnowledgeDocumentWithTimeout(
+    source: string,
+    category: string,
+    content: string,
+    options?: {
+      region?: string;
+      reliability_score?: number;
+      metadata?: any;
+    },
+    timeoutMs: number = 8000
+  ): Promise<KnowledgeDocument | null> {
+    try {
+      console.log('[KNOWLEDGE BRAIN] 🧠 START ADD (with timeout protection)', {
+        source,
+        category,
+        length: content.length,
+        timeout: timeoutMs,
+      });
+
+      // Create insert promise
+      const insertPromise = supabase
+        .from('knowledge_documents')
+        .insert({
+          source,
+          category,
+          region: options?.region,
+          content,
+          reliability_score: options?.reliability_score || 50,
+          metadata: options?.metadata || {},
+        })
+        .select()
+        .single();
+
+      // Create timeout promise
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`Insert timeout after ${timeoutMs}ms`)), timeoutMs)
+      );
+
+      // Race: first to complete wins
+      console.log('[KNOWLEDGE BRAIN] 📝 Racing insert with timeout...');
+      const result = await Promise.race([insertPromise, timeoutPromise]) as any;
+      const { data: doc, error: docError } = result;
+
+      if (docError) {
+        const errorMsg = docError.message || 'Unknown error';
+        console.error('[KNOWLEDGE BRAIN] ❌ Insert failed:', { error: errorMsg });
+        throw new Error(`Insert failed: ${errorMsg}`);
+      }
+
+      if (!doc) {
+        console.error('[KNOWLEDGE BRAIN] ❌ No document returned after insert');
+        throw new Error('No document returned after insert');
+      }
+
+      console.log('[KNOWLEDGE BRAIN] ✅ Document inserted:', doc.id);
+
+      // PHASE 36 Extension: Extract pricing data if PRICING_REFERENCE category
+      if (category === 'PRICING_REFERENCE') {
+        console.log('[KNOWLEDGE BRAIN] 💰 Extracting pricing data...');
+        try {
+          const pricingData = pricingExtractionService.extractPricingData(content, category, options?.region);
+          if (pricingData) {
+            const pricingStored = await pricingExtractionService.storePricingReference(doc.id, pricingData, options?.region);
+            if (pricingStored) {
+              console.log('[KNOWLEDGE BRAIN] ✅ Pricing data extracted and stored:', pricingData);
+            }
+          } else {
+            console.log('[KNOWLEDGE BRAIN] ℹ️ No pricing data found to extract');
+          }
+        } catch (pricingErr) {
+          console.warn('[KNOWLEDGE BRAIN] ⚠️ Pricing extraction error (non-blocking):', pricingErr);
+        }
+      }
+
+      // PHASE 36: Generate embedding ASYNCHRONOUSLY (non-blocking)
+      console.log('[KNOWLEDGE BRAIN] 🚀 Starting async embedding generation...');
+      this.generateEmbeddingAsync(doc.id, content).catch((err) =>
+        console.warn('[KNOWLEDGE BRAIN] Async embedding error (ignored):', err)
+      );
+
+      console.log('[KNOWLEDGE BRAIN] 🎉 Document added successfully (embedding async):', doc.id);
+      return doc;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[KNOWLEDGE BRAIN] 💥 Fatal error:', errorMsg);
+      throw error;
+    }
+  }
+
+  /**
+   * PHASE 36: Generate embedding asynchronously (non-blocking)
+   */
+  private async generateEmbeddingAsync(document_id: string, content: string): Promise<void> {
+    try {
+      console.log('[KNOWLEDGE BRAIN] 🔢 Generating embedding async...');
+
+      const embedding = await this.generateEmbedding(content);
+      if (!embedding) {
+        console.log('[KNOWLEDGE BRAIN] ⏭️ Embedding generation skipped or failed');
+        return;
+      }
+
+      console.log('[KNOWLEDGE BRAIN] 💾 Storing embedding...');
+      const { error: embError } = await supabase.from('knowledge_embeddings').insert({
+        document_id,
+        embedding,
+        chunk_index: 0,
+      });
+
+      if (embError) {
+        console.warn('[KNOWLEDGE BRAIN] ⚠️ Failed to store embedding:', embError.message);
+      } else {
+        console.log('[KNOWLEDGE BRAIN] ✅ Embedding stored successfully');
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.warn('[KNOWLEDGE BRAIN] ⚠️ Async embedding error (non-blocking):', errorMsg);
+    }
+  }
   async generateEmbedding(content: string): Promise<number[] | null> {
     try {
       if (!this.ENABLE_VECTOR_SEARCH) {

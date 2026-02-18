@@ -1,5 +1,6 @@
 /**
  * Knowledge Base Document Upload Component
+ * PHASE 36.2: Refactored to use new knowledge_documents schema and knowledgeBrainService
  * Upload and manage domain knowledge documents
  */
 
@@ -16,30 +17,24 @@ import {
   FileText,
   X,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { KNOWLEDGE_CATEGORY_LABELS, getAllCategories } from '@/constants/knowledge-categories';
+import { knowledgeBrainService } from '@/services/ai/knowledge-brain.service';
 
-const DOCUMENT_CATEGORIES = [
-  'DTU', 'EUROCODE', 'NORM', 'REGULATION',
-  'GUIDELINE', 'BEST_PRACTICE', 'TECHNICAL_GUIDE',
-  'TRAINING', 'MANUAL', 'HANDBOOK',
-  'SUSTAINABILITY', 'ENERGY_EFFICIENCY',
-  'LEGAL', 'LIABILITY', 'WARRANTY',
-  'CASE_STUDY', 'LESSONS_LEARNED'
-];
+// Map of sources with French labels
+const SOURCES = {
+  internal: { label: 'Interne', reliability: 50 },
+  external: { label: 'Externe', reliability: 40 },
+  official: { label: 'Officiel', reliability: 95 },
+} as const;
 
-const WORK_TYPES = [
-  'plumbing', 'electrical', 'painting', 'renovation',
-  'construction', 'hvac', 'roofing', 'insulation',
-  'flooring', 'kitchen', 'bathroom', 'facade',
-  'structure', 'landscaping', 'other'
-];
+// Get all available categories with French labels
+const KNOWLEDGE_CATEGORIES = getAllCategories().map(cat => cat.id);
 
 interface UploadState {
   file: File | null;
-  title: string;
   category: string;
-  workTypes: string[];
   source: 'internal' | 'external' | 'official';
+  region?: string;
   loading: boolean;
   error: string | null;
   success: boolean;
@@ -49,10 +44,9 @@ export function KnowledgeBaseUpload() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<UploadState>({
     file: null,
-    title: '',
     category: 'GUIDELINE',
-    workTypes: [],
     source: 'internal',
+    region: 'National',
     loading: false,
     error: null,
     success: false,
@@ -90,51 +84,59 @@ export function KnowledgeBaseUpload() {
   }
 
   async function handleUpload() {
-    if (!state.file || !state.title || !state.category) {
+    console.log('🧠 [UPLOAD] Handler called - START');
+
+    if (!state.file || !state.category) {
+      console.error('🧠 [UPLOAD] Missing required fields', { file: !!state.file, category: state.category });
       setState(prev => ({
         ...prev,
-        error: 'Remplissez tous les champs obligatoires',
+        error: 'Sélectionnez un fichier et une catégorie',
       }));
       return;
     }
 
-    setState(prev => ({ ...prev, loading: true, error: null }));
-
     try {
+      console.log('🧠 [UPLOAD] Setting loading state...');
+      setState(prev => ({ ...prev, loading: true, error: null }));
+
       // Read file content
+      console.log('🧠 [UPLOAD] Reading file content...');
       const content = await state.file.text();
+      console.log('🧠 [UPLOAD] File content read:', { size: content.length });
 
-      // Extract title from filename if not provided
-      const title = state.title || state.file.name.replace(/\.[^/.]+$/, '');
+      // Get reliability score from source
+      const reliabilityScore = SOURCES[state.source].reliability;
+      console.log('🧠 [UPLOAD] Using reliability score:', reliabilityScore);
 
-      // Insert document into database
-      const { data, error } = await supabase
-        .from('knowledge_documents')
-        .insert([
-          {
-            title,
-            description: `Uploaded from ${state.file.name}`,
-            content,
-            category: state.category,
-            work_types: state.workTypes.length > 0 ? state.workTypes : ['other'],
-            tags: [state.source],
-            source: state.source,
-            authority: state.source === 'official' ? 'official' : 'community',
-            confidence_score: state.source === 'official' ? 95 : 50,
+      // Use knowledgeBrainService with timeout protection (PHASE 36)
+      console.log('🧠 [UPLOAD] Calling knowledgeBrainService.addKnowledgeDocumentWithTimeout...');
+      const result = await knowledgeBrainService.addKnowledgeDocumentWithTimeout(
+        state.source, // source: 'internal', 'external', or 'official'
+        state.category, // category: matches KNOWLEDGE_CATEGORY_LABELS keys
+        content,
+        {
+          region: state.region,
+          reliability_score: reliabilityScore,
+          metadata: {
+            filename: state.file.name,
+            uploaded_at: new Date().toISOString(),
           },
-        ])
-        .select();
+        }
+      );
 
-      if (error) throw error;
+      if (!result) {
+        throw new Error('Document insertion failed');
+      }
 
-      // Success
+      console.log('🧠 [UPLOAD] Document uploaded successfully:', { id: result.id });
+
+      // Success - reset form
       setState(prev => ({
         ...prev,
         file: null,
-        title: '',
         category: 'GUIDELINE',
-        workTypes: [],
         source: 'internal',
+        region: 'National',
         success: true,
         loading: false,
       }));
@@ -144,35 +146,28 @@ export function KnowledgeBaseUpload() {
         fileInputRef.current.value = '';
       }
 
-      // Reset success after 3 seconds
+      // Reset success message after 3 seconds
       setTimeout(() => {
         setState(prev => ({ ...prev, success: false }));
       }, 3000);
+
+      console.log('🧠 [UPLOAD] Handler completed successfully');
     } catch (err) {
-      console.error('[KnowledgeBaseUpload] Error:', err);
+      console.error('❌ [UPLOAD] Handler error:', err);
       setState(prev => ({
         ...prev,
-        error: 'Erreur lors de l\'upload du document',
+        error: err instanceof Error ? err.message : 'Erreur lors de l\'upload du document',
         loading: false,
       }));
     }
   }
 
-  function toggleWorkType(workType: string) {
-    setState(prev => ({
-      ...prev,
-      workTypes: prev.workTypes.includes(workType)
-        ? prev.workTypes.filter(t => t !== workType)
-        : [...prev.workTypes, workType],
-    }));
-  }
-
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Upload de Documents Métier</CardTitle>
+        <CardTitle>Upload de Documents Knowledge Base</CardTitle>
         <CardDescription>
-          Uploadez des documents DTU, normes, guides de bonnes pratiques, etc.
+          Uploadez des documents (DTU, normes, guides, etc.) pour enrichir l'IA avec du contexte métier
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -181,7 +176,7 @@ export function KnowledgeBaseUpload() {
           <Alert className="bg-green-50 border-green-200">
             <CheckCircle className="h-4 w-4 text-green-600" />
             <AlertDescription className="text-green-800">
-              Document uploadé avec succès! Il sera disponible après approbation.
+              ✅ Document uploadé avec succès! Le document sera traité et intégré à la Knowledge Base.
             </AlertDescription>
           </Alert>
         )}
@@ -194,11 +189,13 @@ export function KnowledgeBaseUpload() {
           </Alert>
         )}
 
-        {/* File Input */}
+        {/* File Input - PHASE 36.2: Ensure network request is triggered */}
         <div className="space-y-2">
           <label className="block text-sm font-semibold">Fichier *</label>
-          <div className="border-2 border-dashed rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
-            onClick={() => fileInputRef.current?.click()}>
+          <div
+            className="border-2 border-dashed rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
+            onClick={() => fileInputRef.current?.click()}
+          >
             <input
               ref={fileInputRef}
               type="file"
@@ -231,19 +228,7 @@ export function KnowledgeBaseUpload() {
           <p className="text-xs text-muted-foreground">Max 10MB. PDF ou TXT uniquement.</p>
         </div>
 
-        {/* Title */}
-        <div className="space-y-2">
-          <label className="block text-sm font-semibold">Titre *</label>
-          <input
-            type="text"
-            value={state.title}
-            onChange={e => setState(prev => ({ ...prev, title: e.target.value }))}
-            placeholder="Ex: DTU 31.2 - Joints et étanchéité"
-            className="w-full px-3 py-2 border rounded-md text-sm"
-          />
-        </div>
-
-        {/* Category */}
+        {/* Category - PHASE 36.2: Display French labels */}
         <div className="space-y-2">
           <label className="block text-sm font-semibold">Catégorie *</label>
           <select
@@ -251,51 +236,51 @@ export function KnowledgeBaseUpload() {
             onChange={e => setState(prev => ({ ...prev, category: e.target.value }))}
             className="w-full px-3 py-2 border rounded-md text-sm"
           >
-            {DOCUMENT_CATEGORIES.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
+            {KNOWLEDGE_CATEGORIES.map(catKey => (
+              <option key={catKey} value={catKey}>
+                {KNOWLEDGE_CATEGORY_LABELS[catKey]?.label || catKey}
+              </option>
             ))}
           </select>
+          {state.category && KNOWLEDGE_CATEGORY_LABELS[state.category]?.description && (
+            <p className="text-xs text-muted-foreground mt-1">
+              {KNOWLEDGE_CATEGORY_LABELS[state.category].description}
+            </p>
+          )}
         </div>
 
-        {/* Work Types */}
-        <div className="space-y-2">
-          <label className="block text-sm font-semibold">Types de Travaux (optionnel)</label>
-          <div className="flex flex-wrap gap-2">
-            {WORK_TYPES.map(type => (
-              <Badge
-                key={type}
-                onClick={() => toggleWorkType(type)}
-                className={`cursor-pointer ${
-                  state.workTypes.includes(type)
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-                }`}
-              >
-                {type}
-              </Badge>
-            ))}
-          </div>
-        </div>
-
-        {/* Source */}
+        {/* Source - PHASE 36.2: French labels with reliability info */}
         <div className="space-y-2">
           <label className="block text-sm font-semibold">Source *</label>
-          <div className="flex gap-4">
-            {(['internal', 'external', 'official'] as const).map(source => (
-              <label key={source} className="flex items-center gap-2 text-sm cursor-pointer">
+          <div className="space-y-2">
+            {(Object.entries(SOURCES) as Array<[keyof typeof SOURCES, typeof SOURCES[keyof typeof SOURCES]]>).map(([sourceKey, sourceInfo]) => (
+              <label key={sourceKey} className="flex items-center gap-3 p-2 rounded border hover:bg-muted cursor-pointer">
                 <input
                   type="radio"
                   name="source"
-                  value={source}
-                  checked={state.source === source}
-                  onChange={() => setState(prev => ({ ...prev, source }))}
+                  value={sourceKey}
+                  checked={state.source === sourceKey}
+                  onChange={() => setState(prev => ({ ...prev, source: sourceKey }))}
                 />
-                <span className="capitalize">
-                  {source === 'internal' ? 'Interne' : source === 'external' ? 'Externe' : 'Officiel'}
-                </span>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">{sourceInfo.label}</p>
+                  <p className="text-xs text-muted-foreground">Fiabilité: {sourceInfo.reliability}%</p>
+                </div>
               </label>
             ))}
           </div>
+        </div>
+
+        {/* Region */}
+        <div className="space-y-2">
+          <label className="block text-sm font-semibold">Région (optionnel)</label>
+          <input
+            type="text"
+            value={state.region || ''}
+            onChange={e => setState(prev => ({ ...prev, region: e.target.value || 'National' }))}
+            placeholder="Ex: Île-de-France, National..."
+            className="w-full px-3 py-2 border rounded-md text-sm"
+          />
         </div>
 
         {/* Upload Button */}
@@ -306,10 +291,9 @@ export function KnowledgeBaseUpload() {
               setState(prev => ({
                 ...prev,
                 file: null,
-                title: '',
                 category: 'GUIDELINE',
-                workTypes: [],
                 source: 'internal',
+                region: 'National',
               }));
               if (fileInputRef.current) fileInputRef.current.value = '';
             }}
@@ -319,7 +303,7 @@ export function KnowledgeBaseUpload() {
           </Button>
           <Button
             onClick={handleUpload}
-            disabled={!state.file || !state.title || state.loading}
+            disabled={!state.file || !state.category || state.loading}
           >
             {state.loading ? (
               <>

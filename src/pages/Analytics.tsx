@@ -32,6 +32,109 @@ import type { ContextEngineResult } from '@/core/engines/context.engine';
 type TabType = 'overview' | 'upload-kb' | 'users' | 'settings';
 
 /**
+ * Pricing Statistics Card - PHASE 36 Extension
+ * Display pricing references and market data statistics
+ */
+function PricingStatisticsCard() {
+  const [pricingStats, setPricingStats] = useState<{
+    total_references: number;
+    by_work_type: Record<string, number>;
+    avg_price_by_type: Record<string, number>;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchPricingStats = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const { pricingExtractionService } = await import('@/services/ai/pricing-extraction.service');
+        const stats = await pricingExtractionService.getPricingStats();
+        console.log('[Analytics] Pricing stats:', stats);
+        setPricingStats(stats);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to load pricing statistics';
+        console.error('[Analytics] Pricing stats error:', message);
+        setError(message);
+        setPricingStats(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPricingStats();
+  }, []);
+
+  const topWorkTypes = pricingStats
+    ? Object.entries(pricingStats.by_work_type)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 3)
+    : [];
+
+  return (
+    <Card className="border-l-4 border-l-emerald-500">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">💰</span>
+          <CardTitle className="text-primary font-display">Référentiels Tarifaires</CardTitle>
+        </div>
+        <CardDescription>Données de pricing et références de marché extraites</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {error ? (
+            <div className="p-4 rounded-lg bg-red-50 text-sm text-red-700">
+              Erreur: {error}
+            </div>
+          ) : loading ? (
+            <div className="p-4 rounded-lg bg-muted text-sm text-muted-foreground">
+              Chargement...
+            </div>
+          ) : !pricingStats || pricingStats.total_references === 0 ? (
+            <div className="p-4 rounded-lg bg-muted">
+              <p className="text-sm text-muted-foreground">
+                Aucune référence tarifaire n'a été extraite pour le moment.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="p-4 rounded-lg bg-muted">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Références totales</span>
+                  <span className="text-2xl font-bold">{pricingStats.total_references}</span>
+                </div>
+              </div>
+
+              {topWorkTypes.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium mb-2">Couverture par type de travaux</p>
+                  <div className="space-y-2">
+                    {topWorkTypes.map(([workType, count]) => (
+                      <div key={workType} className="p-3 rounded-lg bg-muted/50">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">{workType}</span>
+                          <Badge variant="secondary">{count}</Badge>
+                        </div>
+                        {pricingStats.avg_price_by_type[workType] && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            ⌀ {Math.round(pricingStats.avg_price_by_type[workType])}€
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
  * Knowledge Base Stats Card - Fetch real document count
  */
 function KnowledgeBaseStatsCard() {
@@ -387,6 +490,9 @@ function OverviewTab() {
 
       {/* Knowledge Base Section */}
       <KnowledgeBaseStatsCard />
+
+      {/* PHASE 36 Extension: Pricing Intelligence Section */}
+      <PricingStatisticsCard />
     </div>
   );
 }
