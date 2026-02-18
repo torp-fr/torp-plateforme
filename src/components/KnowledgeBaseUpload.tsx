@@ -108,11 +108,7 @@ export function KnowledgeBaseUpload() {
       const finalTitle = state.file.name.replace(/\.[^/.]+$/, '') || `Document ${state.category}`;
       console.log('🧠 [UPLOAD] Generated title:', finalTitle);
 
-      // Get reliability score from source
-      const reliabilityScore = SOURCES[state.source].reliability;
-      console.log('🧠 [UPLOAD] Using reliability score:', reliabilityScore);
-
-      // PHASE 36.4: Use knowledgeBrainService with schema-compliant payload (no metadata)
+      // PHASE 36.5: Use knowledgeBrainService with minimal schema-compliant payload
       console.log('🧠 [UPLOAD] Calling knowledgeBrainService.addKnowledgeDocumentWithTimeout...');
       const result = await knowledgeBrainService.addKnowledgeDocumentWithTimeout(
         state.source, // source: 'internal', 'external', or 'official'
@@ -120,9 +116,7 @@ export function KnowledgeBaseUpload() {
         content,
         {
           title: finalTitle,  // ✅ PHASE 36.3: Always provide title
-          region: state.region,
-          reliability_score: reliabilityScore,
-          // PHASE 36.4: Removed metadata (column doesn't exist in schema)
+          // PHASE 36.5: Removed region, reliability_score, metadata (don't exist in schema)
         }
       );
 

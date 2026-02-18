@@ -7,6 +7,10 @@
 import { supabase } from '@/lib/supabase';
 import { hybridAIService } from './hybrid-ai.service';
 import { pricingExtractionService } from './pricing-extraction.service';
+// PHASE 36.6: Unicode sanitizer for safe database insertion
+import { sanitizeText, getSanitizationStats } from '@/utils/text-sanitizer';
+// PHASE 36.8: Intelligent chunking for scalable ingestion
+import { chunkText, getChunkingStats, validateChunks } from '@/utils/chunking';
 
 export interface KnowledgeDocument {
   id: string;
@@ -42,7 +46,8 @@ class KnowledgeBrainService {
   private readonly SIMILARITY_THRESHOLD = 0.5;
 
   /**
-   * PHASE 36.3: Add a knowledge document to the brain (schema-compliant)
+   * PHASE 36.8: Add a knowledge document with intelligent chunking
+   * New pipeline: sanitize → chunk → insert document + chunks → async embeddings
    * Guarantees: title, category, source are always provided (NOT NULL)
    */
   async addKnowledgeDocument(
@@ -52,96 +57,20 @@ class KnowledgeBrainService {
     options?: {
       title?: string;
       region?: string;
-      reliability_score?: number;
     }
   ): Promise<KnowledgeDocument | null> {
-    try {
-      console.log('[KNOWLEDGE BRAIN] 🧠 Starting document addition (schema-compliant)...', {
-        source,
-        category,
-        length: content.length,
-        region: options?.region,
-        hasTitle: !!options?.title,
-      });
-
-      // PHASE 36.3 FIX: Generate safe title if not provided
-      const safeTitle =
-        (options?.title && options.title.trim().length > 0)
-          ? options.title.trim()
-          : `Document ${category || 'Unknown'} - ${new Date().toISOString().split('T')[0]}`;
-
-      // PHASE 35.1: Explicit insert step with error throwing
-      console.log('[KNOWLEDGE BRAIN] 📝 Inserting document to knowledge_documents table...');
-
-      // PHASE 36.4: Schema-compliant insert payload (no ghost columns)
-      const insertPayload = {
-        title: safeTitle,
-        category,
-        source,
-        region: options?.region || null,
-        content,
-        reliability_score: options?.reliability_score || 50,
-        is_active: true,
-        version_number: 1,
-      };
-
-      console.log('[KNOWLEDGE BRAIN] 📋 Final payload keys:', Object.keys(insertPayload));
-
-      const { data: doc, error: docError } = await supabase
-        .from('knowledge_documents')
-        .insert(insertPayload)
-        .select()
-        .single();
-
-      if (docError) {
-        const errorMsg = docError.message || 'Unknown error';
-        console.error('[KNOWLEDGE BRAIN] ❌ Insert failed:', { error: errorMsg, code: docError.code });
-        throw new Error(`Insert failed: ${errorMsg}`);
-      }
-
-      if (!doc) {
-        console.error('[KNOWLEDGE BRAIN] ❌ No document returned after insert');
-        throw new Error('No document returned after insert');
-      }
-
-      console.log('[KNOWLEDGE BRAIN] ✅ Document inserted successfully:', doc.id);
-
-      // Generate and store embedding
-      console.log('[KNOWLEDGE BRAIN] 🔢 Generating embedding...');
-      const embedding = await this.generateEmbedding(content);
-      if (embedding) {
-        console.log('[KNOWLEDGE BRAIN] 💾 Storing embedding...');
-        const { error: embError } = await supabase
-          .from('knowledge_embeddings')
-          .insert({
-            document_id: doc.id,
-            embedding,
-            chunk_index: 0,
-          });
-
-        if (embError) {
-          console.warn('[KNOWLEDGE BRAIN] ⚠️ Failed to store embedding:', embError.message);
-          // Don't fail - document still useful without embedding
-        } else {
-          console.log('[KNOWLEDGE BRAIN] ✅ Embedding stored successfully');
-        }
-      } else {
-        console.log('[KNOWLEDGE BRAIN] ⏭️ Skipping embedding (vector search disabled or generation failed)');
-      }
-
-      console.log('[KNOWLEDGE BRAIN] 🎉 Document added completely:', doc.id);
-      return doc;
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      console.error('[KNOWLEDGE BRAIN] 💥 Fatal error:', errorMsg, error);
-      throw error; // PHASE 35.1: Throw instead of returning null for better error handling
-    }
+    return this.addKnowledgeDocumentWithTimeout(source, category, content, options);
   }
 
   /**
-   * PHASE 36.3: Add knowledge document with schema-compliant insert
-   * Guarantees: title, category, source are always provided (NOT NULL)
-   * NO artificial timeouts - real Supabase errors surface
+   * PHASE 36.8: Add knowledge document with intelligent chunking pipeline
+   * New flow:
+   * 1. Validate & sanitize full content
+   * 2. Chunk text intelligently
+   * 3. Insert document with preview (max 10KB)
+   * 4. Batch insert chunks to knowledge_chunks
+   * 5. Launch async embedding generation per chunk
+   * 6. Extract pricing data if applicable
    */
   async addKnowledgeDocumentWithTimeout(
     source: string,
@@ -150,47 +79,83 @@ class KnowledgeBrainService {
     options?: {
       title?: string;
       region?: string;
-      reliability_score?: number;
     }
   ): Promise<KnowledgeDocument | null> {
+    const startTime = Date.now();
+
     try {
-      console.log('[KNOWLEDGE BRAIN] 🧠 START ADD (schema-compliant insert)', {
+      // PHASE 36.8 SAFETY: Check document size
+      const contentBytes = new TextEncoder().encode(content).length;
+      if (contentBytes > 50 * 1024 * 1024) {
+        // 50MB hard limit
+        const errorMsg = `[KNOWLEDGE BRAIN] 🚫 Document exceeds 50MB hard limit: ${(contentBytes / 1024 / 1024).toFixed(2)}MB`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
+      }
+      if (contentBytes > 20 * 1024 * 1024) {
+        // 20MB warning - would need confirmation
+        console.warn(
+          `[KNOWLEDGE BRAIN] ⚠️ Large document: ${(contentBytes / 1024 / 1024).toFixed(2)}MB (>20MB threshold)`
+        );
+      }
+
+      console.log('[KNOWLEDGE BRAIN] 🧠 START PHASE 36.8 CHUNKED INSERT', {
         source,
         category,
-        length: content.length,
+        content_length: content.length,
+        content_bytes: `${(contentBytes / 1024).toFixed(2)}KB`,
         hasTitle: !!options?.title,
+        region: options?.region,
       });
 
-      // PHASE 36.3 FIX: Generate safe title if not provided
+      // PHASE 36.8 STEP 1: Generate safe title
       const safeTitle =
-        (options?.title && options.title.trim().length > 0)
+        options?.title && options.title.trim().length > 0
           ? options.title.trim()
           : `Document ${category || 'Unknown'} - ${new Date().toISOString().split('T')[0]}`;
 
-      console.log('[KNOWLEDGE BRAIN] 📝 Using title:', safeTitle);
+      // PHASE 36.8 STEP 2: Sanitize full content
+      console.log('[KNOWLEDGE BRAIN] 🧹 STEP 2: Sanitizing content (Unicode + control chars)...');
+      const sanitized = sanitizeText(content);
+      const sanitizationStats = getSanitizationStats(content, sanitized);
+      console.log('[KNOWLEDGE BRAIN] 📊 Sanitization complete:', {
+        original_bytes: sanitizationStats.original_bytes,
+        sanitized_bytes: sanitizationStats.sanitized_bytes,
+        removed_bytes: sanitizationStats.removed_bytes,
+      });
 
-      // PHASE 36.4: Build schema-compliant insert payload (only existing columns)
-      // Removed ghost columns: metadata (doesn't exist in schema)
+      // PHASE 36.8 STEP 3: Chunk text intelligently
+      console.log('[KNOWLEDGE BRAIN] ✂️ STEP 3: Chunking sanitized content...');
+      const chunks = chunkText(sanitized, 1000); // 1000 tokens per chunk ≈ 4000 chars
+      const chunkingStats = getChunkingStats(sanitized, chunks);
+
+      // Validate chunks
+      const validation = validateChunks(chunks);
+      if (!validation.valid) {
+        throw new Error(`Invalid chunks: ${validation.errors.join(', ')}`);
+      }
+
+      console.log('[CHUNKING] 📊 Chunking complete:', {
+        total_chunks: chunkingStats.total_chunks,
+        total_tokens: chunkingStats.total_tokens,
+        largest_chunk_tokens: chunkingStats.largest_chunk_tokens,
+        average_chunk_tokens: chunkingStats.average_chunk_tokens,
+      });
+
+      // PHASE 36.8 STEP 4: Create preview (max 10KB)
+      const preview = sanitized.slice(0, 10000);
+      console.log('[KNOWLEDGE BRAIN] 📄 STEP 4: Created preview:', `${preview.length} chars (${(new TextEncoder().encode(preview).length / 1024).toFixed(2)}KB)`);
+
+      // PHASE 36.8 STEP 5: Insert document with preview
+      console.log('[KNOWLEDGE BRAIN] 📝 STEP 5: Inserting document to knowledge_documents...');
       const insertPayload = {
-        title: safeTitle,          // ✅ REQUIRED - NOT NULL
-        category,                  // ✅ REQUIRED - NOT NULL
-        source,                    // ✅ REQUIRED - NOT NULL
-        content,
-        region: options?.region || null,
-        reliability_score: options?.reliability_score || 50,
+        title: safeTitle,
+        category,
+        source,
+        content: preview, // ✅ PHASE 36.8: Store only preview (max 10KB)
         is_active: true,
       };
 
-      console.log('[KNOWLEDGE BRAIN] 📋 Final payload keys:', Object.keys(insertPayload));
-      console.log('[KNOWLEDGE BRAIN] 📋 Insert payload:', {
-        title: insertPayload.title,
-        category: insertPayload.category,
-        source: insertPayload.source,
-        content_length: content.length,
-      });
-
-      // PHASE 36.3 FIX: REMOVE Promise.race timeout - let real DB errors surface
-      console.log('[KNOWLEDGE BRAIN] 📝 Inserting document...');
       const { data: doc, error: docError } = await supabase
         .from('knowledge_documents')
         .insert(insertPayload)
@@ -199,8 +164,8 @@ class KnowledgeBrainService {
 
       if (docError) {
         const errorMsg = docError.message || 'Unknown error';
-        console.error('[KNOWLEDGE BRAIN] ❌ Insert failed:', { error: errorMsg, code: docError.code });
-        throw new Error(`Knowledge insert failed: ${errorMsg}`);
+        console.error('[KNOWLEDGE BRAIN] ❌ Document insert failed:', { error: errorMsg, code: docError.code });
+        throw new Error(`Document insert failed: ${errorMsg}`);
       }
 
       if (!doc) {
@@ -210,15 +175,39 @@ class KnowledgeBrainService {
 
       console.log('[KNOWLEDGE BRAIN] ✅ Document inserted:', doc.id);
 
-      // PHASE 36 Extension: Extract pricing data if PRICING_REFERENCE category
-      if (category === 'PRICING_REFERENCE') {
-        console.log('[KNOWLEDGE BRAIN] 💰 Extracting pricing data...');
+      // PHASE 36.8 STEP 6: Batch insert chunks
+      console.log('[KNOWLEDGE BRAIN] 📚 STEP 6: Inserting chunks to knowledge_chunks table...');
+      const chunkPayloads = chunks.map((chunk, index) => ({
+        document_id: doc.id,
+        chunk_index: index,
+        content: chunk,
+        token_count: Math.ceil(chunk.length / 4),
+      }));
+
+      const chunkInsertStart = Date.now();
+      const { error: chunksError } = await supabase.from('knowledge_chunks').insert(chunkPayloads);
+
+      if (chunksError) {
+        console.error('[KNOWLEDGE BRAIN] ❌ Chunks insert failed:', chunksError.message);
+        throw new Error(`Chunks insert failed: ${chunksError.message}`);
+      }
+
+      const chunkInsertTime = Date.now() - chunkInsertStart;
+      console.log('[KNOWLEDGE BRAIN] ✅ All chunks inserted:', {
+        count: chunks.length,
+        insert_time_ms: chunkInsertTime,
+        avg_time_per_chunk_ms: (chunkInsertTime / chunks.length).toFixed(2),
+      });
+
+      // PHASE 36.8 STEP 7: Extract pricing if applicable
+      if (category === 'PRICING_REFERENCE' && options?.region) {
+        console.log('[KNOWLEDGE BRAIN] 💰 STEP 7: Extracting pricing data...');
         try {
-          const pricingData = pricingExtractionService.extractPricingData(content, category, options?.region);
+          const pricingData = pricingExtractionService.extractPricingData(content, category, options.region);
           if (pricingData) {
-            const pricingStored = await pricingExtractionService.storePricingReference(doc.id, pricingData, options?.region);
+            const pricingStored = await pricingExtractionService.storePricingReference(doc.id, pricingData, options.region);
             if (pricingStored) {
-              console.log('[KNOWLEDGE BRAIN] ✅ Pricing data extracted and stored:', pricingData);
+              console.log('[KNOWLEDGE BRAIN] ✅ Pricing data extracted and stored');
             }
           } else {
             console.log('[KNOWLEDGE BRAIN] ℹ️ No pricing data found to extract');
@@ -228,13 +217,19 @@ class KnowledgeBrainService {
         }
       }
 
-      // PHASE 36: Generate embedding ASYNCHRONOUSLY (non-blocking)
-      console.log('[KNOWLEDGE BRAIN] 🚀 Starting async embedding generation...');
-      this.generateEmbeddingAsync(doc.id, content).catch((err) =>
-        console.warn('[KNOWLEDGE BRAIN] Async embedding error (ignored):', err)
+      // PHASE 36.8 STEP 8: Launch async embedding generation for each chunk
+      console.log('[EMBEDDING] 🚀 STEP 8: Starting async embedding generation for chunks...');
+      this.generateChunkEmbeddingsAsync(doc.id, chunks).catch((err) =>
+        console.warn('[EMBEDDING] ⚠️ Async embedding error (non-blocking):', err)
       );
 
-      console.log('[KNOWLEDGE BRAIN] 🎉 Document added successfully (embedding async):', doc.id);
+      const totalTime = Date.now() - startTime;
+      console.log('[KNOWLEDGE BRAIN] 🎉 Document added successfully (embeddings async):', {
+        document_id: doc.id,
+        chunks_count: chunks.length,
+        total_time_ms: totalTime,
+      });
+
       return doc;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -244,33 +239,67 @@ class KnowledgeBrainService {
   }
 
   /**
-   * PHASE 36: Generate embedding asynchronously (non-blocking)
+   * PHASE 36.8: Generate embeddings for all chunks asynchronously (non-blocking)
+   * Each chunk gets its own embedding in the knowledge_chunks table
    */
-  private async generateEmbeddingAsync(document_id: string, content: string): Promise<void> {
+  private async generateChunkEmbeddingsAsync(document_id: string, chunks: string[]): Promise<void> {
     try {
-      console.log('[KNOWLEDGE BRAIN] 🔢 Generating embedding async...');
+      console.log('[EMBEDDING] 🔢 Starting chunk embedding generation async...', {
+        document_id,
+        total_chunks: chunks.length,
+      });
 
-      const embedding = await this.generateEmbedding(content);
-      if (!embedding) {
-        console.log('[KNOWLEDGE BRAIN] ⏭️ Embedding generation skipped or failed');
+      if (!this.ENABLE_VECTOR_SEARCH) {
+        console.log('[EMBEDDING] ⏭️ Vector search disabled - skipping embedding generation');
         return;
       }
 
-      console.log('[KNOWLEDGE BRAIN] 💾 Storing embedding...');
-      const { error: embError } = await supabase.from('knowledge_embeddings').insert({
-        document_id,
-        embedding,
-        chunk_index: 0,
-      });
+      // Process embeddings sequentially to avoid rate limiting
+      for (let i = 0; i < chunks.length; i++) {
+        try {
+          const chunk = chunks[i];
+          const chunkTokens = Math.ceil(chunk.length / 4);
 
-      if (embError) {
-        console.warn('[KNOWLEDGE BRAIN] ⚠️ Failed to store embedding:', embError.message);
-      } else {
-        console.log('[KNOWLEDGE BRAIN] ✅ Embedding stored successfully');
+          console.log('[EMBEDDING] 📝 Generating embedding for chunk:', {
+            index: i,
+            chunk_tokens: chunkTokens,
+          });
+
+          const embedding = await this.generateEmbedding(chunk);
+          if (!embedding) {
+            console.warn(`[EMBEDDING] ⏭️ Embedding generation skipped for chunk ${i}`);
+            continue;
+          }
+
+          // Update the chunk with its embedding and timestamp
+          console.log('[EMBEDDING] 💾 Storing embedding for chunk', i);
+          const { error: embError } = await supabase
+            .from('knowledge_chunks')
+            .update({
+              embedding,
+              embedding_generated_at: new Date().toISOString(),
+            })
+            .eq('document_id', document_id)
+            .eq('chunk_index', i);
+
+          if (embError) {
+            console.warn(`[EMBEDDING] ⚠️ Failed to store embedding for chunk ${i}:`, embError.message);
+          } else {
+            console.log(`[EMBEDDING] ✅ Embedding stored for chunk ${i}`);
+          }
+        } catch (chunkErr) {
+          console.warn(`[EMBEDDING] ⚠️ Error processing chunk ${i}:`, chunkErr);
+          // Continue with next chunk on error
+        }
       }
+
+      console.log('[EMBEDDING] 🎉 Chunk embedding generation complete', {
+        document_id,
+        chunks_processed: chunks.length,
+      });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      console.warn('[KNOWLEDGE BRAIN] ⚠️ Async embedding error (non-blocking):', errorMsg);
+      console.warn('[EMBEDDING] 💥 Async embedding batch error (non-blocking):', errorMsg);
     }
   }
   async generateEmbedding(content: string): Promise<number[] | null> {
