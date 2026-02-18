@@ -637,7 +637,15 @@ class KnowledgeBrainService {
         return null;
       }
 
-      console.log('[KNOWLEDGE BRAIN] Embedding generated successfully');
+      // PHASE 36.10.3: Defense in depth - validate embedding dimension
+      // Database expects VECTOR(1536) - enforce this at application level
+      if (embedding.length !== this.EMBEDDING_DIMENSION) {
+        const errorMsg = `[SECURITY] Embedding dimension mismatch: expected ${this.EMBEDDING_DIMENSION}, got ${embedding.length}`;
+        console.error('[KNOWLEDGE BRAIN] 🔴 ' + errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      console.log('[KNOWLEDGE BRAIN] ✅ Embedding generated successfully (1536-dim)');
       return embedding;
     } catch (error) {
       console.error('[KNOWLEDGE BRAIN] Error generating embedding:', error);
