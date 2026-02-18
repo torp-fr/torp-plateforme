@@ -104,17 +104,22 @@ export function KnowledgeBaseUpload() {
       const content = await state.file.text();
       console.log('🧠 [UPLOAD] File content read:', { size: content.length });
 
+      // PHASE 36.3: Generate safe title from filename or category
+      const finalTitle = state.file.name.replace(/\.[^/.]+$/, '') || `Document ${state.category}`;
+      console.log('🧠 [UPLOAD] Generated title:', finalTitle);
+
       // Get reliability score from source
       const reliabilityScore = SOURCES[state.source].reliability;
       console.log('🧠 [UPLOAD] Using reliability score:', reliabilityScore);
 
-      // Use knowledgeBrainService with timeout protection (PHASE 36)
+      // PHASE 36.3: Use knowledgeBrainService with schema-compliant payload
       console.log('🧠 [UPLOAD] Calling knowledgeBrainService.addKnowledgeDocumentWithTimeout...');
       const result = await knowledgeBrainService.addKnowledgeDocumentWithTimeout(
         state.source, // source: 'internal', 'external', or 'official'
         state.category, // category: matches KNOWLEDGE_CATEGORY_LABELS keys
         content,
         {
+          title: finalTitle,  // ✅ PHASE 36.3: Always provide title
           region: state.region,
           reliability_score: reliabilityScore,
           metadata: {

@@ -42,37 +42,49 @@ class KnowledgeBrainService {
   private readonly SIMILARITY_THRESHOLD = 0.5;
 
   /**
-   * Add a knowledge document to the brain
+   * PHASE 36.3: Add a knowledge document to the brain (schema-compliant)
+   * Guarantees: title, category, source are always provided (NOT NULL)
    */
   async addKnowledgeDocument(
     source: string,
     category: string,
     content: string,
     options?: {
+      title?: string;
       region?: string;
       reliability_score?: number;
       metadata?: any;
     }
   ): Promise<KnowledgeDocument | null> {
     try {
-      console.log('[KNOWLEDGE BRAIN] 🧠 Starting document addition...', {
+      console.log('[KNOWLEDGE BRAIN] 🧠 Starting document addition (schema-compliant)...', {
         source,
         category,
         length: content.length,
         region: options?.region,
+        hasTitle: !!options?.title,
       });
+
+      // PHASE 36.3 FIX: Generate safe title if not provided
+      const safeTitle =
+        (options?.title && options.title.trim().length > 0)
+          ? options.title.trim()
+          : `Document ${category || 'Unknown'} - ${new Date().toISOString().split('T')[0]}`;
 
       // PHASE 35.1: Explicit insert step with error throwing
       console.log('[KNOWLEDGE BRAIN] 📝 Inserting document to knowledge_documents table...');
       const { data: doc, error: docError } = await supabase
         .from('knowledge_documents')
         .insert({
-          source,
+          title: safeTitle,  // ✅ PHASE 36.3: Always provide title
           category,
+          source,
           region: options?.region,
           content,
           reliability_score: options?.reliability_score || 50,
           metadata: options?.metadata || {},
+          is_active: true,
+          version_number: 1,
         })
         .select()
         .single();
@@ -123,56 +135,73 @@ class KnowledgeBrainService {
   }
 
   /**
-   * PHASE 36: Add knowledge document with timeout protection
-   * DEFINITIVE FIX for upload freeze - uses Promise.race for timeout safety
+   * PHASE 36.3: Add knowledge document with schema-compliant insert
+   * Guarantees: title, category, source are always provided (NOT NULL)
+   * NO artificial timeouts - real Supabase errors surface
    */
   async addKnowledgeDocumentWithTimeout(
     source: string,
     category: string,
     content: string,
     options?: {
+      title?: string;
       region?: string;
       reliability_score?: number;
       metadata?: any;
-    },
-    timeoutMs: number = 8000
+    }
   ): Promise<KnowledgeDocument | null> {
     try {
-      console.log('[KNOWLEDGE BRAIN] 🧠 START ADD (with timeout protection)', {
+      console.log('[KNOWLEDGE BRAIN] 🧠 START ADD (schema-compliant insert)', {
         source,
         category,
         length: content.length,
-        timeout: timeoutMs,
+        hasTitle: !!options?.title,
       });
 
-      // Create insert promise
-      const insertPromise = supabase
+      // PHASE 36.3 FIX: Generate safe title if not provided
+      const safeTitle =
+        (options?.title && options.title.trim().length > 0)
+          ? options.title.trim()
+          : `Document ${category || 'Unknown'} - ${new Date().toISOString().split('T')[0]}`;
+
+      console.log('[KNOWLEDGE BRAIN] 📝 Using title:', safeTitle);
+
+      // PHASE 36.3: Build complete insert payload with all required columns
+      const insertPayload = {
+        title: safeTitle,  // ✅ REQUIRED - NOT NULL
+        category,          // ✅ REQUIRED - NOT NULL
+        source,            // ✅ REQUIRED - NOT NULL
+        content,
+        region: options?.region || null,
+        reliability_score: options?.reliability_score || 50,
+        metadata: options?.metadata || {},
+        is_active: true,
+        version_number: 1,
+        usage_count: 0,
+        quality_score: 50,
+        is_pricing_reference: category === 'PRICING_REFERENCE',
+        pricing_data: null,
+      };
+
+      console.log('[KNOWLEDGE BRAIN] 📋 Insert payload:', {
+        title: insertPayload.title,
+        category: insertPayload.category,
+        source: insertPayload.source,
+        content_length: content.length,
+      });
+
+      // PHASE 36.3 FIX: REMOVE Promise.race timeout - let real DB errors surface
+      console.log('[KNOWLEDGE BRAIN] 📝 Inserting document...');
+      const { data: doc, error: docError } = await supabase
         .from('knowledge_documents')
-        .insert({
-          source,
-          category,
-          region: options?.region,
-          content,
-          reliability_score: options?.reliability_score || 50,
-          metadata: options?.metadata || {},
-        })
+        .insert(insertPayload)
         .select()
         .single();
 
-      // Create timeout promise
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`Insert timeout after ${timeoutMs}ms`)), timeoutMs)
-      );
-
-      // Race: first to complete wins
-      console.log('[KNOWLEDGE BRAIN] 📝 Racing insert with timeout...');
-      const result = await Promise.race([insertPromise, timeoutPromise]) as any;
-      const { data: doc, error: docError } = result;
-
       if (docError) {
         const errorMsg = docError.message || 'Unknown error';
-        console.error('[KNOWLEDGE BRAIN] ❌ Insert failed:', { error: errorMsg });
-        throw new Error(`Insert failed: ${errorMsg}`);
+        console.error('[KNOWLEDGE BRAIN] ❌ Insert failed:', { error: errorMsg, code: docError.code });
+        throw new Error(`Knowledge insert failed: ${errorMsg}`);
       }
 
       if (!doc) {
