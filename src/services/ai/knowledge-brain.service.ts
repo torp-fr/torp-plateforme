@@ -6,6 +6,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { hybridAIService } from './hybrid-ai.service';
+import { pricingExtractionService } from './pricing-extraction.service';
 
 export interface KnowledgeDocument {
   id: string;
@@ -180,6 +181,24 @@ class KnowledgeBrainService {
       }
 
       console.log('[KNOWLEDGE BRAIN] ✅ Document inserted:', doc.id);
+
+      // PHASE 36 Extension: Extract pricing data if PRICING_REFERENCE category
+      if (category === 'PRICING_REFERENCE') {
+        console.log('[KNOWLEDGE BRAIN] 💰 Extracting pricing data...');
+        try {
+          const pricingData = pricingExtractionService.extractPricingData(content, category, options?.region);
+          if (pricingData) {
+            const pricingStored = await pricingExtractionService.storePricingReference(doc.id, pricingData, options?.region);
+            if (pricingStored) {
+              console.log('[KNOWLEDGE BRAIN] ✅ Pricing data extracted and stored:', pricingData);
+            }
+          } else {
+            console.log('[KNOWLEDGE BRAIN] ℹ️ No pricing data found to extract');
+          }
+        } catch (pricingErr) {
+          console.warn('[KNOWLEDGE BRAIN] ⚠️ Pricing extraction error (non-blocking):', pricingErr);
+        }
+      }
 
       // PHASE 36: Generate embedding ASYNCHRONOUSLY (non-blocking)
       console.log('[KNOWLEDGE BRAIN] 🚀 Starting async embedding generation...');

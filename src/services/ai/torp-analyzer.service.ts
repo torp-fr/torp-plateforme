@@ -25,6 +25,8 @@ import { rgeAdemeService } from '@/services/api/rge-ademe.service';
 // PHASE 35: Knowledge Brain Integration
 import { knowledgeBrainService } from './knowledge-brain.service';
 import { marketIntelligenceService } from './market-intelligence.service';
+// PHASE 36 Extension: Pricing Intelligence
+import { pricingExtractionService } from './pricing-extraction.service';
 
 // Statut de vérification du SIRET
 export interface SiretVerification {
@@ -1033,6 +1035,7 @@ export class TorpAnalyzerService {
   /**
    * Analyze prix (300 points)
    * PHASE 35: Enhanced with market intelligence and knowledge context
+   * PHASE 36 Extension: Prioritize PRICING_REFERENCE documents with +20% weighting boost
    */
   private async analyzePrix(devisData: ExtractedDevisData, typeTravaux: string, region: string): Promise<any> {
     try {
@@ -1040,9 +1043,10 @@ export class TorpAnalyzerService {
 
       let prompt = buildPrixAnalysisPrompt(JSON.stringify(devisData, null, 2), typeTravaux, region);
 
-      // PHASE 35: Inject knowledge context (market data, references)
+      // PHASE 36 Extension: Prioritize PRICING_REFERENCE documents for context injection
+      console.log('[TORP Prix] 💰 Searching for PRICING_REFERENCE documents...');
       prompt = await knowledgeBrainService.injectKnowledgeContext(prompt, {
-        category: 'pricing',
+        category: 'PRICING_REFERENCE', // Prioritize pricing references first
         region,
         type_travaux: typeTravaux,
       });
@@ -1065,6 +1069,24 @@ export class TorpAnalyzerService {
           original: data.scoreTotal,
           adjusted: adjustedScore,
         });
+
+        // PHASE 36 Extension: Apply +20% weighting boost if pricing references were used
+        const pricingStats = await pricingExtractionService.getPricingStats();
+        if (pricingStats && pricingStats.total_references > 0) {
+          const boostMultiplier = 1.2; // +20% boost
+          const boostedScore = Math.min(100, adjustedScore * boostMultiplier);
+          console.log('[TORP Prix] 💰 Pricing references available - applying +20% boost:', {
+            before_boost: adjustedScore,
+            after_boost: boostedScore,
+            total_references: pricingStats.total_references,
+          });
+          data.scoreTotal = boostedScore;
+          data.pricingBoost = {
+            applied: true,
+            boost_percentage: 20,
+            references_used: pricingStats.total_references,
+          };
+        }
       }
 
       return data;

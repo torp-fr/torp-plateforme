@@ -173,6 +173,16 @@ export const KNOWLEDGE_CATEGORY_LABELS: Record<string, { label: string; descript
       'Points d\'attention chantier',
     ],
   },
+  PRICING_REFERENCE: {
+    label: 'Référentiel tarifaire',
+    description: 'Données de tarification et références de marché',
+    examples: [
+      'Rénovation thermique: 80-120€/m²',
+      'Pompe à chaleur: 8000-15000€',
+      'Fenêtres PVC: 200-400€/m²',
+      'Isolation combles: 20-40€/m²',
+    ],
+  },
 };
 
 /**
