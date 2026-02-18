@@ -11,6 +11,8 @@ import { pricingExtractionService } from './pricing-extraction.service';
 import { sanitizeText, getSanitizationStats } from '@/utils/text-sanitizer';
 // PHASE 36.8: Intelligent chunking for scalable ingestion
 import { chunkText, getChunkingStats, validateChunks } from '@/utils/chunking';
+// PHASE 36.10.5: Health monitoring and production observability
+import { KnowledgeHealthService } from './knowledge-health.service';
 
 export interface KnowledgeDocument {
   id: string;
@@ -78,6 +80,8 @@ class KnowledgeBrainService {
   private readonly ENABLE_VECTOR_SEARCH = true;
   private readonly EMBEDDING_DIMENSION = 1536;
   private readonly SIMILARITY_THRESHOLD = 0.5;
+  // PHASE 36.10.5: Health monitoring service
+  private readonly healthService = new KnowledgeHealthService();
   private metrics: IngestionMetrics = {
     total_documents_processed: 0,
     successful_ingestions: 0,
@@ -655,6 +659,7 @@ class KnowledgeBrainService {
 
   /**
    * PHASE 36.10.2: Search relevant knowledge using semantic similarity
+   * PHASE 36.10.5: With runtime health validation (fail-safe guard)
    * CRITICAL: Uses ONLY secure views (knowledge_documents_ready, knowledge_chunks_ready)
    * NO fallback to unsafe queries - all retrieval goes through verified RPC functions
    */
@@ -674,6 +679,28 @@ class KnowledgeBrainService {
         query: query.substring(0, 50) + '...',
         limit,
       });
+
+      // PHASE 36.10.5: Runtime health validation guard - FAIL-SAFE
+      // Block retrieval if system is in critical state
+      try {
+        const healthCheck = await this.healthService.validateSystemHealthBeforeSearch();
+        if (!healthCheck.healthy) {
+          console.error(
+            '[KNOWLEDGE BRAIN] 🔴 BLOCKING RETRIEVAL: System health check failed:',
+            healthCheck.reason
+          );
+          return [];
+        }
+        if (healthCheck.details && !healthCheck.details.vector_dimension_valid) {
+          console.error(
+            '[KNOWLEDGE BRAIN] 🔴 BLOCKING RETRIEVAL: Vector dimension invalid'
+          );
+          return [];
+        }
+      } catch (healthError) {
+        console.warn('[KNOWLEDGE BRAIN] ⚠️ Health validation error (continuing):', healthError);
+        // Don't block - just warn
+      }
 
       // Try vector search if enabled
       if (this.ENABLE_VECTOR_SEARCH) {
@@ -696,6 +723,7 @@ class KnowledgeBrainService {
 
   /**
    * PHASE 36.10.2: Vector similarity search
+   * PHASE 36.10.5: With performance metrics logging
    * CRITICAL: Uses ONLY search_knowledge_by_embedding RPC (secure views enforced at DB level)
    * NO direct table access - ALL retrieval goes through verified RPC
    */
@@ -708,6 +736,7 @@ class KnowledgeBrainService {
       min_reliability?: number;
     }
   ): Promise<SearchResult[]> {
+    const searchStartTime = Date.now();
     try {
       console.log('[KNOWLEDGE BRAIN] 🔍 Vector search starting...');
 
@@ -715,25 +744,50 @@ class KnowledgeBrainService {
       const queryEmbedding = await this.generateEmbedding(query);
       if (!queryEmbedding) {
         console.warn('[KNOWLEDGE BRAIN] ⚠️ Could not generate embedding for query');
+        // PHASE 36.10.5: Log failed search metric
+        await this.healthService.logRpcMetric(
+          'search_knowledge_by_embedding',
+          Date.now() - searchStartTime,
+          0,
+          true,
+          'Failed to generate embedding'
+        );
         return [];
       }
 
       // CRITICAL: Use VERIFIED RPC function
       // This RPC is enforced to use knowledge_documents_ready and knowledge_chunks_ready views
+      const rpcStartTime = Date.now();
       const { data, error } = await supabase.rpc('search_knowledge_by_embedding', {
         query_embedding: queryEmbedding,
         match_threshold: this.SIMILARITY_THRESHOLD,
         match_count: limit,
       });
+      const rpcTime = Date.now() - rpcStartTime;
 
       if (error) {
         console.error('[KNOWLEDGE BRAIN] 🔴 Vector search RPC failed:', error.message);
+        // PHASE 36.10.5: Log failed search metric
+        await this.healthService.logRpcMetric(
+          'search_knowledge_by_embedding',
+          rpcTime,
+          0,
+          true,
+          error.message
+        );
         // NO FALLBACK - return empty array instead of falling back to unsafe query
         return [];
       }
 
       if (!data || data.length === 0) {
         console.log('[KNOWLEDGE BRAIN] ℹ️ Vector search: no results found');
+        // PHASE 36.10.5: Log no results metric
+        await this.healthService.logRpcMetric(
+          'search_knowledge_by_embedding',
+          Date.now() - searchStartTime,
+          0,
+          false
+        );
         return [];
       }
 
@@ -769,10 +823,26 @@ class KnowledgeBrainService {
         };
       });
 
+      // PHASE 36.10.5: Log successful search metric
+      await this.healthService.logRpcMetric(
+        'search_knowledge_by_embedding',
+        Date.now() - searchStartTime,
+        validatedResults.length,
+        false
+      );
+
       return validatedResults;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error('[KNOWLEDGE BRAIN] 💥 Vector search error:', errorMsg);
+      // PHASE 36.10.5: Log error metric
+      await this.healthService.logRpcMetric(
+        'search_knowledge_by_embedding',
+        Date.now() - searchStartTime,
+        0,
+        true,
+        errorMsg
+      );
       // NO FALLBACK - return empty on error
       return [];
     }
@@ -1149,47 +1219,6 @@ class KnowledgeBrainService {
     };
   }
 
-  /**
-   * Get knowledge statistics for analytics
-   */
-  async getKnowledgeStats(): Promise<{
-    total_documents: number;
-    by_category: Record<string, number>;
-    by_source: Record<string, number>;
-    avg_reliability: number;
-  } | null> {
-    try {
-      const { data: documents, error: docError } = await supabase
-        .from('knowledge_documents')
-        .select('*')
-        .eq('is_active', true);
-
-      if (docError || !documents) {
-        console.error('[KNOWLEDGE BRAIN] Failed to get stats:', docError);
-        return null;
-      }
-
-      const by_category: Record<string, number> = {};
-      const by_source: Record<string, number> = {};
-      let total_reliability = 0;
-
-      documents.forEach((doc: KnowledgeDocument) => {
-        by_category[doc.category] = (by_category[doc.category] || 0) + 1;
-        by_source[doc.source] = (by_source[doc.source] || 0) + 1;
-        total_reliability += doc.reliability_score;
-      });
-
-      return {
-        total_documents: documents.length,
-        by_category,
-        by_source,
-        avg_reliability: documents.length > 0 ? total_reliability / documents.length : 0,
-      };
-    } catch (error) {
-      console.error('[KNOWLEDGE BRAIN] Stats error:', error);
-      return null;
-    }
-  }
 }
 
 export const knowledgeBrainService = new KnowledgeBrainService();
