@@ -646,7 +646,9 @@ class KnowledgeBrainService {
   }
 
   /**
-   * Search relevant knowledge using semantic similarity
+   * PHASE 36.10.2: Search relevant knowledge using semantic similarity
+   * CRITICAL: Uses ONLY secure views (knowledge_documents_ready, knowledge_chunks_ready)
+   * NO fallback to unsafe queries - all retrieval goes through verified RPC functions
    */
   async searchRelevantKnowledge(
     query: string,
@@ -659,30 +661,35 @@ class KnowledgeBrainService {
   ): Promise<SearchResult[]> {
     try {
       const limit = options?.limit || 5;
-      const minReliability = options?.min_reliability || 0;
 
-      console.log('[KNOWLEDGE BRAIN] Searching knowledge:', { query: query.substring(0, 50) + '...', limit });
+      console.log('[KNOWLEDGE BRAIN] 🔐 HARDLOCK SEARCH: Searching knowledge (verified docs only):', {
+        query: query.substring(0, 50) + '...',
+        limit,
+      });
 
       // Try vector search if enabled
       if (this.ENABLE_VECTOR_SEARCH) {
         const vectorResults = await this.vectorSearch(query, limit, options);
         if (vectorResults.length > 0) {
-          console.log('[KNOWLEDGE BRAIN] Vector search returned', vectorResults.length, 'results');
+          console.log('[KNOWLEDGE BRAIN] ✅ Vector search returned', vectorResults.length, 'results (all verified)');
           return vectorResults;
         }
+        console.log('[KNOWLEDGE BRAIN] ⚠️ Vector search returned no results, trying keyword search');
       }
 
-      // Fallback to keyword search
-      console.log('[KNOWLEDGE BRAIN] Vector search unavailable - using keyword search');
+      // Fallback to keyword search (also using secure RPC)
+      console.log('[KNOWLEDGE BRAIN] 📝 Using keyword search via secure RPC');
       return await this.keywordSearch(query, limit, options);
     } catch (error) {
-      console.error('[KNOWLEDGE BRAIN] Search error:', error);
+      console.error('[KNOWLEDGE BRAIN] 💥 Search error:', error);
       return [];
     }
   }
 
   /**
-   * Vector similarity search
+   * PHASE 36.10.2: Vector similarity search
+   * CRITICAL: Uses ONLY search_knowledge_by_embedding RPC (secure views enforced at DB level)
+   * NO direct table access - ALL retrieval goes through verified RPC
    */
   private async vectorSearch(
     query: string,
@@ -694,39 +701,78 @@ class KnowledgeBrainService {
     }
   ): Promise<SearchResult[]> {
     try {
+      console.log('[KNOWLEDGE BRAIN] 🔍 Vector search starting...');
+
       // Generate query embedding
       const queryEmbedding = await this.generateEmbedding(query);
       if (!queryEmbedding) {
+        console.warn('[KNOWLEDGE BRAIN] ⚠️ Could not generate embedding for query');
         return [];
       }
 
-      // Search with RPC or direct query
+      // CRITICAL: Use VERIFIED RPC function
+      // This RPC is enforced to use knowledge_documents_ready and knowledge_chunks_ready views
       const { data, error } = await supabase.rpc('search_knowledge_by_embedding', {
         query_embedding: queryEmbedding,
         match_threshold: this.SIMILARITY_THRESHOLD,
         match_count: limit,
-        p_category: options?.category || null,
-        p_region: options?.region || null,
-        p_min_reliability: options?.min_reliability || 0,
       });
 
       if (error) {
-        console.warn('[KNOWLEDGE BRAIN] RPC search failed:', error);
+        console.error('[KNOWLEDGE BRAIN] 🔴 Vector search RPC failed:', error.message);
+        // NO FALLBACK - return empty array instead of falling back to unsafe query
         return [];
       }
 
-      return (data || []).map((item: any) => ({
-        ...item,
-        relevance_score: item.embedding_similarity,
-      }));
+      if (!data || data.length === 0) {
+        console.log('[KNOWLEDGE BRAIN] ℹ️ Vector search: no results found');
+        return [];
+      }
+
+      console.log('[KNOWLEDGE BRAIN] ✅ Vector search found', data.length, 'verified chunks');
+
+      // DEFENSE IN DEPTH: Validate each result at runtime
+      const validatedResults = data.map((item: any) => {
+        // Double-check: ingestion_status must be 'complete'
+        if (item.ingestion_status !== 'complete') {
+          console.warn(
+            '[KNOWLEDGE BRAIN] 🚨 SECURITY BREACH: Result has invalid status:',
+            item.ingestion_status
+          );
+          throw new Error(`Security violation: Retrieved document has status ${item.ingestion_status}`);
+        }
+
+        // Double-check: embedding_integrity_checked must be true
+        if (item.embedding_integrity_checked !== true) {
+          console.warn('[KNOWLEDGE BRAIN] 🚨 SECURITY BREACH: Result has integrity_checked=false');
+          throw new Error('Security violation: Retrieved document has integrity_checked=false');
+        }
+
+        return {
+          id: item.id,
+          source: item.doc_source,
+          category: item.doc_category,
+          content: item.content,
+          reliability_score: 1.0,
+          created_at: item.doc_created_at,
+          updated_at: item.doc_created_at,
+          relevance_score: item.embedding_similarity || 0,
+          embedding_similarity: item.embedding_similarity || 0,
+        };
+      });
+
+      return validatedResults;
     } catch (error) {
-      console.error('[KNOWLEDGE BRAIN] Vector search error:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[KNOWLEDGE BRAIN] 💥 Vector search error:', errorMsg);
+      // NO FALLBACK - return empty on error
       return [];
     }
   }
 
   /**
-   * Keyword/text search fallback
+   * PHASE 36.10.2: Keyword/text search (VERIFIED)
+   * CRITICAL: Uses ONLY search_knowledge_by_keyword RPC (secure views enforced at DB level)
    */
   private async keywordSearch(
     query: string,
@@ -738,36 +784,43 @@ class KnowledgeBrainService {
     }
   ): Promise<SearchResult[]> {
     try {
-      let baseQuery = supabase
-        .from('knowledge_documents')
-        .select('*')
-        .eq('is_active', true)
-        .gte('reliability_score', options?.min_reliability || 0)
-        .order('reliability_score', { ascending: false })
-        .limit(limit);
+      console.log('[KNOWLEDGE BRAIN] 📝 Keyword search starting (verified docs only)...');
 
-      if (options?.category) {
-        baseQuery = baseQuery.eq('category', options.category);
-      }
-
-      if (options?.region) {
-        baseQuery = baseQuery.or(`region.eq.${options.region},region.is.null`);
-      }
-
-      const { data, error } = await baseQuery;
+      // CRITICAL: Use VERIFIED RPC function
+      // This RPC is enforced to use knowledge_documents_ready and knowledge_chunks_ready views
+      const { data, error } = await supabase.rpc('search_knowledge_by_keyword', {
+        search_query: query,
+        match_count: limit,
+        p_category: options?.category || null,
+      });
 
       if (error) {
-        console.error('[KNOWLEDGE BRAIN] Keyword search error:', error);
+        console.error('[KNOWLEDGE BRAIN] 🔴 Keyword search RPC failed:', error.message);
         return [];
       }
 
-      return (data || []).map((doc: any) => ({
-        ...doc,
-        relevance_score: 1.0,
+      if (!data || data.length === 0) {
+        console.log('[KNOWLEDGE BRAIN] ℹ️ Keyword search: no results found');
+        return [];
+      }
+
+      console.log('[KNOWLEDGE BRAIN] ✅ Keyword search found', data.length, 'verified chunks');
+
+      // Map RPC results to SearchResult format
+      return data.map((item: any) => ({
+        id: item.id,
+        source: item.doc_source,
+        category: item.doc_category,
+        content: item.content,
+        reliability_score: 1.0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        relevance_score: item.relevance_score || 0,
         embedding_similarity: 0,
       }));
     } catch (error) {
-      console.error('[KNOWLEDGE BRAIN] Keyword search error:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[KNOWLEDGE BRAIN] 💥 Keyword search error:', errorMsg);
       return [];
     }
   }
