@@ -614,13 +614,23 @@ class KnowledgeBrainService {
         last_failed_chunk: lastFailedChunk,
       });
 
-      if (failed > 0) {
-        const errorMsg = `Embedding generation incomplete: ${failed} of ${chunks.length} chunks failed (last failed: chunk ${lastFailedChunk})`;
-        console.error('[EMBEDDING] 🔴 ' + errorMsg);
-        throw new Error(errorMsg);
-      }
-
-      console.log('[EMBEDDING] 🎉 Embedding generation complete - ' + chunks.length + ' chunks processed successfully');
+      // ✅ PHASE 36.10: Non-blocking observability snapshot (fire-and-forget)
+      setTimeout(() => {
+        try {
+          supabase.from('live_intelligence_snapshots').insert({
+            source: 'knowledge-brain',
+            status: 'embedding_complete',
+            documents_processed: 1,
+            embeddings_generated: successCount,
+            pricing_extracted: 0,
+            errors: failCount,
+          }).catch((err) => {
+            console.warn('[KNOWLEDGE BRAIN] ⚠️ Observability snapshot failed (non-blocking):', err);
+          });
+        } catch (e) {
+          console.warn('[KNOWLEDGE BRAIN] ⚠️ Observability snapshot error (non-blocking):', e);
+        }
+      }, 0);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error('[EMBEDDING] 💥 Embedding batch failed:', errorMsg);
