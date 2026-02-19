@@ -61,6 +61,19 @@ class SecureAIService {
   }
 
   /**
+   * NUCLEAR FIX: Wait for Supabase session to be ready
+   * Retry up to 10 times with 200ms delay between attempts
+   */
+  private async waitForSession(): Promise<any> {
+    for (let i = 0; i < 10; i++) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) return session;
+      await new Promise(r => setTimeout(r, 200));
+    }
+    throw new Error('SESSION_TIMEOUT');
+  }
+
+  /**
    * G??n??re un embedding via Edge Function (cl?? API s??curis??e c??t?? serveur)
    * @param text - Texte ?? convertir en embedding
    * @param model - Mod??le d'embedding (default: text-embedding-3-small)
@@ -73,14 +86,20 @@ class SecureAIService {
     // Tronquer si trop long
     const truncatedText = text.length > 8000 ? text.substring(0, 8000) : text;
 
-    // Get session
-    const { data: { session } } = await supabase.auth.getSession();
+    // NUCLEAR FIX: Wait for session to be ready before invoking Edge Function
+    const session = await this.waitForSession();
+
+    // NUCLEAR AUTH GUARD: Verify access token exists
+    if (!session?.access_token) {
+      console.error('[NUCLEAR AUTH GUARD] No access_token — aborting embedding call');
+      throw new Error('AUTH_NOT_READY');
+    }
 
     console.log('[NUCLEAR FIX] calling EDGE FUNCTION generate-embedding');
 
     const { data, error } = await supabase.functions.invoke('generate-embedding', {
       headers: {
-        Authorization: `Bearer ${session?.access_token}`
+        Authorization: `Bearer ${session.access_token}`
       },
       body: { text: truncatedText, model }
     });
