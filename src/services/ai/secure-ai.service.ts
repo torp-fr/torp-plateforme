@@ -76,9 +76,9 @@ class SecureAIService {
     // Get session
     const { data: { session } } = await supabase.auth.getSession();
 
-    console.log('[NUCLEAR FIX] calling EDGE FUNCTION generateembedding');
+    console.log('[NUCLEAR FIX] calling EDGE FUNCTION generate-embedding');
 
-    const { data, error } = await supabase.functions.invoke('generateembedding', {
+    const { data, error } = await supabase.functions.invoke('generate-embedding', {
       headers: {
         Authorization: `Bearer ${session?.access_token}`
       },
