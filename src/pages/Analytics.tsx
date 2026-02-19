@@ -372,6 +372,10 @@ function EngineStatusLiveCard() {
   const [timeline, setTimeline] = useState<any[]>([]);
   const engineStats = getEngineStats();
 
+  // ✅ PHASE 36.10: Batching buffer to avoid massive re-renders
+  const bufferRef = useRef<any[]>([]);
+  const flushTimerRef = useRef<any>(null);
+
   useEffect(() => {
     console.log('[ANALYTICS REALTIME] Setting up score_snapshots listener...');
 
@@ -401,26 +405,47 @@ function EngineStatusLiveCard() {
             duration: newSnapshot.duration_ms,
           });
 
-          setSnapshots((prev) => ({
-            ...prev,
-            [newSnapshot.engine_name]: {
-              score: newSnapshot.score,
-              status: newSnapshot.status,
-              duration_ms: newSnapshot.duration_ms,
-              timestamp: newSnapshot.created_at || new Date().toISOString(),
-            },
-          }));
+          // ✅ PHASE 36.10: Batching optimization - accumulate snapshots in buffer
+          // Reduces 11 renders → 1 render per batch window (250ms)
+          bufferRef.current.push(newSnapshot);
 
-          // ✅ PHASE 36.10: Add to timeline (keep last 20 events)
-          setTimeline((prev) => [
-            {
-              engine: newSnapshot.engine_name,
-              score: newSnapshot.score,
-              duration: newSnapshot.duration_ms,
-              timestamp: newSnapshot.created_at || new Date().toISOString(),
-            },
-            ...prev.slice(0, 19),
-          ]);
+          if (!flushTimerRef.current) {
+            flushTimerRef.current = setTimeout(() => {
+              const updates = [...bufferRef.current];
+              bufferRef.current = [];
+              flushTimerRef.current = null;
+
+              console.log('[ANALYTICS REALTIME] Flushing batch:', {
+                count: updates.length,
+                engines: updates.map((u) => u.engine_name),
+              });
+
+              // Single batch state update
+              setSnapshots((prev) => {
+                const next = { ...prev };
+                updates.forEach((snap) => {
+                  next[snap.engine_name] = {
+                    score: snap.score,
+                    status: snap.status,
+                    duration_ms: snap.duration_ms,
+                    timestamp: snap.created_at || new Date().toISOString(),
+                  };
+                });
+                return next;
+              });
+
+              // Timeline updated in same batch
+              setTimeline((prev) => [
+                ...updates.map((snap) => ({
+                  engine: snap.engine_name,
+                  score: snap.score,
+                  duration: snap.duration_ms,
+                  timestamp: snap.created_at || new Date().toISOString(),
+                })),
+                ...prev.slice(0, 20 - updates.length),
+              ]);
+            }, 250); // Batch window: 250ms
+          }
         }
       )
       .subscribe((status) => {
@@ -430,6 +455,12 @@ function EngineStatusLiveCard() {
     return () => {
       console.log('[ANALYTICS REALTIME] Cleaning up subscription');
       supabase.removeChannel(channel);
+
+      // ✅ PHASE 36.10: Clear pending batch timer on unmount
+      if (flushTimerRef.current) {
+        clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
     };
   }, []);
 
