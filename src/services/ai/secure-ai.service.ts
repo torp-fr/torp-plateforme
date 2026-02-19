@@ -73,24 +73,12 @@ class SecureAIService {
     // Tronquer si trop long
     const truncatedText = text.length > 8000 ? text.substring(0, 8000) : text;
 
-    // DEBUG: Log environment and session before invoking
-    console.log('[SecureAI] === EMBEDDING INVOCATION DEBUG ===');
-    console.log('[SecureAI] Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
-    console.log('[SecureAI] Supabase Anon Key exists:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
-    console.log('[SecureAI] Supabase Anon Key length:', import.meta.env.VITE_SUPABASE_ANON_KEY?.length);
+    // Get session
+    const { data: { session } } = await supabase.auth.getSession();
 
-    // Get and log session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    console.log('[SecureAI] Session Error:', sessionError?.message || 'None');
-    console.log('[SecureAI] Session exists:', !!session);
-    console.log('[SecureAI] Session user:', session?.user?.id);
-    console.log('[SecureAI] Session access_token exists:', !!session?.access_token);
-    console.log('[SecureAI] Session access_token length:', session?.access_token?.length);
-    console.log('[SecureAI] Session expires_at:', session?.expires_at);
-    console.log('[SecureAI] Request payload:', { text: truncatedText.substring(0, 50) + '...', model });
-    console.log('[SecureAI] =====================================');
+    console.log('[NUCLEAR FIX] calling EDGE FUNCTION generateembedding');
 
-    const { data, error } = await supabase.functions.invoke('generate-embedding', {
+    const { data, error } = await supabase.functions.invoke('generateembedding', {
       headers: {
         Authorization: `Bearer ${session?.access_token}`
       },
@@ -98,13 +86,15 @@ class SecureAIService {
     });
 
     if (error) {
-      console.error('[SecureAI] ERROR EMBEDDING INVOCATION FAILED', error);
+      console.error('[NUCLEAR FIX] EDGE FUNCTION ERROR', error);
       throw new Error(error.message);
     }
+
     if (!data || !Array.isArray(data.embedding)) {
-      console.error('[SecureAI] Invalid embedding response:', data);
-      return null;
+      console.error('[NUCLEAR FIX] Invalid embedding response:', data);
+      throw new Error('Invalid embedding response');
     }
+
     return data.embedding;
   }
 

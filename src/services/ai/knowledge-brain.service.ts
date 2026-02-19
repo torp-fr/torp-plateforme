@@ -14,7 +14,7 @@ import { chunkText, getChunkingStats, validateChunks } from '@/utils/chunking';
 // PHASE 36.10.5: Health monitoring and production observability
 import { KnowledgeHealthService } from './knowledge-health.service';
 // PHASE 36.11: PDF text extraction
-import pdfParse from 'pdf-parse';
+import * as pdfjs from 'pdfjs-dist';
 
 export interface KnowledgeDocument {
   id: string;
@@ -27,22 +27,38 @@ export interface KnowledgeDocument {
   updated_at: string;
 }
 
-import pdf from "pdf-parse";
+// PHASE 36.10.1: State Machine Definition
+type IngestionStatus = 'pending' | 'processing' | 'chunking' | 'embedding' | 'complete' | 'failed';
 
-/**
- * Detect binary / compressed content
- */
-function looksBinary(text: string): boolean {
-  if (!text) return true;
+interface IngestionState {
+  ingestion_status: IngestionStatus;
+  ingestion_progress: number;
+  ingestion_started_at?: string;
+  ingestion_completed_at?: string;
+  last_ingestion_error?: string;
+  last_ingestion_step?: string;
+  embedding_integrity_checked?: boolean;
+}
 
-  // PDF header
-  if (text.startsWith('%PDF')) return true;
+// PHASE 36.10.1: State transition rules
+const ALLOWED_TRANSITIONS: Record<IngestionStatus, IngestionStatus[]> = {
+  pending: ['processing'],
+  processing: ['chunking', 'failed'],
+  chunking: ['embedding', 'failed'],
+  embedding: ['complete', 'failed'],
+  failed: ['pending'],
+  complete: [], // Terminal state - no transitions allowed
+};
 
-  // high non printable ratio
-  const nonPrintable = (text.match(/[^\x09\x0A\x0D\x20-\x7E]/g) || []).length;
-  const ratio = nonPrintable / text.length;
-
-  return ratio > 0.20;
+// PHASE 36.10.1: Metrics tracking
+interface IngestionMetrics {
+  total_documents_processed: number;
+  successful_ingestions: number;
+  failed_ingestions: number;
+  avg_chunks_per_document: number;
+  avg_embedding_time_per_chunk: number;
+  integrity_check_failures: number;
+  retry_success_rate: number;
 }
 
 class KnowledgeBrainService {
@@ -81,7 +97,7 @@ class KnowledgeBrainService {
 
   /**
    * PHASE 36.11: Extract readable text from document (PDF or plain text)
-   * Detects PDF header and extracts text using pdf-parse
+   * Detects PDF header and extracts text using pdfjs-dist
    * Falls back to TextDecoder for plain text files
    * Never returns binary data
    */
@@ -101,8 +117,16 @@ class KnowledgeBrainService {
       if (header === '%PDF') {
         console.log('[KNOWLEDGE BRAIN] 📄 PDF detected - extracting text...');
         try {
-          const pdf = await pdfParse(buffer);
-          const extractedText = pdf.text || '';
+          const pdf = await pdfjs.getDocument({ data: uint8Array }).promise;
+          let extractedText = '';
+
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map((item: any) => item.str).join('');
+            extractedText += pageText + '\n';
+          }
+
           if (!extractedText || extractedText.trim().length === 0) {
             console.warn('[KNOWLEDGE BRAIN] ⚠️ PDF text extraction returned empty');
             return '';
@@ -183,13 +207,19 @@ class KnowledgeBrainService {
 
       // Validate transition if status is changing
       if (newStatus && newStatus !== currentStatus) {
-        const allowedNextStates = ALLOWED_TRANSITIONS[currentStatus] || [];
-        if (!allowedNextStates.includes(newStatus)) {
-          const errorMsg = `[STATE MACHINE VIOLATION] ${currentStatus} -> ${newStatus} not allowed. Valid: ${allowedNextStates.join(', ')}`;
-          console.error('[KNOWLEDGE BRAIN] 🔴 ' + errorMsg);
-          return false;
+        // PHASE 36.11: Safe fallback guard if state machine is undefined
+        if (!ALLOWED_TRANSITIONS) {
+          console.warn('[KNOWLEDGE BRAIN] Transition guard fallback - ALLOWED_TRANSITIONS undefined');
+          console.log('[KNOWLEDGE BRAIN] 🟢 Valid transition (fallback): ' + currentStatus + ' -> ' + newStatus);
+        } else {
+          const allowedNextStates = ALLOWED_TRANSITIONS[currentStatus] || [];
+          if (!allowedNextStates.includes(newStatus)) {
+            const errorMsg = `[STATE MACHINE VIOLATION] ${currentStatus} -> ${newStatus} not allowed. Valid: ${allowedNextStates.join(', ')}`;
+            console.error('[KNOWLEDGE BRAIN] 🔴 ' + errorMsg);
+            return false;
+          }
+          console.log('[KNOWLEDGE BRAIN] 🟢 Valid transition: ' + currentStatus + ' -> ' + newStatus);
         }
-        console.log('[KNOWLEDGE BRAIN] 🟢 Valid transition: ' + currentStatus + ' -> ' + newStatus);
       }
 
       // Perform update
@@ -1278,17 +1308,6 @@ class KnowledgeBrainService {
       return [];
     }
   }
-
-  // Detect PDF
-  const header = new TextDecoder().decode(buffer.slice(0, 4));
-
-  if (header.includes('%PDF')) {
-    console.log('[KNOWLEDGE BRAIN] 📄 PDF detected — extracting text...');
-    const data = await pdf(Buffer.from(buffer));
-    return data.text || '';
-  }
-
-  // Fallback: treat as plain text
-  console.log('[KNOWLEDGE BRAIN] 📄 Plain text detected');
-  return new TextDecoder().decode(buffer);
 }
+
+export const knowledgeBrainService = new KnowledgeBrainService();
