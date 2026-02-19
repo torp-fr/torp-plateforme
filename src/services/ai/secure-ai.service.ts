@@ -78,7 +78,7 @@ class SecureAIService {
    * @param text - Texte ?? convertir en embedding
    * @param model - Mod??le d'embedding (default: text-embedding-3-small)
    */
-  async generateEmbedding(text: string, model: string = 'text-embedding-3-small'): Promise<number[]> {
+  async generate-embedding(text: string, model: string = 'text-embedding-3-small'): Promise<number[]> {
     if (!text || text.trim().length === 0) {
       throw new Error('Text is required for embedding generation');
     }
