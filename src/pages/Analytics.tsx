@@ -3,7 +3,7 @@
  * Réservé aux comptes admin - suivi et gestion de la plateforme
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { KnowledgeBaseUpload } from '@/components/KnowledgeBaseUpload';
 import {
@@ -27,6 +27,7 @@ import { ENGINE_REGISTRY, getEngineStats } from '@/core/platform/engineRegistry'
 import { API_REGISTRY, getAPIStats } from '@/core/platform/apiRegistry';
 import { getOrchestrationStatus, getOrchestrationStats, getLastOrchestration } from '@/core/platform/engineOrchestrator';
 import { analyticsService } from '@/services/api/analytics.service';
+import { supabase } from '@/lib/supabase';
 import type { ContextEngineResult } from '@/core/engines/context.engine';
 
 type TabType = 'overview' | 'upload-kb' | 'users' | 'settings';
@@ -363,10 +364,260 @@ export function Analytics() {
 }
 
 /**
+ * Orchestration execution order - defines the pipeline sequence
+ */
+const ENGINE_FLOW = [
+  'contextEngine',
+  'lotEngine',
+  'ruleEngine',
+  'scoringEngine',
+  'enrichmentEngine',
+  'auditEngine',
+  'globalScoringEngine',
+  'trustCappingEngine',
+];
+
+/**
+ * PHASE 36.10: Engine Status Live Card with Realtime Updates
+ * Listens to score_snapshots table for real-time engine metrics
+ */
+function EngineStatusLiveCard() {
+  const [snapshots, setSnapshots] = useState<Record<string, any>>({});
+  const [timeline, setTimeline] = useState<any[]>([]);
+  const engineStats = getEngineStats();
+
+  // ✅ PHASE 36.10: Batching buffer to avoid massive re-renders
+  const bufferRef = useRef<any[]>([]);
+  const flushTimerRef = useRef<any>(null);
+
+  useEffect(() => {
+    console.log('[ANALYTICS REALTIME] Setting up score_snapshots listener...');
+
+    // ✅ PHASE 36.10: Subscribe to real-time engine snapshots (filtered for performance)
+    // Filter at DB level to avoid massive re-renders from non-engine snapshots
+    const channel = supabase
+      .channel('analytics-engine-snapshots')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'score_snapshots',
+          filter: 'snapshot_type=eq.engine', // ✅ Only engine snapshots - reduce network + re-renders
+        },
+        (payload) => {
+          // ✅ PHASE 36.10: Security check - validate snapshot_type at application level
+          const newSnapshot = payload.new as any;
+          if (newSnapshot.snapshot_type !== 'engine') {
+            console.warn('[ANALYTICS REALTIME] ⚠️ Received non-engine snapshot (should be filtered):', newSnapshot.snapshot_type);
+            return;
+          }
+
+          console.log('[ANALYTICS REALTIME] New engine snapshot received:', {
+            engine: newSnapshot.engine_name,
+            score: newSnapshot.score,
+            duration: newSnapshot.duration_ms,
+          });
+
+          // ✅ PHASE 36.10: Batching optimization - accumulate snapshots in buffer
+          // Reduces 11 renders → 1 render per batch window (250ms)
+          bufferRef.current.push(newSnapshot);
+
+          if (!flushTimerRef.current) {
+            flushTimerRef.current = setTimeout(() => {
+              const updates = [...bufferRef.current];
+              bufferRef.current = [];
+              flushTimerRef.current = null;
+
+              console.log('[ANALYTICS REALTIME] Flushing batch:', {
+                count: updates.length,
+                engines: updates.map((u) => u.engine_name),
+              });
+
+              // Single batch state update
+              setSnapshots((prev) => {
+                const next = { ...prev };
+                updates.forEach((snap) => {
+                  next[snap.engine_name] = {
+                    score: snap.score,
+                    status: snap.status,
+                    duration_ms: snap.duration_ms,
+                    timestamp: snap.created_at || new Date().toISOString(),
+                  };
+                });
+                return next;
+              });
+
+              // Timeline updated in same batch
+              setTimeline((prev) => [
+                ...updates.map((snap) => ({
+                  engine: snap.engine_name,
+                  score: snap.score,
+                  duration: snap.duration_ms,
+                  timestamp: snap.created_at || new Date().toISOString(),
+                })),
+                ...prev.slice(0, 20 - updates.length),
+              ]);
+            }, 250); // Batch window: 250ms
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[ANALYTICS REALTIME] Subscription status:', status);
+      });
+
+    return () => {
+      console.log('[ANALYTICS REALTIME] Cleaning up subscription');
+      supabase.removeChannel(channel);
+
+      // ✅ PHASE 36.10: Clear pending batch timer on unmount
+      if (flushTimerRef.current) {
+        clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  return (
+    <Card className="border-l-4 border-l-blue-500">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Cpu className="h-5 w-5 text-blue-600" />
+            <CardTitle className="text-primary font-display">Platform Engines</CardTitle>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">{engineStats.total} engines</Badge>
+            {Object.keys(snapshots).length > 0 && (
+              <Badge className="bg-green-100 text-green-700 border-green-300">
+                🔴 Live ({Object.keys(snapshots).length})
+              </Badge>
+            )}
+          </div>
+        </div>
+        <CardDescription>Orchestration engines pour analyse et enrichissement</CardDescription>
+      </CardHeader>
+
+      {/* ✅ PHASE 36.11: Engine Orchestration Flow Pipeline */}
+      <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+        <h4 className="text-xs font-semibold text-blue-900 mb-3 uppercase">Orchestration Pipeline</h4>
+        <div className="flex items-center gap-2 overflow-x-auto pb-2">
+          {ENGINE_FLOW.map((engineId, idx) => {
+            const hasSnapshot = engineId in snapshots;
+            const snapshot = snapshots[engineId];
+            return (
+              <React.Fragment key={engineId}>
+                <div
+                  className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all whitespace-nowrap ${
+                    hasSnapshot
+                      ? 'bg-green-100 border border-green-300 text-green-700'
+                      : 'bg-gray-100 border border-gray-300 text-gray-600'
+                  }`}
+                >
+                  <span className="text-xs font-medium">
+                    {engineId.replace(/Engine$/, '').charAt(0).toUpperCase() + engineId.replace(/Engine$/, '').slice(1)}
+                  </span>
+                  {hasSnapshot && (
+                    <span className="text-xs font-semibold text-green-700">
+                      ✓ {snapshot.score !== null ? snapshot.score.toFixed(2) : '—'}
+                    </span>
+                  )}
+                </div>
+                {idx < ENGINE_FLOW.length - 1 && (
+                  <div className="flex items-center justify-center">
+                    <div className={`w-6 h-0.5 ${hasSnapshot ? 'bg-green-400' : 'bg-gray-300'}`} />
+                    <span className={`text-xs ${hasSnapshot ? 'text-green-600' : 'text-gray-400'}`}>→</span>
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
+      </div>
+
+      <CardContent>
+        {/* Orchestration Status */}
+        <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-blue-900">Orchestration Status</span>
+            <Badge className="bg-blue-100 text-blue-700 border-blue-300">
+              {getOrchestrationStatus()}
+            </Badge>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {ENGINE_REGISTRY.map((engine) => {
+            const snapshot = snapshots[engine.id];
+            return (
+              <div key={engine.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors">
+                <div>
+                  <p className="font-medium text-sm">{engine.name}</p>
+                  <p className="text-xs text-muted-foreground">{engine.description}</p>
+                  {snapshot && (
+                    <p className="text-xs text-blue-600 mt-1">
+                      ⚡ Score: {snapshot.score !== null ? snapshot.score.toFixed(2) : '—'} | Duration: {snapshot.duration_ms}ms
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {snapshot && (
+                    <Badge className="bg-blue-100 text-blue-700 border-blue-300 animate-pulse">
+                      {snapshot.status}
+                    </Badge>
+                  )}
+                  <Badge
+                    variant="outline"
+                    className={
+                      engine.status === 'active'
+                        ? 'bg-green-100 text-green-700 border-green-300'
+                        : engine.status === 'error'
+                          ? 'bg-red-100 text-red-700 border-red-300'
+                          : 'bg-gray-100 text-gray-700 border-gray-300'
+                    }
+                  >
+                    {engine.status}
+                  </Badge>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ✅ PHASE 36.10: Engine Activity Timeline */}
+        {timeline.length > 0 && (
+          <div className="mt-6 pt-4 border-t border-muted">
+            <h4 className="text-sm font-semibold text-foreground mb-3">📊 Engine Activity (Last 20)</h4>
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {timeline.map((item, idx) => (
+                <div key={idx} className="text-xs p-2 rounded bg-muted/30 text-muted-foreground hover:bg-muted/50 transition-colors">
+                  <span className="font-medium">[{item.engine}]</span>
+                  {' '}
+                  <span className="text-blue-600">
+                    {item.score !== null ? `${item.score.toFixed(2)}` : '—'}
+                  </span>
+                  {' '}
+                  <span className="text-gray-500">
+                    {item.duration}ms
+                  </span>
+                  {' '}
+                  <span className="text-xs text-gray-400">
+                    {new Date(item.timestamp).toLocaleTimeString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
  * Overview Tab Component - Platform Control Center
  */
 function OverviewTab() {
-  const engineStats = getEngineStats();
   const apiStats = getAPIStats();
 
   return (
@@ -399,53 +650,8 @@ function OverviewTab() {
 
       {/* ========== PLATFORM CONTROL CENTER ========== */}
 
-      {/* Platform Engines Section */}
-      <Card className="border-l-4 border-l-blue-500">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Cpu className="h-5 w-5 text-blue-600" />
-              <CardTitle className="text-primary font-display">Platform Engines</CardTitle>
-            </div>
-            <Badge variant="outline">{engineStats.total} engines</Badge>
-          </div>
-          <CardDescription>Orchestration engines pour analyse et enrichissement</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {/* Orchestration Status */}
-          <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-blue-900">Orchestration Status</span>
-              <Badge className="bg-blue-100 text-blue-700 border-blue-300">
-                {getOrchestrationStatus()}
-              </Badge>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {ENGINE_REGISTRY.map((engine) => (
-              <div key={engine.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                <div>
-                  <p className="font-medium text-sm">{engine.name}</p>
-                  <p className="text-xs text-muted-foreground">{engine.description}</p>
-                </div>
-                <Badge
-                  variant="outline"
-                  className={
-                    engine.status === 'active'
-                      ? 'bg-green-100 text-green-700 border-green-300'
-                      : engine.status === 'error'
-                        ? 'bg-red-100 text-red-700 border-red-300'
-                        : 'bg-gray-100 text-gray-700 border-gray-300'
-                  }
-                >
-                  {engine.status}
-                </Badge>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Platform Engines Section - NOW WITH REALTIME UPDATES */}
+      <EngineStatusLiveCard />
 
       {/* Last Orchestration Result Section */}
       <LastOrchestrationResultSection />
