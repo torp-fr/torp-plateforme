@@ -16,38 +16,32 @@ class SecureAIService {
     model: string = 'text-embedding-3-small'
   ): Promise<number[]> {
 
-    const traceId = crypto.randomUUID();
-
-    console.log(`[TRACE][${traceId}] CLIENT START`);
+    console.log('[ULTRA TRACE] generateEmbedding START');
 
     const session = await this.waitForSession();
 
-    console.log(`[TRACE][${traceId}] SESSION OK`);
+    console.log('[ULTRA TRACE] session ready');
 
     const { data, error } = await supabase.functions.invoke(
       'generate-embedding',
       {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
-          "x-trace-id": traceId
         },
         body: { text, model }
       }
     );
 
     if (error) {
-      console.error(`[TRACE][${traceId}] EDGE ERROR`, error);
+      console.error('[ULTRA TRACE] EDGE ERROR', error);
       throw error;
     }
 
-    console.log(`[TRACE][${traceId}] EDGE RESPONSE RECEIVED`, data?.traceId);
+    console.log('[ULTRA TRACE] EDGE RESPONSE', data);
 
     if (!data?.embedding) {
-      console.error(`[TRACE][${traceId}] INVALID DATA`, data);
       throw new Error('Invalid embedding response');
     }
-
-    console.log(`[TRACE][${traceId}] SUCCESS`);
 
     return data.embedding;
   }
