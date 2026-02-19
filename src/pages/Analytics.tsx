@@ -364,6 +364,20 @@ export function Analytics() {
 }
 
 /**
+ * Orchestration execution order - defines the pipeline sequence
+ */
+const ENGINE_FLOW = [
+  'contextEngine',
+  'lotEngine',
+  'ruleEngine',
+  'scoringEngine',
+  'enrichmentEngine',
+  'auditEngine',
+  'globalScoringEngine',
+  'trustCappingEngine',
+];
+
+/**
  * PHASE 36.10: Engine Status Live Card with Realtime Updates
  * Listens to score_snapshots table for real-time engine metrics
  */
@@ -483,6 +497,44 @@ function EngineStatusLiveCard() {
         </div>
         <CardDescription>Orchestration engines pour analyse et enrichissement</CardDescription>
       </CardHeader>
+
+      {/* ✅ PHASE 36.11: Engine Orchestration Flow Pipeline */}
+      <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+        <h4 className="text-xs font-semibold text-blue-900 mb-3 uppercase">Orchestration Pipeline</h4>
+        <div className="flex items-center gap-2 overflow-x-auto pb-2">
+          {ENGINE_FLOW.map((engineId, idx) => {
+            const hasSnapshot = engineId in snapshots;
+            const snapshot = snapshots[engineId];
+            return (
+              <React.Fragment key={engineId}>
+                <div
+                  className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all whitespace-nowrap ${
+                    hasSnapshot
+                      ? 'bg-green-100 border border-green-300 text-green-700'
+                      : 'bg-gray-100 border border-gray-300 text-gray-600'
+                  }`}
+                >
+                  <span className="text-xs font-medium">
+                    {engineId.replace(/Engine$/, '').charAt(0).toUpperCase() + engineId.replace(/Engine$/, '').slice(1)}
+                  </span>
+                  {hasSnapshot && (
+                    <span className="text-xs font-semibold text-green-700">
+                      ✓ {snapshot.score !== null ? snapshot.score.toFixed(2) : '—'}
+                    </span>
+                  )}
+                </div>
+                {idx < ENGINE_FLOW.length - 1 && (
+                  <div className="flex items-center justify-center">
+                    <div className={`w-6 h-0.5 ${hasSnapshot ? 'bg-green-400' : 'bg-gray-300'}`} />
+                    <span className={`text-xs ${hasSnapshot ? 'text-green-600' : 'text-gray-400'}`}>→</span>
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
+      </div>
+
       <CardContent>
         {/* Orchestration Status */}
         <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200">
