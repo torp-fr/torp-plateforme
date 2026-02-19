@@ -91,6 +91,9 @@ class SecureAIService {
     console.log('[SecureAI] =====================================');
 
     const { data, error } = await supabase.functions.invoke('generate-embedding', {
+      headers: {
+        Authorization: `Bearer ${session?.access_token}`
+      },
       body: { text: truncatedText, model }
     });
 
@@ -147,6 +150,9 @@ class SecureAIService {
     console.log('[SecureAI] =================================');
 
     const { data, error } = await supabase.functions.invoke('llm-completion', {
+      headers: {
+        Authorization: `Bearer ${session?.access_token}`
+      },
       body: {
         messages,
         model,
