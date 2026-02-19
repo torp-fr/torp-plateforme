@@ -27,6 +27,40 @@ export interface KnowledgeDocument {
   updated_at: string;
 }
 
+// PHASE 36.10.1: State Machine Definition
+type IngestionStatus = 'pending' | 'processing' | 'chunking' | 'embedding' | 'complete' | 'failed';
+
+interface IngestionState {
+  ingestion_status: IngestionStatus;
+  ingestion_progress: number;
+  ingestion_started_at?: string;
+  ingestion_completed_at?: string;
+  last_ingestion_error?: string;
+  last_ingestion_step?: string;
+  embedding_integrity_checked?: boolean;
+}
+
+// PHASE 36.10.1: State transition rules
+const ALLOWED_TRANSITIONS: Record<IngestionStatus, IngestionStatus[]> = {
+  pending: ['processing'],
+  processing: ['chunking', 'failed'],
+  chunking: ['embedding', 'failed'],
+  embedding: ['complete', 'failed'],
+  failed: ['pending'],
+  complete: [], // Terminal state - no transitions allowed
+};
+
+// PHASE 36.10.1: Metrics tracking
+interface IngestionMetrics {
+  total_documents_processed: number;
+  successful_ingestions: number;
+  failed_ingestions: number;
+  avg_chunks_per_document: number;
+  avg_embedding_time_per_chunk: number;
+  integrity_check_failures: number;
+  retry_success_rate: number;
+}
+
 class KnowledgeBrainService {
   private readonly ENABLE_VECTOR_SEARCH = true;
   private readonly EMBEDDING_DIMENSION = 1536;
@@ -173,13 +207,19 @@ class KnowledgeBrainService {
 
       // Validate transition if status is changing
       if (newStatus && newStatus !== currentStatus) {
-        const allowedNextStates = ALLOWED_TRANSITIONS[currentStatus] || [];
-        if (!allowedNextStates.includes(newStatus)) {
-          const errorMsg = `[STATE MACHINE VIOLATION] ${currentStatus} -> ${newStatus} not allowed. Valid: ${allowedNextStates.join(', ')}`;
-          console.error('[KNOWLEDGE BRAIN] 🔴 ' + errorMsg);
-          return false;
+        // PHASE 36.11: Safe fallback guard if state machine is undefined
+        if (!ALLOWED_TRANSITIONS) {
+          console.warn('[KNOWLEDGE BRAIN] Transition guard fallback - ALLOWED_TRANSITIONS undefined');
+          console.log('[KNOWLEDGE BRAIN] 🟢 Valid transition (fallback): ' + currentStatus + ' -> ' + newStatus);
+        } else {
+          const allowedNextStates = ALLOWED_TRANSITIONS[currentStatus] || [];
+          if (!allowedNextStates.includes(newStatus)) {
+            const errorMsg = `[STATE MACHINE VIOLATION] ${currentStatus} -> ${newStatus} not allowed. Valid: ${allowedNextStates.join(', ')}`;
+            console.error('[KNOWLEDGE BRAIN] 🔴 ' + errorMsg);
+            return false;
+          }
+          console.log('[KNOWLEDGE BRAIN] 🟢 Valid transition: ' + currentStatus + ' -> ' + newStatus);
         }
-        console.log('[KNOWLEDGE BRAIN] 🟢 Valid transition: ' + currentStatus + ' -> ' + newStatus);
       }
 
       // Perform update
