@@ -27,55 +27,22 @@ export interface KnowledgeDocument {
   updated_at: string;
 }
 
-export interface MarketPriceReference {
-  id: string;
-  type_travaux: string;
-  region: string;
-  min_price: number;
-  avg_price: number;
-  max_price: number;
-  source: string;
-  reliability_score: number;
-  data_count: number;
-}
+import pdf from "pdf-parse";
 
-export interface SearchResult extends KnowledgeDocument {
-  relevance_score: number;
-  embedding_similarity: number;
-}
+/**
+ * Detect binary / compressed content
+ */
+function looksBinary(text: string): boolean {
+  if (!text) return true;
 
-// PHASE 36.10.1: State Machine Definition
-type IngestionStatus = 'pending' | 'processing' | 'chunking' | 'embedding' | 'complete' | 'failed';
+  // PDF header
+  if (text.startsWith('%PDF')) return true;
 
-interface IngestionState {
-  ingestion_status: IngestionStatus;
-  ingestion_progress: number;
-  ingestion_started_at?: string;
-  ingestion_completed_at?: string;
-  last_ingestion_error?: string;
-  last_ingestion_step?: string;
-  embedding_integrity_checked?: boolean;
-}
+  // high non printable ratio
+  const nonPrintable = (text.match(/[^\x09\x0A\x0D\x20-\x7E]/g) || []).length;
+  const ratio = nonPrintable / text.length;
 
-// PHASE 36.10.1: State transition rules
-const ALLOWED_TRANSITIONS: Record<IngestionStatus, IngestionStatus[]> = {
-  pending: ['processing'],
-  processing: ['chunking', 'failed'],
-  chunking: ['embedding', 'failed'],
-  embedding: ['complete', 'failed'],
-  failed: ['pending'],
-  complete: [], // Terminal state - no transitions allowed
-};
-
-// PHASE 36.10.1: Metrics tracking
-interface IngestionMetrics {
-  total_documents_processed: number;
-  successful_ingestions: number;
-  failed_ingestions: number;
-  avg_chunks_per_document: number;
-  avg_embedding_time_per_chunk: number;
-  integrity_check_failures: number;
-  retry_success_rate: number;
+  return ratio > 0.20;
 }
 
 class KnowledgeBrainService {
@@ -1312,32 +1279,16 @@ class KnowledgeBrainService {
     }
   }
 
-  /**
-   * PHASE 36.10.1: Get ingestion metrics
-   * Returns current ingestion performance metrics
-   */
-  getIngestionMetrics(): IngestionMetrics {
-    console.log('[KNOWLEDGE BRAIN] 📊 Returning ingestion metrics');
-    return { ...this.metrics };
+  // Detect PDF
+  const header = new TextDecoder().decode(buffer.slice(0, 4));
+
+  if (header.includes('%PDF')) {
+    console.log('[KNOWLEDGE BRAIN] 📄 PDF detected — extracting text...');
+    const data = await pdf(Buffer.from(buffer));
+    return data.text || '';
   }
 
-  /**
-   * PHASE 36.10.1: Reset ingestion metrics
-   * Useful for testing and monitoring
-   */
-  resetIngestionMetrics(): void {
-    console.log('[KNOWLEDGE BRAIN] 🔄 Resetting ingestion metrics');
-    this.metrics = {
-      total_documents_processed: 0,
-      successful_ingestions: 0,
-      failed_ingestions: 0,
-      avg_chunks_per_document: 0,
-      avg_embedding_time_per_chunk: 0,
-      integrity_check_failures: 0,
-      retry_success_rate: 0,
-    };
-  }
-
+  // Fallback: treat as plain text
+  console.log('[KNOWLEDGE BRAIN] 📄 Plain text detected');
+  return new TextDecoder().decode(buffer);
 }
-
-export const knowledgeBrainService = new KnowledgeBrainService();
