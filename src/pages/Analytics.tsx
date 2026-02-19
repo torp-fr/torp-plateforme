@@ -374,7 +374,8 @@ function EngineStatusLiveCard() {
   useEffect(() => {
     console.log('[ANALYTICS REALTIME] Setting up score_snapshots listener...');
 
-    // ✅ Subscribe to real-time engine snapshots
+    // ✅ PHASE 36.10: Subscribe to real-time engine snapshots (filtered for performance)
+    // Filter at DB level to avoid massive re-renders from non-engine snapshots
     const channel = supabase
       .channel('analytics-engine-snapshots')
       .on(
@@ -383,10 +384,22 @@ function EngineStatusLiveCard() {
           event: 'INSERT',
           schema: 'public',
           table: 'score_snapshots',
+          filter: 'snapshot_type=eq.engine', // ✅ Only engine snapshots - reduce network + re-renders
         },
         (payload) => {
-          console.log('[ANALYTICS REALTIME] New engine snapshot received:', payload.new);
+          // ✅ PHASE 36.10: Security check - validate snapshot_type at application level
           const newSnapshot = payload.new as any;
+          if (newSnapshot.snapshot_type !== 'engine') {
+            console.warn('[ANALYTICS REALTIME] ⚠️ Received non-engine snapshot (should be filtered):', newSnapshot.snapshot_type);
+            return;
+          }
+
+          console.log('[ANALYTICS REALTIME] New engine snapshot received:', {
+            engine: newSnapshot.engine_name,
+            score: newSnapshot.score,
+            duration: newSnapshot.duration_ms,
+          });
+
           setSnapshots((prev) => ({
             ...prev,
             [newSnapshot.engine_name]: {
