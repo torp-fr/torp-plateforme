@@ -3,7 +3,7 @@
  * Réservé aux comptes admin - suivi et gestion de la plateforme
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { KnowledgeBaseUpload } from '@/components/KnowledgeBaseUpload';
 import {
