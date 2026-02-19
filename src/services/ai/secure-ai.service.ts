@@ -97,27 +97,14 @@ class SecureAIService {
       body: { text: truncatedText, model }
     });
 
-    // DEBUG: Log detailed error information
     if (error) {
-      console.error('[SecureAI] ERROR EMBEDDING INVOCATION FAILED');
-      console.error('[SecureAI] Error object:', error);
-      console.error('[SecureAI] Error type:', typeof error);
-      console.error('[SecureAI] Error.message:', error?.message);
-      console.error('[SecureAI] Error.status:', (error as any)?.status);
-      console.error('[SecureAI] Error.statusCode:', (error as any)?.statusCode);
-      console.error('[SecureAI] Error.name:', (error as any)?.name);
-      console.error('[SecureAI] Error.code:', (error as any)?.code);
-      console.error('[SecureAI] Full error:', JSON.stringify(error, null, 2));
-      throw new Error(`Failed to generate embedding: ${error.message}`);
+      console.error('[SecureAI] ERROR EMBEDDING INVOCATION FAILED', error);
+      throw new Error(error.message);
     }
-
-    if (!data?.embedding || !Array.isArray(data.embedding)) {
-      console.error('[SecureAI] INVALID RESPONSE FORMAT');
-      console.error('[SecureAI] Response data:', data);
-      throw new Error('Invalid embedding response from server');
+    if (!data || !Array.isArray(data.embedding)) {
+      console.error('[SecureAI] Invalid embedding response:', data);
+      return null;
     }
-
-    console.log('[SecureAI] OK Embedding generated successfully');
     return data.embedding;
   }
 
