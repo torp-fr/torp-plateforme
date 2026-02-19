@@ -6,6 +6,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { hybridAIService } from './hybrid-ai.service';
+import { secureAI } from './secure-ai.service';
 import { pricingExtractionService } from './pricing-extraction.service';
 // PHASE 36.6: Unicode sanitizer for safe database insertion
 import { sanitizeText, getSanitizationStats } from '@/utils/text-sanitizer';
@@ -735,27 +736,12 @@ class KnowledgeBrainService {
   }
   async generateEmbedding(content: string): Promise<number[] | null> {
     try {
-      if (!this.ENABLE_VECTOR_SEARCH) {
-        console.log('[KNOWLEDGE BRAIN] Vector search disabled - skipping embedding');
-        return null;
-      }
+      console.log('[NUCLEAR TRACE] embedding call about to happen');
 
-      // PHASE 36.10.7: Defensive check - ensure embedding service is properly wired
-      if (!hybridAIService || typeof hybridAIService.generateEmbedding !== 'function') {
-        const errorMsg = '[CRITICAL] Embedding service not properly initialized. hybridAIService.generateEmbedding is not a function.';
-        console.error('[KNOWLEDGE BRAIN] 🔴 ' + errorMsg);
-        throw new Error(errorMsg);
-      }
+      // PHASE 36.11: Direct call to secureAI Edge Function
+      const embedding = await secureAI.generateEmbedding(content);
 
-      console.log('[KNOWLEDGE BRAIN] 🧠 Generating embedding for content...');
-
-      // Use OpenAI embedding via hybrid AI service
-      const { data: embedding, error } = await hybridAIService.generateEmbedding(content);
-
-      if (error || !embedding) {
-        console.warn('[KNOWLEDGE BRAIN] Embedding generation failed:', error);
-        return null;
-      }
+      console.log('[NUCLEAR TRACE] embedding received', embedding?.length);
 
       // PHASE 36.10.3: Defense in depth - validate embedding dimension
       // Database expects VECTOR(1536) - enforce this at application level
