@@ -73,19 +73,48 @@ class SecureAIService {
     // Tronquer si trop long
     const truncatedText = text.length > 8000 ? text.substring(0, 8000) : text;
 
+    // DEBUG: Log environment and session before invoking
+    console.log('[SecureAI] === EMBEDDING INVOCATION DEBUG ===');
+    console.log('[SecureAI] Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
+    console.log('[SecureAI] Supabase Anon Key exists:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
+    console.log('[SecureAI] Supabase Anon Key length:', import.meta.env.VITE_SUPABASE_ANON_KEY?.length);
+
+    // Get and log session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    console.log('[SecureAI] Session Error:', sessionError?.message || 'None');
+    console.log('[SecureAI] Session exists:', !!session);
+    console.log('[SecureAI] Session user:', session?.user?.id);
+    console.log('[SecureAI] Session access_token exists:', !!session?.access_token);
+    console.log('[SecureAI] Session access_token length:', session?.access_token?.length);
+    console.log('[SecureAI] Session expires_at:', session?.expires_at);
+    console.log('[SecureAI] Request payload:', { text: truncatedText.substring(0, 50) + '...', model });
+    console.log('[SecureAI] =====================================');
+
     const { data, error } = await supabase.functions.invoke('generate-embedding', {
       body: { text: truncatedText, model }
     });
 
+    // DEBUG: Log detailed error information
     if (error) {
-      console.error('[SecureAI] Embedding generation error:', error);
+      console.error('[SecureAI] ERROR EMBEDDING INVOCATION FAILED');
+      console.error('[SecureAI] Error object:', error);
+      console.error('[SecureAI] Error type:', typeof error);
+      console.error('[SecureAI] Error.message:', error?.message);
+      console.error('[SecureAI] Error.status:', (error as any)?.status);
+      console.error('[SecureAI] Error.statusCode:', (error as any)?.statusCode);
+      console.error('[SecureAI] Error.name:', (error as any)?.name);
+      console.error('[SecureAI] Error.code:', (error as any)?.code);
+      console.error('[SecureAI] Full error:', JSON.stringify(error, null, 2));
       throw new Error(`Failed to generate embedding: ${error.message}`);
     }
 
     if (!data?.embedding || !Array.isArray(data.embedding)) {
+      console.error('[SecureAI] INVALID RESPONSE FORMAT');
+      console.error('[SecureAI] Response data:', data);
       throw new Error('Invalid embedding response from server');
     }
 
+    console.log('[SecureAI] OK Embedding generated successfully');
     return data.embedding;
   }
 
@@ -108,6 +137,15 @@ class SecureAIService {
       throw new Error('Messages are required for completion');
     }
 
+    // DEBUG: Log before invoking
+    console.log('[SecureAI] === LLM COMPLETION DEBUG ===');
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    console.log('[SecureAI] Session exists:', !!session);
+    console.log('[SecureAI] Session access_token exists:', !!session?.access_token);
+    console.log('[SecureAI] LLM Provider:', provider);
+    console.log('[SecureAI] LLM Model:', model);
+    console.log('[SecureAI] =================================');
+
     const { data, error } = await supabase.functions.invoke('llm-completion', {
       body: {
         messages,
@@ -121,7 +159,10 @@ class SecureAIService {
     });
 
     if (error) {
-      console.error('[SecureAI] LLM completion error:', error);
+      console.error('[SecureAI] ERROR LLM COMPLETION FAILED');
+      console.error('[SecureAI] Error.message:', error?.message);
+      console.error('[SecureAI] Error.status:', (error as any)?.status);
+      console.error('[SecureAI] Full error:', JSON.stringify(error, null, 2));
       throw new Error(`Failed to complete: ${error.message}`);
     }
 

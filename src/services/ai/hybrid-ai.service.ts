@@ -185,6 +185,25 @@ export class HybridAIService {
       },
     };
   }
+
+  /**
+   * Generate embedding via OpenAI (embeddings are not available from Claude)
+   */
+  async generateEmbedding(text: string): Promise<{ data: number[] | null; error?: Error | null }> {
+    try {
+      if (env.app.debugMode) {
+        console.log('[HybridAI] Generating embedding via OpenAI');
+      }
+
+      return await openAIService.generateEmbedding(text);
+    } catch (error) {
+      console.error('[HybridAI] Embedding generation failed:', error);
+      return {
+        data: null,
+        error: error instanceof Error ? error : new Error(String(error))
+      };
+    }
+  }
 }
 
 export const hybridAIService = new HybridAIService();
