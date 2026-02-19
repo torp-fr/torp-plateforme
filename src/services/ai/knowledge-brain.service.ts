@@ -92,6 +92,13 @@ class KnowledgeBrainService {
     retry_success_rate: 0,
   };
 
+  constructor() {
+    // PHASE 36.10.7: Verify embedding service is properly wired
+    console.log('[KNOWLEDGE BRAIN] 🧠 Initializing service...');
+    console.log('[KNOWLEDGE BRAIN] Embedding service (hybridAIService):', hybridAIService);
+    console.log('[KNOWLEDGE BRAIN] generateEmbedding available:', typeof hybridAIService.generateEmbedding);
+  }
+
   /**
    * PHASE 36.10.1: Strict state machine update with transition validation
    * Enforces legal state transitions and prevents state corruption
@@ -150,6 +157,11 @@ class KnowledgeBrainService {
    * PHASE 36.10.1: Atomic claim - Safely claim document for processing
    * Uses UPDATE instead of SELECT to avoid race conditions
    * Returns true only if we successfully claimed the document
+   *
+   * PHASE 36.10.6 CRITICAL AUTHORITY:
+   * This is the ONLY function allowed to transition a document from 'pending' to 'processing'.
+   * Never transition to 'processing' outside this function.
+   * This ensures true multi-instance safety and proper state machine integrity.
    */
   private async tryClaimDocumentForProcessing(documentId: string): Promise<boolean> {
     try {
@@ -348,14 +360,6 @@ class KnowledgeBrainService {
       }
 
       console.log('[KNOWLEDGE BRAIN] ✅ Document inserted:', doc.id);
-
-      // ✅ PHASE 36.10 STEP 5: Update state to 'processing'
-      await this.updateDocumentState(doc.id, {
-        ingestion_status: 'processing',
-        ingestion_started_at: new Date(),
-        ingestion_progress: 5,
-        last_ingestion_step: 'document_inserted',
-      });
 
       // ✅ PHASE 36.9 STEP 5: RETURN IMMEDIATELY TO UI
       // All heavy lifting happens in background via setTimeout(..., 0)
@@ -631,7 +635,14 @@ class KnowledgeBrainService {
         return null;
       }
 
-      console.log('[KNOWLEDGE BRAIN] Generating embedding for content...');
+      // PHASE 36.10.7: Defensive check - ensure embedding service is properly wired
+      if (!hybridAIService || typeof hybridAIService.generateEmbedding !== 'function') {
+        const errorMsg = '[CRITICAL] Embedding service not properly initialized. hybridAIService.generateEmbedding is not a function.';
+        console.error('[KNOWLEDGE BRAIN] 🔴 ' + errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      console.log('[KNOWLEDGE BRAIN] 🧠 Generating embedding for content...');
 
       // Use OpenAI embedding via hybrid AI service
       const { data: embedding, error } = await hybridAIService.generateEmbedding(content);
