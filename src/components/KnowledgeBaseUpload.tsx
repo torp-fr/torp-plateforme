@@ -99,10 +99,14 @@ export function KnowledgeBaseUpload() {
       console.log('🧠 [UPLOAD] Setting loading state...');
       setState(prev => ({ ...prev, loading: true, error: null }));
 
-      // Read file content
-      console.log('🧠 [UPLOAD] Reading file content...');
-      const content = await state.file.text();
-      console.log('🧠 [UPLOAD] File content read:', { size: content.length });
+      // PHASE 36.11: Extract document text (PDF or plain text)
+      console.log('🧠 [UPLOAD] Extracting document text...');
+      const content = await knowledgeBrainService.extractDocumentTextFromFile(state.file);
+      console.log('🧠 [UPLOAD] Document text extracted:', { size: content.length });
+
+      if (!content || content.trim().length === 0) {
+        throw new Error('Impossible d\'extraire le texte du document');
+      }
 
       // PHASE 36.3: Generate safe title from filename or category
       const finalTitle = state.file.name.replace(/\.[^/.]+$/, '') || `Document ${state.category}`;
