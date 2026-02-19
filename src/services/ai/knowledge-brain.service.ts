@@ -356,6 +356,24 @@ class KnowledgeBrainService {
         success: successCount,
         failed: failCount,
       });
+
+      // ✅ PHASE 36.10: Non-blocking observability snapshot (fire-and-forget)
+      setTimeout(() => {
+        try {
+          supabase.from('live_intelligence_snapshots').insert({
+            source: 'knowledge-brain',
+            status: 'embedding_complete',
+            documents_processed: 1,
+            embeddings_generated: successCount,
+            pricing_extracted: 0,
+            errors: failCount,
+          }).catch((err) => {
+            console.warn('[KNOWLEDGE BRAIN] ⚠️ Observability snapshot failed (non-blocking):', err);
+          });
+        } catch (e) {
+          console.warn('[KNOWLEDGE BRAIN] ⚠️ Observability snapshot error (non-blocking):', e);
+        }
+      }, 0);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.warn('[EMBEDDING] 💥 Embedding batch failed:', errorMsg);

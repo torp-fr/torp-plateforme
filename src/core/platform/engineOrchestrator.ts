@@ -124,6 +124,9 @@ export async function runOrchestration(
 
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          // Record snapshot (non-blocking)
+          recordEngineSnapshot('contextEngine', contextResult, 'completed',
+            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
         }
         // Execute Lot Engine if active (depends on Context Engine)
         else if (engine.id === 'lotEngine') {
@@ -141,6 +144,9 @@ export async function runOrchestration(
 
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          // Record snapshot (non-blocking)
+          recordEngineSnapshot('lotEngine', lotResult, 'completed',
+            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
         }
         // Execute Rule Engine if active (depends on Lot Engine)
         else if (engine.id === 'ruleEngine') {
@@ -162,6 +168,9 @@ export async function runOrchestration(
 
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          // Record snapshot (non-blocking)
+          recordEngineSnapshot('ruleEngine', ruleResult, 'completed',
+            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
         }
         // Execute Scoring Engine if active (depends on Rule Engine and Lot Engine)
         else if (engine.id === 'scoringEngine') {
@@ -180,6 +189,9 @@ export async function runOrchestration(
 
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          // Record snapshot (non-blocking)
+          recordEngineSnapshot('scoringEngine', scoringResult, 'completed',
+            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
         }
         // Execute Enrichment Engine if active (depends on all prior engines)
         else if (engine.id === 'enrichmentEngine') {
@@ -199,6 +211,9 @@ export async function runOrchestration(
 
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          // Record snapshot (non-blocking)
+          recordEngineSnapshot('enrichmentEngine', enrichmentResult, 'completed',
+            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
         }
         // Execute Audit Engine if active (depends on all prior engines - final pipeline stage)
         else if (engine.id === 'auditEngine') {
@@ -234,6 +249,9 @@ export async function runOrchestration(
 
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          // Record snapshot (non-blocking)
+          recordEngineSnapshot('auditEngine', auditResult, 'completed',
+            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
         }
         // Execute Enterprise Engine if active (global scoring pillar)
         else if (engine.id === 'enterpriseEngine') {
@@ -243,6 +261,9 @@ export async function runOrchestration(
           executionContext.enterprise = enterpriseResult;
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          // Record snapshot (non-blocking)
+          recordEngineSnapshot('enterpriseEngine', enterpriseResult, 'completed',
+            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
         }
         // Execute Pricing Engine if active (global scoring pillar)
         else if (engine.id === 'pricingEngine') {
@@ -252,6 +273,9 @@ export async function runOrchestration(
           executionContext.pricing = pricingResult;
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          // Record snapshot (non-blocking)
+          recordEngineSnapshot('pricingEngine', pricingResult, 'completed',
+            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
         }
         // Execute Quality Engine if active (global scoring pillar)
         else if (engine.id === 'qualityEngine') {
@@ -261,6 +285,9 @@ export async function runOrchestration(
           executionContext.quality = qualityResult;
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          // Record snapshot (non-blocking)
+          recordEngineSnapshot('qualityEngine', qualityResult, 'completed',
+            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
         }
         // Execute Global Scoring Engine if active (final scoring consolidation)
         else if (engine.id === 'globalScoringEngine') {
@@ -270,6 +297,9 @@ export async function runOrchestration(
           executionContext.globalScore = globalScoringResult;
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          // Record snapshot (non-blocking)
+          recordEngineSnapshot('globalScoringEngine', globalScoringResult, 'completed',
+            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
         }
         // Execute Trust Capping Engine if active (intelligent grade capping)
         else if (engine.id === 'trustCappingEngine') {
@@ -290,6 +320,9 @@ export async function runOrchestration(
 
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          // Record snapshot (non-blocking)
+          recordEngineSnapshot('trustCappingEngine', trustCappingResult, 'completed',
+            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
         }
         // Execute Structural Consistency Engine if active (analytical pillar balance)
         else if (engine.id === 'structuralConsistencyEngine') {
@@ -299,6 +332,9 @@ export async function runOrchestration(
           executionContext.structuralConsistency = structuralConsistencyResult;
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          // Record snapshot (non-blocking)
+          recordEngineSnapshot('structuralConsistencyEngine', structuralConsistencyResult, 'completed',
+            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
         } else {
           // Other engines not yet implemented
           engineExecutionResult.status = 'skipped';
@@ -423,6 +459,29 @@ export function resumeOrchestration(): void {
 export function stopOrchestration(): void {
   orchestrationState = 'idle';
   console.log('[EngineOrchestrator] Orchestration stopped');
+}
+
+/**
+ * PHASE 36.10: Record engine score snapshot (fire-and-forget observability)
+ * Non-blocking, errors are silently logged
+ */
+async function recordEngineSnapshot(engineId: string, result: any, status: string, durationMs?: number): Promise<void> {
+  setTimeout(() => {
+    try {
+      const { supabase } = require('@/lib/supabase');
+      supabase.from('score_snapshots').insert({
+        engine_name: engineId,
+        score: result?.score ?? result?.globalScore ?? result?.riskScore ?? null,
+        status: status,
+        duration_ms: durationMs,
+        meta: result ?? {},
+      }).catch((err: any) => {
+        console.warn(`[EngineOrchestrator] ⚠️ Score snapshot failed for ${engineId} (non-blocking):`, err);
+      });
+    } catch (e) {
+      console.warn(`[EngineOrchestrator] ⚠️ Snapshot error for ${engineId} (non-blocking):`, e);
+    }
+  }, 0);
 }
 
 /**
