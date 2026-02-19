@@ -13,6 +13,8 @@ import { sanitizeText, getSanitizationStats } from '@/utils/text-sanitizer';
 import { chunkText, getChunkingStats, validateChunks } from '@/utils/chunking';
 // PHASE 36.10.5: Health monitoring and production observability
 import { KnowledgeHealthService } from './knowledge-health.service';
+// PHASE 36.11: PDF text extraction
+import pdfParse from 'pdf-parse';
 
 export interface KnowledgeDocument {
   id: string;
@@ -97,6 +99,95 @@ class KnowledgeBrainService {
     console.log('[KNOWLEDGE BRAIN] 🧠 Initializing service...');
     console.log('[KNOWLEDGE BRAIN] Embedding service (hybridAIService):', hybridAIService);
     console.log('[KNOWLEDGE BRAIN] generateEmbedding available:', typeof hybridAIService.generateEmbedding);
+  }
+
+  /**
+   * PHASE 36.11: Extract readable text from document (PDF or plain text)
+   * Public API for document text extraction
+   * Detects PDF header and extracts text using pdf-parse
+   * Falls back to TextDecoder for plain text files
+   * Never returns binary data
+   */
+  async extractDocumentTextFromFile(file: File): Promise<string> {
+    return this.extractDocumentText(file);
+  }
+
+  /**
+   * PHASE 36.11: Extract readable text from document (PDF or plain text)
+   * Detects PDF header and extracts text using pdf-parse
+   * Falls back to TextDecoder for plain text files
+   * Never returns binary data
+   */
+  private async extractDocumentText(file: File): Promise<string> {
+    try {
+      const buffer = await file.arrayBuffer();
+      const uint8Array = new Uint8Array(buffer);
+
+      // Check for PDF header
+      const header = String.fromCharCode(
+        uint8Array[0],
+        uint8Array[1],
+        uint8Array[2],
+        uint8Array[3]
+      );
+
+      if (header === '%PDF') {
+        console.log('[KNOWLEDGE BRAIN] 📄 PDF detected - extracting text...');
+        try {
+          const pdf = await pdfParse(buffer);
+          const extractedText = pdf.text || '';
+          if (!extractedText || extractedText.trim().length === 0) {
+            console.warn('[KNOWLEDGE BRAIN] ⚠️ PDF text extraction returned empty');
+            return '';
+          }
+          console.log('[KNOWLEDGE BRAIN] ✅ PDF text extracted:', extractedText.length, 'chars');
+          return extractedText;
+        } catch (pdfError) {
+          console.error('[KNOWLEDGE BRAIN] ❌ PDF parsing error:', pdfError);
+          return '';
+        }
+      }
+
+      // Plain text file
+      console.log('[KNOWLEDGE BRAIN] 📝 Plain text file detected');
+      const text = new TextDecoder().decode(uint8Array);
+      console.log('[KNOWLEDGE BRAIN] ✅ Text decoded:', text.length, 'chars');
+      return text;
+    } catch (error) {
+      console.error('[KNOWLEDGE BRAIN] ❌ Document extraction error:', error);
+      return '';
+    }
+  }
+
+  /**
+   * PHASE 36.11: Detect if chunk contains binary data
+   * Returns true if PDF header or non-printable chars ratio > 20%
+   */
+  private isBinaryChunk(content: string): boolean {
+    if (!content) return false;
+
+    // Check for PDF header
+    if (content.includes('%PDF')) {
+      console.warn('[KNOWLEDGE BRAIN] Binary chunk skipped: PDF header detected');
+      return true;
+    }
+
+    // Count non-printable characters
+    let nonPrintable = 0;
+    for (let i = 0; i < content.length; i++) {
+      const code = content.charCodeAt(i);
+      if (code < 32 && code !== 9 && code !== 10 && code !== 13) {
+        nonPrintable++;
+      }
+    }
+
+    const ratio = nonPrintable / content.length;
+    if (ratio > 0.2) {
+      console.warn(`[KNOWLEDGE BRAIN] Binary chunk skipped: ${(ratio * 100).toFixed(1)}% non-printable`);
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -556,6 +647,13 @@ class KnowledgeBrainService {
           const chunk = chunks[i];
           const chunkContent = typeof chunk === 'string' ? chunk : chunk.content;
           const chunkTokens = typeof chunk === 'string' ? Math.ceil(chunk.length / 4) : chunk.tokenCount;
+
+          // PHASE 36.11: Binary guard - skip binary chunks
+          if (this.isBinaryChunk(chunkContent)) {
+            console.log('[EMBEDDING] ⏭️ Chunk ' + i + ' skipped (binary content)');
+            failed++;
+            continue;
+          }
 
           console.log('[EMBEDDING] 📝 Generating embedding for chunk ' + i + ' (' + chunkTokens + ' tokens)');
 
