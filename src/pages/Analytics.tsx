@@ -369,6 +369,7 @@ export function Analytics() {
  */
 function EngineStatusLiveCard() {
   const [snapshots, setSnapshots] = useState<Record<string, any>>({});
+  const [timeline, setTimeline] = useState<any[]>([]);
   const engineStats = getEngineStats();
 
   useEffect(() => {
@@ -409,6 +410,17 @@ function EngineStatusLiveCard() {
               timestamp: newSnapshot.created_at || new Date().toISOString(),
             },
           }));
+
+          // ✅ PHASE 36.10: Add to timeline (keep last 20 events)
+          setTimeline((prev) => [
+            {
+              engine: newSnapshot.engine_name,
+              score: newSnapshot.score,
+              duration: newSnapshot.duration_ms,
+              timestamp: newSnapshot.created_at || new Date().toISOString(),
+            },
+            ...prev.slice(0, 19),
+          ]);
         }
       )
       .subscribe((status) => {
@@ -488,6 +500,32 @@ function EngineStatusLiveCard() {
             );
           })}
         </div>
+
+        {/* ✅ PHASE 36.10: Engine Activity Timeline */}
+        {timeline.length > 0 && (
+          <div className="mt-6 pt-4 border-t border-muted">
+            <h4 className="text-sm font-semibold text-foreground mb-3">📊 Engine Activity (Last 20)</h4>
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {timeline.map((item, idx) => (
+                <div key={idx} className="text-xs p-2 rounded bg-muted/30 text-muted-foreground hover:bg-muted/50 transition-colors">
+                  <span className="font-medium">[{item.engine}]</span>
+                  {' '}
+                  <span className="text-blue-600">
+                    {item.score !== null ? `${item.score.toFixed(2)}` : '—'}
+                  </span>
+                  {' '}
+                  <span className="text-gray-500">
+                    {item.duration}ms
+                  </span>
+                  {' '}
+                  <span className="text-xs text-gray-400">
+                    {new Date(item.timestamp).toLocaleTimeString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
