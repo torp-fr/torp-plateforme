@@ -621,9 +621,9 @@ class KnowledgeBrainService {
             source: 'knowledge-brain',
             status: 'embedding_complete',
             documents_processed: 1,
-            embeddings_generated: successCount,
+            embeddings_generated: successful,
             pricing_extracted: 0,
-            errors: failCount,
+            errors: failed,
           }).catch((err) => {
             console.warn('[KNOWLEDGE BRAIN] ⚠️ Observability snapshot failed (non-blocking):', err);
           });
