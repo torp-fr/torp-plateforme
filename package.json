@@ -63,7 +63,6 @@
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",
     "openai": "^6.9.1",
-    "pdf-parse": "^2.4.5",
     "pdfjs-dist": "^5.4.394",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",

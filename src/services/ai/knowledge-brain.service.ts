@@ -14,7 +14,7 @@ import { chunkText, getChunkingStats, validateChunks } from '@/utils/chunking';
 // PHASE 36.10.5: Health monitoring and production observability
 import { KnowledgeHealthService } from './knowledge-health.service';
 // PHASE 36.11: PDF text extraction
-import pdfParse from 'pdf-parse';
+import * as pdfjs from 'pdfjs-dist';
 
 export interface KnowledgeDocument {
   id: string;
@@ -81,7 +81,7 @@ class KnowledgeBrainService {
 
   /**
    * PHASE 36.11: Extract readable text from document (PDF or plain text)
-   * Detects PDF header and extracts text using pdf-parse
+   * Detects PDF header and extracts text using pdfjs-dist
    * Falls back to TextDecoder for plain text files
    * Never returns binary data
    */
@@ -101,8 +101,16 @@ class KnowledgeBrainService {
       if (header === '%PDF') {
         console.log('[KNOWLEDGE BRAIN] 📄 PDF detected - extracting text...');
         try {
-          const pdf = await pdfParse(buffer);
-          const extractedText = pdf.text || '';
+          const pdf = await pdfjs.getDocument({ data: uint8Array }).promise;
+          let extractedText = '';
+
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map((item: any) => item.str).join('');
+            extractedText += pageText + '\n';
+          }
+
           if (!extractedText || extractedText.trim().length === 0) {
             console.warn('[KNOWLEDGE BRAIN] ⚠️ PDF text extraction returned empty');
             return '';
