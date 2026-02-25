@@ -25,6 +25,7 @@ export function RAGStatusStrip() {
   const [pipelineLocked, setPipelineLocked] = useState(false);
   const [streamMode, setStreamMode] = useState(false);
   const [adaptiveLevel, setAdaptiveLevel] = useState<'FAST' | 'NORMAL' | 'SAFE' | 'CRITICAL'>('NORMAL');
+  const [predictedRisk, setPredictedRisk] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('LOW');
 
   const fetchStatus = async () => {
     try {
@@ -131,7 +132,9 @@ export function RAGStatusStrip() {
     // PHASE 12: Listen for adaptive stream controller updates
     const handleStreamControllerUpdated = () => {
       const controller = (window as any).__RAG_STREAM_CONTROLLER__ || {};
+      const predictor = (window as any).__RAG_LATENCY_PREDICTOR__ || {};
       setAdaptiveLevel(controller.adaptiveLevel || 'NORMAL');
+      setPredictedRisk(predictor.predictedRisk || 'LOW');
     };
     window.addEventListener('RAG_STREAM_CONTROLLER_UPDATED', handleStreamControllerUpdated);
 
@@ -223,15 +226,17 @@ export function RAGStatusStrip() {
                       ? 'bg-amber-50 text-amber-700 border-amber-200'
                       : adaptiveLevel === 'CRITICAL'
                         ? 'bg-red-50 text-red-700 border-red-200'
-                        : streamMode && adaptiveLevel === 'SAFE'
-                          ? 'bg-orange-50 text-orange-700 border-orange-200'
-                          : streamMode
-                            ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
-                            : bigDocMode
-                              ? 'bg-purple-50 text-purple-700 border-purple-200'
-                              : edgeOnline
-                                ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                : 'bg-red-50 text-red-700 border-red-200'
+                        : predictedRisk === 'HIGH'
+                          ? 'bg-red-50 text-red-700 border-red-200'
+                          : streamMode && adaptiveLevel === 'SAFE'
+                            ? 'bg-orange-50 text-orange-700 border-orange-200'
+                            : streamMode
+                              ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
+                              : bigDocMode
+                                ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                : edgeOnline
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  : 'bg-red-50 text-red-700 border-red-200'
                 }
               >
                 {pipelineLocked
@@ -240,15 +245,17 @@ export function RAGStatusStrip() {
                     ? '⏸️ Paused'
                     : adaptiveLevel === 'CRITICAL'
                       ? '🔴 Critical'
-                      : streamMode && adaptiveLevel === 'SAFE'
-                        ? '⚠️ Adaptive Safe'
-                        : streamMode
-                          ? '🌊 Streaming'
-                          : bigDocMode
-                            ? '⚡ Throttled'
-                            : edgeOnline
-                              ? '✓ Online'
-                              : '⚠️ Fallback'}
+                      : predictedRisk === 'HIGH'
+                        ? '🔮 High Risk'
+                        : streamMode && adaptiveLevel === 'SAFE'
+                          ? '⚠️ Adaptive Safe'
+                          : streamMode
+                            ? '🌊 Streaming'
+                            : bigDocMode
+                              ? '⚡ Throttled'
+                              : edgeOnline
+                                ? '✓ Online'
+                                : '⚠️ Fallback'}
               </Badge>
             </div>
           </div>

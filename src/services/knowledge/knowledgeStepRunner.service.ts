@@ -40,6 +40,41 @@ export class KnowledgeStepRunnerService {
     };
   }
 
+  private static updateLatencyTrend(predictor: any) {
+    if (predictor.samples.length < 6) return;
+
+    const last = predictor.samples.slice(-3);
+    const prev = predictor.samples.slice(-6, -3);
+
+    const avgLast = last.reduce((a: number, b: number) => a + b, 0) / last.length;
+    const avgPrev = prev.reduce((a: number, b: number) => a + b, 0) / prev.length;
+
+    // PHASE 13: Detect trend
+    if (avgLast > avgPrev * 1.35) {
+      predictor.trend = 'RISING';
+    } else if (avgLast < avgPrev * 0.7) {
+      predictor.trend = 'FALLING';
+    } else {
+      predictor.trend = 'STABLE';
+    }
+
+    // PHASE 13: Predict risk based on trend and latency
+    if (predictor.trend === 'RISING') {
+      const latencyAvg = predictor.samples.reduce((a: number, b: number) => a + b, 0) / predictor.samples.length;
+      if (latencyAvg > 2000) {
+        predictor.predictedRisk = 'HIGH';
+      } else if (latencyAvg > 1200) {
+        predictor.predictedRisk = 'MEDIUM';
+      } else {
+        predictor.predictedRisk = 'LOW';
+      }
+    } else {
+      predictor.predictedRisk = 'LOW';
+    }
+
+    console.log(`[LATENCY PREDICTOR] trend: ${predictor.trend} → risk: ${predictor.predictedRisk}`);
+  }
+
   private static updateAdaptiveMetrics(latency: number, error: boolean = false) {
     const controller = (window as any).__RAG_STREAM_CONTROLLER__ || {
       batchSize: 50,
@@ -51,6 +86,17 @@ export class KnowledgeStepRunnerService {
       errorRate: 0,
       adaptiveLevel: 'NORMAL',
     };
+
+    // PHASE 13: Collect latency samples for prediction
+    const predictor = (window as any).__RAG_LATENCY_PREDICTOR__ ?? {
+      samples: [],
+      trend: 'STABLE',
+      predictedRisk: 'LOW',
+    };
+    predictor.samples.push(latency);
+    if (predictor.samples.length > 12) {
+      predictor.samples.shift();
+    }
 
     controller.latencySum = (controller.latencySum || 0) + latency;
     controller.latencyCount = (controller.latencyCount || 0) + 1;
@@ -65,13 +111,23 @@ export class KnowledgeStepRunnerService {
 
     controller.errorRate = controller.latencyCount > 0 ? (controller.errorCount / controller.latencyCount) * 100 : 0;
 
+    // PHASE 13: Update latency trend
+    this.updateLatencyTrend(predictor);
+
     // PHASE 12: Adaptive algorithm
     let newLevel = 'NORMAL';
     let newBatchSize = controller.batchSize || 50;
     let newThrottleMs = controller.throttleMs || 80;
 
+    // PHASE 13: Pre-slowdown based on predicted risk
+    if (predictor.predictedRisk === 'HIGH') {
+      newLevel = 'SAFE';
+      newBatchSize = Math.max(newBatchSize - 5, 30);
+      newThrottleMs = newThrottleMs + 20;
+      console.log(`[LATENCY PREDICTOR] 🔮 High risk detected → pre-slowdown (${predictor.trend})`);
+    }
     // CRITICAL: 3 consecutive errors
-    if (controller.consecutiveErrors >= 3) {
+    else if (controller.consecutiveErrors >= 3) {
       newLevel = 'CRITICAL';
       if (!(window as any).__RAG_EMBEDDING_PAUSED__) {
         console.warn('[STREAM CTRL] 🔴 CRITICAL: 3 consecutive errors → pausing embedding');
@@ -106,6 +162,7 @@ export class KnowledgeStepRunnerService {
     controller.adaptiveLevel = newLevel;
 
     (window as any).__RAG_STREAM_CONTROLLER__ = controller;
+    (window as any).__RAG_LATENCY_PREDICTOR__ = predictor;
     window.dispatchEvent(new Event('RAG_STREAM_CONTROLLER_UPDATED'));
   }
 
@@ -590,6 +647,8 @@ export class KnowledgeStepRunnerService {
       if (isStreamMode) {
         console.log(`[STEP RUNNER] 🌊 STREAM MODE: Embedding chunks with adaptive batching...`);
         let cursor = 0;
+        let preloadBuffer: any[] = []; // PHASE 13: Smart queue preload buffer
+        let preloadPromise: Promise<any> | null = null; // PHASE 13: Preload promise
 
         // PHASE 12: Initialize stream controller if needed
         if (!(window as any).__RAG_STREAM_CONTROLLER__) {
@@ -617,13 +676,24 @@ export class KnowledgeStepRunnerService {
           const batchSize = config.batchSize;
           let batchThrottleMs = config.throttleMs;
 
-          // Fetch batch of chunks from DB using adaptive batch size
-          const { data: batch, error: fetchError } = await supabase
-            .from('knowledge_chunks')
-            .select('id, content, chunk_index')
-            .eq('document_id', documentId)
-            .order('chunk_index', { ascending: true })
-            .range(cursor, cursor + batchSize - 1);
+          // PHASE 13: Use preloaded buffer if available, else fetch from DB
+          let batch: any[] | null = null;
+          let fetchError = null;
+
+          if (preloadBuffer.length > 0) {
+            batch = preloadBuffer;
+            preloadBuffer = [];
+          } else {
+            // Fetch batch of chunks from DB using adaptive batch size
+            const response = await supabase
+              .from('knowledge_chunks')
+              .select('id, content, chunk_index')
+              .eq('document_id', documentId)
+              .order('chunk_index', { ascending: true })
+              .range(cursor, cursor + batchSize - 1);
+            batch = response.data;
+            fetchError = response.error;
+          }
 
           if (fetchError) {
             console.error(`[STEP RUNNER] Batch fetch error at offset ${cursor}:`, fetchError);
@@ -633,6 +703,21 @@ export class KnowledgeStepRunnerService {
           if (!batch || batch.length === 0) {
             console.log(`[STEP RUNNER] 🌊 Stream embedding complete (${cursor} chunks processed) - Adaptive Level: ${config.adaptiveLevel}`);
             break;
+          }
+
+          // PHASE 13: Smart queue preload - start fetching next batch while processing current
+          if (batchSize > 40 && !preloadPromise) {
+            preloadPromise = supabase
+              .from('knowledge_chunks')
+              .select('id, content, chunk_index')
+              .eq('document_id', documentId)
+              .order('chunk_index', { ascending: true })
+              .range(cursor + batchSize, cursor + batchSize * 2 - 1)
+              .then(response => response.data || [])
+              .catch(err => {
+                console.warn('[STREAM PRELOAD] Preload error:', err);
+                return [];
+              });
           }
 
           // Embed batch sequentially
@@ -683,6 +768,13 @@ export class KnowledgeStepRunnerService {
           }
 
           cursor += batchSize;
+
+          // PHASE 13: Resolve preload promise if available
+          if (preloadPromise) {
+            preloadBuffer = await preloadPromise;
+            preloadPromise = null;
+          }
+
           // Micro-throttle between batches
           await new Promise(resolve => setTimeout(resolve, 30));
         }

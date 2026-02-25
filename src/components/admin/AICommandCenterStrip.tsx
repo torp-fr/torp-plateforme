@@ -11,6 +11,8 @@ interface CommandState {
   pipelineLocked: boolean;
   streamMode: boolean;
   adaptiveLevel: 'FAST' | 'NORMAL' | 'SAFE' | 'CRITICAL';
+  latencyTrend: 'STABLE' | 'RISING' | 'FALLING';
+  predictedRisk: 'LOW' | 'MEDIUM' | 'HIGH';
 }
 
 export function AICommandCenterStrip() {
@@ -22,6 +24,8 @@ export function AICommandCenterStrip() {
     pipelineLocked: false,
     streamMode: false,
     adaptiveLevel: 'NORMAL',
+    latencyTrend: 'STABLE',
+    predictedRisk: 'LOW',
   });
 
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -107,7 +111,13 @@ export function AICommandCenterStrip() {
     // PHASE 12: Listen for adaptive stream controller updates
     const handleStreamControllerUpdated = () => {
       const controller = (window as any).__RAG_STREAM_CONTROLLER__ || {};
-      setState(prev => ({ ...prev, adaptiveLevel: controller.adaptiveLevel || 'NORMAL' }));
+      const predictor = (window as any).__RAG_LATENCY_PREDICTOR__ || {};
+      setState(prev => ({
+        ...prev,
+        adaptiveLevel: controller.adaptiveLevel || 'NORMAL',
+        latencyTrend: predictor.trend || 'STABLE',
+        predictedRisk: predictor.predictedRisk || 'LOW',
+      }));
     };
     window.addEventListener('RAG_STREAM_CONTROLLER_UPDATED', handleStreamControllerUpdated);
 
@@ -228,6 +238,25 @@ export function AICommandCenterStrip() {
                   : state.adaptiveLevel === 'SAFE'
                     ? '🟠 SAFE'
                     : '🔴 CRITICAL'}
+            </Badge>
+          )}
+
+          {/* PHASE 13: Predicted Risk Badge */}
+          {state.streamMode && (
+            <Badge
+              className={
+                state.predictedRisk === 'HIGH'
+                  ? 'bg-red-100 text-red-700 border-red-200'
+                  : state.predictedRisk === 'MEDIUM'
+                    ? 'bg-orange-100 text-orange-700 border-orange-200'
+                    : 'bg-green-100 text-green-700 border-green-200'
+              }
+            >
+              {state.predictedRisk === 'HIGH'
+                ? '🔮 HIGH'
+                : state.predictedRisk === 'MEDIUM'
+                  ? '🔮 MEDIUM'
+                  : '🔮 LOW'}
             </Badge>
           )}
 
