@@ -5,7 +5,6 @@
  */
 
 import { structuredLogger } from '@/services/observability/structured-logger';
-import crypto from 'crypto';
 
 const logger = structuredLogger;
 
@@ -27,43 +26,41 @@ export interface CacheStats {
 }
 
 interface CacheTTLConfig {
-  [source: string]: number; // TTL in milliseconds
+  [source: string]: number;
+}
+
+async function hashString(input: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(input);
+  const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 class IntelligentCacheService {
   private cache: Map<string, CacheEntry<any>> = new Map();
   private hitCount = 0;
   private missCount = 0;
+  private refreshIntervals: Map<string, number> = new Map();
 
   private ttlConfig: CacheTTLConfig = {
-    // Enterprise verification: 24 hours (can be refreshed on demand)
     enterprise_verifications: 24 * 60 * 60 * 1000,
-    // Geo context: 7 days (geographic data doesn't change often)
     geo_context_cache: 7 * 24 * 60 * 60 * 1000,
-    // RGE certification: 7 days (quarterly updates)
     rge_certifications: 7 * 24 * 60 * 60 * 1000,
-    // API response cache: 1 hour
     api_response: 60 * 60 * 1000,
-    // Doctrine sources: 24 hours
     doctrine_sources: 24 * 60 * 60 * 1000,
-    // Fraud patterns: 1 hour (more dynamic)
     fraud_patterns: 60 * 60 * 1000,
   };
 
-  /**
-   * Generate cache key from parameters
-   */
-  private generateCacheKey(source: string, params: Record<string, any>): string {
+  private async generateCacheKey(source: string, params: Record<string, any>): Promise<string> {
     const paramString = JSON.stringify(params);
-    const hash = crypto.createHash('sha256').update(paramString).digest('hex');
+    const hash = await hashString(paramString);
     return `${source}:${hash}`;
   }
 
-  /**
-   * Get cached data if available and not expired
-   */
-  get<T>(source: string, params: Record<string, any>): T | null {
-    const key = this.generateCacheKey(source, params);
+  async get<T>(source: string, params: Record<string, any>): Promise<T | null> {
+    const key = await this.generateCacheKey(source, params);
     const entry = this.cache.get(key);
 
     if (!entry) {
@@ -74,26 +71,21 @@ class IntelligentCacheService {
 
     const age = Date.now() - entry.timestamp;
     if (age > entry.ttlMs) {
-      // Expired
       this.cache.delete(key);
       this.missCount++;
       logger.debug(`[Cache] EXPIRED: ${key} (age: ${age}ms, ttl: ${entry.ttlMs}ms)`);
       return null;
     }
 
-    // Hit
     this.hitCount++;
     entry.hits++;
     logger.debug(`[Cache] HIT: ${key} (age: ${age}ms)`);
     return entry.data as T;
   }
 
-  /**
-   * Set cache data
-   */
-  set<T>(source: string, params: Record<string, any>, data: T): void {
-    const key = this.generateCacheKey(source, params);
-    const ttlMs = this.ttlConfig[source] || 60 * 60 * 1000; // Default 1 hour
+  async set<T>(source: string, params: Record<string, any>, data: T): Promise<void> {
+    const key = await this.generateCacheKey(source, params);
+    const ttlMs = this.ttlConfig[source] || 60 * 60 * 1000;
 
     this.cache.set(key, {
       key,
@@ -107,11 +99,8 @@ class IntelligentCacheService {
     logger.debug(`[Cache] SET: ${key} (ttl: ${ttlMs}ms)`);
   }
 
-  /**
-   * Clear specific cache entry
-   */
-  invalidate(source: string, params: Record<string, any>): boolean {
-    const key = this.generateCacheKey(source, params);
+  async invalidate(source: string, params: Record<string, any>): Promise<boolean> {
+    const key = await this.generateCacheKey(source, params);
     const deleted = this.cache.delete(key);
 
     if (deleted) {
@@ -161,13 +150,12 @@ class IntelligentCacheService {
     return count;
   }
 
-  /**
-   * Clear all cache
-   */
   clear(): void {
     this.cache.clear();
     this.hitCount = 0;
     this.missCount = 0;
+    this.refreshIntervals.forEach(id => clearInterval(id));
+    this.refreshIntervals.clear();
     logger.info('[Cache] Cleared all cache');
   }
 
@@ -222,20 +210,17 @@ class IntelligentCacheService {
     return this.ttlConfig[source] || 60 * 60 * 1000;
   }
 
-  /**
-   * Automatic refresh for critical cache entries (background)
-   */
   scheduleRefresh(
     source: string,
     params: Record<string, any>,
     refreshFn: () => Promise<any>,
-    refreshIntervalMs: number = 30 * 60 * 1000 // 30 minutes default
-  ): NodeJS.Timer {
-    return setInterval(async () => {
+    refreshIntervalMs: number = 30 * 60 * 1000
+  ): number {
+    const intervalId = setInterval(async () => {
       try {
         logger.debug(`[Cache] Refreshing ${source}...`);
         const data = await refreshFn();
-        this.set(source, params, data);
+        await this.set(source, params, data);
         logger.info(`[Cache] Refreshed ${source}`);
       } catch (error) {
         logger.error(
@@ -243,13 +228,13 @@ class IntelligentCacheService {
         );
       }
     }, refreshIntervalMs);
+
+    this.refreshIntervals.set(`${source}:${Date.now()}`, intervalId);
+    return intervalId;
   }
 
-  /**
-   * Get cache entry details (for debugging)
-   */
-  getEntryDetails(source: string, params: Record<string, any>): CacheEntry<any> | null {
-    const key = this.generateCacheKey(source, params);
+  async getEntryDetails(source: string, params: Record<string, any>): Promise<CacheEntry<any> | null> {
+    const key = await this.generateCacheKey(source, params);
     const entry = this.cache.get(key);
 
     if (entry) {
@@ -258,7 +243,7 @@ class IntelligentCacheService {
 
       return {
         ...entry,
-        ttlMs: remaining, // Show remaining TTL
+        ttlMs: remaining,
       };
     }
 
