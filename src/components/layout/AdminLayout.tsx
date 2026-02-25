@@ -229,9 +229,9 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         </div>
       </header>
 
-      <div className="flex min-h-screen">
-        {/* Sidebar Desktop */}
-        <aside className="hidden md:flex md:flex-col w-64 bg-sidebar text-sidebar-foreground sticky top-0 h-screen border-r border-sidebar-border">
+      <div className="flex min-h-screen overflow-hidden">
+        {/* Sidebar Desktop - FIXE */}
+        <aside className="hidden md:flex md:flex-col w-64 bg-sidebar text-sidebar-foreground min-h-screen fixed left-0 top-0 border-r border-sidebar-border">
           <SidebarContent />
         </aside>
 
@@ -253,7 +253,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         )}
 
         {/* Main content */}
-        <main className="flex-1 min-h-screen bg-background">
+        <main className="flex-1 md:ml-64 min-h-screen bg-background overflow-auto">
           {/* Header Desktop */}
           <header className="hidden md:flex bg-background border-b h-14 items-center justify-between px-6 sticky top-0 z-40">
             <div className="flex items-center gap-4">

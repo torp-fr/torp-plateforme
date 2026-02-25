@@ -35,6 +35,13 @@ export default function Login() {
     }
   }, [user, isAuthLoading, navigate]);
 
+  // Admin redirect trigger on user change
+  useEffect(() => {
+    if (user?.isAdmin === true) {
+      navigate('/analytics', { replace: true });
+    }
+  }, [user]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
