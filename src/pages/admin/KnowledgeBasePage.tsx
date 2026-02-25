@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { UploadKBTab } from '../Analytics';
-import { KnowledgeDocumentsList } from '@/components/admin/KnowledgeDocumentsList';
+import { KnowledgeLibraryManager } from '@/components/admin/KnowledgeLibraryManager';
 import { RAGStatusStrip } from '@/components/admin/RAGStatusStrip';
 import { EmbeddingQueuePanel } from '@/components/admin/EmbeddingQueuePanel';
 import { IngestionMetricsPanel } from '@/components/admin/IngestionMetricsPanel';
@@ -28,8 +28,8 @@ export function KnowledgeBasePage() {
       {/* EMBEDDING QUEUE */}
       <EmbeddingQueuePanel />
 
-      {/* DOCUMENT LIST */}
-      <KnowledgeDocumentsList />
+      {/* LIBRARY MANAGER */}
+      <KnowledgeLibraryManager />
 
       {/* METRICS */}
       <IngestionMetricsPanel />
