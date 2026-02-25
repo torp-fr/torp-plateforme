@@ -14,7 +14,8 @@
  */
 
 import { knowledgeBrainService } from '@/services/ai/knowledge-brain.service';
-import { ingestionStateMachineService, DocumentIngestionState, IngestionFailureReason } from './index';
+import { ingestionStateMachineService } from './ingestionStateMachine.service';
+import { DocumentIngestionState, IngestionFailureReason } from './index';
 import { supabase } from '@/lib/supabase';
 
 export interface StepResult {
