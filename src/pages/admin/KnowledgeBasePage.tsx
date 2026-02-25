@@ -6,6 +6,9 @@
 import React from 'react';
 import { UploadKBTab } from '../Analytics';
 import { KnowledgeDocumentsList } from '@/components/admin/KnowledgeDocumentsList';
+import { RAGStatusStrip } from '@/components/admin/RAGStatusStrip';
+import { EmbeddingQueuePanel } from '@/components/admin/EmbeddingQueuePanel';
+import { IngestionMetricsPanel } from '@/components/admin/IngestionMetricsPanel';
 
 export function KnowledgeBasePage() {
   return (
@@ -16,11 +19,20 @@ export function KnowledgeBasePage() {
         <p className="text-sm text-muted-foreground">Upload et enrichissement du cerveau métier</p>
       </div>
 
+      {/* RAG STATUS */}
+      <RAGStatusStrip />
+
       {/* INGESTION PIPELINE */}
       <UploadKBTab />
 
+      {/* EMBEDDING QUEUE */}
+      <EmbeddingQueuePanel />
+
       {/* DOCUMENT LIST */}
       <KnowledgeDocumentsList />
+
+      {/* METRICS */}
+      <IngestionMetricsPanel />
     </div>
   );
 }
