@@ -18,6 +18,8 @@ import { chunkText, getChunkingStats, validateChunks } from '@/utils/chunking';
 import { KnowledgeHealthService } from './knowledge-health.service';
 // PHASE 36.11: PDF text extraction
 import * as pdfjs from 'pdfjs-dist';
+// PHASE 39: Step Runner trigger for progressive integration
+import { triggerStepRunner } from '@/api/knowledge-step-trigger';
 
 export interface KnowledgeDocument {
   id: string;
@@ -451,6 +453,20 @@ class KnowledgeBrainService {
       }
 
       console.log('[KNOWLEDGE BRAIN] ✅ Document inserted:', doc.id);
+
+      // PHASE 39: Trigger Step Runner for progressive integration
+      console.log('[STEP TRIGGER] launching for', doc.id);
+      triggerStepRunner(doc.id)
+        .then((result) => {
+          if (result.success) {
+            console.log('[STEP TRIGGER] ✅ triggered successfully for', doc.id);
+          } else {
+            console.warn('[STEP TRIGGER] ⚠️ trigger warning for', doc.id, ':', result.error);
+          }
+        })
+        .catch((err) => {
+          console.error('[STEP TRIGGER] ❌ trigger error for', doc.id, ':', err);
+        });
 
       // ✅ PHASE 36.9 STEP 5: RETURN IMMEDIATELY TO UI
       // All heavy lifting happens in background via setTimeout(..., 0)
