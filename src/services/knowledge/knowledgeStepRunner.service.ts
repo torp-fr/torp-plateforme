@@ -46,6 +46,17 @@ export class KnowledgeStepRunnerService {
     try {
       console.log(`[STEP RUNNER] 🚀 Running next step for document ${documentId}`);
 
+      // RUNTIME GUARD: Verify ingestionStateMachineService is properly initialized
+      if (!ingestionStateMachineService?.getStateContext) {
+        const errorMsg = 'ingestionStateMachineService INVALID EXPORT - getStateContext is undefined';
+        console.error(`[STEP RUNNER] 💥 ${errorMsg}`);
+        return {
+          success: false,
+          error: errorMsg,
+          duration: Date.now() - startTime,
+        };
+      }
+
       // Get current state
       const context = await ingestionStateMachineService.getStateContext(documentId);
       if (!context) {

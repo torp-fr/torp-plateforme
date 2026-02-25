@@ -68,6 +68,13 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+// DEBUG: Verify supabase client URL for Edge Function invoke debugging
+console.log('[SUPABASE CLIENT INIT]', {
+  supabaseUrl,
+  hasAnonKey: !!supabaseAnonKey,
+  clientUrl: supabase.supabaseUrl,
+});
+
 /**
  * Check if Supabase is configured
  */

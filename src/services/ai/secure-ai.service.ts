@@ -56,6 +56,9 @@ class SecureAIService {
       sessionExpiresAt: session?.expires_at,
     });
 
+    // CRITICAL: Verify supabase client URL (fixes edge invoke origin mismatch)
+    console.log('[EDGE DEBUG URL]', supabase.supabaseUrl);
+
     const invokeStart = Date.now();
     const { data, error } = await supabase.functions.invoke(
       'generate-embedding',
@@ -126,6 +129,9 @@ class SecureAIService {
       messagesCount: params.messages?.length,
       timestamp: new Date().toISOString(),
     });
+
+    // CRITICAL: Verify supabase client URL (fixes edge invoke origin mismatch)
+    console.log('[EDGE DEBUG URL]', supabase.supabaseUrl);
 
     const invokeStart = Date.now();
     const { data, error } = await supabase.functions.invoke(
