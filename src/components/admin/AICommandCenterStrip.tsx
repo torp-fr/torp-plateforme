@@ -28,6 +28,17 @@ export function AICommandCenterStrip() {
       if (edgeOffline) orchestratorState = 'FALLBACK';
       else if (!queueSubscribed) orchestratorState = 'DEGRADED';
 
+      // PHASE 8: AUTO-HEAL LOGIC
+      // If edge comes back ONLINE and EMBEDDING_PAUSED, clear pause
+      const wasEmbeddingPaused = Boolean((window as any).__RAG_EMBEDDING_PAUSED__);
+      if (!edgeOffline && wasEmbeddingPaused) {
+        console.log('[RAG COMMAND CENTER] 🟢 EDGE RECOVERED: Clearing embedding pause');
+        (window as any).__RAG_EMBEDDING_PAUSED__ = false;
+        window.dispatchEvent(new Event('RAG_EMBEDDING_RESUMED'));
+        // Dispatch OPS event to trigger retry
+        window.dispatchEvent(new CustomEvent('RAG_OPS_EVENT', { detail: { event: 'edge_recovered' } }));
+      }
+
       setState((prev) => ({
         ...prev,
         orchestratorState,

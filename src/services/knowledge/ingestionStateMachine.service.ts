@@ -156,7 +156,8 @@ export class IngestionStateMachineService {
   }
 
   /**
-   * Mark document as FAILED with reason and error details
+   * PHASE 8: Mark document as FAILED with reason and error details
+   * ALSO triggers global embedding pause if critical
    *
    * Stores error information in existing Supabase column:
    * - last_ingestion_error: JSON string with reason, message, and stack
@@ -178,6 +179,15 @@ export class IngestionStateMachineService {
       );
       console.log(`[STATE MACHINE] Reason: ${reason}`);
       console.log(`[STATE MACHINE] Error: ${errorMessage}`);
+
+      // PHASE 8: If EMBEDDING failed → trigger global pause
+      if (reason === IngestionFailureReason.EMBEDDING_API_ERROR ||
+          reason === IngestionFailureReason.EMBEDDING_TIMEOUT ||
+          reason === IngestionFailureReason.EMBEDDING_PARTIAL_FAILURE) {
+        console.warn(`[STATE MACHINE] 🔴 CRITICAL: Embedding failure detected - pausing pipeline`);
+        (window as any).__RAG_EMBEDDING_PAUSED__ = true;
+        window.dispatchEvent(new Event('RAG_EMBEDDING_PAUSED'));
+      }
 
       // Build error details as JSON string for storage in last_ingestion_error
       const errorDetails = {

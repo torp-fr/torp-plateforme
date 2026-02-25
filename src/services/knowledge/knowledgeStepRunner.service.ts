@@ -324,6 +324,8 @@ export class KnowledgeStepRunnerService {
    * STEP 3: Embedding (EMBEDDING state)
    * Generates embeddings for each chunk
    *
+   * PHASE 8: GLOBAL PAUSE CHECK - if embedding paused, stop immediately
+   *
    * Calls knowledge-brain.service embedding function
    * On success: transitions to FINALIZING
    * On failure: marks FAILED with EMBEDDING error
@@ -332,6 +334,16 @@ export class KnowledgeStepRunnerService {
     const startTime = Date.now();
 
     try {
+      // PHASE 8: EMBEDDING PAUSE GUARD - stop if global pause active
+      if ((window as any).__RAG_EMBEDDING_PAUSED__) {
+        console.warn(`[STEP RUNNER] 🔴 EMBEDDING PAUSED: Stopping embedding for document ${documentId}`);
+        return {
+          success: false,
+          error: 'Embedding pipeline paused globally',
+          duration: Date.now() - startTime,
+        };
+      }
+
       console.log(`[STEP RUNNER] 🔢 EMBEDDING STEP: Generating embeddings for chunks...`);
 
       // Fetch chunks to embed
