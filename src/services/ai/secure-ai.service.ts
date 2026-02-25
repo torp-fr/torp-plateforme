@@ -41,8 +41,22 @@ class SecureAIService {
 
     const session = await this.waitForSession();
 
-    console.log('[SECURE AI] invoking EDGE generate-embedding');
+    // EDGE DEBUG — BEFORE INVOKE
+    const projectUrl = session?.user?.id ? 'authenticated' : 'guest';
+    const hasSession = !!session?.access_token;
+    const payloadSize = JSON.stringify({ text: truncatedText, model }).length;
 
+    console.log('[EDGE DEBUG] invoking generate-embedding', {
+      projectUrl,
+      hasSession,
+      payloadSize,
+      textLength: truncatedText.length,
+      model,
+      timestamp: new Date().toISOString(),
+      sessionExpiresAt: session?.expires_at,
+    });
+
+    const invokeStart = Date.now();
     const { data, error } = await supabase.functions.invoke(
       'generate-embedding',
       {
@@ -55,16 +69,41 @@ class SecureAIService {
         }
       }
     );
+    const invokeDuration = Date.now() - invokeStart;
+
+    // EDGE DEBUG — AFTER INVOKE
+    console.log('[EDGE DEBUG] response received', {
+      error: error ? { message: error.message, context: error.context } : null,
+      hasData: !!data,
+      dataKeys: data ? Object.keys(data) : [],
+      embeddingLength: data?.embedding?.length || null,
+      invokeDuration,
+      timestamp: new Date().toISOString(),
+    });
 
     if (error) {
-      console.error('[SECURE AI] EDGE ERROR', error);
+      console.error('[SECURE AI] EDGE ERROR', {
+        message: error.message,
+        context: error.context,
+        statusCode: error.status || 'unknown',
+      });
       throw new Error(error.message);
     }
 
     if (!data?.embedding) {
-      console.error('[SECURE AI] INVALID RESPONSE', data);
+      console.error('[SECURE AI] INVALID RESPONSE', {
+        data,
+        keys: data ? Object.keys(data) : [],
+        hasEmbedding: !!data?.embedding,
+      });
       throw new Error('INVALID_EMBEDDING_RESPONSE');
     }
+
+    console.log('[EDGE DEBUG] embedding generated successfully', {
+      embeddingDimension: data.embedding.length,
+      totalDuration: invokeDuration,
+      source: 'secure-ai.service',
+    });
 
     return data.embedding;
   }
@@ -76,6 +115,19 @@ class SecureAIService {
 
     const session = await this.waitForSession();
 
+    // EDGE DEBUG — BEFORE INVOKE
+    const hasSession = !!session?.access_token;
+    const payloadSize = JSON.stringify(params).length;
+
+    console.log('[EDGE DEBUG] invoking llm-completion', {
+      hasSession,
+      payloadSize,
+      model: params.model,
+      messagesCount: params.messages?.length,
+      timestamp: new Date().toISOString(),
+    });
+
+    const invokeStart = Date.now();
     const { data, error } = await supabase.functions.invoke(
       'llm-completion',
       {
@@ -85,9 +137,23 @@ class SecureAIService {
         body: params
       }
     );
+    const invokeDuration = Date.now() - invokeStart;
+
+    // EDGE DEBUG — AFTER INVOKE
+    console.log('[EDGE DEBUG] llm-completion response received', {
+      error: error ? { message: error.message, context: error.context } : null,
+      hasData: !!data,
+      contentLength: data?.content?.length || null,
+      invokeDuration,
+      timestamp: new Date().toISOString(),
+    });
 
     if (error) {
-      console.error('[SECURE AI] LLM ERROR', error);
+      console.error('[SECURE AI] LLM ERROR', {
+        message: error.message,
+        context: error.context,
+        statusCode: error.status || 'unknown',
+      });
       throw new Error(error.message);
     }
 
