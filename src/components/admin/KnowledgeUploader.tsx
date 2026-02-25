@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { triggerStepRunner } from "@/api/knowledge-step-trigger";
 
 interface UploadedFile {
   id: string;
@@ -206,6 +207,21 @@ export const KnowledgeUploader = () => {
           f.id === uploadedFile.id ? { ...f, progress: 75 } : f
         )
       );
+
+      // PHASE 39: Trigger Step Runner non-blocking
+      // Fire-and-safe: runs in parallel without awaiting
+      triggerStepRunner(result.documentId)
+        .then((triggerResult) => {
+          if (triggerResult.success) {
+            console.log(`[KnowledgeUploader] ✅ Step Runner triggered for ${result.documentId}`);
+          } else {
+            console.warn(`[KnowledgeUploader] ⚠️ Step Runner trigger warning:`, triggerResult.error);
+          }
+        })
+        .catch((error) => {
+          console.error(`[KnowledgeUploader] ❌ Step Runner trigger error:`, error);
+          // Do not throw - let pipeline continue
+        });
 
       // Index document
       const indexResponse = await fetch(
