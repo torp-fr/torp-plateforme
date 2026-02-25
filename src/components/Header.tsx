@@ -55,7 +55,7 @@ export const Header = () => {
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+          <Link to={user ? dashboardLink : "/"} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <img
               src={torpLogo}
               alt="TORP"

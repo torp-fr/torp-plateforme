@@ -4,15 +4,10 @@
  * Provides quota visibility for admin dashboard
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import { structuredLogger } from '@/services/observability/structured-logger';
 
 const logger = structuredLogger;
-
-const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL || '',
-  process.env.REACT_APP_SUPABASE_ANON_KEY || ''
-);
 
 export interface APIQuotaStatus {
   apiName: string;
