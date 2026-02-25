@@ -2,54 +2,68 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
-import { Database, Zap, List } from 'lucide-react';
+import { Database, Zap, List, AlertCircle } from 'lucide-react';
 
 interface VectorHealth {
   totalDocuments: number;
   edgeOnline: boolean;
+  fallbackActive: boolean;
 }
 
 export function VectorHealthPanel() {
   const [health, setHealth] = useState<VectorHealth>({
     totalDocuments: 0,
     edgeOnline: true,
+    fallbackActive: false,
   });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchHealth = async () => {
-      try {
-        setLoading(true);
+  const updateHealth = async () => {
+    try {
+      setLoading(true);
 
-        const { count, error } = await supabase
-          .from('knowledge_documents')
-          .select('*', { count: 'exact', head: true })
-          .eq('is_active', true);
+      const { count, error } = await supabase
+        .from('knowledge_documents')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_active', true);
 
-        if (error) {
-          console.log('[Vector Health] Query error:', error.message);
-          setHealth((prev) => ({ ...prev, totalDocuments: 0 }));
-          return;
-        }
-
-        const edgeOnline = !window.__RAG_EDGE_OFFLINE__;
-
-        setHealth({
-          totalDocuments: count || 0,
-          edgeOnline,
-        });
-
-        console.log('[Vector Health] Updated:', { count, edgeOnline });
-      } catch (err) {
-        console.error('[Vector Health] Error:', err);
-      } finally {
-        setLoading(false);
+      if (error) {
+        console.log('[VectorHealth] Query error:', error.message);
+        setHealth((prev) => ({ ...prev, totalDocuments: 0 }));
+        return;
       }
-    };
 
-    fetchHealth();
-    const interval = setInterval(fetchHealth, 30000);
-    return () => clearInterval(interval);
+      const edgeOnline = !window.__RAG_EDGE_OFFLINE__;
+      const fallbackActive = window.__RAG_EDGE_OFFLINE__ === true;
+
+      setHealth({
+        totalDocuments: count || 0,
+        edgeOnline,
+        fallbackActive,
+      });
+
+      console.log('[VectorHealth] Updated:', { count, edgeOnline, fallbackActive });
+    } catch (err) {
+      console.error('[VectorHealth] Error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    updateHealth();
+    const interval = setInterval(updateHealth, 30000);
+
+    // Listen for OPS events
+    const handleRefresh = () => updateHealth();
+    window.addEventListener('RAG_OPS_EVENT', handleRefresh);
+    window.addEventListener('RAG_LIBRARY_REFRESH', handleRefresh);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('RAG_OPS_EVENT', handleRefresh);
+      window.removeEventListener('RAG_LIBRARY_REFRESH', handleRefresh);
+    };
   }, []);
 
   return (
@@ -81,15 +95,15 @@ export function VectorHealthPanel() {
                 className={
                   health.edgeOnline
                     ? 'bg-emerald-50 text-emerald-700 border-emerald-200 mt-1'
-                    : 'bg-red-50 text-red-700 border-red-200 mt-1'
+                    : 'bg-amber-50 text-amber-700 border-amber-200 mt-1'
                 }
               >
-                {health.edgeOnline ? '✓ Online' : '✗ Fallback'}
+                {health.edgeOnline ? '✓ Online' : '⚠️ Degraded'}
               </Badge>
             </div>
           </div>
 
-          {/* Documents */}
+          {/* Documents Indexed */}
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-amber-100 flex items-center justify-center">
               <List className="h-5 w-5 text-amber-600" />
@@ -99,6 +113,19 @@ export function VectorHealthPanel() {
               <p className="text-lg font-semibold text-foreground mt-1">{health.totalDocuments}</p>
             </div>
           </div>
+
+          {/* Fallback Status */}
+          {health.fallbackActive && (
+            <div className="flex items-center gap-3 col-span-3">
+              <div className="h-10 w-10 rounded-lg bg-red-100 flex items-center justify-center">
+                <AlertCircle className="h-5 w-5 text-red-600" />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-medium text-muted-foreground">Fallback Embedding</p>
+                <Badge className="bg-red-50 text-red-700 border-red-200 mt-1">FALLBACK ACTIVE</Badge>
+              </div>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
