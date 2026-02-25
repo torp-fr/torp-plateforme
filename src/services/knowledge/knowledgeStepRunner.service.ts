@@ -400,6 +400,16 @@ export class KnowledgeStepRunnerService {
         };
       }
 
+      // PHASE 10: GLOBAL PIPELINE LOCK GUARD - stop if pipeline locked
+      if ((window as any).__RAG_PIPELINE_LOCKED__) {
+        console.warn(`[STEP RUNNER] 🔒 Global pipeline locked - abort embedding`);
+        return {
+          success: false,
+          error: 'Pipeline locked globally',
+          duration: Date.now() - startTime,
+        };
+      }
+
       console.log(`[STEP RUNNER] 🔢 EMBEDDING STEP: Generating embeddings for chunks...`);
 
       // Fetch chunks to embed

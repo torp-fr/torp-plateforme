@@ -8,6 +8,7 @@ interface CommandState {
   heartbeat: 'beating' | 'stale';
   lastEventTime: number | null;
   bigDocMode: boolean;
+  pipelineLocked: boolean;
 }
 
 export function AICommandCenterStrip() {
@@ -16,6 +17,7 @@ export function AICommandCenterStrip() {
     heartbeat: 'beating',
     lastEventTime: Date.now(),
     bigDocMode: false,
+    pipelineLocked: false,
   });
 
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -33,6 +35,8 @@ export function AICommandCenterStrip() {
       // PHASE 8: AUTO-HEAL LOGIC
       // If edge comes back ONLINE and EMBEDDING_PAUSED, clear pause
       const wasEmbeddingPaused = Boolean((window as any).__RAG_EMBEDDING_PAUSED__);
+      const pipelineLocked = Boolean((window as any).__RAG_PIPELINE_LOCKED__);
+
       if (!edgeOffline && wasEmbeddingPaused) {
         console.log('[RAG COMMAND CENTER] 🟢 EDGE RECOVERED: Clearing embedding pause');
         (window as any).__RAG_EMBEDDING_PAUSED__ = false;
@@ -41,9 +45,15 @@ export function AICommandCenterStrip() {
         window.dispatchEvent(new CustomEvent('RAG_OPS_EVENT', { detail: { event: 'edge_recovered' } }));
       }
 
+      // PHASE 10: Check for pipeline lock
+      if (pipelineLocked && orchestratorState !== 'DEGRADED') {
+        orchestratorState = 'DEGRADED';
+      }
+
       setState((prev) => ({
         ...prev,
         orchestratorState,
+        pipelineLocked,
         lastEventTime: Date.now(),
       }));
 
@@ -65,6 +75,18 @@ export function AICommandCenterStrip() {
     };
     window.addEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocMode);
     window.addEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocClear);
+
+    // PHASE 10: Listen for pipeline lock events
+    const handlePipelineLocked = () => {
+      console.log('[RAG COMMAND CENTER] 🔒 Pipeline locked');
+      setState(prev => ({ ...prev, pipelineLocked: true, orchestratorState: 'DEGRADED' }));
+    };
+    const handlePipelineUnlocked = () => {
+      console.log('[RAG COMMAND CENTER] 🔓 Pipeline unlocked');
+      setState(prev => ({ ...prev, pipelineLocked: false }));
+    };
+    window.addEventListener('RAG_PIPELINE_LOCKED', handlePipelineLocked);
+    window.addEventListener('RAG_PIPELINE_UNLOCKED', handlePipelineUnlocked);
 
     // PATCH 5: HEARTBEAT MONITOR - stabilized interval
     // If edge is offline (FALLBACK), use 15s interval to reduce load
@@ -93,6 +115,8 @@ export function AICommandCenterStrip() {
       window.removeEventListener('RAG_COMMAND_CENTER_UPDATE', updateCommandState);
       window.removeEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocMode);
       window.removeEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocClear);
+      window.removeEventListener('RAG_PIPELINE_LOCKED', handlePipelineLocked);
+      window.removeEventListener('RAG_PIPELINE_UNLOCKED', handlePipelineUnlocked);
       if (heartbeatIntervalRef.current) {
         clearInterval(heartbeatIntervalRef.current);
       }
@@ -141,6 +165,13 @@ export function AICommandCenterStrip() {
           {state.bigDocMode && (
             <Badge className="bg-blue-100 text-blue-700 border-blue-200">
               📚 BIG DOC MODE
+            </Badge>
+          )}
+
+          {/* PHASE 10: Pipeline Locked Badge */}
+          {state.pipelineLocked && (
+            <Badge className="bg-red-100 text-red-700 border-red-200">
+              🔒 PIPELINE LOCKED
             </Badge>
           )}
 

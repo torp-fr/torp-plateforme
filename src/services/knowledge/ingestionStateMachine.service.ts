@@ -193,6 +193,16 @@ export class IngestionStateMachineService {
         window.dispatchEvent(new Event('RAG_EMBEDDING_PAUSED'));
       }
 
+      // PHASE 10: HARD LOCK on critical failures
+      if (reason === IngestionFailureReason.EMBEDDING_API_ERROR ||
+          reason === IngestionFailureReason.EMBEDDING_TIMEOUT ||
+          reason === IngestionFailureReason.EMBEDDING_PARTIAL_FAILURE ||
+          reason === IngestionFailureReason.CHUNKING_ERROR) {
+        console.warn(`[STATE MACHINE] 🔒 ACTIVATING HARD LOCK: Pipeline locked to prevent worker storm`);
+        (window as any).__RAG_PIPELINE_LOCKED__ = true;
+        window.dispatchEvent(new Event('RAG_PIPELINE_LOCKED'));
+      }
+
       // Build error details as JSON string for storage in last_ingestion_error
       const errorDetails = {
         reason,

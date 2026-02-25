@@ -501,6 +501,19 @@ class KnowledgeBrainService {
     originalContent: string
   ): Promise<void> {
     try {
+      // PHASE 10: HARD LOCK GUARD - Stop immediately if pipeline locked
+      if ((window as any).__RAG_PIPELINE_LOCKED__) {
+        console.warn('[KNOWLEDGE BRAIN] 🔒 Pipeline locked - abort async processing');
+        return;
+      }
+
+      // PHASE 10: Check if document is FAILED before processing
+      const context = await this.getStateContext?.(documentId);
+      if (context?.current_state === 'FAILED') {
+        console.warn('[KNOWLEDGE BRAIN] 🔴 Document FAILED - stopping async worker');
+        return;
+      }
+
       console.log('[KNOWLEDGE BRAIN] 🧠 BACKGROUND: Starting chunking...');
       const startTime = Date.now();
 

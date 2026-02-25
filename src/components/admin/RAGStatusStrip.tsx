@@ -22,6 +22,7 @@ export function RAGStatusStrip() {
   const [loading, setLoading] = useState(true);
   const [edgeOnline, setEdgeOnline] = useState(true);
   const [bigDocMode, setBigDocMode] = useState(false);
+  const [pipelineLocked, setPipelineLocked] = useState(false);
 
   const fetchStatus = async () => {
     try {
@@ -101,6 +102,18 @@ export function RAGStatusStrip() {
     window.addEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocActivated);
     window.addEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocCleared);
 
+    // PHASE 10: Listen for pipeline lock events
+    const handlePipelineLocked = () => {
+      console.log('[RAGStatusStrip] Pipeline locked');
+      setPipelineLocked(true);
+    };
+    const handlePipelineUnlocked = () => {
+      console.log('[RAGStatusStrip] Pipeline unlocked');
+      setPipelineLocked(false);
+    };
+    window.addEventListener('RAG_PIPELINE_LOCKED', handlePipelineLocked);
+    window.addEventListener('RAG_PIPELINE_UNLOCKED', handlePipelineUnlocked);
+
     return () => {
       clearInterval(interval);
       window.removeEventListener('RAG_OPS_EVENT', handleOpsEvent);
@@ -109,6 +122,8 @@ export function RAGStatusStrip() {
       window.removeEventListener('RAG_EMBEDDING_RESUMED', handleEmbeddingResume);
       window.removeEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocActivated);
       window.removeEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocCleared);
+      window.removeEventListener('RAG_PIPELINE_LOCKED', handlePipelineLocked);
+      window.removeEventListener('RAG_PIPELINE_UNLOCKED', handlePipelineUnlocked);
     };
   }, []);
 
@@ -151,14 +166,18 @@ export function RAGStatusStrip() {
           {/* Embedding Engine */}
           <div className="flex items-center gap-3">
             <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
-              status.embeddingEngine === 'paused'
-                ? 'bg-amber-100'
-                : 'bg-blue-100'
+              pipelineLocked
+                ? 'bg-red-100'
+                : status.embeddingEngine === 'paused'
+                  ? 'bg-amber-100'
+                  : 'bg-blue-100'
             }`}>
               <Zap className={`h-5 w-5 ${
-                status.embeddingEngine === 'paused'
-                  ? 'text-amber-600'
-                  : 'text-blue-600'
+                pipelineLocked
+                  ? 'text-red-600'
+                  : status.embeddingEngine === 'paused'
+                    ? 'text-amber-600'
+                    : 'text-blue-600'
               }`} />
             </div>
             <div>
@@ -166,16 +185,18 @@ export function RAGStatusStrip() {
               <Badge
                 variant="outline"
                 className={
-                  status.embeddingEngine === 'paused'
-                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : bigDocMode
-                      ? 'bg-purple-50 text-purple-700 border-purple-200'
-                      : edgeOnline
-                        ? 'bg-blue-50 text-blue-700 border-blue-200'
-                        : 'bg-red-50 text-red-700 border-red-200'
+                  pipelineLocked
+                    ? 'bg-red-50 text-red-700 border-red-200'
+                    : status.embeddingEngine === 'paused'
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : bigDocMode
+                        ? 'bg-purple-50 text-purple-700 border-purple-200'
+                        : edgeOnline
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : 'bg-red-50 text-red-700 border-red-200'
                 }
               >
-                {status.embeddingEngine === 'paused' ? '⏸️ Paused' : bigDocMode ? '⚡ Throttled' : edgeOnline ? '✓ Online' : '⚠️ Fallback'}
+                {pipelineLocked ? '🔒 Locked' : status.embeddingEngine === 'paused' ? '⏸️ Paused' : bigDocMode ? '⚡ Throttled' : edgeOnline ? '✓ Online' : '⚠️ Fallback'}
               </Badge>
             </div>
           </div>
