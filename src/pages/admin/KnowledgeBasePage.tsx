@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { UploadKBTab } from '../Analytics';
+import { AICommandCenterStrip } from '@/components/admin/AICommandCenterStrip';
 import { RAGStatusStrip } from '@/components/admin/RAGStatusStrip';
 import { VectorHealthPanel } from '@/components/admin/VectorHealthPanel';
 import { EmbeddingQueuePanel } from '@/components/admin/EmbeddingQueuePanel';
@@ -20,6 +21,9 @@ export function KnowledgeBasePage() {
         <h1 className="text-2xl font-bold">Base de Connaissances</h1>
         <p className="text-sm text-muted-foreground">Upload et enrichissement du cerveau métier</p>
       </div>
+
+      {/* 🎯 AI COMMAND CENTER */}
+      <AICommandCenterStrip />
 
       {/* 1️⃣ RAG STATUS */}
       <RAGStatusStrip />

@@ -42,6 +42,9 @@ export function VectorHealthPanel() {
         fallbackActive,
       });
 
+      // Dispatch command center update
+      window.dispatchEvent(new Event('RAG_COMMAND_CENTER_UPDATE'));
+
       console.log('[VectorHealth] Updated:', { count, edgeOnline, fallbackActive });
     } catch (err) {
       console.error('[VectorHealth] Error:', err);

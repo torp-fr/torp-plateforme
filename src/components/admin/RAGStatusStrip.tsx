@@ -52,6 +52,9 @@ export function RAGStatusStrip() {
         embeddingEngine: 'active',
       });
 
+      // Dispatch command center update
+      window.dispatchEvent(new Event('RAG_COMMAND_CENTER_UPDATE'));
+
       console.log('[RAGStatus] Updated:', { count, edgeOnline: isEdgeOnline });
     } catch (err) {
       console.error('[RAGStatus] Error:', err);

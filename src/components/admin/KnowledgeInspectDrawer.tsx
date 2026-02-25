@@ -60,8 +60,40 @@ export function KnowledgeInspectDrawer({ document, onClose }: KnowledgeInspectDr
             </TabsTrigger>
           </TabsList>
 
-          {/* Metadata Tab */}
-          <TabsContent value="metadata" className="p-6 space-y-6">
+          {/* Command Mode Header */}
+          <div className="bg-gradient-to-r from-primary/10 to-primary/5 p-3 rounded-lg border border-primary/20 mb-6">
+            <p className="text-xs font-semibold text-primary mb-2">AI COMMAND VIEW</p>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">Derived State</span>
+                <Badge className="bg-green-50 text-green-700 border-green-200">Ready</Badge>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">Edge Status</span>
+                <Badge
+                  className={
+                    !Boolean((window as any).RAG_EDGE_OFFLINE)
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-red-50 text-red-700 border-red-200'
+                  }
+                >
+                  {!Boolean((window as any).RAG_EDGE_OFFLINE) ? '✓ Online' : '✗ Fallback'}
+                </Badge>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">Last Ops</span>
+                <span className="text-xs font-mono text-muted-foreground">
+                  {new Date().toLocaleTimeString('fr-FR')}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">Est. Tokens</span>
+                <Badge variant="outline">
+                  {safePreview ? Math.ceil(safePreview.length / 4) : 0}
+                </Badge>
+              </div>
+            </div>
+          </div>
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2">TITLE</p>
               <p className="text-lg font-semibold text-foreground">{safeTitle}</p>
