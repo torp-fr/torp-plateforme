@@ -38,7 +38,7 @@ import Results from "./pages/Results";
 import JobStatusPage from "./pages/analysis/JobStatusPage";
 
 // Admin Pages
-import Analytics from "./pages/Analytics";
+import { DashboardPage } from "./pages/admin/DashboardPage";
 import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { SystemHealthPage } from "./pages/admin/SystemHealthPage";
 import { LiveIntelligencePage } from "./pages/admin/LiveIntelligencePage";
@@ -73,14 +73,16 @@ const AppContent = () => {
           {/* ADMIN ROUTES - Admin-only protection */}
           {/* ============================================ */}
           <Route element={<AdminRoute><AdminLayout /></AdminRoute>}>
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/analytics/system" element={<SystemHealthPage />} />
-            <Route path="/analytics/intelligence" element={<LiveIntelligencePage />} />
-            <Route path="/analytics/orchestrations" element={<OrchestrationsPage />} />
-            <Route path="/analytics/knowledge" element={<KnowledgeBasePage />} />
-            <Route path="/analytics/security" element={<SecurityPage />} />
-            <Route path="/analytics/settings" element={<AdminSettingsPage />} />
-            <Route path="/analytics/users" element={<AdminUsersPage />} />
+            <Route path="/analytics">
+              <Route index element={<DashboardPage />} />
+              <Route path="system" element={<SystemHealthPage />} />
+              <Route path="intelligence" element={<LiveIntelligencePage />} />
+              <Route path="orchestrations" element={<OrchestrationsPage />} />
+              <Route path="knowledge" element={<KnowledgeBasePage />} />
+              <Route path="security" element={<SecurityPage />} />
+              <Route path="settings" element={<AdminSettingsPage />} />
+              <Route path="users" element={<AdminUsersPage />} />
+            </Route>
           </Route>
 
           {/* ============================================ */}

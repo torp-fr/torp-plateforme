@@ -17,6 +17,10 @@ import {
   ChevronDown,
   User,
   Sparkles,
+  Zap,
+  AlertTriangle,
+  TrendingUp,
+  Plug,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
@@ -44,7 +48,7 @@ interface NavItem {
   exact?: boolean;
 }
 
-// Navigation ADMIN - Ne change JAMAIS
+// Navigation ADMIN - Route-driven cockpit navigation
 const ADMIN_NAV_ITEMS: NavItem[] = [
   {
     id: 'dashboard',
@@ -54,34 +58,40 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
     exact: true,
   },
   {
-    id: 'system',
-    href: '/analytics/system',
-    icon: Database,
-    label: 'System Health',
+    id: 'orchestrations',
+    href: '/analytics/orchestrations',
+    icon: Zap,
+    label: "Cockpit d'Orchestration",
+  },
+  {
+    id: 'security',
+    href: '/analytics/security',
+    icon: AlertTriangle,
+    label: 'Surveillance Fraude',
   },
   {
     id: 'intelligence',
     href: '/analytics/intelligence',
-    icon: BarChart3,
-    label: 'Live Intelligence',
-  },
-  {
-    id: 'orchestrations',
-    href: '/analytics/orchestrations',
-    icon: BarChart3,
-    label: 'Orchestrations',
+    icon: TrendingUp,
+    label: 'Adaptatif',
   },
   {
     id: 'knowledge',
     href: '/analytics/knowledge',
     icon: Database,
-    label: 'Knowledge Base',
+    label: 'Base de Connaissances',
   },
   {
-    id: 'security',
-    href: '/analytics/security',
+    id: 'system',
+    href: '/analytics/system',
+    icon: Plug,
+    label: 'APIs',
+  },
+  {
+    id: 'users',
+    href: '/analytics/users',
     icon: Users,
-    label: 'Security',
+    label: 'Utilisateurs',
   },
   {
     id: 'settings',
