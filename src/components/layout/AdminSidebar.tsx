@@ -46,21 +46,21 @@ const ADMIN_SECTIONS = {
       },
       {
         id: 'orchestration',
-        href: '/analytics?tab=orchestration',
+        href: '/analytics/orchestrations',
         icon: Zap,
         label: 'Cockpit d\'Orchestration',
         description: 'Status des moteurs',
       },
       {
         id: 'fraud',
-        href: '/analytics?tab=fraud',
+        href: '/analytics/security',
         icon: AlertTriangle,
         label: 'Surveillance Fraude',
         description: 'Détection & patterns',
       },
       {
         id: 'adaptive',
-        href: '/analytics?tab=adaptive',
+        href: '/analytics/intelligence',
         icon: TrendingUp,
         label: 'Monitoring Adaptatif',
         description: 'Impacts & ajustements',
@@ -72,14 +72,14 @@ const ADMIN_SECTIONS = {
     items: [
       {
         id: 'kb',
-        href: '/analytics?tab=kb',
+        href: '/analytics/knowledge',
         icon: BookOpen,
         label: 'Base de Connaissances',
         description: 'Documents & ingestion',
       },
       {
         id: 'doctrine',
-        href: '/analytics?tab=doctrine',
+        href: '/analytics/settings',
         icon: Shield,
         label: 'Doctrine & Normes',
         description: 'Règles & jurisprudence',
@@ -91,7 +91,7 @@ const ADMIN_SECTIONS = {
     items: [
       {
         id: 'apis',
-        href: '/analytics?tab=apis',
+        href: '/analytics/system',
         icon: Plug,
         label: 'APIs Externes',
         description: 'Services intégrés',
@@ -105,14 +105,14 @@ const ADMIN_SECTIONS = {
       },
       {
         id: 'logs',
-        href: '/analytics?tab=logs',
+        href: '/analytics/system',
         icon: FileText,
         label: 'Logs Système',
         description: 'Audit trail',
       },
       {
         id: 'config',
-        href: '/analytics?tab=config',
+        href: '/analytics/settings',
         icon: Cog,
         label: 'Configuration',
         description: 'Paramètres plateforme',
@@ -131,14 +131,6 @@ export function AdminSidebar({ collapsed = false, userEmail, onClose }: AdminSid
   const location = useLocation();
 
   const isActiveRoute = (href: string): boolean => {
-    if (href.includes('?')) {
-      const baseHref = href.split('?')[0];
-      const queryParam = href.split('?')[1];
-      return (
-        location.pathname === baseHref &&
-        location.search.includes(queryParam.split('=')[1])
-      );
-    }
     return location.pathname === href;
   };
 
