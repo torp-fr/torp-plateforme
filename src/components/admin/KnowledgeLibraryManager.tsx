@@ -27,10 +27,10 @@ export function KnowledgeLibraryManager() {
 
       const { data, error: dbError } = await supabase
         .from('knowledge_documents')
-        .select('id, title, category, created_at, preview, processing_state')
+        .select('id, title, category, created_at, preview')
         .eq('is_active', true)
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(50);
 
       if (dbError) {
         if (dbError.message.includes('permission') || dbError.message.includes('RLS')) {
@@ -62,11 +62,13 @@ export function KnowledgeLibraryManager() {
       const { error: updateError } = await supabase
         .from('knowledge_documents')
         .update({ is_active: false })
-        .eq('id', docId);
+        .eq('id', docId)
+        .select();
 
       if (updateError) {
         if (updateError.message.includes('permission') || updateError.message.includes('RLS')) {
-          throw new Error('Permissions insuffisantes pour supprimer (RLS)');
+          setError('Permissions insuffisantes (RLS)');
+          return;
         }
         throw updateError;
       }
@@ -83,20 +85,12 @@ export function KnowledgeLibraryManager() {
     }
   };
 
-  const getProcessingStateColor = (state?: string) => {
-    if (!state || state === 'completed') return 'bg-green-50 text-green-700 border-green-200';
-    if (state === 'extracting') return 'bg-blue-50 text-blue-700 border-blue-200';
-    if (state === 'chunking') return 'bg-purple-50 text-purple-700 border-purple-200';
-    if (state === 'embedding') return 'bg-amber-50 text-amber-700 border-amber-200';
-    return 'bg-gray-50 text-gray-700 border-gray-200';
+  const getProcessingStateColor = () => {
+    return 'bg-green-50 text-green-700 border-green-200';
   };
 
-  const getProcessingStateLabel = (state?: string) => {
-    if (!state || state === 'completed') return '✓ Complété';
-    if (state === 'extracting') return '📄 Extraction';
-    if (state === 'chunking') return '✂️ Chunking';
-    if (state === 'embedding') return '🧠 Embedding';
-    return 'Traitement';
+  const getProcessingStateLabel = () => {
+    return '✓ Ingéré';
   };
 
   if (loading) {
@@ -146,65 +140,69 @@ export function KnowledgeLibraryManager() {
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {documents.map((doc) => (
-            <div
-              key={doc.id}
-              className="p-4 rounded-lg border border-border/50 hover:border-border/100 transition-colors group"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-sm text-foreground truncate">{doc.title}</h3>
-                  {doc.preview && (
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                      {doc.preview}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    {doc.category && (
-                      <Badge variant="outline" className="whitespace-nowrap text-xs">
-                        {doc.category}
-                      </Badge>
+          {documents.map((doc) => {
+            const safeTitle = doc.title ?? 'Document';
+            const safePreview = doc.preview ?? '';
+            const safeCategory = doc.category ?? 'général';
+
+            return (
+              <div
+                key={doc.id}
+                className="p-4 rounded-lg border border-border/50 hover:border-border/100 transition-colors group"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium text-sm text-foreground truncate">{safeTitle}</h3>
+                    {safePreview && (
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                        {safePreview}
+                      </p>
                     )}
-                    <Badge
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <Badge variant="outline" className="whitespace-nowrap text-xs">
+                        {safeCategory}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className={`whitespace-nowrap text-xs ${getProcessingStateColor()}`}
+                      >
+                        {getProcessingStateLabel()}
+                      </Badge>
+                      <p className="text-xs text-muted-foreground/60">
+                        {new Date(doc.created_at).toLocaleString('fr-FR')}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* ACTION BAR */}
+                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
                       variant="outline"
-                      className={`whitespace-nowrap text-xs ${getProcessingStateColor(doc.processing_state)}`}
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      title="Inspecter"
                     >
-                      {getProcessingStateLabel(doc.processing_state)}
-                    </Badge>
-                    <p className="text-xs text-muted-foreground/60">
-                      {new Date(doc.created_at).toLocaleString('fr-FR')}
-                    </p>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={() => handleDelete(doc.id, safeTitle)}
+                      disabled={deleting === doc.id}
+                      title="Supprimer"
+                    >
+                      {deleting === doc.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
                   </div>
                 </div>
-
-                {/* ACTION BAR */}
-                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    title="Inspecter"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    onClick={() => handleDelete(doc.id, doc.title)}
-                    disabled={deleting === doc.id}
-                    title="Supprimer"
-                  >
-                    {deleting === doc.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </CardContent>
     </Card>

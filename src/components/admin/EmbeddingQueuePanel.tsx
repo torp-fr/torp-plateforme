@@ -48,9 +48,20 @@ export function EmbeddingQueuePanel() {
       }
     };
 
+    // Prevent duplicate subscription
+    if (window.__RAG_QUEUE_SUBSCRIBED__) {
+      console.log('[Embedding Queue] Subscription already active, skipping');
+      return;
+    }
+    window.__RAG_QUEUE_SUBSCRIBED__ = true;
+
     fetchQueue();
     const interval = setInterval(fetchQueue, 10000); // Refresh every 10s
-    return () => clearInterval(interval);
+
+    return () => {
+      clearInterval(interval);
+      window.__RAG_QUEUE_SUBSCRIBED__ = false;
+    };
   }, []);
 
   const getStatusColor = (status?: string) => {

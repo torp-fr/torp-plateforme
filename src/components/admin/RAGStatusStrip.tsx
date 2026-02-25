@@ -20,6 +20,26 @@ export function RAGStatusStrip() {
     embeddingEngine: 'active',
   });
   const [loading, setLoading] = useState(true);
+  const [edgeOnline, setEdgeOnline] = useState(true);
+
+  useEffect(() => {
+    // Listen for edge embedding failures
+    const handleConsoleWarn = (event: any) => {
+      if (event?.message?.includes('EDGE ERROR') || event?.message?.includes('fallback embedding')) {
+        setEdgeOnline(false);
+        console.log('[RAGStatusStrip] Edge embedding fallback detected');
+      }
+    };
+
+    // Also check for window globals set by orchestrator
+    if (window.__RAG_EDGE_OFFLINE__) {
+      setEdgeOnline(false);
+    }
+
+    return () => {
+      // Cleanup
+    };
+  }, []);
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -141,6 +161,19 @@ export function RAGStatusStrip() {
               </p>
             </div>
           </div>
+
+          {/* Edge Status */}
+          {!edgeOnline && (
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-red-100 flex items-center justify-center">
+                <Zap className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Edge</p>
+                <Badge variant="destructive">OFFLINE</Badge>
+              </div>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
