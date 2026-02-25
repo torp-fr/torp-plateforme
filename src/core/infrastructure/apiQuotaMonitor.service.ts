@@ -5,7 +5,9 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { logger } from '@/core/platform/logger';
+import { structuredLogger } from '@/services/observability/structured-logger';
+
+const logger = structuredLogger;
 
 const supabase = createClient(
   process.env.REACT_APP_SUPABASE_URL || '',

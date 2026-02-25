@@ -4,7 +4,9 @@
  * Ensures platform resilience against API failures
  */
 
-import { logger } from '@/core/platform/logger';
+import { structuredLogger } from '@/services/observability/structured-logger';
+
+const logger = structuredLogger;
 
 export interface ResilientResult<T> {
   success: boolean;

@@ -4,8 +4,10 @@
  * Reduces API calls and improves response time
  */
 
-import { logger } from '@/core/platform/logger';
+import { structuredLogger } from '@/services/observability/structured-logger';
 import crypto from 'crypto';
+
+const logger = structuredLogger;
 
 export interface CacheEntry<T> {
   key: string;
