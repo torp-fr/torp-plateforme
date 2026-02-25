@@ -16,41 +16,60 @@ export function EmbeddingQueuePanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchQueue = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const fetchQueue = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        // Fetch documents that are not fully completed
-        const { data, error: dbError } = await supabase
-          .from('knowledge_documents')
-          .select('id, title, embedding_status, created_at')
-          .neq('embedding_status', 'completed')
-          .order('created_at', { ascending: false })
-          .limit(5);
+      const { data, error: dbError } = await supabase
+        .from('knowledge_documents')
+        .select('id, title, embedding_status, created_at')
+        .neq('embedding_status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(5);
 
-        if (dbError) {
-          // If column doesn't exist, assume all are completed
-          console.log('[Embedding Queue] Status column unavailable, showing all as completed');
-          setQueue([]);
-          return;
-        }
-
-        setQueue(data || []);
-        console.log('[Embedding Queue] Items pending:', data?.length || 0);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to fetch queue';
-        console.error('[Embedding Queue] Error:', message);
-        setError(message);
-      } finally {
-        setLoading(false);
+      if (dbError) {
+        console.log('[EmbeddingQueue] Status column unavailable');
+        setQueue([]);
+        return;
       }
-    };
+
+      setQueue(data || []);
+      console.log('[EmbeddingQueue] Pending:', data?.length || 0);
+
+      // Dispatch OPS event for other components
+      window.dispatchEvent(new Event('RAG_OPS_EVENT'));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch queue';
+      console.error('[EmbeddingQueue] Error:', message);
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Prevent duplicate subscription
+    if (window.__RAG_QUEUE_SUBSCRIBED__) {
+      console.log('[EmbeddingQueue] Subscription already active');
+      return;
+    }
+    window.__RAG_QUEUE_SUBSCRIBED__ = true;
 
     fetchQueue();
-    const interval = setInterval(fetchQueue, 10000); // Refresh every 10s
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchQueue, 10000);
+
+    // Listen for refresh events
+    const handleRefresh = () => fetchQueue();
+    window.addEventListener('RAG_LIBRARY_REFRESH', handleRefresh);
+    window.addEventListener('RAG_RETRY_REQUESTED', handleRefresh);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('RAG_LIBRARY_REFRESH', handleRefresh);
+      window.removeEventListener('RAG_RETRY_REQUESTED', handleRefresh);
+      window.__RAG_QUEUE_SUBSCRIBED__ = false;
+    };
   }, []);
 
   const getStatusColor = (status?: string) => {
@@ -62,7 +81,7 @@ export function EmbeddingQueuePanel() {
 
   const getStatusLabel = (status?: string) => {
     if (!status || status === 'completed') return '✓ Complété';
-    if (status === 'processing') return '⏳ En cours';
+    if (status === 'processing') return '⏳ Traitement';
     if (status === 'error') return '✗ Erreur';
     return '⏳ En attente';
   };
@@ -84,7 +103,7 @@ export function EmbeddingQueuePanel() {
     <Card>
       <CardHeader>
         <CardTitle className="text-lg">Queue d'embedding</CardTitle>
-        <CardDescription>Documents en attente d'embedding vectoriel</CardDescription>
+        <CardDescription>Documents en attente de vectorisation</CardDescription>
       </CardHeader>
       <CardContent>
         {error ? (
@@ -97,9 +116,12 @@ export function EmbeddingQueuePanel() {
         ) : (
           <div className="space-y-2">
             {queue.map((item) => (
-              <div key={item.id} className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:border-border/100 transition-colors">
+              <div
+                key={item.id}
+                className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:border-border/100 transition-colors"
+              >
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{item.title}</p>
+                  <p className="text-sm font-medium text-foreground truncate">{item.title ?? 'Document'}</p>
                   <p className="text-xs text-muted-foreground/60">
                     {new Date(item.created_at).toLocaleString('fr-FR')}
                   </p>

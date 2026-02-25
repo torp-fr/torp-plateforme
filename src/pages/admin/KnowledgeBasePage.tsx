@@ -5,9 +5,12 @@
 
 import React from 'react';
 import { UploadKBTab } from '../Analytics';
-import { KnowledgeDocumentsList } from '@/components/admin/KnowledgeDocumentsList';
+import { AICommandCenterStrip } from '@/components/admin/AICommandCenterStrip';
 import { RAGStatusStrip } from '@/components/admin/RAGStatusStrip';
+import { VectorHealthPanel } from '@/components/admin/VectorHealthPanel';
 import { EmbeddingQueuePanel } from '@/components/admin/EmbeddingQueuePanel';
+import { RAGIngestionTimeline } from '@/components/admin/RAGIngestionTimeline';
+import { KnowledgeLibraryManager } from '@/components/admin/KnowledgeLibraryManager';
 import { IngestionMetricsPanel } from '@/components/admin/IngestionMetricsPanel';
 
 export function KnowledgeBasePage() {
@@ -19,19 +22,28 @@ export function KnowledgeBasePage() {
         <p className="text-sm text-muted-foreground">Upload et enrichissement du cerveau métier</p>
       </div>
 
-      {/* RAG STATUS */}
+      {/* 🎯 AI COMMAND CENTER */}
+      <AICommandCenterStrip />
+
+      {/* 1️⃣ RAG STATUS */}
       <RAGStatusStrip />
 
-      {/* INGESTION PIPELINE */}
+      {/* 2️⃣ VECTOR HEALTH */}
+      <VectorHealthPanel />
+
+      {/* 3️⃣ INGESTION PIPELINE */}
       <UploadKBTab />
 
-      {/* EMBEDDING QUEUE */}
+      {/* 4️⃣ EMBEDDING QUEUE */}
       <EmbeddingQueuePanel />
 
-      {/* DOCUMENT LIST */}
-      <KnowledgeDocumentsList />
+      {/* 5️⃣ INGESTION TIMELINE */}
+      <RAGIngestionTimeline />
 
-      {/* METRICS */}
+      {/* 6️⃣ LIBRARY MANAGER */}
+      <KnowledgeLibraryManager />
+
+      {/* 7️⃣ METRICS */}
       <IngestionMetricsPanel />
     </div>
   );
