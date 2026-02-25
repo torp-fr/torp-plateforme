@@ -1,12 +1,8 @@
 import React from 'react';
 import { Sparkles, Activity, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { useNavigate } from 'react-router-dom';
 
 export function CockpitHeader() {
-  const navigate = useNavigate();
-
   return (
     <div className="sticky top-0 z-30 backdrop-blur-sm bg-background/80 border-b border-border/50">
       <div className="flex items-center justify-between px-6 py-3 gap-4">
@@ -31,14 +27,6 @@ export function CockpitHeader() {
               APIs Online
             </Badge>
           </div>
-
-          <Button
-            onClick={() => navigate('/analyze')}
-            size="sm"
-            className="bg-primary hover:bg-primary/90"
-          >
-            Créer analyse
-          </Button>
         </div>
       </div>
     </div>
