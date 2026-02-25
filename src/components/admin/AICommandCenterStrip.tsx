@@ -10,6 +10,7 @@ interface CommandState {
   bigDocMode: boolean;
   pipelineLocked: boolean;
   streamMode: boolean;
+  adaptiveLevel: 'FAST' | 'NORMAL' | 'SAFE' | 'CRITICAL';
 }
 
 export function AICommandCenterStrip() {
@@ -20,6 +21,7 @@ export function AICommandCenterStrip() {
     bigDocMode: false,
     pipelineLocked: false,
     streamMode: false,
+    adaptiveLevel: 'NORMAL',
   });
 
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -102,6 +104,13 @@ export function AICommandCenterStrip() {
     window.addEventListener('RAG_STREAM_MODE_ACTIVATED', handleStreamModeActivated);
     window.addEventListener('RAG_STREAM_MODE_CLEARED', handleStreamModeCleared);
 
+    // PHASE 12: Listen for adaptive stream controller updates
+    const handleStreamControllerUpdated = () => {
+      const controller = (window as any).__RAG_STREAM_CONTROLLER__ || {};
+      setState(prev => ({ ...prev, adaptiveLevel: controller.adaptiveLevel || 'NORMAL' }));
+    };
+    window.addEventListener('RAG_STREAM_CONTROLLER_UPDATED', handleStreamControllerUpdated);
+
     // PATCH 5: HEARTBEAT MONITOR - stabilized interval
     // If edge is offline (FALLBACK), use 15s interval to reduce load
     // Otherwise use 5s for responsiveness
@@ -133,6 +142,7 @@ export function AICommandCenterStrip() {
       window.removeEventListener('RAG_PIPELINE_UNLOCKED', handlePipelineUnlocked);
       window.removeEventListener('RAG_STREAM_MODE_ACTIVATED', handleStreamModeActivated);
       window.removeEventListener('RAG_STREAM_MODE_CLEARED', handleStreamModeCleared);
+      window.removeEventListener('RAG_STREAM_CONTROLLER_UPDATED', handleStreamControllerUpdated);
       if (heartbeatIntervalRef.current) {
         clearInterval(heartbeatIntervalRef.current);
       }
@@ -195,6 +205,29 @@ export function AICommandCenterStrip() {
           {state.streamMode && (
             <Badge className="bg-cyan-100 text-cyan-700 border-cyan-200">
               🌊 STREAM MODE
+            </Badge>
+          )}
+
+          {/* PHASE 12: Adaptive Level Badge */}
+          {state.streamMode && (
+            <Badge
+              className={
+                state.adaptiveLevel === 'FAST'
+                  ? 'bg-green-100 text-green-700 border-green-200'
+                  : state.adaptiveLevel === 'NORMAL'
+                    ? 'bg-blue-100 text-blue-700 border-blue-200'
+                    : state.adaptiveLevel === 'SAFE'
+                      ? 'bg-orange-100 text-orange-700 border-orange-200'
+                      : 'bg-red-100 text-red-700 border-red-200'
+              }
+            >
+              {state.adaptiveLevel === 'FAST'
+                ? '🟢 FAST'
+                : state.adaptiveLevel === 'NORMAL'
+                  ? '🟡 NORMAL'
+                  : state.adaptiveLevel === 'SAFE'
+                    ? '🟠 SAFE'
+                    : '🔴 CRITICAL'}
             </Badge>
           )}
 

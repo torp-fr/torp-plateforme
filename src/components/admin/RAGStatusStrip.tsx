@@ -24,6 +24,7 @@ export function RAGStatusStrip() {
   const [bigDocMode, setBigDocMode] = useState(false);
   const [pipelineLocked, setPipelineLocked] = useState(false);
   const [streamMode, setStreamMode] = useState(false);
+  const [adaptiveLevel, setAdaptiveLevel] = useState<'FAST' | 'NORMAL' | 'SAFE' | 'CRITICAL'>('NORMAL');
 
   const fetchStatus = async () => {
     try {
@@ -127,6 +128,13 @@ export function RAGStatusStrip() {
     window.addEventListener('RAG_STREAM_MODE_ACTIVATED', handleStreamModeActivated);
     window.addEventListener('RAG_STREAM_MODE_CLEARED', handleStreamModeCleared);
 
+    // PHASE 12: Listen for adaptive stream controller updates
+    const handleStreamControllerUpdated = () => {
+      const controller = (window as any).__RAG_STREAM_CONTROLLER__ || {};
+      setAdaptiveLevel(controller.adaptiveLevel || 'NORMAL');
+    };
+    window.addEventListener('RAG_STREAM_CONTROLLER_UPDATED', handleStreamControllerUpdated);
+
     return () => {
       clearInterval(interval);
       window.removeEventListener('RAG_OPS_EVENT', handleOpsEvent);
@@ -139,6 +147,7 @@ export function RAGStatusStrip() {
       window.removeEventListener('RAG_PIPELINE_UNLOCKED', handlePipelineUnlocked);
       window.removeEventListener('RAG_STREAM_MODE_ACTIVATED', handleStreamModeActivated);
       window.removeEventListener('RAG_STREAM_MODE_CLEARED', handleStreamModeCleared);
+      window.removeEventListener('RAG_STREAM_CONTROLLER_UPDATED', handleStreamControllerUpdated);
     };
   }, []);
 
@@ -185,18 +194,22 @@ export function RAGStatusStrip() {
                 ? 'bg-red-100'
                 : status.embeddingEngine === 'paused'
                   ? 'bg-amber-100'
-                  : streamMode
-                    ? 'bg-cyan-100'
-                    : 'bg-blue-100'
+                  : adaptiveLevel === 'CRITICAL'
+                    ? 'bg-red-100'
+                    : streamMode
+                      ? 'bg-cyan-100'
+                      : 'bg-blue-100'
             }`}>
               <Zap className={`h-5 w-5 ${
                 pipelineLocked
                   ? 'text-red-600'
                   : status.embeddingEngine === 'paused'
                     ? 'text-amber-600'
-                    : streamMode
-                      ? 'text-cyan-600'
-                      : 'text-blue-600'
+                    : adaptiveLevel === 'CRITICAL'
+                      ? 'text-red-600'
+                      : streamMode
+                        ? 'text-cyan-600'
+                        : 'text-blue-600'
               }`} />
             </div>
             <div>
@@ -208,16 +221,34 @@ export function RAGStatusStrip() {
                     ? 'bg-red-50 text-red-700 border-red-200'
                     : status.embeddingEngine === 'paused'
                       ? 'bg-amber-50 text-amber-700 border-amber-200'
-                      : streamMode
-                        ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
-                        : bigDocMode
-                          ? 'bg-purple-50 text-purple-700 border-purple-200'
-                          : edgeOnline
-                            ? 'bg-blue-50 text-blue-700 border-blue-200'
-                            : 'bg-red-50 text-red-700 border-red-200'
+                      : adaptiveLevel === 'CRITICAL'
+                        ? 'bg-red-50 text-red-700 border-red-200'
+                        : streamMode && adaptiveLevel === 'SAFE'
+                          ? 'bg-orange-50 text-orange-700 border-orange-200'
+                          : streamMode
+                            ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
+                            : bigDocMode
+                              ? 'bg-purple-50 text-purple-700 border-purple-200'
+                              : edgeOnline
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : 'bg-red-50 text-red-700 border-red-200'
                 }
               >
-                {pipelineLocked ? '🔒 Locked' : status.embeddingEngine === 'paused' ? '⏸️ Paused' : streamMode ? '🌊 Streaming' : bigDocMode ? '⚡ Throttled' : edgeOnline ? '✓ Online' : '⚠️ Fallback'}
+                {pipelineLocked
+                  ? '🔒 Locked'
+                  : status.embeddingEngine === 'paused'
+                    ? '⏸️ Paused'
+                    : adaptiveLevel === 'CRITICAL'
+                      ? '🔴 Critical'
+                      : streamMode && adaptiveLevel === 'SAFE'
+                        ? '⚠️ Adaptive Safe'
+                        : streamMode
+                          ? '🌊 Streaming'
+                          : bigDocMode
+                            ? '⚡ Throttled'
+                            : edgeOnline
+                              ? '✓ Online'
+                              : '⚠️ Fallback'}
               </Badge>
             </div>
           </div>
