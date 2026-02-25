@@ -34,7 +34,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import torpLogo from '@/assets/torp-logo-red.png';
+import { BRANDING } from '@/config/branding';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -214,7 +214,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </button>
 
             <Link to={config.dashboardLink} className="flex items-center gap-2">
-              <img src={torpLogo} alt="TORP" className="h-8 w-auto" />
+              <img src={BRANDING.logoPrimary} alt="TORP" className="h-8 w-auto" />
               <span className="font-semibold text-lg hidden sm:inline">TORP</span>
               {config.badge && (
                 <span
