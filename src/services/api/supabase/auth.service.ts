@@ -120,7 +120,7 @@ export class SupabaseAuthService {
       email: data.email,
       password: data.password,
       options: {
-        emailRedirectTo: `${window.location.origin}/dashboard`,
+        emailRedirectTo: 'https://www.torp.fr/dashboard',
         data: {
           name: data.name,
         },
@@ -231,7 +231,7 @@ export class SupabaseAuthService {
     }
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: 'https://www.torp.fr/reset-password',
     });
 
     if (error) {
