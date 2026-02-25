@@ -8,6 +8,7 @@ import { ArrowRight, CheckCircle2, FileSearch, Users, Award, FileText } from "lu
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import heroImage from "@/assets/hero-image.jpg";
+import torpLogo from "@/assets/torp-logo-red.png";
 
 export const Hero = () => {
   const { user } = useApp();
@@ -28,6 +29,12 @@ export const Hero = () => {
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           {/* Left Column - Content */}
           <div className="space-y-8 animate-fade-in">
+            {/* Logo */}
+            <div className="flex items-center gap-3">
+              <img src={torpLogo} alt="TORP" className="h-12 w-auto" />
+              <span className="text-2xl font-bold text-primary">TORP</span>
+            </div>
+
             {/* Headline */}
             <div className="space-y-4">
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight tracking-tight">
