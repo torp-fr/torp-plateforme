@@ -312,6 +312,7 @@ function AnalyticsStatsCards() {
 export function Analytics() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const handleTabChange = (tab: TabType) => setActiveTab(tab);
 
   return (
     <div className="space-y-8">
