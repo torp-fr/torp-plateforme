@@ -9,7 +9,7 @@ interface RAGStatus {
   totalDocuments: number;
   lastIngestionTime: string | null;
   vectorStatus: 'operational' | 'idle' | 'error';
-  embeddingEngine: 'active' | 'idle';
+  embeddingEngine: 'active' | 'idle' | 'paused';
 }
 
 export function RAGStatusStrip() {
@@ -21,6 +21,8 @@ export function RAGStatusStrip() {
   });
   const [loading, setLoading] = useState(true);
   const [edgeOnline, setEdgeOnline] = useState(true);
+  const [bigDocMode, setBigDocMode] = useState(false);
+  const [pipelineLocked, setPipelineLocked] = useState(false);
 
   const fetchStatus = async () => {
     try {
@@ -45,11 +47,15 @@ export function RAGStatusStrip() {
       const isEdgeOnline = !window.__RAG_EDGE_OFFLINE__;
       setEdgeOnline(isEdgeOnline);
 
+      // PHASE 8: Check if embedding is paused
+      const isEmbeddingPaused = Boolean((window as any).__RAG_EMBEDDING_PAUSED__);
+      const embeddingEngine = isEmbeddingPaused ? 'paused' : 'active';
+
       setStatus({
         totalDocuments: count || 0,
         lastIngestionTime: data?.[0]?.created_at || null,
         vectorStatus: count && count > 0 ? 'operational' : 'idle',
-        embeddingEngine: 'active',
+        embeddingEngine,
       });
 
       // Dispatch command center update
@@ -72,10 +78,52 @@ export function RAGStatusStrip() {
     window.addEventListener('RAG_OPS_EVENT', handleOpsEvent);
     window.addEventListener('RAG_LIBRARY_REFRESH', handleOpsEvent);
 
+    // PHASE 8: Listen for embedding pause/resume events
+    const handleEmbeddingPause = () => {
+      console.log('[RAGStatusStrip] Embedding paused');
+      fetchStatus();
+    };
+    const handleEmbeddingResume = () => {
+      console.log('[RAGStatusStrip] Embedding resumed');
+      fetchStatus();
+    };
+    window.addEventListener('RAG_EMBEDDING_PAUSED', handleEmbeddingPause);
+    window.addEventListener('RAG_EMBEDDING_RESUMED', handleEmbeddingResume);
+
+    // PHASE 9: Listen for big document mode events
+    const handleBigDocActivated = () => {
+      console.log('[RAGStatusStrip] Big doc mode activated');
+      setBigDocMode(true);
+    };
+    const handleBigDocCleared = () => {
+      console.log('[RAGStatusStrip] Big doc mode cleared');
+      setBigDocMode(false);
+    };
+    window.addEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocActivated);
+    window.addEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocCleared);
+
+    // PHASE 10: Listen for pipeline lock events
+    const handlePipelineLocked = () => {
+      console.log('[RAGStatusStrip] Pipeline locked');
+      setPipelineLocked(true);
+    };
+    const handlePipelineUnlocked = () => {
+      console.log('[RAGStatusStrip] Pipeline unlocked');
+      setPipelineLocked(false);
+    };
+    window.addEventListener('RAG_PIPELINE_LOCKED', handlePipelineLocked);
+    window.addEventListener('RAG_PIPELINE_UNLOCKED', handlePipelineUnlocked);
+
     return () => {
       clearInterval(interval);
       window.removeEventListener('RAG_OPS_EVENT', handleOpsEvent);
       window.removeEventListener('RAG_LIBRARY_REFRESH', handleOpsEvent);
+      window.removeEventListener('RAG_EMBEDDING_PAUSED', handleEmbeddingPause);
+      window.removeEventListener('RAG_EMBEDDING_RESUMED', handleEmbeddingResume);
+      window.removeEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocActivated);
+      window.removeEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocCleared);
+      window.removeEventListener('RAG_PIPELINE_LOCKED', handlePipelineLocked);
+      window.removeEventListener('RAG_PIPELINE_UNLOCKED', handlePipelineUnlocked);
     };
   }, []);
 
@@ -117,13 +165,38 @@ export function RAGStatusStrip() {
 
           {/* Embedding Engine */}
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
-              <Zap className="h-5 w-5 text-blue-600" />
+            <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
+              pipelineLocked
+                ? 'bg-red-100'
+                : status.embeddingEngine === 'paused'
+                  ? 'bg-amber-100'
+                  : 'bg-blue-100'
+            }`}>
+              <Zap className={`h-5 w-5 ${
+                pipelineLocked
+                  ? 'text-red-600'
+                  : status.embeddingEngine === 'paused'
+                    ? 'text-amber-600'
+                    : 'text-blue-600'
+              }`} />
             </div>
             <div>
               <p className="text-xs font-medium text-muted-foreground">Engine</p>
-              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                {edgeOnline ? '✓ Online' : '⚠️ Fallback'}
+              <Badge
+                variant="outline"
+                className={
+                  pipelineLocked
+                    ? 'bg-red-50 text-red-700 border-red-200'
+                    : status.embeddingEngine === 'paused'
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : bigDocMode
+                        ? 'bg-purple-50 text-purple-700 border-purple-200'
+                        : edgeOnline
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : 'bg-red-50 text-red-700 border-red-200'
+                }
+              >
+                {pipelineLocked ? '🔒 Locked' : status.embeddingEngine === 'paused' ? '⏸️ Paused' : bigDocMode ? '⚡ Throttled' : edgeOnline ? '✓ Online' : '⚠️ Fallback'}
               </Badge>
             </div>
           </div>
