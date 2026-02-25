@@ -26,7 +26,7 @@ export class IngestionStateMachineService {
    * @param to Target state
    * @returns true if transition valid
    */
-  static isValidTransition(
+  isValidTransition(
     from: DocumentIngestionState,
     to: DocumentIngestionState
   ): boolean {
@@ -37,7 +37,7 @@ export class IngestionStateMachineService {
   /**
    * Get allowed next states from current state
    */
-  static getAllowedTransitions(from: DocumentIngestionState): DocumentIngestionState[] {
+  getAllowedTransitions(from: DocumentIngestionState): DocumentIngestionState[] {
     return VALID_TRANSITIONS[from] || [];
   }
 
@@ -45,7 +45,7 @@ export class IngestionStateMachineService {
    * Get the next logical step for a document
    * Used to determine what to do when restarting from a checkpoint
    */
-  static getNextStep(
+  getNextStep(
     currentState: DocumentIngestionState
   ): DocumentIngestionState | null {
     const allowedTransitions = VALID_TRANSITIONS[currentState];
@@ -60,7 +60,7 @@ export class IngestionStateMachineService {
   /**
    * Get progress percentage for UI indicators
    */
-  static getProgressPercent(state: DocumentIngestionState): number {
+  getProgressPercent(state: DocumentIngestionState): number {
     return STATE_PROGRESS_MAP[state] || 0;
   }
 
@@ -80,7 +80,7 @@ export class IngestionStateMachineService {
    * @param stepName Current step description
    * @returns true if transition successful, false if invalid
    */
-  static async transitionTo(
+  async transitionTo(
     documentId: string,
     toState: DocumentIngestionState,
     stepName: string
@@ -160,7 +160,7 @@ export class IngestionStateMachineService {
    * @param errorMessage Human-readable error message
    * @param errorStack Optional stack trace
    */
-  static async markFailed(
+  async markFailed(
     documentId: string,
     reason: IngestionFailureReason,
     errorMessage: string,
@@ -213,7 +213,7 @@ export class IngestionStateMachineService {
    * - ingestion_status, ingestion_progress, last_ingestion_step
    * - ingestion_started_at, ingestion_completed_at, last_ingestion_error
    */
-  static async getStateContext(documentId: string): Promise<IngestionStateContext | null> {
+  async getStateContext(documentId: string): Promise<IngestionStateContext | null> {
     try {
       // Select only existing Supabase columns (minimal fetch)
       const { data: doc, error } = await supabase
@@ -270,7 +270,7 @@ export class IngestionStateMachineService {
   /**
    * Check if document is in terminal state (COMPLETED or FAILED)
    */
-  static isTerminalState(state: DocumentIngestionState): boolean {
+  isTerminalState(state: DocumentIngestionState): boolean {
     return (
       state === DocumentIngestionState.COMPLETED || state === DocumentIngestionState.FAILED
     );
@@ -279,14 +279,14 @@ export class IngestionStateMachineService {
   /**
    * Check if document is retryable (in FAILED state)
    */
-  static isRetryable(state: DocumentIngestionState): boolean {
+  isRetryable(state: DocumentIngestionState): boolean {
     return state === DocumentIngestionState.FAILED;
   }
 
   /**
    * Get human-readable state name
    */
-  static getStateName(state: DocumentIngestionState): string {
+  getStateName(state: DocumentIngestionState): string {
     const names: Record<DocumentIngestionState, string> = {
       [DocumentIngestionState.UPLOADED]: 'Uploaded',
       [DocumentIngestionState.EXTRACTING]: 'Extracting text...',
@@ -302,7 +302,7 @@ export class IngestionStateMachineService {
   /**
    * Get human-readable failure reason
    */
-  static getFailureReasonName(reason: IngestionFailureReason): string {
+  getFailureReasonName(reason: IngestionFailureReason): string {
     const names: Record<IngestionFailureReason, string> = {
       [IngestionFailureReason.PDF_PARSE_ERROR]: 'PDF parsing error',
       [IngestionFailureReason.EXTRACTION_TIMEOUT]: 'Extraction timed out',
