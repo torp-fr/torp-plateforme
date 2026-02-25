@@ -5,8 +5,9 @@
  */
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { useApp } from '@/context/AppContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -28,6 +29,7 @@ import {
 
 export function LandingPage() {
   const navigate = useNavigate();
+  const { user } = useApp();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const features = [
@@ -129,6 +131,13 @@ export function LandingPage() {
           </nav>
 
           <div className="hidden md:flex items-center gap-4">
+            {!user && (
+              <Link to="/login">
+                <Button variant="ghost" size="sm">
+                  Connexion
+                </Button>
+              </Link>
+            )}
             <Button
               onClick={() => navigate('/quote')}
               className="gradient-primary text-primary-foreground border-0 font-display"
@@ -154,7 +163,14 @@ export function LandingPage() {
             <a href="#benefits" className="block text-sm text-muted-foreground font-medium">
               Avantages
             </a>
-            <div className="pt-4 border-t border-border">
+            <div className="pt-4 border-t border-border space-y-3">
+              {!user && (
+                <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="outline" size="sm" className="w-full">
+                    Connexion
+                  </Button>
+                </Link>
+              )}
               <Button
                 onClick={() => navigate('/quote')}
                 className="w-full gradient-primary text-primary-foreground border-0"

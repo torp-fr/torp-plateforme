@@ -69,6 +69,23 @@ export class OpenAIService {
       system: systemPrompt + ' Return only valid JSON, no markdown or explanations.',
     });
   }
+
+  /**
+   * Generate embedding via secure Edge Function
+   * Returns the embedding vector (1536 dimensions for text-embedding-3-small)
+   */
+  async generateEmbedding(text: string): Promise<{ data: number[] | null; error?: Error | null }> {
+    try {
+      const embedding = await secureAI.generateEmbedding(text, 'text-embedding-3-small');
+      return { data: embedding };
+    } catch (error) {
+      console.error('[OpenAIService] Embedding generation failed:', error);
+      return {
+        data: null,
+        error: error instanceof Error ? error : new Error(String(error))
+      };
+    }
+  }
 }
 
 export const openAIService = new OpenAIService();

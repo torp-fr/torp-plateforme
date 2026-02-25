@@ -1,24 +1,15 @@
 /**
  * Service Supabase - Gestion données enrichies, CCF, analyses
- * Migre localStorage → Supabase pgvector
+ * REFACTORED: Uses centralized Supabase client from /lib/supabase.ts
+ *
+ * ⚠️ SINGLE SOURCE OF TRUTH
+ * This service does NOT instantiate Supabase.
+ * It imports the centralized client instead.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import type { CCFData } from '@/components/guided-ccf/GuidedCCF';
 import type { EnrichedClientData } from '@/types/enrichment';
-
-// ============================================================================
-// CLIENT SUPABASE
-// ============================================================================
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.warn('⚠️ Supabase not configured');
-}
-
-const supabase = createClient(SUPABASE_URL || '', SUPABASE_KEY || '');
 
 // ============================================================================
 // TYPES
@@ -274,6 +265,17 @@ export async function uploadQuotePDF(
   uploadedBy: string
 ): Promise<string | null> {
   try {
+    // Verify session exists before attempting upload
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      console.error('❌ [uploadQuotePDF] Session check error:', sessionError);
+      throw new Error('Failed to verify session');
+    }
+    if (!session) {
+      throw new Error('No active session - please login and retry');
+    }
+    console.log('✅ [uploadQuotePDF] Session verified:', session.user?.id);
+
     // Sanitize filename - remove special characters that Supabase Storage rejects
     const sanitizedName = file.name
       .replace(/[^a-zA-Z0-9._-]/g, '_') // Replace special chars with underscore
@@ -283,28 +285,59 @@ export async function uploadQuotePDF(
     // Upload fichier à Supabase Storage
     const filePath = `ccf/${ccfId}/${Date.now()}_${sanitizedName}`;
 
-    console.log('🔄 [uploadQuotePDF] Uploading to storage:', filePath);
+    console.log('🔄 [uploadQuotePDF] Starting file upload...', {
+      bucket: 'quote-uploads',
+      filePath,
+      fileSize: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
+      fileType: file.type,
+    });
 
-    const { error: uploadError } = await supabase.storage
+    const uploadStartTime = performance.now();
+
+    // Upload with 10-second timeout protection
+    const uploadPromise = supabase.storage
       .from('quote-uploads')
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: false,
       });
 
+    const timeoutPromise = new Promise<any>((_, reject) =>
+      setTimeout(
+        () => reject(new Error('Upload timeout - request took longer than 10 seconds')),
+        10000
+      )
+    );
+
+    const { error: uploadError } = await Promise.race([uploadPromise, timeoutPromise]);
+    const uploadDuration = performance.now() - uploadStartTime;
+
     if (uploadError) {
-      console.error('❌ [uploadQuotePDF] Storage upload error:', uploadError);
+      console.error('❌ [uploadQuotePDF] Storage upload error:', {
+        message: uploadError.message,
+        code: uploadError.statusCode,
+        durationMs: uploadDuration.toFixed(0),
+      });
       throw new Error(`Storage error: ${uploadError.message}`);
     }
 
-    console.log('✅ [uploadQuotePDF] File uploaded to storage');
+    console.log('✅ [uploadQuotePDF] File uploaded to storage', {
+      durationMs: uploadDuration.toFixed(0),
+      path: filePath,
+    });
 
-    // Créer enregistrement DB
+    // Get public URL for the file
     const { data: urlData } = supabase.storage
       .from('quote-uploads')
       .getPublicUrl(filePath);
 
+    if (!urlData?.publicUrl) {
+      throw new Error('Failed to generate public URL for uploaded file');
+    }
+
     console.log('🔄 [uploadQuotePDF] Creating database record...');
+
+    const dbStartTime = performance.now();
 
     const { data: record, error: dbError } = await supabase
       .from('quote_uploads')
@@ -314,7 +347,7 @@ export async function uploadQuotePDF(
           filename: file.name,
           file_size: file.size,
           file_path: filePath,
-          file_url: urlData?.publicUrl,
+          file_url: urlData.publicUrl,
           uploaded_by: uploadedBy,
           processing_status: 'pending',
         },
@@ -322,15 +355,38 @@ export async function uploadQuotePDF(
       .select()
       .single();
 
+    const dbDuration = performance.now() - dbStartTime;
+
     if (dbError) {
-      console.error('❌ [uploadQuotePDF] DB insert error:', dbError);
+      console.error('❌ [uploadQuotePDF] DB insert error:', {
+        message: dbError.message,
+        code: dbError.code,
+        durationMs: dbDuration.toFixed(0),
+      });
+      // Clean up uploaded file if database insert fails
+      try {
+        await supabase.storage
+          .from('quote-uploads')
+          .remove([filePath]);
+      } catch (cleanupError) {
+        console.error('⚠️  [uploadQuotePDF] Failed to clean up file after DB error:', cleanupError);
+      }
       throw new Error(`Database error: ${dbError.message}`);
     }
 
-    console.log('✅ [uploadQuotePDF] Quote uploaded successfully:', record.id);
+    console.log('✅ [uploadQuotePDF] Quote uploaded successfully', {
+      id: record.id,
+      uploadDurationMs: uploadDuration.toFixed(0),
+      dbDurationMs: dbDuration.toFixed(0),
+      totalDurationMs: (uploadDuration + dbDuration).toFixed(0),
+    });
+
     return record.id;
   } catch (error) {
-    console.error('❌ [uploadQuotePDF] Upload error:', error);
+    console.error('❌ [uploadQuotePDF] Upload failed:', {
+      error: error instanceof Error ? error.message : String(error),
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+    });
     throw error; // Re-throw so caller can handle
   }
 }
@@ -455,5 +511,8 @@ export async function migrateFromLocalStorage(): Promise<boolean> {
     return false;
   }
 }
+
+// Re-export centralized client for backwards compatibility
+export { supabase };
 
 export default supabase;

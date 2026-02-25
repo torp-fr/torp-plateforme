@@ -9,8 +9,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, FileText, Clock, Shield, CheckCircle, Home, Zap, Droplet, Paintbrush, Download, Loader2 } from 'lucide-react';
-import { AppLayout } from '@/components/layout';
 import { devisService } from '@/services/api/supabase/devis.service';
+import type { DevisMetadata } from '@/services/api/supabase/devis.service';
 
 const projectTypes = [
   { id: 'plomberie', label: 'Plomberie', icon: Droplet },
@@ -95,8 +95,72 @@ export default function Analyze() {
     }
   }, [handleFileUpload]);
 
+  // PHASE 34.4: Upload file and move to Step 2 (new clean architecture)
+  const handleContinueToStep2 = async () => {
+    console.log('[PHASE 34.4] handleContinueToStep2 called');
+
+    if (!uploadedFile || !user) {
+      console.error('[PHASE 34.4] Missing file or user');
+      toast({
+        title: 'Erreur',
+        description: 'Fichier manquant ou utilisateur non authentifié',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    try {
+      setIsAnalyzing(true);
+      setAnalysisProgress(['Upload du devis en cours...']);
+
+      console.log('[PHASE 34.4] Uploading file:', uploadedFile.name);
+
+      // Upload and get devisId
+      const uploadResult = await devisService.uploadDevis(
+        user.id,
+        uploadedFile,
+        projectData.name || 'Sans titre'
+      );
+
+      console.log('[PHASE 34.4] Upload complete, devisId:', uploadResult.id);
+
+      // Store devisId and move to Step 2
+      setCurrentDevisId(uploadResult.id);
+      setAnalysisProgress(prev => [...prev, 'Devis uploadé avec succès!']);
+
+      // Small delay for UX feedback
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      setIsAnalyzing(false);
+      setStep(2);
+    } catch (error) {
+      console.error('[PHASE 34.4] Upload error:', error);
+      setIsAnalyzing(false);
+      toast({
+        title: 'Erreur d\'upload',
+        description: error instanceof Error ? error.message : 'Une erreur est survenue',
+        variant: 'destructive'
+      });
+    }
+  };
+
   const handleAnalyze = async () => {
-    if (!uploadedFile || !projectData.name || !projectData.type) {
+    console.log('[PHASE 34.4] handleAnalyze called - CLEAN ARCHITECTURE');
+    console.log('[PHASE 34.4] Current state:', {
+      devisId: currentDevisId,
+      projectName: projectData.name,
+      projectType: projectData.type,
+      isAnalyzing,
+      userExists: !!user,
+    });
+
+    // PHASE 34.4: Validation - NO LONGER check uploadedFile (it's lost after navigation)
+    if (!projectData.name || !projectData.type) {
+      console.warn('[PHASE 34.4] Validation failed - missing required fields');
+      console.log('[PHASE 34.4] Validation details:', {
+        projectName: !!projectData.name,
+        projectType: !!projectData.type,
+      });
       toast({
         title: 'Informations manquantes',
         description: 'Veuillez remplir tous les champs obligatoires.',
@@ -105,15 +169,26 @@ export default function Analyze() {
       return;
     }
 
+    // PHASE 34.4: Verify devisId exists (the file was uploaded in Step 1)
+    if (!currentDevisId) {
+      console.error('[PHASE 34.4] No devisId found - cannot analyze');
+      toast({
+        title: 'Erreur',
+        description: 'Devis non trouvé. Veuillez retourner à l\'étape 1.',
+        variant: 'destructive'
+      });
+      setStep(1);
+      return;
+    }
+
     try {
+      console.log('[PHASE 34.4] Validation passed - proceeding with analysis');
       setIsAnalyzing(true);
       setAnalysisProgress(['Préparation de l\'analyse...']);
 
       // Check if user is authenticated
-      console.log('[Analyze] User check:', { hasUser: !!user, userId: user?.id, email: user?.email });
-
       if (!user) {
-        console.error('[Analyze] No user found in context');
+        console.log('[PHASE 34.4] User not authenticated - redirecting to login');
         toast({
           title: 'Non authentifié',
           description: 'Veuillez vous connecter pour analyser un devis.',
@@ -123,198 +198,53 @@ export default function Analyze() {
         return;
       }
 
-      console.log('[Analyze] Starting upload with user:', user.id);
-      console.log('[Analyze] File:', { name: uploadedFile.name, size: uploadedFile.size, type: uploadedFile.type });
-      console.log('[Analyze] Project data:', projectData);
-      console.log('[Analyze] devisService:', devisService);
-      console.log('[Analyze] About to call uploadDevis...');
+      console.log('[PHASE 34.4] User authenticated:', user.id);
+      console.log('[PHASE 34.4] Using devisId:', currentDevisId);
 
-      // Upload devis and start analysis
-      setAnalysisProgress(prev => [...prev, 'Upload du devis en cours...']);
-      console.log('[Analyze] Calling uploadDevis NOW...');
+      // Build metadata from form data
+      const metadata: DevisMetadata = {
+        nom: projectData.name,
+        typeTravaux: projectData.type,
+        budget: projectData.budget,
+        surface: projectData.surface ? parseFloat(projectData.surface) : undefined,
+        description: projectData.description,
+        delaiSouhaite: projectData.startDate,
+        urgence: projectData.urgency,
+        contraintes: projectData.constraints,
+        userType: userType as 'B2C' | 'B2B' | 'admin',
+      };
 
-      // Add timeout to avoid infinite wait
-      const uploadPromise = devisService.uploadDevis(
-        user.id,
-        uploadedFile,
-        projectData.name,
-        {
-          typeTravaux: projectData.type,
-          budget: projectData.budget,
-          surface: projectData.surface ? parseFloat(projectData.surface) : undefined,
-          description: projectData.description,
-          delaiSouhaite: projectData.startDate,
-          urgence: projectData.urgency,
-          contraintes: projectData.constraints,
-          userType: userType, // Pass user type for differentiated analysis
-        }
+      console.log('[PHASE 34.4] Calling devisService.analyzeDevisById()');
+      setAnalysisProgress(prev => [...prev, 'Analyse du devis en cours...']);
+
+      // PHASE 34.4: Call analyzeDevisById with devisId (no file re-upload)
+      await devisService.analyzeDevisById(
+        currentDevisId,
+        undefined, // No file - it's already in storage
+        metadata
       );
 
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Upload timeout after 30 seconds')), 30000);
-      });
+      console.log('[PHASE 34.4] Analysis complete for devisId:', currentDevisId);
+      setAnalysisProgress(prev => [...prev, 'Analyse terminée avec succès', 'Redirection vers le résultat...']);
 
-      const devis = await Promise.race([uploadPromise, timeoutPromise]);
+      // Small delay for UX feedback
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      setCurrentDevisId(devis.id);
-      setAnalysisProgress(prev => [...prev, 'Devis uploadé avec succès', 'Analyse TORP en cours...']);
+      setAnalysisProgress(prev => [...prev, 'Redirection en cours...']);
+      setIsAnalyzing(false);
 
-      // Poll for analysis completion
-      const checkAnalysisStatus = async () => {
-        try {
-          // Use direct REST API to avoid SDK blocking issues
-          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-          const supabaseAuthKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
-          const sessionData = localStorage.getItem(supabaseAuthKey);
-
-          let accessToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
-          if (sessionData) {
-            try {
-              const session = JSON.parse(sessionData);
-              accessToken = session.access_token;
-            } catch (e) {
-              console.error('Failed to parse session:', e);
-            }
-          }
-
-          const queryUrl = `${supabaseUrl}/rest/v1/devis?id=eq.${devis.id}&select=*`;
-          const response = await fetch(queryUrl, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-            },
-          });
-
-          if (!response.ok) {
-            console.error('Error checking analysis status:', response.status);
-            return null;
-          }
-
-          const dataArray = await response.json();
-          return dataArray[0] || null;
-        } catch (error) {
-          console.error('Error checking analysis status:', error);
-          return null;
-        }
-      };
-
-      // Poll every 3 seconds with error tracking
-      let pollErrorCount = 0;
-      let analyzedConfirmCount = 0;
-      let pollIntervalCleared = false;
-
-      const pollInterval = setInterval(async () => {
-        if (pollIntervalCleared) return;
-
-        const devisData = await checkAnalysisStatus();
-
-        if (!devisData) {
-          pollErrorCount++;
-          console.warn(`[Analyze] Polling error ${pollErrorCount}/10`);
-
-          // After 10 consecutive errors (30 seconds), show warning but continue polling
-          if (pollErrorCount >= 10 && pollErrorCount % 10 === 0) {
-            console.error('[Analyze] Multiple polling errors, checking if still analyzing...');
-            setAnalysisProgress(prev => {
-              const errMsg = 'Vérification du statut en cours...';
-              if (!prev.includes(errMsg)) {
-                return [...prev, errMsg];
-              }
-              return prev;
-            });
-          }
-          return;
-        }
-
-        // Reset error count on successful poll
-        pollErrorCount = 0;
-
-        console.log('[Analyze] Polling status:', devisData.status, '| Score:', devisData.score_total);
-
-        // Update progress based on status
-        if (devisData.status === 'analyzing') {
-          analyzedConfirmCount = 0; // Reset confirmation count
-          // Show random progress step
-          const steps = [
-            'Extraction des données du devis...',
-            'Analyse de l\'entreprise (250 pts)...',
-            'Vérification des prix du marché (300 pts)...',
-            'Analyse de la complétude technique (200 pts)...',
-            'Vérification de la conformité (150 pts)...',
-            'Analyse des délais (100 pts)...',
-            'Génération de la synthèse finale...'
-          ];
-          const randomStep = steps[Math.floor(Math.random() * steps.length)];
-          setAnalysisProgress(prev => {
-            if (!prev.includes(randomStep)) {
-              return [...prev, randomStep];
-            }
-            return prev;
-          });
-        } else if (devisData.status === 'analyzed') {
-          analyzedConfirmCount++;
-          console.log(`[Analyze] Status is 'analyzed' (confirmation ${analyzedConfirmCount}/2)`);
-
-          // Wait for 2 confirmations to avoid race conditions
-          if (analyzedConfirmCount >= 2) {
-            console.log('[Analyze] Analysis CONFIRMED complete! Navigating to results...');
-            pollIntervalCleared = true;
-            clearInterval(pollInterval);
-            setAnalysisProgress(prev => [...prev, 'Analyse terminée !']);
-
-            // Navigate directly to results page - let it load the data
-            setIsAnalyzing(false);
-
-            // Toast supprimé - la navigation vers les résultats est suffisante
-
-            // Use a small delay to ensure state is updated
-            setTimeout(() => {
-              console.log('[Analyze] Navigating NOW to /results?devisId=' + devis.id);
-              navigate(`/results?devisId=${devis.id}`);
-            }, 100);
-          }
-        } else if (devisData.status === 'uploaded') {
-          analyzedConfirmCount = 0;
-          // Still waiting for analysis to start
-          setAnalysisProgress(prev => {
-            const lastMsg = 'En attente de traitement...';
-            if (!prev.includes(lastMsg)) {
-              return [...prev, lastMsg];
-            }
-            return prev;
-          });
-        }
-      }, 3000);
-
-      // Timeout after 10 minutes (analysis can take 6+ minutes)
-      const timeoutId = setTimeout(() => {
-        if (!pollIntervalCleared) {
-          pollIntervalCleared = true;
-          clearInterval(pollInterval);
-          setIsAnalyzing(false);
-          toast({
-            title: 'Délai d\'analyse dépassé',
-            description: 'L\'analyse prend plus de temps que prévu. Consultez votre dashboard.',
-            variant: 'destructive'
-          });
-          navigate('/dashboard');
-        }
-      }, 600000); // 10 minutes instead of 5
-
-      // Store cleanup function
-      (window as any).__analyzeCleanup = () => {
-        pollIntervalCleared = true;
-        clearInterval(pollInterval);
-        clearTimeout(timeoutId);
-      };
+      // PHASE 34.4: Navigate to devis details page (analysis result)
+      setTimeout(() => {
+        console.log('[PHASE 34.4] Navigating to devis page:', currentDevisId);
+        navigate(`/devis/${currentDevisId}`);
+      }, 500);
 
     } catch (error) {
-      console.error('[Analyze] ===== CATCH BLOCK REACHED =====');
-      console.error('[Analyze] Analysis error:', error);
-      console.error('[Analyze] Error type:', typeof error);
-      console.error('[Analyze] Error message:', error instanceof Error ? error.message : String(error));
-      console.error('[Analyze] Error stack:', error instanceof Error ? error.stack : 'No stack');
+      console.error('[PHASE 34.4] ===== ERROR IN ANALYSIS =====');
+      console.error('[PHASE 34.4] Error object:', error);
+      console.error('[PHASE 34.4] Error type:', typeof error);
+      console.error('[PHASE 34.4] Error message:', error instanceof Error ? error.message : String(error));
+      console.error('[PHASE 34.4] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
 
       setIsAnalyzing(false);
       toast({
@@ -364,233 +294,231 @@ export default function Analyze() {
   }
 
   return (
-    <AppLayout>
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-foreground">
-            Analyser votre devis BTP
-          </h1>
-          <p className="text-xl text-muted-foreground">
-            Obtenez un score de confiance en quelques clics
-          </p>
-        </div>
-
-          {step === 1 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Upload className="w-5 h-5" />
-                  Étape 1 : Téléverser votre devis
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div
-                  className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-primary/50 hover:bg-accent/50 transition-colors cursor-pointer"
-                  onDrop={handleDrop}
-                  onDragOver={(e) => e.preventDefault()}
-                  onClick={() => document.getElementById('file-input')?.click()}
-                >
-                  {uploadedFile ? (
-                    <div className="space-y-4">
-                      <FileText className="w-16 h-16 text-primary mx-auto" />
-                      <div>
-                        <h3 className="text-xl font-semibold text-foreground mb-2">
-                          Fichier sélectionné
-                        </h3>
-                        <p className="text-muted-foreground">{uploadedFile.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <Upload className="w-16 h-16 text-muted-foreground mx-auto" />
-                      <div>
-                        <h3 className="text-xl font-semibold text-foreground mb-2">
-                          Glissez votre devis ici
-                        </h3>
-                        <p className="text-muted-foreground mb-4">
-                          ou cliquez pour sélectionner un fichier
-                        </p>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Formats acceptés : PDF, JPG, PNG (max 10MB)
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  <input
-                    id="file-input"
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                </div>
-
-                <div className="mt-8 grid md:grid-cols-3 gap-6">
-                  <div className="flex items-center space-x-3">
-                    <Shield className="w-6 h-6 text-primary" />
-                    <span className="text-muted-foreground">100% sécurisé et confidentiel</span>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <Clock className="w-6 h-6 text-primary" />
-                    <span className="text-muted-foreground">Analyse en 3 minutes</span>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <CheckCircle className="w-6 h-6 text-primary" />
-                    <span className="text-muted-foreground">Rapport détaillé instantané</span>
-                  </div>
-                </div>
-
-                {uploadedFile && (
-                <div className="mt-8 text-center">
-                  <Button onClick={() => setStep(2)} size="lg">
-                    Continuer vers les détails du projet
-                  </Button>
-                </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {step === 2 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
-                  Étape 2 : Détails du projet
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="mb-6 p-4 bg-info/10 border border-info/20 rounded-lg">
-                  <h4 className="font-semibold text-info mb-2">Analyse de cohérence projet/devis</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Ces informations permettent à notre IA de vérifier la cohérence entre vos besoins, 
-                    le projet proposé et le prix du devis pour détecter d'éventuelles incohérences.
-                  </p>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="project-name">Nom du projet *</Label>
-                    <Input
-                      id="project-name"
-                      placeholder="Ex: Rénovation salle de bain"
-                      value={projectData.name}
-                      onChange={(e) => setProjectData({...projectData, name: e.target.value})}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Type de projet *</Label>
-                    <Select
-                      value={projectData.type}
-                      onValueChange={(value) => setProjectData({...projectData, type: value})}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner le type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {projectTypes.map(type => (
-                          <SelectItem key={type.id} value={type.id}>
-                            {type.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Budget estimé prévu</Label>
-                    <Select
-                      value={projectData.budget}
-                      onValueChange={(value) => setProjectData({...projectData, budget: value})}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Votre budget initial" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="0-5000">Moins de 5 000 €</SelectItem>
-                        <SelectItem value="5000-15000">5 000 € - 15 000 €</SelectItem>
-                        <SelectItem value="15000-50000">15 000 € - 50 000 €</SelectItem>
-                        <SelectItem value="50000-100000">50 000 € - 100 000 €</SelectItem>
-                        <SelectItem value="100000+">Plus de 100 000 €</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Surface concernée (m²)</Label>
-                    <Input
-                      type="number"
-                      placeholder="Ex: 15"
-                      value={projectData.surface || ''}
-                      onChange={(e) => setProjectData({...projectData, surface: e.target.value})}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Délai souhaité de début</Label>
-                    <Input
-                      type="date"
-                      value={projectData.startDate}
-                      onChange={(e) => setProjectData({...projectData, startDate: e.target.value})}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Urgence du projet</Label>
-                    <Select
-                      value={projectData.urgency || ''}
-                      onValueChange={(value) => setProjectData({...projectData, urgency: value})}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Niveau d'urgence" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="faible">Pas pressé</SelectItem>
-                        <SelectItem value="moyenne">Dans les 3-6 mois</SelectItem>
-                        <SelectItem value="forte">Urgent (&lt; 3 mois)</SelectItem>
-                        <SelectItem value="critique">Très urgent (&lt; 1 mois)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Description de vos besoins</Label>
-                  <Textarea
-                    placeholder="Décrivez précisément vos attentes et besoins pour ce projet..."
-                    value={projectData.description}
-                    onChange={(e) => setProjectData({...projectData, description: e.target.value})}
-                    rows={4}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Contraintes particulières</Label>
-                  <Textarea
-                    placeholder="Contraintes techniques, budgétaires, délais spécifiques..."
-                    value={projectData.constraints || ''}
-                    onChange={(e) => setProjectData({...projectData, constraints: e.target.value})}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="flex gap-4 pt-6">
-                  <Button variant="outline" onClick={() => setStep(1)}>
-                    Retour
-                  </Button>
-                  <Button onClick={handleAnalyze} size="lg" className="flex-1">
-                    Lancer l'analyse TORP
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-        )}
+    <>
+      <div className="mb-8">
+        <h1 className="text-4xl font-bold text-foreground">
+          Analyser votre devis BTP
+        </h1>
+        <p className="text-xl text-muted-foreground">
+          Obtenez un score de confiance en quelques clics
+        </p>
       </div>
-    </AppLayout>
+
+        {step === 1 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Upload className="w-5 h-5" />
+                Étape 1 : Téléverser votre devis
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div
+                className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-primary/50 hover:bg-accent/50 transition-colors cursor-pointer"
+                onDrop={handleDrop}
+                onDragOver={(e) => e.preventDefault()}
+                onClick={() => document.getElementById('file-input')?.click()}
+              >
+                {uploadedFile ? (
+                  <div className="space-y-4">
+                    <FileText className="w-16 h-16 text-primary mx-auto" />
+                    <div>
+                      <h3 className="text-xl font-semibold text-foreground mb-2">
+                        Fichier sélectionné
+                      </h3>
+                      <p className="text-muted-foreground">{uploadedFile.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <Upload className="w-16 h-16 text-muted-foreground mx-auto" />
+                    <div>
+                      <h3 className="text-xl font-semibold text-foreground mb-2">
+                        Glissez votre devis ici
+                      </h3>
+                      <p className="text-muted-foreground mb-4">
+                        ou cliquez pour sélectionner un fichier
+                      </p>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Formats acceptés : PDF, JPG, PNG (max 10MB)
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                <input
+                  id="file-input"
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </div>
+
+              <div className="mt-8 grid md:grid-cols-3 gap-6">
+                <div className="flex items-center space-x-3">
+                  <Shield className="w-6 h-6 text-primary" />
+                  <span className="text-muted-foreground">100% sécurisé et confidentiel</span>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Clock className="w-6 h-6 text-primary" />
+                  <span className="text-muted-foreground">Analyse en 3 minutes</span>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <CheckCircle className="w-6 h-6 text-primary" />
+                  <span className="text-muted-foreground">Rapport détaillé instantané</span>
+                </div>
+              </div>
+
+              {uploadedFile && (
+              <div className="mt-8 text-center">
+                <Button onClick={handleContinueToStep2} size="lg" disabled={isAnalyzing}>
+                  Continuer vers les détails du projet
+                </Button>
+              </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {step === 2 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                Étape 2 : Détails du projet
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="mb-6 p-4 bg-info/10 border border-info/20 rounded-lg">
+                <h4 className="font-semibold text-info mb-2">Analyse de cohérence projet/devis</h4>
+                <p className="text-sm text-muted-foreground">
+                  Ces informations permettent à notre IA de vérifier la cohérence entre vos besoins, 
+                  le projet proposé et le prix du devis pour détecter d'éventuelles incohérences.
+                </p>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="project-name">Nom du projet *</Label>
+                  <Input
+                    id="project-name"
+                    placeholder="Ex: Rénovation salle de bain"
+                    value={projectData.name}
+                    onChange={(e) => setProjectData({...projectData, name: e.target.value})}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Type de projet *</Label>
+                  <Select
+                    value={projectData.type}
+                    onValueChange={(value) => setProjectData({...projectData, type: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner le type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {projectTypes.map(type => (
+                        <SelectItem key={type.id} value={type.id}>
+                          {type.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Budget estimé prévu</Label>
+                  <Select
+                    value={projectData.budget}
+                    onValueChange={(value) => setProjectData({...projectData, budget: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Votre budget initial" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0-5000">Moins de 5 000 €</SelectItem>
+                      <SelectItem value="5000-15000">5 000 € - 15 000 €</SelectItem>
+                      <SelectItem value="15000-50000">15 000 € - 50 000 €</SelectItem>
+                      <SelectItem value="50000-100000">50 000 € - 100 000 €</SelectItem>
+                      <SelectItem value="100000+">Plus de 100 000 €</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Surface concernée (m²)</Label>
+                  <Input
+                    type="number"
+                    placeholder="Ex: 15"
+                    value={projectData.surface || ''}
+                    onChange={(e) => setProjectData({...projectData, surface: e.target.value})}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Délai souhaité de début</Label>
+                  <Input
+                    type="date"
+                    value={projectData.startDate}
+                    onChange={(e) => setProjectData({...projectData, startDate: e.target.value})}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Urgence du projet</Label>
+                  <Select
+                    value={projectData.urgency || ''}
+                    onValueChange={(value) => setProjectData({...projectData, urgency: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Niveau d'urgence" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="faible">Pas pressé</SelectItem>
+                      <SelectItem value="moyenne">Dans les 3-6 mois</SelectItem>
+                      <SelectItem value="forte">Urgent (&lt; 3 mois)</SelectItem>
+                      <SelectItem value="critique">Très urgent (&lt; 1 mois)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Description de vos besoins</Label>
+                <Textarea
+                  placeholder="Décrivez précisément vos attentes et besoins pour ce projet..."
+                  value={projectData.description}
+                  onChange={(e) => setProjectData({...projectData, description: e.target.value})}
+                  rows={4}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Contraintes particulières</Label>
+                <Textarea
+                  placeholder="Contraintes techniques, budgétaires, délais spécifiques..."
+                  value={projectData.constraints || ''}
+                  onChange={(e) => setProjectData({...projectData, constraints: e.target.value})}
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex gap-4 pt-6">
+                <Button variant="outline" onClick={() => setStep(1)}>
+                  Retour
+                </Button>
+                <Button onClick={handleAnalyze} size="lg" className="flex-1">
+                  Lancer l'analyse TORP
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+      )}
+    </>
   );
 }

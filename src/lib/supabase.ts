@@ -1,6 +1,29 @@
 /**
  * Supabase Client Configuration
  * Centralized Supabase client instance
+ *
+ * ⚠️  ARCHITECTURE LOCKDOWN (PHASE 31.6)
+ *
+ * This is the ONLY Supabase client instantiation allowed in the entire codebase.
+ *
+ * CRITICAL RULE:
+ *   Do NOT create another createClient() anywhere else.
+ *   All database access MUST import this instance: import { supabase } from '@/lib/supabase'
+ *
+ * ENFORCEMENT:
+ *   • Automated audit: scripts/architecture-lock-check.mjs
+ *   • ESLint rule: no-restricted-imports (blocks @supabase/supabase-js)
+ *   • Pre-commit hook: Verifies no duplicate createClient() in codebase
+ *
+ * VIOLATION IMPACT:
+ *   Creating a duplicate client causes:
+ *   ❌ Session state inconsistency
+ *   ❌ Connection pool duplication
+ *   ❌ Memory leaks
+ *   ❌ Auth context loss
+ *   ❌ Real-time subscription conflicts
+ *
+ * If you need to use Supabase, import from here. Period.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -43,6 +66,13 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
       'x-application-name': 'torp-web-app',
     },
   },
+});
+
+// DEBUG: Verify supabase client URL for Edge Function invoke debugging
+console.log('[SUPABASE CLIENT INIT]', {
+  supabaseUrl,
+  hasAnonKey: !!supabaseAnonKey,
+  clientUrl: supabase.supabaseUrl,
 });
 
 /**

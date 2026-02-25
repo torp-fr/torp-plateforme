@@ -1,0 +1,141 @@
+/**
+ * System Health Page - Admin Analytics
+ * Displays system health metrics and monitoring
+ * Phase 32.2: Real data from Supabase
+ */
+
+import React, { useEffect, useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { AlertCircle, Loader2 } from 'lucide-react';
+import { analyticsService } from '@/services/api/analytics.service';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { useToast } from '@/hooks/use-toast';
+
+interface HealthStatus {
+  database: string;
+  api: string;
+  storage: string;
+  timestamp: string;
+}
+
+export function SystemHealthPage() {
+  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchHealth = async () => {
+      try {
+        setIsLoading(true);
+        const healthData = await analyticsService.getPlatformHealth();
+        setHealth(healthData);
+        setError(null);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to fetch health metrics';
+        setError(message);
+        toast({
+          title: 'Erreur',
+          description: message,
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchHealth();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchHealth, 30000);
+    return () => clearInterval(interval);
+  }, [toast]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error || !health) {
+    return (
+      <EmptyState
+        title="Impossible de charger les métriques"
+        description={error || 'Les données de santé système ne sont pas disponibles'}
+      />
+    );
+  }
+
+  const getStatusColor = (status: string) => {
+    return status === 'operational'
+      ? 'bg-green-100 text-green-800'
+      : 'bg-red-100 text-red-800';
+  };
+
+  const getStatusLabel = (status: string) => {
+    return status === 'operational' ? '✓ Opérationnel' : '✗ Erreur';
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-foreground">System Health</h1>
+        <p className="text-muted-foreground">Monitor system status and performance metrics</p>
+      </div>
+
+      {/* Status Overview */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5" />
+            Status Overview
+          </CardTitle>
+          <CardDescription>
+            Last updated: {new Date(health.timestamp).toLocaleString()}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Database</span>
+              <span
+                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(health.database)}`}
+              >
+                {getStatusLabel(health.database)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">API Server</span>
+              <span
+                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(health.api)}`}
+              >
+                {getStatusLabel(health.api)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">File Storage</span>
+              <span
+                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(health.storage)}`}
+              >
+                {getStatusLabel(health.storage)}
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Info Note */}
+      <Card>
+        <CardContent className="p-6">
+          <p className="text-sm text-muted-foreground">
+            System health is monitored continuously. Detailed metrics appear here when available.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export default SystemHealthPage;

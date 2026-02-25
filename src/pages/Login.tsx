@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,8 +16,24 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const { setUser } = useApp();
+  const { setUser, user, isLoading: isAuthLoading } = useApp();
   const { toast } = useToast();
+
+  // Redirect if session already exists (e.g., after page refresh)
+  useEffect(() => {
+    if (!isAuthLoading && user) {
+      console.log('[Login] Session exists, redirecting based on role:', user.role, 'isAdmin:', user.isAdmin);
+
+      // Use same redirect logic as handleLogin
+      if (user.isAdmin === true) {
+        navigate('/analytics');
+      } else if (user.type === 'B2B') {
+        navigate('/projets');
+      } else {
+        navigate('/dashboard');
+      }
+    }
+  }, [user, isAuthLoading, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

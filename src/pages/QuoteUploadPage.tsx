@@ -7,7 +7,6 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Upload, FileText, AlertCircle, CheckCircle2, ChevronLeft, Loader2 } from 'lucide-react';
-import { pappersService } from '@/services/external-apis/PappersService';
 import { auditService } from '@/services/audit';
 
 export function QuoteUploadPage() {
@@ -99,23 +98,37 @@ export function QuoteUploadPage() {
         console.warn('⚠️ [QuoteUpload] Supabase upload failed, using localStorage fallback:', supabaseError);
       }
 
-      // 🆕 Pappers Integration: Extract SIRET and enrich company data
+      // Extract SIRET from filename using regex
       setEnrichmentStatus('🔍 Extraction du SIRET...');
-      const siret = await pappersService.extractSIRETFromFilename(file.name);
+      const siretMatch = file.name.match(/\b(\d{14})\b/);
+      const siret = siretMatch ? siretMatch[1] : null;
 
       if (siret) {
         console.log(`🔍 [QuoteUpload] SIRET extracted: ${siret}`);
-        setEnrichmentStatus(`📊 Enrichissement données Pappers pour ${siret}...`);
+        setEnrichmentStatus(`📊 Données Pappers disponibles pour ${siret}...`);
 
+        // Note: Pappers enrichment now done server-side via Edge Function
+        // Client doesn't have direct access to API key
         try {
-          const companyProfile = await pappersService.getCompleteProfile(siret);
-          if (companyProfile) {
-            console.log('✅ [QuoteUpload] Company enriched via Pappers:', companyProfile.company.name);
-            setEnrichmentStatus(`✅ Entreprise enrichie: ${companyProfile.company.name}`);
-            localStorage.setItem('enrichedCompanyProfile', JSON.stringify(companyProfile));
+          const { supabase } = await import('@/lib/supabase');
+          const { data: papperData, error: papperError } = await supabase.functions.invoke('pappers-proxy', {
+            body: { siret },
+          });
+
+          if (papperError) {
+            console.warn('⚠️ [QuoteUpload] Pappers Edge Function failed:', papperError);
+            setEnrichmentStatus('⚠️ Enrichissement Pappers indisponible');
+          } else if (papperData && !papperData.error) {
+            console.log('✅ [QuoteUpload] Company data retrieved via proxy');
+            setEnrichmentStatus(`✅ Données d'entreprise chargées (SIRET: ${siret})`);
+            // Store the raw Pappers response for later use
+            localStorage.setItem('enrichedCompanyProfile', JSON.stringify({ papperData, siret }));
+          } else {
+            console.warn('⚠️ [QuoteUpload] Pappers API error:', papperData?.error);
+            setEnrichmentStatus('⚠️ Entreprise non trouvée via Pappers');
           }
-        } catch (papperError) {
-          console.warn('⚠️ [QuoteUpload] Pappers enrichment failed:', papperError);
+        } catch (proxyError) {
+          console.warn('⚠️ [QuoteUpload] Pappers proxy call failed:', proxyError);
           setEnrichmentStatus('⚠️ Enrichissement Pappers échoué');
         }
       } else {

@@ -5,7 +5,8 @@
  */
 
 import { inseeService } from '@/services/external-apis/INSEEService';
-import { pappersService } from '@/services/external-apis/PappersService';
+// NOTE: Pappers API moved to server-side via Edge Function
+// import { pappersService } from '@/services/external-apis/PappersService';
 import { banService } from '@/services/external-apis/BANService';
 import { georisquesService } from '@/services/external-apis/GeorisquesService';
 import type { ProjectContext } from '@/types/ProjectContext';

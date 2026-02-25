@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { env } from '@/config/env';
 import { DevisData, TorpAnalysisResult } from '@/types/torp';
 import type { Database } from '@/types/supabase';
+import { STORAGE_BUCKETS } from '@/constants/storage';
 import { pdfExtractorService } from '@/services/pdf/pdf-extractor.service';
 import { torpAnalyzerService } from '@/services/ai/torp-analyzer.service';
 import {
@@ -17,6 +18,7 @@ import {
   type DevisProposalVector,
   type ComparisonResult,
 } from '@/services/ai/embeddings';
+import { analyzeDevisDomain } from '@/domain';
 
 type DbDevis = Database['public']['Tables']['devis']['Row'];
 type DbDevisInsert = Database['public']['Tables']['devis']['Insert'];
@@ -84,16 +86,14 @@ export class SupabaseDevisService {
     projectName: string,
     metadata?: DevisMetadata
   ): Promise<{ id: string; status: string }> {
-    console.log('[DevisService] uploadDevis called with userId:', userId);
+    console.log('[SAFE MODE] Upload START');
 
     // Use the userId passed from the authenticated context
-    // Note: Session check was causing timeout on Vercel, so we trust the React context authentication
     if (!userId) {
       throw new Error('User ID is required to upload a devis');
     }
 
     const authenticatedUserId = userId;
-    console.log('[DevisService] Using authenticated userId:', authenticatedUserId);
 
     // Validate file
     if (file.size > env.upload.maxFileSize) {
@@ -110,134 +110,96 @@ export class SupabaseDevisService {
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
     const filePath = `${authenticatedUserId}/${timestamp}_${sanitizedFileName}`;
 
-    // Upload file to Supabase Storage
-    console.log('[DevisService] Uploading file to Storage:', {
-      bucket: 'devis-uploads',
-      filePath,
-      fileSize: file.size,
-      fileType: file.type
-    });
+    console.log('[SAFE MODE] Uploading to storage:', { filePath, fileSize: file.size });
 
-    // Use direct REST API instead of SDK to avoid blocking issue
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-
-    // Get user session token from localStorage (where Supabase stores it)
-    const supabaseAuthKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
-    const sessionData = localStorage.getItem(supabaseAuthKey);
-
-    let accessToken;
-    if (sessionData) {
-      try {
-        const session = JSON.parse(sessionData);
-        accessToken = session.access_token;
-        console.log('[DevisService] Using user session token for upload');
-      } catch (e) {
-        console.error('[DevisService] Failed to parse session:', e);
-      }
-    }
-
-    // Fallback to anon key if no session token
-    if (!accessToken) {
-      accessToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      console.log('[DevisService] Using anon key as fallback');
-    }
-
-    console.log('[DevisService] Using direct API upload...');
-    const uploadUrl = `${supabaseUrl}/storage/v1/object/devis-uploads/${filePath}`;
-
-    const uploadResponse = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': file.type,
-      },
-      body: file,
-    });
-
-    if (!uploadResponse.ok) {
-      const errorText = await uploadResponse.text();
-      console.error('[DevisService] Storage upload error:', errorText);
-      throw new Error(`Failed to upload file: ${uploadResponse.status} ${errorText}`);
-    }
-
-    const uploadData = await uploadResponse.json();
-    console.log('[DevisService] File uploaded successfully:', uploadData);
-
-    // Get public URL for the file
-    const { data: { publicUrl } } = supabase.storage
-      .from('devis-uploads')
-      .getPublicUrl(filePath);
-
-    // Create devis record in database
-    const devisInsert: DbDevisInsert = {
-      user_id: authenticatedUserId,
-      nom_projet: projectName,
-      type_travaux: metadata?.typeTravaux || null,
-      montant_total: 0, // Will be updated after analysis
-      file_url: publicUrl,
-      file_name: file.name,
-      file_size: file.size,
-      file_type: file.type,
-      status: 'uploaded',
-    };
-
-    console.log('[DevisService] Inserting devis record:', devisInsert);
-
-    // Use direct REST API for insert as well (SDK blocks like storage.upload did)
-    const insertUrl = `${supabaseUrl}/rest/v1/devis`;
-    const insertResponse = await fetch(insertUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=representation',
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify(devisInsert),
-    });
-
-    if (!insertResponse.ok) {
-      const errorText = await insertResponse.text();
-      console.error('[DevisService] Database insert error:', errorText);
-      // Clean up uploaded file if database insert fails
-      const deleteUrl = `${supabaseUrl}/storage/v1/object/devis-uploads/${filePath}`;
-      await fetch(deleteUrl, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${accessToken}` },
+    try {
+      // DIAGNOSTIC: Test bucket access
+      console.log('[SAFE MODE] Testing bucket access...');
+      const { data: testList, error: testError } = await supabase.storage
+        .from(STORAGE_BUCKETS.DEVIS)
+        .list('', { limit: 1 });
+      console.log('[SAFE MODE] Bucket test result:', {
+        testListCount: testList?.length ?? null,
+        testError: testError?.message ?? null,
       });
-      throw new Error(`Failed to create devis record: ${insertResponse.status} ${errorText}`);
-    }
 
-    const devisDataArray = await insertResponse.json();
-    const devisData = devisDataArray[0];
-    console.log('[DevisService] Devis record created successfully:', devisData);
+      // STEP 1: Upload file to storage (NO timeout wrapper)
+      console.log('[SAFE MODE] About to call storage.upload()');
+      const uploadStart = performance.now();
 
-    // Trigger async analysis - update status to analyzing
-    const updateUrl = `${supabaseUrl}/rest/v1/devis?id=eq.${devisData.id}`;
-    await fetch(updateUrl, {
-      method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({ status: 'analyzing' }),
-    });
+      // Detect if upload hangs
+      const hangDetector = setTimeout(() => {
+        console.warn('[SAFE MODE] ⚠️ Upload still pending after 8 seconds - possible freeze');
+      }, 8000);
 
-    // Start analysis in background (don't await to avoid blocking upload response)
-    this.analyzeDevisById(devisData.id, file, metadata).catch((error) => {
-      console.error(`[Devis] Analysis failed for ${devisData.id}:`, error);
-      // Update status to failed
-      supabase
+      const { data: uploadedFile, error: uploadError } = await supabase.storage
+        .from(STORAGE_BUCKETS.DEVIS)
+        .upload(filePath, file, {
+          contentType: file.type,
+          upsert: false,
+        });
+
+      clearTimeout(hangDetector);
+      const uploadEnd = performance.now();
+      const uploadDuration = uploadEnd - uploadStart;
+
+      console.log('[SAFE MODE] Upload finished in ms:', uploadDuration.toFixed(0));
+
+      if (uploadError) {
+        console.error('[SAFE MODE] Upload FULL ERROR:', uploadError);
+        console.error('[SAFE MODE] Error details:', {
+          message: uploadError.message,
+          statusCode: uploadError.statusCode,
+          status: uploadError.status,
+        });
+        throw uploadError;
+      }
+
+      console.log('[SAFE MODE] Upload DONE');
+
+      // Get public URL for the file
+      const { data: { publicUrl } } = supabase.storage
+        .from(STORAGE_BUCKETS.DEVIS)
+        .getPublicUrl(filePath);
+
+      // STEP 2: Insert DB record (NO analysis trigger)
+      const devisInsert: DbDevisInsert = {
+        user_id: authenticatedUserId,
+        nom_projet: projectName,
+        type_travaux: metadata?.typeTravaux || null,
+        montant_total: 0,
+        file_url: publicUrl,
+        file_path: filePath,
+        file_name: file.name,
+        file_size: file.size,
+        file_type: file.type,
+        status: 'uploaded',
+      };
+
+      console.log('[SAFE MODE] Inserting DB record');
+
+      const { data: devisData, error: insertError } = await supabase
         .from('devis')
-        .update({ status: 'uploaded' })
-        .eq('id', devisData.id);
-    });
+        .insert(devisInsert)
+        .select()
+        .single();
 
-    return {
-      id: devisData.id,
-      status: 'analyzing',
-    };
+      if (insertError) {
+        console.error('[SAFE MODE] DB INSERT FAILED:', insertError);
+        throw new Error(`Failed to create devis record: ${insertError.message}`);
+      }
+
+      console.log('[SAFE MODE] DB INSERT DONE');
+
+      // Return uploaded status (NO "analyzing")
+      return {
+        id: devisData.id,
+        status: 'uploaded',
+      };
+    } catch (error) {
+      console.error('[SAFE MODE] Upload process error:', error);
+      throw error;
+    }
   }
 
   /**
@@ -253,168 +215,100 @@ export class SupabaseDevisService {
       // If file not provided, fetch it from storage
       let devisFile = file;
       if (!devisFile) {
-        const { data: devisData } = await supabase
+        console.log('[Devis] Fetching devis from database');
+        const { data: devisData, error: devisError } = await supabase
           .from('devis')
-          .select('file_url, file_name')
+          .select('file_path, file_name, status')
           .eq('id', devisId)
           .single();
 
-        if (!devisData) {
-          throw new Error('Devis not found');
+        if (devisError || !devisData) {
+          throw new Error(`Devis not found: ${devisError?.message || 'No data'}`);
         }
 
-        // Download file from storage
-        const filePath = new URL(devisData.file_url).pathname.split('/').slice(-3).join('/');
+        // Safety guard: prevent re-analyzing
+        if (devisData.status === 'analyzed') {
+          console.warn('[Devis] Devis already analyzed - returning early');
+          return;
+        }
+
+        // Verify file_path exists
+        if (!devisData.file_path) {
+          throw new Error('Missing file_path in devis record - cannot download file');
+        }
+
+        console.log('[Devis] Downloading file from storage:', devisData.file_path);
         const { data: fileData, error: downloadError } = await supabase.storage
-          .from('devis-uploads')
-          .download(filePath);
+          .from(STORAGE_BUCKETS.DEVIS)
+          .download(devisData.file_path);
 
         if (downloadError || !fileData) {
-          throw new Error('Failed to download devis file');
+          console.error('[Devis] Storage download error:', downloadError);
+          throw new Error(`Failed to download devis file: ${downloadError?.message || 'No data'}`);
         }
 
-        devisFile = new File([fileData], devisData.file_name, { type: 'application/pdf' });
+        devisFile = new File([fileData], devisData.file_name || 'devis.pdf', { type: 'application/pdf' });
+        console.log('[Devis] File downloaded successfully');
       }
 
-      // Step 1: Extract text from PDF
+      // PHASE 37: Use Domain Layer for orchestration
       console.log(`[Devis] Extracting text from PDF...`);
       const devisText = await pdfExtractorService.extractText(devisFile);
 
-      // Step 1.5: Vectorize project context (DEMAND) if available
-      let enrichedMetadata: DevisMetadata = { ...metadata, userType: metadata?.userType || 'B2C' };
-      let demandEmbeddings: ProjectContextEmbeddings | null = null;
+      console.log(`[Devis] Passing to domain layer for analysis orchestration...`);
+      const analysisResult = await analyzeDevisDomain({
+        devisText,
+        devisId,
+        userId: authenticatedUserId,
+        projectMetadata: metadata,
+        analyzeOptions: {
+          includeKnowledgeEnrichment: true,
+          includeMarketComparison: true,
+        },
+      });
 
-      if (metadata?.nom || metadata?.typeTravaux || metadata?.budget || metadata?.surface) {
-        console.log(`[Devis] Vectorizing project context (DEMAND)...`);
-        const projectContextData: ProjectContextData = {
-          name: metadata?.nom || '',
-          type: metadata?.typeTravaux || '',
-          budget: metadata?.budget,
-          surface: typeof metadata?.surface === 'number' ? String(metadata.surface) : metadata?.surface,
-          startDate: undefined,
-          endDate: metadata?.delaiSouhaite,
-          description: metadata?.description,
-          urgency: metadata?.urgence,
-          constraints: metadata?.contraintes,
-        };
-
-        demandEmbeddings = projectContextEmbeddingsService.vectorizeProjectContext(projectContextData);
-        const contextSummary = projectContextEmbeddingsService.generateContextSummary(projectContextData);
-
-        enrichedMetadata.projectContextEmbeddings = demandEmbeddings;
-
-        console.log(`[Devis] Demand vectorized:`, {
-          typeEmbedding: demandEmbeddings.typeEmbedding,
-          budgetRange: demandEmbeddings.budgetRange.category,
-          surfaceRange: demandEmbeddings.surfaceRange.category,
-          urgencyLevel: demandEmbeddings.urgencyLevel,
-          contextFactors: demandEmbeddings.contextualFactors.length,
-        });
-
-        console.log(`[Devis] Demand summary:\n${contextSummary}`);
-      }
-
-      // Step 1.6: Extract structured data & vectorize proposal (PROPOSITION)
-      console.log(`[Devis] Extracting and vectorizing devis proposal (PROPOSITION)...`);
-      let proposalEmbeddings: DevisProposalVector | null = null;
-      let demandVsProposalComparison: ComparisonResult | null = null;
-
-      // Extract structured data from devis text
-      const extractedData = await torpAnalyzerService.extractDevisDataDirect(devisText);
-
-      if (extractedData) {
-        proposalEmbeddings = devisProposalEmbeddingsService.vectorizeDevisProposal(extractedData);
-
-        console.log(`[Devis] Proposal vectorized:`, {
-          typeVecteur: proposalEmbeddings.typeVecteur,
-          prixTotal: proposalEmbeddings.prixVecteur.montantTotal,
-          transparence: proposalEmbeddings.prixVecteur.transparence,
-          entrepriseName: proposalEmbeddings.entrepriseVecteur.nom,
-          conformiteScore: proposalEmbeddings.entrepriseVecteur.scoreConformite,
-        });
-
-        // Compare DEMAND vs PROPOSITION vectors
-        if (demandEmbeddings && proposalEmbeddings) {
-          console.log(`[Devis] Comparing demand vs proposal vectors...`);
-          demandVsProposalComparison = devisProposalEmbeddingsService.compareVectors(
-            demandEmbeddings,
-            proposalEmbeddings
-          );
-
-          console.log(`[Devis] Alignment score: ${demandVsProposalComparison.alignmentScore}/100`);
-          console.log(`[Devis] Gaps found: ${demandVsProposalComparison.gapAnalysis.length}`);
-          console.log(`[Devis] Recommendations: ${demandVsProposalComparison.recommendations.length}`);
-
-          // Log gaps
-          demandVsProposalComparison.gapAnalysis.forEach(gap => {
-            console.log(`  - [${gap.severity.toUpperCase()}] ${gap.category}: ${gap.description}`);
-          });
-        }
-      }
-
-      // Step 2: Run TORP analysis
-      console.log(`[Devis] Running TORP analysis... (userType: ${enrichedMetadata.userType || 'B2C'})`);
-      const analysis = await torpAnalyzerService.analyzeDevis(devisText, enrichedMetadata as any);
+      // Extract components for database save
+      const analysis = analysisResult.torAnalysisResult;
 
       // Step 3: Save results to database
       console.log(`[Devis] Saving analysis results...`);
 
-      // Get user session token (same approach as uploadDevis)
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseAuthKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
-      const sessionData = localStorage.getItem(supabaseAuthKey);
-
-      let accessToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      if (sessionData) {
-        try {
-          const session = JSON.parse(sessionData);
-          accessToken = session.access_token;
-        } catch (e) {
-          console.error('[DevisService] Failed to parse session:', e);
-        }
-      }
-
-      // Use direct REST API to avoid blocking issue
-      const updateUrl = `${supabaseUrl}/rest/v1/devis?id=eq.${devisId}`;
-      const updateResponse = await fetch(updateUrl, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      // Use official Supabase SDK to update analysis results
+      const analysisUpdate = {
+        status: 'analyzed',
+        analyzed_at: new Date().toISOString(),
+        analysis_duration: analysis.dureeAnalyse,
+        score_total: analysis.scoreGlobal,
+        grade: analysis.grade,
+        score_entreprise: analysis.scoreEntreprise,
+        score_prix: analysis.scorePrix,
+        score_completude: analysis.scoreCompletude,
+        score_conformite: analysis.scoreConformite,
+        score_delais: analysis.scoreDelais,
+        score_innovation_durable: analysis.scoreInnovationDurable || null,
+        score_transparence: analysis.scoreTransparence || null,
+        recommendations: {
+          ...analysis.recommandations,
+          budgetRealEstime: analysis.budgetRealEstime || 0,
+          margeNegociation: analysis.margeNegociation,
         },
-        body: JSON.stringify({
-          status: 'analyzed',
-          analyzed_at: new Date().toISOString(),
-          analysis_duration: analysis.dureeAnalyse,
-          score_total: analysis.scoreGlobal,
-          grade: analysis.grade,
-          score_entreprise: analysis.scoreEntreprise,
-          score_prix: analysis.scorePrix,
-          score_completude: analysis.scoreCompletude,
-          score_conformite: analysis.scoreConformite,
-          score_delais: analysis.scoreDelais,
-          score_innovation_durable: analysis.scoreInnovationDurable || null,
-          score_transparence: analysis.scoreTransparence || null,
-          recommendations: {
-            ...analysis.recommandations,
-            budgetRealEstime: analysis.budgetRealEstime || 0,
-            margeNegociation: analysis.margeNegociation,
-          },
-          // Sauvegarder les données extraites pour enrichissement et géocodage
-          extracted_data: analysis.extractedData || null,
-          // Sauvegarder l'adresse du chantier directement
-          adresse_chantier: analysis.extractedData?.travaux?.adresseChantier || null,
-          detected_overcosts: analysis.surcoutsDetectes,
-          potential_savings: analysis.scorePrix.economiesPotentielles || 0,
-          updated_at: new Date().toISOString(),
-        }),
-      });
+        // Sauvegarder les données extraites pour enrichissement et géocodage
+        extracted_data: analysis.extractedData || null,
+        // Sauvegarder l'adresse du chantier directement
+        adresse_chantier: analysis.extractedData?.travaux?.adresseChantier || null,
+        detected_overcosts: analysis.surcoutsDetectes,
+        potential_savings: analysis.scorePrix.economiesPotentielles || 0,
+        updated_at: new Date().toISOString(),
+      };
 
-      if (!updateResponse.ok) {
-        const errorText = await updateResponse.text();
-        console.error('[DevisService] Database update error:', errorText);
-        throw new Error(`Failed to save analysis: ${updateResponse.status} ${errorText}`);
+      const { error: updateError } = await supabase
+        .from('devis')
+        .update(analysisUpdate)
+        .eq('id', devisId);
+
+      if (updateError) {
+        console.error('[DevisService] Database update error:', updateError);
+        throw new Error(`Failed to save analysis: ${updateError.message}`);
       }
 
       console.log('[DevisService] Analysis results saved successfully');
@@ -430,8 +324,8 @@ export class SupabaseDevisService {
 
         if (devisInfo?.user_id) {
           const { data: userInfo } = await supabase
-            .from('users')
-            .select('email, name')
+            .from('profiles')
+            .select('email, full_name')
             .eq('id', devisInfo.user_id)
             .single();
 
@@ -449,37 +343,23 @@ export class SupabaseDevisService {
     } catch (error) {
       console.error(`[Devis] Analysis failed for ${devisId}:`, error);
 
-      // Update status to indicate failure using REST API
+      // Update status back to uploaded if analysis fails
       try {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const supabaseAuthKey = `sb-${supabaseUrl.split('//')[1].split('.')[0]}-auth-token`;
-        const sessionData = localStorage.getItem(supabaseAuthKey);
-
-        let accessToken = import.meta.env.VITE_SUPABASE_ANON_KEY;
-        if (sessionData) {
-          try {
-            const session = JSON.parse(sessionData);
-            accessToken = session.access_token;
-          } catch (e) {
-            console.error('[DevisService] Failed to parse session:', e);
-          }
-        }
-
-        const updateUrl = `${supabaseUrl}/rest/v1/devis?id=eq.${devisId}`;
-        await fetch(updateUrl, {
-          method: 'PATCH',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({
+        const { error: statusError } = await supabase
+          .from('devis')
+          .update({
             status: 'uploaded',
             updated_at: new Date().toISOString(),
-          }),
-        });
+          })
+          .eq('id', devisId);
+
+        if (statusError) {
+          console.error('[Devis] Failed to update status after error:', statusError);
+        } else {
+          console.log('[Devis] Status reverted to uploaded after error');
+        }
       } catch (updateError) {
-        console.error('[DevisService] Failed to update status after error:', updateError);
+        console.error('[Devis] Failed to update status after error:', updateError);
       }
 
       throw error;
@@ -763,7 +643,7 @@ The system will analyze the devis content, pricing, and recommendations to give 
 
     // Delete from storage
     const { error: storageError } = await supabase.storage
-      .from('devis-uploads')
+      .from(STORAGE_BUCKETS.DEVIS)
       .remove([filePath]);
 
     if (storageError) {

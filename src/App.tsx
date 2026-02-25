@@ -4,13 +4,14 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AppProvider, useApp } from "@/context/AppContext";
+import { AppProvider } from "@/context/AppContext";
 import { ErrorBoundary } from "@/components/error/ErrorBoundary";
 
-// Layouts
-import MainLayout from "./components/layout/MainLayout";
+// Layouts - ISOLATED
+import AdminLayout from "./components/layout/AdminLayout";
+import UserLayout from "./components/layout/UserLayout";
 
-// Pages - Core MVP
+// Pages - Core MVP (Public)
 import LandingPage from "./pages/LandingPage";
 import QuotePage from "./pages/QuotePage";
 import QuoteSuccessPage from "./pages/QuoteSuccessPage";
@@ -22,33 +23,42 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
-// Auth
+// Auth - Route Protection
 import { ProtectedRoute } from "@/components/auth/ProRoute";
 import { AdminRoute } from "@/components/auth/AdminRoute";
 
-// Protected Pages
+// User Pages
 import Dashboard from "./pages/Dashboard";
-import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
 import ProjetPage from "./pages/projet/ProjetPage";
 import ProjetsListePage from "./pages/projet/ProjetsListePage";
 import Profile from "./pages/Profile";
 import Analyze from "./pages/Analyze";
 import Results from "./pages/Results";
+import JobStatusPage from "./pages/analysis/JobStatusPage";
+
+// Admin Pages
+import Analytics from "./pages/Analytics";
 import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
+import { SystemHealthPage } from "./pages/admin/SystemHealthPage";
+import { LiveIntelligencePage } from "./pages/admin/LiveIntelligencePage";
+import { OrchestrationsPage } from "./pages/admin/OrchestrationsPage";
+import { KnowledgeBasePage } from "./pages/admin/KnowledgeBasePage";
+import { SecurityPage } from "./pages/admin/SecurityPage";
+import { AdminSettingsPage } from "./pages/admin/AdminSettingsPage";
 
 const queryClient = new QueryClient();
 
 const AppContent = () => {
-  const { userType } = useApp();
-
   return (
     <>
       <Toaster />
       <Sonner />
       <BrowserRouter>
         <Routes>
-          {/* Public Routes */}
+          {/* ============================================ */}
+          {/* PUBLIC ROUTES - No authentication required */}
+          {/* ============================================ */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/quote" element={<QuotePage />} />
           <Route path="/quote-success" element={<QuoteSuccessPage />} />
@@ -59,22 +69,38 @@ const AppContent = () => {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
-          {/* Protected Routes with Layout */}
-          <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/analytics" element={<AdminRoute><Analytics /></AdminRoute>} />
-            <Route path="/admin/users" element={<AdminRoute><AdminUsersPage /></AdminRoute>} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/projets" element={<ProjetsListePage />} />
-            <Route path="/projet/:projectId" element={<ProjetPage />} />
-            <Route path="/results" element={<Results />} />
-            <Route path="/profile" element={<Profile />} />
+          {/* ============================================ */}
+          {/* ADMIN ROUTES - Admin-only protection */}
+          {/* ============================================ */}
+          <Route element={<AdminRoute><AdminLayout /></AdminRoute>}>
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/analytics/system" element={<SystemHealthPage />} />
+            <Route path="/analytics/intelligence" element={<LiveIntelligencePage />} />
+            <Route path="/analytics/orchestrations" element={<OrchestrationsPage />} />
+            <Route path="/analytics/knowledge" element={<KnowledgeBasePage />} />
+            <Route path="/analytics/security" element={<SecurityPage />} />
+            <Route path="/analytics/settings" element={<AdminSettingsPage />} />
+            <Route path="/analytics/users" element={<AdminUsersPage />} />
           </Route>
 
-          {/* Protected Routes with Custom Layout (Analyze has its own AppLayout) */}
-          <Route element={<ProtectedRoute><Analyze /></ProtectedRoute>} path="/analyze" />
+          {/* ============================================ */}
+          {/* USER ROUTES - Authenticated user protection */}
+          {/* ============================================ */}
+          <Route element={<ProtectedRoute><UserLayout /></ProtectedRoute>}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/analyze" element={<Analyze />} />
+            <Route path="/analysis/job/:jobId" element={<JobStatusPage />} />
+            <Route path="/projects" element={<ProjetsListePage />} />
+            <Route path="/project/:projectId" element={<ProjetPage />} />
+            <Route path="/company" element={<Settings />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/results" element={<Results />} />
+          </Route>
 
-          {/* Fallback */}
+          {/* ============================================ */}
+          {/* FALLBACK */}
+          {/* ============================================ */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

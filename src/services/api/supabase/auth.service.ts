@@ -1,6 +1,8 @@
 /**
  * Supabase Auth Service
- * Real authentication using Supabase Auth
+ * Real authentication using Supabase Auth + Profiles
+ *
+ * CRITICAL: Uses profiles table, NOT deleted users table
  */
 
 import { supabase } from '@/lib/supabase';
@@ -27,40 +29,25 @@ export interface AuthResponse {
   refreshToken?: string;
 }
 
-type DbUser = Database['public']['Tables']['users']['Row'];
+type DbProfile = Database['public']['Tables']['profiles']['Row'];
 
 /**
- * Convert Supabase user to app User format with all profile fields
+ * Convert Supabase profile to app User format
  */
-function mapDbUserToAppUser(dbUser: DbUser): User {
+function mapDbProfileToAppUser(profile: DbProfile): User {
   return {
-    id: dbUser.id,
-    email: dbUser.email,
-    name: dbUser.name || undefined,
-    type: dbUser.user_type,
-    isAdmin: Boolean((dbUser as Record<string, unknown>).is_admin),
-    role: (dbUser as Record<string, unknown>).role as string || 'user',
-    canUploadKb: (dbUser as Record<string, unknown>).can_upload_kb as boolean || false,
-    phone: dbUser.phone || undefined,
-    city: (dbUser as Record<string, unknown>).city as string || undefined,
-    postal_code: (dbUser as Record<string, unknown>).postal_code as string || undefined,
-    // B2C
-    company: dbUser.company || undefined,
-    property_type: (dbUser as Record<string, unknown>).property_type as string || undefined,
-    property_surface: (dbUser as Record<string, unknown>).property_surface as number || undefined,
-    property_year: (dbUser as Record<string, unknown>).property_year as number || undefined,
-    property_rooms: (dbUser as Record<string, unknown>).property_rooms as number || undefined,
-    property_address: (dbUser as Record<string, unknown>).property_address as string || undefined,
-    property_energy_class: (dbUser as Record<string, unknown>).property_energy_class as string || undefined,
-    is_owner: (dbUser as Record<string, unknown>).is_owner as boolean ?? undefined,
-    // B2B
-    company_siret: (dbUser as Record<string, unknown>).company_siret as string || undefined,
-    company_activity: (dbUser as Record<string, unknown>).company_activity as string || undefined,
-    company_size: (dbUser as Record<string, unknown>).company_size as string || undefined,
-    company_role: (dbUser as Record<string, unknown>).company_role as string || undefined,
-    company_address: (dbUser as Record<string, unknown>).company_address as string || undefined,
-    company_code_ape: (dbUser as Record<string, unknown>).company_code_ape as string || undefined,
-    company_rcs: (dbUser as Record<string, unknown>).company_rcs as string || undefined,
+    id: profile.id,
+    email: profile.email,
+    name: profile.full_name || undefined,
+    type: 'B2C', // Default type (B2B determined by company fields)
+    isAdmin: profile.role === 'admin' || profile.role === 'super_admin',
+    role: profile.role || 'user',
+    canUploadKb: profile.can_upload_kb || false,
+    phone: profile.phone || undefined,
+    city: profile.city || undefined,
+    postal_code: profile.postal_code || undefined,
+    company: profile.company_name || undefined,
+    company_siret: profile.company_siret || undefined,
   };
 }
 
@@ -88,30 +75,24 @@ export class SupabaseAuthService {
       throw new Error('Authentication failed');
     }
 
-    // Fetch user profile from users table (all columns for profile pre-fill)
-    // If no profile exists yet, create a basic user object from auth data
-    const { data: userData, error: userError } = await supabase
-      .from('users')
+    // Fetch user profile from profiles table
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
       .select('*')
       .eq('id', authData.user.id)
-      .maybeSingle();
+      .single();
 
-    let mappedUser: User;
-
-    if (userError || !userData) {
-      // User profile doesn't exist yet, create basic user from auth data
-      console.warn('User profile not found, creating from auth data:', authData.user.email);
-      mappedUser = {
-        id: authData.user.id,
-        email: authData.user.email || '',
-        name: authData.user.user_metadata?.name || undefined,
-        type: (authData.user.user_metadata?.user_type as UserType) || 'B2C',
-      };
-    } else {
-      mappedUser = mapDbUserToAppUser(userData);
+    if (profileError) {
+      console.error('[Login] Profile load error:', profileError);
+      throw new Error('Failed to load user profile');
     }
 
-    console.log('✓ Login réussi:', mappedUser.email, '- Type:', mappedUser.type);
+    if (!profileData) {
+      throw new Error('User profile not found');
+    }
+
+    const mappedUser = mapDbProfileToAppUser(profileData);
+    console.log('✓ Login successful:', mappedUser.email, '- Admin:', mappedUser.isAdmin, '- Role:', mappedUser.role);
 
     return {
       user: mappedUser,
@@ -122,6 +103,7 @@ export class SupabaseAuthService {
 
   /**
    * Register new user
+   * With email confirmation enabled, profile is created by database trigger
    */
   async register(data: RegisterData): Promise<AuthResponse> {
     // Validate input
@@ -138,12 +120,9 @@ export class SupabaseAuthService {
       email: data.email,
       password: data.password,
       options: {
-        emailRedirectTo: `${window.location.origin}/dashboard`,
+        emailRedirectTo: 'https://www.torp.fr/dashboard',
         data: {
           name: data.name,
-          user_type: data.type,
-          company: data.company,
-          phone: data.phone,
         },
       },
     });
@@ -156,43 +135,16 @@ export class SupabaseAuthService {
       throw new Error('Registration failed');
     }
 
-    // Create user profile using RPC function (bypasses RLS timing issues)
-    // This works even without an active session, which is the case when email confirmation is required
-    const { data: userData, error: userError } = await supabase.rpc('create_user_profile', {
-      p_user_id: authData.user.id,
-      p_email: data.email,
-      p_name: data.name,
-      p_user_type: data.type,
-      p_company: data.company || null,
-      p_phone: data.phone || null,
-    });
-
-    if (userError || !userData) {
-      console.error('Failed to create user profile after registration:', userError);
-      // Fallback: return a basic user object based on auth data
-      const user = {
+    // Return minimal user object (waiting for email confirmation)
+    // Profile will be created by trigger when auth user is confirmed
+    return {
+      user: {
         id: authData.user.id,
         email: data.email,
         name: data.name,
-        type: data.type,
-        company: data.company,
-        phone: data.phone,
-      };
-
-      return {
-        user,
-        token: authData.session?.access_token || '',
-        refreshToken: authData.session?.refresh_token,
-      };
-    }
-
-    // RPC now returns JSONB object directly (not an array)
-    const mappedUser = mapDbUserToAppUser(userData as DbUser);
-
-    return {
-      user: mappedUser,
-      token: authData.session?.access_token || '',
-      refreshToken: authData.session?.refresh_token,
+        type: 'B2C',
+      },
+      token: '',
     };
   }
 
@@ -207,66 +159,44 @@ export class SupabaseAuthService {
   }
 
   /**
-   * Get current user
+   * Get current user from profiles table
    */
   async getCurrentUser(): Promise<User | null> {
     try {
       // Get current session
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
 
-      if (authError) {
-        console.error('[getCurrentUser] Auth error:', authError);
-        return null;
-      }
-
-      if (!authUser) {
-        console.log('[getCurrentUser] No auth user found');
+      // If not authenticated (including 401 Unauthorized), just return null
+      if (authError || !authUser) {
+        console.log('[getCurrentUser] Not authenticated (normal on public pages)');
         return null;
       }
 
       console.log('[getCurrentUser] Auth user found:', authUser.email);
 
-      // Fetch user profile (all columns for profile pre-fill)
-      const { data: userData, error: userError } = await supabase
-        .from('users')
+      // Only try to fetch profile if we have an authenticated user
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
         .select('*')
         .eq('id', authUser.id)
-        .maybeSingle();
+        .single();
 
-      if (userError) {
-        console.warn('[getCurrentUser] Error fetching user profile:', userError);
-        // If profile doesn't exist, create temporary user from auth data
-        const tempUser: User = {
-          id: authUser.id,
-          email: authUser.email || '',
-          name: authUser.user_metadata?.name || 'User',
-          type: (authUser.user_metadata?.user_type as UserType) || 'B2C',
-          company: authUser.user_metadata?.company,
-          phone: authUser.user_metadata?.phone,
-        };
-        console.log('[getCurrentUser] Error occurred, returning temporary user:', tempUser.email);
-        return tempUser;
+      // If profile doesn't exist (e.g., user pending email confirmation), return null
+      if (profileError) {
+        console.log('[getCurrentUser] Profile not found (user pending confirmation):', profileError.message);
+        return null;
       }
 
-      if (!userData) {
-        console.warn('[getCurrentUser] No user profile found, creating temporary from auth data');
-        // Create temporary user from auth metadata
-        const tempUser: User = {
-          id: authUser.id,
-          email: authUser.email || '',
-          name: authUser.user_metadata?.name || 'User',
-          type: (authUser.user_metadata?.user_type as UserType) || 'B2C',
-          company: authUser.user_metadata?.company,
-          phone: authUser.user_metadata?.phone,
-        };
-        return tempUser;
+      if (!profileData) {
+        console.log('[getCurrentUser] Profile data is empty');
+        return null;
       }
 
-      const mappedUser = mapDbUserToAppUser(userData);
-      console.log('[getCurrentUser] User profile loaded:', mappedUser.email, 'Type:', mappedUser.type);
+      const mappedUser = mapDbProfileToAppUser(profileData);
+      console.log('[getCurrentUser] Profile loaded:', mappedUser.email);
       return mappedUser;
     } catch (error) {
-      console.error('[getCurrentUser] Exception:', error);
+      console.log('[getCurrentUser] Exception handled gracefully:', error instanceof Error ? error.message : 'Unknown error');
       return null;
     }
   }
@@ -301,7 +231,7 @@ export class SupabaseAuthService {
     }
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: 'https://www.torp.fr/reset-password',
     });
 
     if (error) {
@@ -348,9 +278,9 @@ export class SupabaseAuthService {
   /**
    * Update user profile
    */
-  async updateProfile(userId: string, updates: Partial<DbUser>): Promise<User> {
+  async updateProfile(userId: string, updates: Partial<DbProfile>): Promise<User> {
     const { data, error } = await supabase
-      .from('users')
+      .from('profiles')
       .update(updates)
       .eq('id', userId)
       .select()
@@ -360,7 +290,7 @@ export class SupabaseAuthService {
       throw new Error(`Failed to update profile: ${error.message}`);
     }
 
-    return mapDbUserToAppUser(data);
+    return mapDbProfileToAppUser(data);
   }
 
   /**
@@ -373,30 +303,18 @@ export class SupabaseAuthService {
       if (session?.user) {
         try {
           const { data, error } = await supabase
-            .from('users')
+            .from('profiles')
             .select('*')
             .eq('id', session.user.id)
-            .maybeSingle();
+            .single();
 
           if (error) {
-            console.warn('[Auth State Change] Error fetching user profile:', error);
-            // If profile doesn't exist yet, create temporary user from auth data
-            // This handles newly registered users waiting for profile creation
-            const tempUser: User = {
-              id: session.user.id,
-              email: session.user.email || '',
-              name: session.user.user_metadata?.name || 'User',
-              type: (session.user.user_metadata?.user_type as UserType) || 'B2C',
-              company: session.user.user_metadata?.company,
-              phone: session.user.user_metadata?.phone,
-            };
-            console.log('[Auth State Change] Using temporary user profile:', tempUser.email);
-            callback(tempUser);
-            return;
+            console.error('[Auth State Change] Error fetching user profile:', error);
+            throw new Error('Failed to load user profile');
           }
 
           if (data) {
-            const mappedUser = mapDbUserToAppUser(data);
+            const mappedUser = mapDbProfileToAppUser(data);
             console.log('[Auth State Change] User profile loaded:', mappedUser.email);
             callback(mappedUser);
           } else {

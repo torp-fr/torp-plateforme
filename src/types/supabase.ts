@@ -252,6 +252,7 @@ export interface Database {
           amount: number
           currency: string | null
           file_url: string
+          file_path: string | null
           file_name: string
           file_size: number | null
           file_type: string | null
@@ -282,6 +283,7 @@ export interface Database {
           amount: number
           currency?: string | null
           file_url: string
+          file_path?: string | null
           file_name: string
           file_size?: number | null
           file_type?: string | null
@@ -312,6 +314,7 @@ export interface Database {
           amount?: number
           currency?: string | null
           file_url?: string
+          file_path?: string | null
           file_name?: string
           file_size?: number | null
           file_type?: string | null
