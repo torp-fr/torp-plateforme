@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import { KnowledgeBaseUpload } from '@/components/KnowledgeBaseUpload';
 import { CockpitOrchestration } from '@/components/admin/CockpitOrchestration';
 import {
@@ -310,89 +310,9 @@ function AnalyticsStatsCards() {
 }
 
 export function Analytics() {
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
-  const handleTabChange = (tab: TabType) => setActiveTab(tab);
-
   return (
     <div className="space-y-8">
-      {/* Tab Navigation */}
-      <div className="flex gap-2 border-b overflow-x-auto">
-        <Button
-          variant={activeTab === 'orchestration' ? 'default' : 'ghost'}
-          onClick={() => handleTabChange('orchestration')}
-          className="rounded-b-none"
-        >
-          <Zap className="h-4 w-4 mr-2" />
-          Cockpit d'Orchestration
-        </Button>
-        <Button
-          variant={activeTab === 'fraud' ? 'default' : 'ghost'}
-          onClick={() => handleTabChange('fraud')}
-          className="rounded-b-none"
-        >
-          <AlertCircle className="h-4 w-4 mr-2" />
-          Surveillance Fraude
-        </Button>
-        <Button
-          variant={activeTab === 'kb' ? 'default' : 'ghost'}
-          onClick={() => handleTabChange('kb')}
-          className="rounded-b-none"
-        >
-          <Database className="h-4 w-4 mr-2" />
-          Base de Connaissances
-        </Button>
-        <Button
-          variant={activeTab === 'doctrine' ? 'default' : 'ghost'}
-          onClick={() => handleTabChange('doctrine')}
-          className="rounded-b-none"
-        >
-          <BookOpen className="h-4 w-4 mr-2" />
-          Doctrine & Normes
-        </Button>
-        <Button
-          variant={activeTab === 'adaptive' ? 'default' : 'ghost'}
-          onClick={() => handleTabChange('adaptive')}
-          className="rounded-b-none"
-        >
-          <TrendingUp className="h-4 w-4 mr-2" />
-          Adaptatif
-        </Button>
-        <Button
-          variant={activeTab === 'apis' ? 'default' : 'ghost'}
-          onClick={() => handleTabChange('apis')}
-          className="rounded-b-none"
-        >
-          <ExternalLink className="h-4 w-4 mr-2" />
-          APIs
-        </Button>
-        <Button
-          variant={activeTab === 'users' ? 'default' : 'ghost'}
-          onClick={() => handleTabChange('users')}
-          className="rounded-b-none"
-        >
-          <Users className="h-4 w-4 mr-2" />
-          Utilisateurs
-        </Button>
-        <Button
-          variant={activeTab === 'logs' ? 'default' : 'ghost'}
-          onClick={() => handleTabChange('logs')}
-          className="rounded-b-none"
-        >
-          <FileText className="h-4 w-4 mr-2" />
-          Logs
-        </Button>
-      </div>
-
-      {/* Tab Content */}
-      {activeTab === 'orchestration' && <CockpitOrchestration loading={loading} />}
-      {activeTab === 'fraud' && <FraudMonitoringTab />}
-      {activeTab === 'kb' && <UploadKBTab />}
-      {activeTab === 'doctrine' && <DoctrineTab />}
-      {activeTab === 'adaptive' && <AdaptiveTab />}
-      {activeTab === 'apis' && <APIsTab />}
-      {activeTab === 'users' && <UsersTab navigate={navigate} />}
-      {activeTab === 'logs' && <LogsTab />}
+      <Outlet />
     </div>
   );
 }
