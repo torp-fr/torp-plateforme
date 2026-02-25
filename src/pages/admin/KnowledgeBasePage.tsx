@@ -1,37 +1,22 @@
 /**
- * Knowledge Base Page - Content management
- * Phase 32.2: Real data when available
+ * Knowledge Base Page - Real ingestion pipeline
+ * Upload and enrichment of business brain
  */
 
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BookOpen } from 'lucide-react';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { UploadKBTab } from '../Analytics';
 
 export function KnowledgeBasePage() {
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
+      {/* HEADER */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Knowledge Base</h1>
-        <p className="text-muted-foreground">Manage documentation and learning materials</p>
+        <h1 className="text-2xl font-bold">Base de Connaissances</h1>
+        <p className="text-sm text-muted-foreground">Upload et enrichissement du cerveau métier</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5" />
-            Knowledge Base Content
-          </CardTitle>
-          <CardDescription>Documentation and articles</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <EmptyState
-            title="No articles yet"
-            description="Knowledge base articles will appear here as they are created"
-            icon={<BookOpen className="h-12 w-12 text-muted-foreground/50" />}
-          />
-        </CardContent>
-      </Card>
+      {/* INGESTION PIPELINE */}
+      <UploadKBTab />
     </div>
   );
 }
