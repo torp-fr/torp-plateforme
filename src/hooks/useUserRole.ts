@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 
 export type UserRole = 'user' | 'admin' | 'super_admin';
 
@@ -18,19 +18,6 @@ interface UseUserRoleReturn {
   error: string | null;
 }
 
-/**
- * Get Supabase client
- */
-function getSupabaseClient() {
-  const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || '';
-  const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Missing Supabase configuration');
-  }
-
-  return createClient(supabaseUrl, supabaseAnonKey);
-}
 
 /**
  * Fetch user role from Supabase profiles table
@@ -39,7 +26,6 @@ async function fetchUserRoleFromProfiles(userId: string): Promise<UserRole | nul
   try {
     console.log('[useUserRole] Fetching role for user:', userId);
 
-    const supabase = getSupabaseClient();
 
     const { data, error } = await supabase
       .from('profiles')
@@ -69,7 +55,6 @@ async function fetchUserRoleFromAuthMetadata(userId: string): Promise<UserRole |
   try {
     console.log('[useUserRole] Checking auth metadata for:', userId);
 
-    const supabase = getSupabaseClient();
 
     // Get auth metadata
     const {

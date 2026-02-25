@@ -50,6 +50,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+// DEBUG: Detect duplicate Supabase client instantiation
+if (!supabaseUrl) {
+  console.error('🔥 CRITICAL: supabaseUrl is EMPTY - This indicates a duplicate Supabase client initialization outside /src/lib/supabase.ts');
+}
+
 /**
  * Supabase client instance
  * Typed with Database schema for full TypeScript support
@@ -83,18 +88,6 @@ export function getSupabase() {
 }
 
 export const supabase = getSupabase();
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-    storage: window.localStorage,
-  },
-  global: {
-    headers: {
-      'x-application-name': 'torp-web-app',
-    },
-  },
-});
 
 // DEBUG: Verify supabase client URL for Edge Function invoke debugging
 console.log('[SUPABASE CLIENT INIT]', {
