@@ -13,7 +13,7 @@
  * This service coordinates the flow via state machine.
  */
 
-import { knowledgeBrainService } from './index';
+import { knowledgeBrainService } from '@/services/ai/knowledge-brain.service';
 import { ingestionStateMachineService, DocumentIngestionState, IngestionFailureReason } from './index';
 import { supabase } from '@/lib/supabase';
 
