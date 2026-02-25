@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { UploadKBTab } from '../Analytics';
+import { KnowledgeDocumentsList } from '@/components/admin/KnowledgeDocumentsList';
 
 export function KnowledgeBasePage() {
   return (
@@ -17,6 +18,9 @@ export function KnowledgeBasePage() {
 
       {/* INGESTION PIPELINE */}
       <UploadKBTab />
+
+      {/* DOCUMENT LIST */}
+      <KnowledgeDocumentsList />
     </div>
   );
 }
