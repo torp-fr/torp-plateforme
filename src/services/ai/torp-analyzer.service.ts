@@ -1,9 +1,12 @@
 /**
  * TORP Analyzer Service
  * Main service for analyzing devis using AI and TORP methodology
+ *
+ * PHASE 36.12: Now uses AI Orchestrator for centralized AI operations
+ * This ensures consistent retry logic, timeouts, and error handling
  */
 
-import { hybridAIService } from './hybrid-ai.service';
+import { aiOrchestrator } from './aiOrchestrator.service';
 import {
   TORP_SYSTEM_PROMPT,
   buildExtractionPrompt,
@@ -441,7 +444,7 @@ export class TorpAnalyzerService {
 
     const prompt = buildExtractionPrompt(devisText);
 
-    const { data } = await hybridAIService.generateJSON<ExtractedDevisData>(prompt, {
+    const { data } = await aiOrchestrator.generateJSON<ExtractedDevisData>(prompt, {
       systemPrompt: TORP_SYSTEM_PROMPT,
       temperature: 0.2, // Low temperature for accurate extraction
     });
@@ -973,7 +976,7 @@ export class TorpAnalyzerService {
       console.log('[TORP Entreprise] Generating AI analysis with RGE data:', !!rgeData);
       const prompt = buildEntrepriseAnalysisPrompt(JSON.stringify(devisData, null, 2), enrichedData, rgeData);
 
-      const { data } = await hybridAIService.generateJSON(prompt, {
+      const { data } = await aiOrchestrator.generateJSON(prompt, {
         systemPrompt: TORP_SYSTEM_PROMPT,
         temperature: 0.4,
       });
@@ -1051,7 +1054,7 @@ export class TorpAnalyzerService {
         type_travaux: typeTravaux,
       });
 
-      const { data } = await hybridAIService.generateJSON(prompt, {
+      const { data } = await aiOrchestrator.generateJSON(prompt, {
         systemPrompt: TORP_SYSTEM_PROMPT,
         temperature: 0.4,
       });
@@ -1113,7 +1116,7 @@ export class TorpAnalyzerService {
         type_travaux: typeTravaux,
       });
 
-      const { data } = await hybridAIService.generateJSON(prompt, {
+      const { data } = await aiOrchestrator.generateJSON(prompt, {
         systemPrompt: TORP_SYSTEM_PROMPT,
         temperature: 0.4,
       });
@@ -1141,7 +1144,7 @@ export class TorpAnalyzerService {
         type_travaux: typeProjet,
       });
 
-      const { data } = await hybridAIService.generateJSON(prompt, {
+      const { data } = await aiOrchestrator.generateJSON(prompt, {
         systemPrompt: TORP_SYSTEM_PROMPT,
         temperature: 0.3,
       });
@@ -1169,7 +1172,7 @@ export class TorpAnalyzerService {
         type_travaux: typeTravaux,
       });
 
-      const { data } = await hybridAIService.generateJSON(prompt, {
+      const { data } = await aiOrchestrator.generateJSON(prompt, {
         systemPrompt: TORP_SYSTEM_PROMPT,
         temperature: 0.4,
       });

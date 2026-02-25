@@ -18,6 +18,7 @@ import {
   type DevisProposalVector,
   type ComparisonResult,
 } from '@/services/ai/embeddings';
+import { analyzeDevisDomain } from '@/domain';
 
 type DbDevis = Database['public']['Tables']['devis']['Row'];
 type DbDevisInsert = Database['public']['Tables']['devis']['Insert'];
@@ -250,85 +251,24 @@ export class SupabaseDevisService {
         console.log('[Devis] File downloaded successfully');
       }
 
-      // Step 1: Extract text from PDF
+      // PHASE 37: Use Domain Layer for orchestration
       console.log(`[Devis] Extracting text from PDF...`);
       const devisText = await pdfExtractorService.extractText(devisFile);
 
-      // Step 1.5: Vectorize project context (DEMAND) if available
-      let enrichedMetadata: DevisMetadata = { ...metadata, userType: metadata?.userType || 'B2C' };
-      let demandEmbeddings: ProjectContextEmbeddings | null = null;
+      console.log(`[Devis] Passing to domain layer for analysis orchestration...`);
+      const analysisResult = await analyzeDevisDomain({
+        devisText,
+        devisId,
+        userId: authenticatedUserId,
+        projectMetadata: metadata,
+        analyzeOptions: {
+          includeKnowledgeEnrichment: true,
+          includeMarketComparison: true,
+        },
+      });
 
-      if (metadata?.nom || metadata?.typeTravaux || metadata?.budget || metadata?.surface) {
-        console.log(`[Devis] Vectorizing project context (DEMAND)...`);
-        const projectContextData: ProjectContextData = {
-          name: metadata?.nom || '',
-          type: metadata?.typeTravaux || '',
-          budget: metadata?.budget,
-          surface: typeof metadata?.surface === 'number' ? String(metadata.surface) : metadata?.surface,
-          startDate: undefined,
-          endDate: metadata?.delaiSouhaite,
-          description: metadata?.description,
-          urgency: metadata?.urgence,
-          constraints: metadata?.contraintes,
-        };
-
-        demandEmbeddings = projectContextEmbeddingsService.vectorizeProjectContext(projectContextData);
-        const contextSummary = projectContextEmbeddingsService.generateContextSummary(projectContextData);
-
-        enrichedMetadata.projectContextEmbeddings = demandEmbeddings;
-
-        console.log(`[Devis] Demand vectorized:`, {
-          typeEmbedding: demandEmbeddings.typeEmbedding,
-          budgetRange: demandEmbeddings.budgetRange.category,
-          surfaceRange: demandEmbeddings.surfaceRange.category,
-          urgencyLevel: demandEmbeddings.urgencyLevel,
-          contextFactors: demandEmbeddings.contextualFactors.length,
-        });
-
-        console.log(`[Devis] Demand summary:\n${contextSummary}`);
-      }
-
-      // Step 1.6: Extract structured data & vectorize proposal (PROPOSITION)
-      console.log(`[Devis] Extracting and vectorizing devis proposal (PROPOSITION)...`);
-      let proposalEmbeddings: DevisProposalVector | null = null;
-      let demandVsProposalComparison: ComparisonResult | null = null;
-
-      // Extract structured data from devis text
-      const extractedData = await torpAnalyzerService.extractDevisDataDirect(devisText);
-
-      if (extractedData) {
-        proposalEmbeddings = devisProposalEmbeddingsService.vectorizeDevisProposal(extractedData);
-
-        console.log(`[Devis] Proposal vectorized:`, {
-          typeVecteur: proposalEmbeddings.typeVecteur,
-          prixTotal: proposalEmbeddings.prixVecteur.montantTotal,
-          transparence: proposalEmbeddings.prixVecteur.transparence,
-          entrepriseName: proposalEmbeddings.entrepriseVecteur.nom,
-          conformiteScore: proposalEmbeddings.entrepriseVecteur.scoreConformite,
-        });
-
-        // Compare DEMAND vs PROPOSITION vectors
-        if (demandEmbeddings && proposalEmbeddings) {
-          console.log(`[Devis] Comparing demand vs proposal vectors...`);
-          demandVsProposalComparison = devisProposalEmbeddingsService.compareVectors(
-            demandEmbeddings,
-            proposalEmbeddings
-          );
-
-          console.log(`[Devis] Alignment score: ${demandVsProposalComparison.alignmentScore}/100`);
-          console.log(`[Devis] Gaps found: ${demandVsProposalComparison.gapAnalysis.length}`);
-          console.log(`[Devis] Recommendations: ${demandVsProposalComparison.recommendations.length}`);
-
-          // Log gaps
-          demandVsProposalComparison.gapAnalysis.forEach(gap => {
-            console.log(`  - [${gap.severity.toUpperCase()}] ${gap.category}: ${gap.description}`);
-          });
-        }
-      }
-
-      // Step 2: Run TORP analysis
-      console.log(`[Devis] Running TORP analysis... (userType: ${enrichedMetadata.userType || 'B2C'})`);
-      const analysis = await torpAnalyzerService.analyzeDevis(devisText, enrichedMetadata as any);
+      // Extract components for database save
+      const analysis = analysisResult.torAnalysisResult;
 
       // Step 3: Save results to database
       console.log(`[Devis] Saving analysis results...`);
