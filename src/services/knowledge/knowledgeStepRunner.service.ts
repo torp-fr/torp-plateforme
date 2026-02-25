@@ -44,11 +44,24 @@ export class KnowledgeStepRunnerService {
     const startTime = Date.now();
 
     try {
+      // PATCH 7: PREVENT DOUBLE PIPELINE - check if one is already running
+      if ((window as any).__RAG_PIPELINE_RUNNING__) {
+        console.warn(`[STEP RUNNER] ⚠️ PIPELINE ALREADY RUNNING - ignoring duplicate request for ${documentId}`);
+        return {
+          success: false,
+          error: 'Pipeline already running for another document',
+          duration: Date.now() - startTime,
+        };
+      }
+
+      // Set flag to prevent concurrent pipelines
+      (window as any).__RAG_PIPELINE_RUNNING__ = true;
       console.log(`[STEP RUNNER] 🚀 Running next step for document ${documentId}`);
 
       // Get current state
       const context = await ingestionStateMachineService.getStateContext(documentId);
       if (!context) {
+        (window as any).__RAG_PIPELINE_RUNNING__ = false;
         return {
           success: false,
           error: 'Failed to fetch document state',
@@ -120,6 +133,9 @@ export class KnowledgeStepRunnerService {
         error: errorMsg,
         duration: Date.now() - startTime,
       };
+    } finally {
+      // PATCH 7: CLEANUP - release pipeline lock
+      (window as any).__RAG_PIPELINE_RUNNING__ = false;
     }
   }
 
@@ -240,8 +256,21 @@ export class KnowledgeStepRunnerService {
       const { chunkText } = await import('@/utils/chunking');
       const chunks = chunkText(doc.original_content, 1000);
 
+      // PATCH 3: HARD STOP if chunking returns empty - do not continue
       if (!chunks || chunks.length === 0) {
-        throw new Error('No chunks created from content');
+        console.error(`[STEP RUNNER] 🚫 CHUNKING FAILED: No chunks created - marking FAILED and STOPPING`);
+        await ingestionStateMachineService.markFailed(
+          documentId,
+          IngestionFailureReason.CHUNKING_ERROR,
+          'No chunks created from content',
+          undefined
+        );
+        return {
+          success: false,
+          nextState: DocumentIngestionState.FAILED,
+          error: 'No chunks created from content',
+          duration: Date.now() - startTime,
+        };
       }
 
       console.log(`[STEP RUNNER] ✅ Created ${chunks.length} chunks`);

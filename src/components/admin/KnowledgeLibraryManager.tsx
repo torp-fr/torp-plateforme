@@ -52,20 +52,24 @@ export function KnowledgeLibraryManager() {
         .order('created_at', { ascending: false })
         .limit(100);
 
+      // PATCH 6: Never throw - handle errors gracefully
       if (dbError) {
-        if (dbError.message.includes('permission') || dbError.message.includes('RLS')) {
-          throw new Error('Permissions insuffisantes (RLS)');
-        }
-        throw dbError;
+        console.error('[KLM DEBUG] Query error:', dbError);
+        const errorMsg = dbError.message.includes('permission') || dbError.message.includes('RLS')
+          ? 'Permissions insuffisantes (RLS)'
+          : dbError.message ?? 'Erreur lors du chargement des documents';
+        setError(errorMsg);
+        setLoading(false);
+        return;
       }
 
       setDocuments(data || []);
       console.log('[KLM] Documents fetched:', data?.length || 0);
+      setLoading(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load documents';
-      console.error('[KLM] Error:', message);
+      console.error('[KLM DEBUG]', message);
       setError(message);
-    } finally {
       setLoading(false);
     }
   };

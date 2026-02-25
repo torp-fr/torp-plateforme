@@ -41,7 +41,12 @@ export function AICommandCenterStrip() {
     window.addEventListener('RAG_OPS_EVENT', updateCommandState);
     window.addEventListener('RAG_COMMAND_CENTER_UPDATE', updateCommandState);
 
-    // Heartbeat monitor - check for stale events
+    // PATCH 5: HEARTBEAT MONITOR - stabilized interval
+    // If edge is offline (FALLBACK), use 15s interval to reduce load
+    // Otherwise use 5s for responsiveness
+    const heartbeatInterval = Boolean((window as any).RAG_EDGE_OFFLINE) ? 15000 : 5000;
+    console.log(`[RAG COMMAND CENTER] Heartbeat interval: ${heartbeatInterval}ms (Edge: ${(window as any).RAG_EDGE_OFFLINE ? 'OFFLINE' : 'ONLINE'})`);
+
     heartbeatIntervalRef.current = setInterval(() => {
       setState((prev) => {
         const now = Date.now();
@@ -56,7 +61,7 @@ export function AICommandCenterStrip() {
 
         return { ...prev, heartbeat };
       });
-    }, 5000);
+    }, heartbeatInterval);
 
     return () => {
       window.removeEventListener('RAG_OPS_EVENT', updateCommandState);

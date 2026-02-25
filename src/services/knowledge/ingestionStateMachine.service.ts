@@ -102,6 +102,12 @@ export class IngestionStateMachineService {
 
       const currentState = doc.ingestion_status as DocumentIngestionState;
 
+      // PATCH 1-2: FAILED state lock - prevent any transitions FROM FAILED
+      if (currentState === DocumentIngestionState.FAILED) {
+        console.warn(`[STATE LOCK] ⚠️ Ignoring transition from FAILED state (immutable)`);
+        return false;
+      }
+
       // Validate transition
       if (!this.isValidTransition(currentState, toState)) {
         console.error(
