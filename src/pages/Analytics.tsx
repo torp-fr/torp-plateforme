@@ -987,7 +987,7 @@ function LastOrchestrationResultSection() {
 /**
  * Upload KB Tab Component
  */
-function UploadKBTab() {
+export function UploadKBTab() {
   return (
     <div className="space-y-6">
       <KnowledgeBaseUpload />
