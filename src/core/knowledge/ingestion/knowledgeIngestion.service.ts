@@ -4,7 +4,7 @@
  * Prepares knowledge base for RAG (Phase 30)
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 
 /**
  * Knowledge document metadata
@@ -55,19 +55,6 @@ export interface IngestionResult {
   errors?: string[];
 }
 
-/**
- * Initialize Supabase client
- */
-function getSupabaseClient() {
-  const supabaseUrl = process.env.SUPABASE_URL || '';
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase configuration');
-  }
-
-  return createClient(supabaseUrl, supabaseKey);
-}
 
 /**
  * Extract text from document buffer
@@ -110,7 +97,6 @@ export async function ingestKnowledgeDocument(
   try {
     console.log('[KnowledgeIngestion] Starting ingestion for:', filename);
 
-    const supabase = getSupabaseClient();
 
     // Step 1: Extract text
     const text = extractTextFromBuffer(fileBuffer, filename);
@@ -190,7 +176,6 @@ export async function searchKnowledge(query: string, limit: number = 10): Promis
   try {
     console.log('[KnowledgeIngestion] Searching for:', query);
 
-    const supabase = getSupabaseClient();
 
     // Full-text search on chunk content
     const { data, error } = await supabase
@@ -221,7 +206,6 @@ export async function getKnowledgeStats(): Promise<{
   totalSize: number;
 }> {
   try {
-    const supabase = getSupabaseClient();
 
     const { data: docs, error: docsError } = await supabase
       .from('knowledge_documents')
@@ -251,7 +235,6 @@ export async function getKnowledgeStats(): Promise<{
  */
 export async function getRecentDocuments(limit: number = 10): Promise<KnowledgeDocument[]> {
   try {
-    const supabase = getSupabaseClient();
 
     const { data, error } = await supabase
       .from('knowledge_documents')
@@ -275,7 +258,6 @@ export async function getRecentDocuments(limit: number = 10): Promise<KnowledgeD
  */
 export async function deleteKnowledgeDocument(documentId: string): Promise<boolean> {
   try {
-    const supabase = getSupabaseClient();
 
     // Delete chunks first (cascade)
     await supabase.from('knowledge_chunks').delete().eq('document_id', documentId);

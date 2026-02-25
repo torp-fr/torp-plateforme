@@ -5,7 +5,7 @@
 
 import type { KnowledgeChunk as ChunkerChunk } from './knowledgeChunker.service';
 import { generateEmbeddingsForChunks } from './knowledgeEmbedding.service';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 
 /**
  * Index statistics
@@ -17,19 +17,6 @@ export interface IndexStats {
   lastUpdated: string;
 }
 
-/**
- * Initialize Supabase client
- */
-function getSupabaseClient() {
-  const supabaseUrl = process.env.SUPABASE_URL || '';
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase configuration');
-  }
-
-  return createClient(supabaseUrl, supabaseKey);
-}
 
 /**
  * Index chunks by generating embeddings
@@ -37,8 +24,6 @@ function getSupabaseClient() {
 export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): Promise<boolean> {
   try {
     console.log('[KnowledgeIndex] Indexing', chunks.length, 'chunks for document:', documentId);
-
-    const supabase = getSupabaseClient();
 
     // Step 1: Generate embeddings
     const embeddings = await generateEmbeddingsForChunks(chunks);

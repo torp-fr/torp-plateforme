@@ -50,6 +50,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+// DEBUG: Detect duplicate Supabase client instantiation
+if (!supabaseUrl) {
+  console.error('🔥 CRITICAL: supabaseUrl is EMPTY - This indicates a duplicate Supabase client initialization outside /src/lib/supabase.ts');
+}
+
 /**
  * Supabase client instance
  * Typed with Database schema for full TypeScript support
