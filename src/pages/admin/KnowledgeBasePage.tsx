@@ -7,9 +7,7 @@ import React from 'react';
 import { UploadKBTab } from '../Analytics';
 import { AICommandCenterStrip } from '@/components/admin/AICommandCenterStrip';
 import { RAGStatusStrip } from '@/components/admin/RAGStatusStrip';
-import { VectorHealthPanel } from '@/components/admin/VectorHealthPanel';
 import { EmbeddingQueuePanel } from '@/components/admin/EmbeddingQueuePanel';
-import { RAGIngestionTimeline } from '@/components/admin/RAGIngestionTimeline';
 import { KnowledgeLibraryManager } from '@/components/admin/KnowledgeLibraryManager';
 import { IngestionMetricsPanel } from '@/components/admin/IngestionMetricsPanel';
 
@@ -28,22 +26,16 @@ export function KnowledgeBasePage() {
       {/* 1️⃣ RAG STATUS */}
       <RAGStatusStrip />
 
-      {/* 2️⃣ VECTOR HEALTH */}
-      <VectorHealthPanel />
-
-      {/* 3️⃣ INGESTION PIPELINE */}
+      {/* 2️⃣ INGESTION PIPELINE */}
       <UploadKBTab />
 
-      {/* 4️⃣ EMBEDDING QUEUE */}
+      {/* 3️⃣ EMBEDDING QUEUE */}
       <EmbeddingQueuePanel />
 
-      {/* 5️⃣ INGESTION TIMELINE */}
-      <RAGIngestionTimeline />
-
-      {/* 6️⃣ LIBRARY MANAGER */}
+      {/* 4️⃣ DOCUMENT MANAGEMENT */}
       <KnowledgeLibraryManager />
 
-      {/* 7️⃣ METRICS */}
+      {/* 5️⃣ METRICS */}
       <IngestionMetricsPanel />
     </div>
   );

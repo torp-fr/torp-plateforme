@@ -6,6 +6,14 @@ import { supabase } from '@/lib/supabase';
 import { Loader2, Eye, Trash2, RotateCw } from 'lucide-react';
 import { KnowledgeInspectDrawer } from './KnowledgeInspectDrawer';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface KnowledgeDocument {
   id: string;
@@ -39,10 +47,10 @@ export function KnowledgeLibraryManager() {
 
       const { data, error: dbError } = await supabase
         .from('knowledge_documents')
-        .select('id, title, category, created_at, preview')
+        .select('id,title,category,preview,created_at,is_active')
         .eq('is_active', true)
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(100);
 
       if (dbError) {
         if (dbError.message.includes('permission') || dbError.message.includes('RLS')) {
@@ -52,7 +60,7 @@ export function KnowledgeLibraryManager() {
       }
 
       setDocuments(data || []);
-      console.log('[KLM] Loaded:', data?.length || 0);
+      console.log('[KLM] Documents fetched:', data?.length || 0);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load documents';
       console.error('[KLM] Error:', message);
@@ -181,85 +189,91 @@ export function KnowledgeLibraryManager() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Bibliothèque d'enrichissement ({documents.length})</CardTitle>
+          <CardTitle className="text-lg">Gestion des Documents ({documents.length})</CardTitle>
           <CardDescription>Documents ingérés et disponibles pour le RAG</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {documents.map((doc) => {
-              const safeTitle = doc.title ?? 'Document';
-              const safePreview = doc.preview ?? '';
-              const safeCategory = doc.category ?? 'général';
-              const ragState = getDerivedRagState(doc.created_at);
+          <div className="rounded-lg border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-[25%]">Titre</TableHead>
+                  <TableHead className="w-[15%]">Catégorie</TableHead>
+                  <TableHead className="w-[35%]">Aperçu</TableHead>
+                  <TableHead className="w-[15%]">Date</TableHead>
+                  <TableHead className="w-[10%] text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {documents.map((doc) => {
+                  const safeTitle = doc.title ?? 'Document';
+                  const safePreview = doc.preview ?? '';
+                  const safeCategory = doc.category ?? 'général';
+                  const ragState = getDerivedRagState(doc.created_at);
+                  const previewTruncated =
+                    safePreview.length > 80 ? safePreview.substring(0, 80) + '...' : safePreview;
 
-              return (
-                <div
-                  key={doc.id}
-                  className="p-4 rounded-lg border border-border/50 hover:border-border/100 transition-colors group"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-sm text-foreground truncate">{safeTitle}</h3>
-                      {safePreview && (
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                          {safePreview}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-2 mt-2 flex-wrap">
-                        <Badge variant="outline" className="whitespace-nowrap text-xs">
+                  return (
+                    <TableRow key={doc.id} className="hover:bg-muted/50">
+                      <TableCell className="font-medium text-sm truncate">{safeTitle}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
                           {safeCategory}
                         </Badge>
-                        <Badge
-                          variant="outline"
-                          className={`whitespace-nowrap text-xs ${ragState.color}`}
-                        >
-                          {ragState.label}
-                        </Badge>
-                        <p className="text-xs text-muted-foreground/60">
-                          {new Date(doc.created_at).toLocaleString('fr-FR')}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* ACTION BAR */}
-                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                        onClick={() => handleInspect(doc)}
-                        title="Inspecter"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                        onClick={() => handleRetryEmbedding(doc)}
-                        title="Retry Embedding"
-                      >
-                        <RotateCw className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                        onClick={() => handleDelete(doc.id, safeTitle)}
-                        disabled={deleting === doc.id}
-                        title="Supprimer"
-                      >
-                        {deleting === doc.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground truncate">
+                        {previewTruncated || '(pas d\'aperçu)'}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {new Date(doc.created_at).toLocaleString('fr-FR', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={() => handleInspect(doc)}
+                            title="Inspecter"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={() => handleRetryEmbedding(doc)}
+                            title="Retry Embedding"
+                          >
+                            <RotateCw className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={() => handleDelete(doc.id, safeTitle)}
+                            disabled={deleting === doc.id}
+                            title="Supprimer"
+                          >
+                            {deleting === doc.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>
