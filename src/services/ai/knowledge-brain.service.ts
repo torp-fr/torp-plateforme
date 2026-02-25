@@ -2,11 +2,13 @@
  * PHASE 35: Knowledge Brain Service
  * Manages knowledge documents, embeddings, and semantic search
  * Integrates with TORP for context-aware analysis
+ *
+ * PHASE 36.12: Now uses AI Orchestrator for centralized embedding operations
+ * This ensures consistent retry logic, timeouts, and error handling
  */
 
 import { supabase } from '@/lib/supabase';
-import { hybridAIService } from './hybrid-ai.service';
-import { secureAI } from './secure-ai.service';
+import { aiOrchestrator } from './aiOrchestrator.service';
 import { pricingExtractionService } from './pricing-extraction.service';
 // PHASE 36.6: Unicode sanitizer for safe database insertion
 import { sanitizeText, getSanitizationStats } from '@/utils/text-sanitizer';
@@ -79,10 +81,10 @@ class KnowledgeBrainService {
   };
 
   constructor() {
-    // PHASE 36.10.7: Verify embedding service is properly wired
+    // PHASE 36.10.7: Verify orchestrator is properly wired
     console.log('[KNOWLEDGE BRAIN] 🧠 Initializing service...');
-    console.log('[KNOWLEDGE BRAIN] Embedding service (hybridAIService):', hybridAIService);
-    console.log('[KNOWLEDGE BRAIN] generateEmbedding available:', typeof hybridAIService.generateEmbedding);
+    console.log('[KNOWLEDGE BRAIN] Embedding orchestrator: aiOrchestrator');
+    console.log('[KNOWLEDGE BRAIN] generateEmbedding available via orchestrator');
   }
 
   /**
@@ -736,12 +738,20 @@ class KnowledgeBrainService {
   }
   async generateEmbedding(content: string): Promise<number[] | null> {
     try {
-      console.log('[NUCLEAR TRACE] embedding call about to happen');
+      console.log('[KNOWLEDGE BRAIN] 🔄 Embedding generation (via orchestrator)');
 
-      // PHASE 36.11: Direct call to secureAI Edge Function
-      const embedding = await secureAI.generateEmbedding(content);
+      // PHASE 36.12: Use AI Orchestrator for centralized embedding with retry/fallback
+      const result = await aiOrchestrator.generateEmbedding({
+        text: content,
+        model: 'text-embedding-3-small',
+      });
 
-      console.log('[NUCLEAR TRACE] embedding received', embedding?.length);
+      const embedding = result.embedding;
+      console.log('[KNOWLEDGE BRAIN] 📊 Embedding received:', {
+        length: embedding.length,
+        source: result.source,
+        retries: result.retriesUsed,
+      });
 
       // PHASE 36.10.3: Defense in depth - validate embedding dimension
       // Database expects VECTOR(1536) - enforce this at application level
@@ -751,10 +761,10 @@ class KnowledgeBrainService {
         throw new Error(errorMsg);
       }
 
-      console.log('[KNOWLEDGE BRAIN] ✅ Embedding generated successfully (1536-dim)');
+      console.log('[KNOWLEDGE BRAIN] ✅ Embedding generated successfully (1536-dim, source: ' + result.source + ')');
       return embedding;
     } catch (error) {
-      console.error('[KNOWLEDGE BRAIN] Error generating embedding:', error);
+      console.error('[KNOWLEDGE BRAIN] ❌ Error generating embedding:', error instanceof Error ? error.message : String(error));
       return null;
     }
   }
