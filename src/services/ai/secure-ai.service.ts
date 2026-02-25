@@ -58,6 +58,7 @@ class SecureAIService {
 
     // CRITICAL: Verify supabase client URL (fixes edge invoke origin mismatch)
     console.log('[EDGE DEBUG URL]', supabase.supabaseUrl);
+    console.log('[EDGE INVOKE FINAL]', supabase.supabaseUrl);
 
     const invokeStart = Date.now();
     const { data, error } = await supabase.functions.invoke(
@@ -132,6 +133,7 @@ class SecureAIService {
 
     // CRITICAL: Verify supabase client URL (fixes edge invoke origin mismatch)
     console.log('[EDGE DEBUG URL]', supabase.supabaseUrl);
+    console.log('[EDGE INVOKE FINAL]', supabase.supabaseUrl);
 
     const invokeStart = Date.now();
     const { data, error } = await supabase.functions.invoke(
