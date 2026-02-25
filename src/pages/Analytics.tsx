@@ -737,7 +737,7 @@ function EngineStatusLiveCard() {
 /**
  * Overview Tab Component - Platform Control Center
  */
-function OverviewTab() {
+export function OverviewTab() {
   const apiStats = getAPIStats();
 
   return (
