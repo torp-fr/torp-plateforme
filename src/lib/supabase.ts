@@ -54,7 +54,35 @@ if (!supabaseUrl || !supabaseAnonKey) {
  * Supabase client instance
  * Typed with Database schema for full TypeScript support
  */
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+let _supabase: ReturnType<typeof createClient<Database>> | null = null;
+
+export function getSupabase() {
+  if (!_supabase) {
+    // DEBUG GLOBAL COUNTER
+    // @ts-ignore
+    window.__SUPABASE_INIT_COUNT = (window.__SUPABASE_INIT_COUNT || 0) + 1;
+
+    _supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+        storage: window.localStorage,
+      },
+      global: {
+        headers: {
+          'x-application-name': 'torp-web-app',
+        },
+      },
+    });
+
+    console.log('🔥 SUPABASE INIT COUNT =', window.__SUPABASE_INIT_COUNT);
+  }
+
+  return _supabase;
+}
+
+export const supabase = getSupabase();
   auth: {
     autoRefreshToken: true,
     persistSession: true,
