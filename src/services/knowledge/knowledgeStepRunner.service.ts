@@ -227,10 +227,15 @@ export class KnowledgeStepRunnerService {
   }
 
   /**
-   * STEP 2: Chunking (CHUNKING state)
+   * PHASE 9: STEP 2 - Chunking (CHUNKING state)
    * Splits extracted text into semantic chunks
    *
-   * Calls knowledge-brain.service internal function
+   * CRITICAL: Single source of truth for chunking
+   * - knowledgeStepRunner orchestrates ONLY
+   * - knowledgeBrainService must NOT re-chunk
+   * - Verify chunks aren't already inserted (anti-double-pipeline)
+   * - Support massive documents with throttling
+   *
    * On success: transitions to EMBEDDING
    * On failure: marks FAILED with CHUNKING error
    */
@@ -239,6 +244,30 @@ export class KnowledgeStepRunnerService {
 
     try {
       console.log(`[STEP RUNNER] ✂️ CHUNKING STEP: Splitting text into chunks...`);
+
+      // PHASE 9: Check if chunks already exist (prevent double-chunking)
+      const { data: existingChunks } = await supabase
+        .from('knowledge_chunks')
+        .select('id', { count: 'exact', head: true })
+        .eq('document_id', documentId);
+
+      if (existingChunks && existingChunks.length > 0) {
+        console.log(`[STEP RUNNER] ℹ️ Chunks already exist (${existingChunks.length}) - skipping rechunking`);
+        // Transition directly to EMBEDDING
+        const transitioned = await ingestionStateMachineService.transitionTo(
+          documentId,
+          DocumentIngestionState.EMBEDDING,
+          'chunks_already_created'
+        );
+        if (!transitioned) {
+          throw new Error('Failed to transition to EMBEDDING state');
+        }
+        return {
+          success: true,
+          nextState: DocumentIngestionState.EMBEDDING,
+          duration: Date.now() - startTime,
+        };
+      }
 
       // Fetch content to chunk
       const { data: doc, error: fetchError } = await supabase
@@ -251,12 +280,21 @@ export class KnowledgeStepRunnerService {
         throw new Error('No content available for chunking');
       }
 
+      const contentLength = doc.original_content.length;
+      const isBigDoc = contentLength > 1_000_000; // 1MB threshold
+
+      // PHASE 9: Detect big document mode
+      if (isBigDoc) {
+        console.warn(`[STEP RUNNER] 📚 BIG DOCUMENT DETECTED: ${contentLength} chars - activating throttled mode`);
+        (window as any).__RAG_BIG_DOC_MODE__ = true;
+        window.dispatchEvent(new Event('RAG_BIG_DOC_MODE_ACTIVATED'));
+      }
+
       // Use knowledge-brain service chunking function
-      // (In PHASE 39, this would delegate to knowledge-brain.service.chunkAndStore())
       const { chunkText } = await import('@/utils/chunking');
       const chunks = chunkText(doc.original_content, 1000);
 
-      // PATCH 3: HARD STOP if chunking returns empty - do not continue
+      // PATCH 3: HARD STOP if chunking returns empty
       if (!chunks || chunks.length === 0) {
         console.error(`[STEP RUNNER] 🚫 CHUNKING FAILED: No chunks created - marking FAILED and STOPPING`);
         await ingestionStateMachineService.markFailed(
@@ -269,6 +307,24 @@ export class KnowledgeStepRunnerService {
           success: false,
           nextState: DocumentIngestionState.FAILED,
           error: 'No chunks created from content',
+          duration: Date.now() - startTime,
+        };
+      }
+
+      // PHASE 9: Chunk limit safety - max 600 chunks
+      const MAX_CHUNKS_PER_DOC = 600;
+      if (chunks.length > MAX_CHUNKS_PER_DOC) {
+        console.error(`[STEP RUNNER] 🚫 CHUNK LIMIT EXCEEDED: ${chunks.length} chunks > ${MAX_CHUNKS_PER_DOC} max`);
+        await ingestionStateMachineService.markFailed(
+          documentId,
+          IngestionFailureReason.CHUNKING_ERROR,
+          `Document too large: ${chunks.length} chunks exceeds limit of ${MAX_CHUNKS_PER_DOC}`,
+          undefined
+        );
+        return {
+          success: false,
+          nextState: DocumentIngestionState.FAILED,
+          error: `Document too large (${chunks.length} chunks)`,
           duration: Date.now() - startTime,
         };
       }
@@ -362,6 +418,25 @@ export class KnowledgeStepRunnerService {
       let successCount = 0;
       let failureCount = 0;
 
+      // PHASE 9: Check if document is in FAILED state before embedding
+      const context = await ingestionStateMachineService.getStateContext(documentId);
+      if (context && context.current_state === DocumentIngestionState.FAILED) {
+        console.error(`[STEP RUNNER] 🔴 HARD LOCK: Document is FAILED - stopping embedding immediately`);
+        return {
+          success: false,
+          error: 'Document is in FAILED state',
+          duration: Date.now() - startTime,
+        };
+      }
+
+      // PHASE 9: Check if big doc mode is active
+      const isBigDocMode = Boolean((window as any).__RAG_BIG_DOC_MODE__);
+      const throttleDelay = isBigDocMode ? 80 : 0; // 80ms throttle for big docs
+
+      if (isBigDocMode) {
+        console.warn(`[STEP RUNNER] ⚡ BIG DOC MODE: Throttling embeddings (${throttleDelay}ms between chunks)`);
+      }
+
       // Generate embeddings for each chunk sequentially
       for (let i = 0; i < chunks.length; i++) {
         try {
@@ -374,6 +449,10 @@ export class KnowledgeStepRunnerService {
           if (!embedding) {
             console.warn(`[STEP RUNNER] ⚠️ Chunk ${i} embedding returned null`);
             failureCount++;
+            // PHASE 9: Still throttle even on failure
+            if (throttleDelay > 0) {
+              await new Promise(resolve => setTimeout(resolve, throttleDelay));
+            }
             continue;
           }
 
@@ -391,6 +470,11 @@ export class KnowledgeStepRunnerService {
             failureCount++;
           } else {
             successCount++;
+          }
+
+          // PHASE 9: Throttle between chunks if big document
+          if (throttleDelay > 0 && i < chunks.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, throttleDelay));
           }
         } catch (chunkError) {
           console.error(`[STEP RUNNER] Error embedding chunk ${i}:`, chunkError);

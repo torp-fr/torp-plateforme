@@ -21,6 +21,7 @@ export function RAGStatusStrip() {
   });
   const [loading, setLoading] = useState(true);
   const [edgeOnline, setEdgeOnline] = useState(true);
+  const [bigDocMode, setBigDocMode] = useState(false);
 
   const fetchStatus = async () => {
     try {
@@ -88,12 +89,26 @@ export function RAGStatusStrip() {
     window.addEventListener('RAG_EMBEDDING_PAUSED', handleEmbeddingPause);
     window.addEventListener('RAG_EMBEDDING_RESUMED', handleEmbeddingResume);
 
+    // PHASE 9: Listen for big document mode events
+    const handleBigDocActivated = () => {
+      console.log('[RAGStatusStrip] Big doc mode activated');
+      setBigDocMode(true);
+    };
+    const handleBigDocCleared = () => {
+      console.log('[RAGStatusStrip] Big doc mode cleared');
+      setBigDocMode(false);
+    };
+    window.addEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocActivated);
+    window.addEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocCleared);
+
     return () => {
       clearInterval(interval);
       window.removeEventListener('RAG_OPS_EVENT', handleOpsEvent);
       window.removeEventListener('RAG_LIBRARY_REFRESH', handleOpsEvent);
       window.removeEventListener('RAG_EMBEDDING_PAUSED', handleEmbeddingPause);
       window.removeEventListener('RAG_EMBEDDING_RESUMED', handleEmbeddingResume);
+      window.removeEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocActivated);
+      window.removeEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocCleared);
     };
   }, []);
 
@@ -153,12 +168,14 @@ export function RAGStatusStrip() {
                 className={
                   status.embeddingEngine === 'paused'
                     ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : edgeOnline
-                      ? 'bg-blue-50 text-blue-700 border-blue-200'
-                      : 'bg-red-50 text-red-700 border-red-200'
+                    : bigDocMode
+                      ? 'bg-purple-50 text-purple-700 border-purple-200'
+                      : edgeOnline
+                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                        : 'bg-red-50 text-red-700 border-red-200'
                 }
               >
-                {status.embeddingEngine === 'paused' ? '⏸️ Paused' : edgeOnline ? '✓ Online' : '⚠️ Fallback'}
+                {status.embeddingEngine === 'paused' ? '⏸️ Paused' : bigDocMode ? '⚡ Throttled' : edgeOnline ? '✓ Online' : '⚠️ Fallback'}
               </Badge>
             </div>
           </div>

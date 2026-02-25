@@ -7,6 +7,7 @@ interface CommandState {
   orchestratorState: 'ACTIVE' | 'DEGRADED' | 'FALLBACK';
   heartbeat: 'beating' | 'stale';
   lastEventTime: number | null;
+  bigDocMode: boolean;
 }
 
 export function AICommandCenterStrip() {
@@ -14,6 +15,7 @@ export function AICommandCenterStrip() {
     orchestratorState: 'ACTIVE',
     heartbeat: 'beating',
     lastEventTime: Date.now(),
+    bigDocMode: false,
   });
 
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -52,6 +54,18 @@ export function AICommandCenterStrip() {
     window.addEventListener('RAG_OPS_EVENT', updateCommandState);
     window.addEventListener('RAG_COMMAND_CENTER_UPDATE', updateCommandState);
 
+    // PHASE 9: Listen for big document mode events
+    const handleBigDocMode = () => {
+      console.log('[RAG COMMAND CENTER] 📚 Big document mode activated');
+      setState(prev => ({ ...prev, bigDocMode: true }));
+    };
+    const handleBigDocClear = () => {
+      console.log('[RAG COMMAND CENTER] 📚 Big document mode cleared');
+      setState(prev => ({ ...prev, bigDocMode: false }));
+    };
+    window.addEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocMode);
+    window.addEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocClear);
+
     // PATCH 5: HEARTBEAT MONITOR - stabilized interval
     // If edge is offline (FALLBACK), use 15s interval to reduce load
     // Otherwise use 5s for responsiveness
@@ -77,6 +91,8 @@ export function AICommandCenterStrip() {
     return () => {
       window.removeEventListener('RAG_OPS_EVENT', updateCommandState);
       window.removeEventListener('RAG_COMMAND_CENTER_UPDATE', updateCommandState);
+      window.removeEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocMode);
+      window.removeEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocClear);
       if (heartbeatIntervalRef.current) {
         clearInterval(heartbeatIntervalRef.current);
       }
@@ -120,6 +136,13 @@ export function AICommandCenterStrip() {
               {state.orchestratorState}
             </Badge>
           </div>
+
+          {/* PHASE 9: Big Document Mode Badge */}
+          {state.bigDocMode && (
+            <Badge className="bg-blue-100 text-blue-700 border-blue-200">
+              📚 BIG DOC MODE
+            </Badge>
+          )}
 
           {/* Heartbeat Badge */}
           <Badge

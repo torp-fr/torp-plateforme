@@ -134,6 +134,10 @@ export class IngestionStateMachineService {
       if (toState === DocumentIngestionState.COMPLETED) {
         updateData.ingestion_completed_at = new Date().toISOString();
         console.log(`[STATE MACHINE] ⏱️ Ingestion completed at ${updateData.ingestion_completed_at}`);
+
+        // PHASE 9: Clear big doc mode when document completes
+        (window as any).__RAG_BIG_DOC_MODE__ = false;
+        window.dispatchEvent(new Event('RAG_BIG_DOC_MODE_CLEARED'));
       }
 
       // Update state in database
