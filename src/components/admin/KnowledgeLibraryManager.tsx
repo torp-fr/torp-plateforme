@@ -3,7 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
-import { Loader2, Eye, Trash2 } from 'lucide-react';
+import { Loader2, Eye, Trash2, RotateCw } from 'lucide-react';
+import { KnowledgeInspectDrawer } from './KnowledgeInspectDrawer';
+import { useToast } from '@/hooks/use-toast';
 
 interface KnowledgeDocument {
   id: string;
@@ -15,10 +17,12 @@ interface KnowledgeDocument {
 }
 
 export function KnowledgeLibraryManager() {
+  const { toast } = useToast();
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [selectedDoc, setSelectedDoc] = useState<KnowledgeDocument | null>(null);
 
   const fetchDocuments = async () => {
     try {
@@ -53,6 +57,18 @@ export function KnowledgeLibraryManager() {
   useEffect(() => {
     fetchDocuments();
   }, []);
+
+  const handleInspect = (doc: KnowledgeDocument) => {
+    setSelectedDoc(doc);
+  };
+
+  const handleRetryEmbedding = (doc: KnowledgeDocument) => {
+    console.warn('[RAG ENTERPRISE] Retry requested for', doc.id);
+    toast({
+      title: 'Retry Queued',
+      description: 'Manual embedding trigger required for ' + (doc.title ?? 'Document'),
+    });
+  };
 
   const handleDelete = async (docId: string, docTitle: string) => {
     try {
@@ -133,13 +149,16 @@ export function KnowledgeLibraryManager() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">Bibliothèque d'enrichissement ({documents.length})</CardTitle>
-        <CardDescription>Documents ingérés et disponibles pour le RAG</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
+    <>
+      <KnowledgeInspectDrawer document={selectedDoc} onClose={() => setSelectedDoc(null)} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Bibliothèque d'enrichissement ({documents.length})</CardTitle>
+          <CardDescription>Documents ingérés et disponibles pour le RAG</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
           {documents.map((doc) => {
             const safeTitle = doc.title ?? 'Document';
             const safePreview = doc.preview ?? '';
@@ -180,9 +199,19 @@ export function KnowledgeLibraryManager() {
                       variant="outline"
                       size="sm"
                       className="h-8 w-8 p-0"
+                      onClick={() => handleInspect(doc)}
                       title="Inspecter"
                     >
                       <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={() => handleRetryEmbedding(doc)}
+                      title="Retry Embedding"
+                    >
+                      <RotateCw className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="destructive"
@@ -206,5 +235,6 @@ export function KnowledgeLibraryManager() {
         </div>
       </CardContent>
     </Card>
+    </>
   );
 }
