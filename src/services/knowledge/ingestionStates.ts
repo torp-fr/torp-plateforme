@@ -79,40 +79,36 @@ export interface StateTransition {
 
 /**
  * Ingestion state context for persistence
+ *
+ * Maps to existing Supabase knowledge_documents columns:
+ * - document_id: id
+ * - current_state: ingestion_status
+ * - started_at: ingestion_started_at
+ * - transitioned_at: updated_at
+ * - progress_percent: ingestion_progress
+ * - current_step: last_ingestion_step
+ * - failure_reason/error_message/error_stack: parsed from last_ingestion_error JSON
  */
 export interface IngestionStateContext {
   document_id: string;
   current_state: DocumentIngestionState;
-  previous_state?: DocumentIngestionState;
 
-  // Timing
-  started_at: string;
-  transitioned_at: string;
+  // Timing (mapped to Supabase columns)
+  started_at: string;           // ingestion_started_at
+  transitioned_at: string;      // updated_at
   updated_at: string;
 
-  // Progress tracking
-  progress_percent: number;
-  current_step: string;
+  // Progress tracking (mapped to Supabase columns)
+  progress_percent: number;     // ingestion_progress
+  current_step: string;         // last_ingestion_step
 
-  // Metrics
-  extraction_duration_ms?: number;
-  chunking_duration_ms?: number;
-  embedding_duration_ms?: number;
-  finalization_duration_ms?: number;
-  total_duration_ms?: number;
-
-  // Failure tracking
+  // Failure tracking (parsed from last_ingestion_error JSON)
   failure_reason?: IngestionFailureReason;
   error_message?: string;
-  error_stack?: string;
-  retry_count: number;
-  last_retry_at?: string;
+  error_stack?: string | null;
 
-  // Statistics
-  chunks_created?: number;
-  chunks_embedded?: number;
-  chunks_failed?: number;
-  embedding_integrity_checked?: boolean;
+  // Retry tracking
+  retry_count: number;
 }
 
 /**
