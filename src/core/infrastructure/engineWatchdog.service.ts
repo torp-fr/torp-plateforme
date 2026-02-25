@@ -4,15 +4,10 @@
  * Ensures platform stability and early warning of issues
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import { structuredLogger } from '@/services/observability/structured-logger';
 
 const logger = structuredLogger;
-
-const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL || '',
-  process.env.REACT_APP_SUPABASE_ANON_KEY || ''
-);
 
 export interface WatchdogAlert {
   type: 'slow_execution' | 'error_spike' | 'fraud_anomaly' | 'api_unavailable' | 'enrichment_degradation';
