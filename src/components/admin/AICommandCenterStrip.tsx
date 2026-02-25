@@ -9,6 +9,7 @@ interface CommandState {
   lastEventTime: number | null;
   bigDocMode: boolean;
   pipelineLocked: boolean;
+  streamMode: boolean;
 }
 
 export function AICommandCenterStrip() {
@@ -18,6 +19,7 @@ export function AICommandCenterStrip() {
     lastEventTime: Date.now(),
     bigDocMode: false,
     pipelineLocked: false,
+    streamMode: false,
   });
 
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -88,6 +90,18 @@ export function AICommandCenterStrip() {
     window.addEventListener('RAG_PIPELINE_LOCKED', handlePipelineLocked);
     window.addEventListener('RAG_PIPELINE_UNLOCKED', handlePipelineUnlocked);
 
+    // PHASE 11: Listen for stream mode events
+    const handleStreamModeActivated = () => {
+      console.log('[RAG COMMAND CENTER] 🌊 Stream mode activated');
+      setState(prev => ({ ...prev, streamMode: true }));
+    };
+    const handleStreamModeCleared = () => {
+      console.log('[RAG COMMAND CENTER] 🌊 Stream mode cleared');
+      setState(prev => ({ ...prev, streamMode: false }));
+    };
+    window.addEventListener('RAG_STREAM_MODE_ACTIVATED', handleStreamModeActivated);
+    window.addEventListener('RAG_STREAM_MODE_CLEARED', handleStreamModeCleared);
+
     // PATCH 5: HEARTBEAT MONITOR - stabilized interval
     // If edge is offline (FALLBACK), use 15s interval to reduce load
     // Otherwise use 5s for responsiveness
@@ -117,6 +131,8 @@ export function AICommandCenterStrip() {
       window.removeEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocClear);
       window.removeEventListener('RAG_PIPELINE_LOCKED', handlePipelineLocked);
       window.removeEventListener('RAG_PIPELINE_UNLOCKED', handlePipelineUnlocked);
+      window.removeEventListener('RAG_STREAM_MODE_ACTIVATED', handleStreamModeActivated);
+      window.removeEventListener('RAG_STREAM_MODE_CLEARED', handleStreamModeCleared);
       if (heartbeatIntervalRef.current) {
         clearInterval(heartbeatIntervalRef.current);
       }
@@ -172,6 +188,13 @@ export function AICommandCenterStrip() {
           {state.pipelineLocked && (
             <Badge className="bg-red-100 text-red-700 border-red-200">
               🔒 PIPELINE LOCKED
+            </Badge>
+          )}
+
+          {/* PHASE 11: Stream Mode Badge */}
+          {state.streamMode && (
+            <Badge className="bg-cyan-100 text-cyan-700 border-cyan-200">
+              🌊 STREAM MODE
             </Badge>
           )}
 

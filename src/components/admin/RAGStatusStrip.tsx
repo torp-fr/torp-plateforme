@@ -23,6 +23,7 @@ export function RAGStatusStrip() {
   const [edgeOnline, setEdgeOnline] = useState(true);
   const [bigDocMode, setBigDocMode] = useState(false);
   const [pipelineLocked, setPipelineLocked] = useState(false);
+  const [streamMode, setStreamMode] = useState(false);
 
   const fetchStatus = async () => {
     try {
@@ -114,6 +115,18 @@ export function RAGStatusStrip() {
     window.addEventListener('RAG_PIPELINE_LOCKED', handlePipelineLocked);
     window.addEventListener('RAG_PIPELINE_UNLOCKED', handlePipelineUnlocked);
 
+    // PHASE 11: Listen for stream mode events
+    const handleStreamModeActivated = () => {
+      console.log('[RAGStatusStrip] Stream mode activated');
+      setStreamMode(true);
+    };
+    const handleStreamModeCleared = () => {
+      console.log('[RAGStatusStrip] Stream mode cleared');
+      setStreamMode(false);
+    };
+    window.addEventListener('RAG_STREAM_MODE_ACTIVATED', handleStreamModeActivated);
+    window.addEventListener('RAG_STREAM_MODE_CLEARED', handleStreamModeCleared);
+
     return () => {
       clearInterval(interval);
       window.removeEventListener('RAG_OPS_EVENT', handleOpsEvent);
@@ -124,6 +137,8 @@ export function RAGStatusStrip() {
       window.removeEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocCleared);
       window.removeEventListener('RAG_PIPELINE_LOCKED', handlePipelineLocked);
       window.removeEventListener('RAG_PIPELINE_UNLOCKED', handlePipelineUnlocked);
+      window.removeEventListener('RAG_STREAM_MODE_ACTIVATED', handleStreamModeActivated);
+      window.removeEventListener('RAG_STREAM_MODE_CLEARED', handleStreamModeCleared);
     };
   }, []);
 
@@ -170,14 +185,18 @@ export function RAGStatusStrip() {
                 ? 'bg-red-100'
                 : status.embeddingEngine === 'paused'
                   ? 'bg-amber-100'
-                  : 'bg-blue-100'
+                  : streamMode
+                    ? 'bg-cyan-100'
+                    : 'bg-blue-100'
             }`}>
               <Zap className={`h-5 w-5 ${
                 pipelineLocked
                   ? 'text-red-600'
                   : status.embeddingEngine === 'paused'
                     ? 'text-amber-600'
-                    : 'text-blue-600'
+                    : streamMode
+                      ? 'text-cyan-600'
+                      : 'text-blue-600'
               }`} />
             </div>
             <div>
@@ -189,14 +208,16 @@ export function RAGStatusStrip() {
                     ? 'bg-red-50 text-red-700 border-red-200'
                     : status.embeddingEngine === 'paused'
                       ? 'bg-amber-50 text-amber-700 border-amber-200'
-                      : bigDocMode
-                        ? 'bg-purple-50 text-purple-700 border-purple-200'
-                        : edgeOnline
-                          ? 'bg-blue-50 text-blue-700 border-blue-200'
-                          : 'bg-red-50 text-red-700 border-red-200'
+                      : streamMode
+                        ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
+                        : bigDocMode
+                          ? 'bg-purple-50 text-purple-700 border-purple-200'
+                          : edgeOnline
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : 'bg-red-50 text-red-700 border-red-200'
                 }
               >
-                {pipelineLocked ? '🔒 Locked' : status.embeddingEngine === 'paused' ? '⏸️ Paused' : bigDocMode ? '⚡ Throttled' : edgeOnline ? '✓ Online' : '⚠️ Fallback'}
+                {pipelineLocked ? '🔒 Locked' : status.embeddingEngine === 'paused' ? '⏸️ Paused' : streamMode ? '🌊 Streaming' : bigDocMode ? '⚡ Throttled' : edgeOnline ? '✓ Online' : '⚠️ Fallback'}
               </Badge>
             </div>
           </div>

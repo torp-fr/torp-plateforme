@@ -429,6 +429,15 @@ class KnowledgeBrainService {
       const preview = sanitized.slice(0, 10000);
       console.log('[KNOWLEDGE BRAIN] 📄 Created preview: ' + preview.length + ' chars');
 
+      // PHASE 11: STREAM MODE DETECTION
+      const STREAM_THRESHOLD = 2_000_000; // 2MB threshold
+      const isStreamMode = sanitized.length > STREAM_THRESHOLD;
+      if (isStreamMode) {
+        console.warn(`[STREAM MODE] 🚀 Activating streaming ingestion (${(sanitized.length / 1024 / 1024).toFixed(2)}MB)`);
+        (window as any).__RAG_STREAM_MODE__ = true;
+        window.dispatchEvent(new Event('RAG_STREAM_MODE_ACTIVATED'));
+      }
+
       // ✅ PHASE 36.9 STEP 4: INSERT DOCUMENT IMMEDIATELY (NON-BLOCKING)
       // PHASE 36.10.1: Initialize with ingestion_status = 'pending'
       console.log('[KNOWLEDGE BRAIN] 📝 Inserting document FIRST...');

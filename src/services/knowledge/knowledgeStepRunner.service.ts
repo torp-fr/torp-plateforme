@@ -282,6 +282,7 @@ export class KnowledgeStepRunnerService {
 
       const contentLength = doc.original_content.length;
       const isBigDoc = contentLength > 1_000_000; // 1MB threshold
+      const isStreamMode = Boolean((window as any).__RAG_STREAM_MODE__);
 
       // PHASE 9: Detect big document mode
       if (isBigDoc) {
@@ -292,7 +293,73 @@ export class KnowledgeStepRunnerService {
 
       // Use knowledge-brain service chunking function
       const { chunkText } = await import('@/utils/chunking');
-      const chunks = chunkText(doc.original_content, 1000);
+
+      // PHASE 11: STREAMING CHUNKING ENGINE
+      let chunks: any[] = [];
+      if (isStreamMode) {
+        console.log(`[STEP RUNNER] 🌊 STREAM MODE: Chunking ${(contentLength / 1024 / 1024).toFixed(2)}MB with micro-batching`);
+        const STREAM_SLICE_SIZE = 60000; // 60KB slices
+        const STREAM_BATCH_SIZE = 40;
+
+        for (let offset = 0; offset < doc.original_content.length; offset += STREAM_SLICE_SIZE) {
+          // Check pipeline lock
+          if ((window as any).__RAG_PIPELINE_LOCKED__) {
+            console.warn(`[STEP RUNNER] 🔒 Pipeline locked during streaming - aborting`);
+            throw new Error('Pipeline locked during streaming ingestion');
+          }
+
+          const slice = doc.original_content.slice(offset, offset + STREAM_SLICE_SIZE);
+          const partialChunks = chunkText(slice, 1000);
+
+          if (partialChunks && partialChunks.length > 0) {
+            chunks.push(...partialChunks);
+
+            // Insert batch every STREAM_BATCH_SIZE chunks
+            if (chunks.length >= STREAM_BATCH_SIZE) {
+              console.log(`[STEP RUNNER] 💾 Stream batch: inserting ${chunks.length} chunks...`);
+              const { error: insertError } = await supabase
+                .from('knowledge_chunks')
+                .insert(
+                  chunks.map((chunk, idx) => ({
+                    document_id: documentId,
+                    content: chunk.content,
+                    chunk_index: offset / STREAM_SLICE_SIZE * STREAM_BATCH_SIZE + idx,
+                  }))
+                );
+
+              if (insertError) {
+                console.warn(`[STEP RUNNER] ⚠️ Batch insert warning:`, insertError.message);
+              }
+
+              chunks = []; // Reset for next batch
+            }
+          }
+
+          // Yield thread back to browser
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+      } else {
+        // Standard chunking for normal documents
+        chunks = chunkText(doc.original_content, 1000);
+      }
+
+      // Insert remaining chunks from stream
+      if (isStreamMode && chunks.length > 0) {
+        console.log(`[STEP RUNNER] 💾 Stream final batch: inserting ${chunks.length} chunks...`);
+        const { error: insertError } = await supabase
+          .from('knowledge_chunks')
+          .insert(
+            chunks.map((chunk, idx) => ({
+              document_id: documentId,
+              content: chunk.content,
+              chunk_index: idx,
+            }))
+          );
+
+        if (insertError) {
+          console.warn(`[STEP RUNNER] ⚠️ Final batch insert warning:`, insertError.message);
+        }
+      }
 
       // PATCH 3: HARD STOP if chunking returns empty
       if (!chunks || chunks.length === 0) {
@@ -412,22 +479,6 @@ export class KnowledgeStepRunnerService {
 
       console.log(`[STEP RUNNER] 🔢 EMBEDDING STEP: Generating embeddings for chunks...`);
 
-      // Fetch chunks to embed
-      const { data: chunks, error: fetchError } = await supabase
-        .from('knowledge_chunks')
-        .select('id, content')
-        .eq('document_id', documentId)
-        .order('chunk_index', { ascending: true });
-
-      if (fetchError || !chunks || chunks.length === 0) {
-        throw new Error('No chunks found to embed');
-      }
-
-      console.log(`[STEP RUNNER] Processing ${chunks.length} chunks...`);
-
-      let successCount = 0;
-      let failureCount = 0;
-
       // PHASE 9: Check if document is in FAILED state before embedding
       const context = await ingestionStateMachineService.getStateContext(documentId);
       if (context && context.current_state === DocumentIngestionState.FAILED) {
@@ -441,54 +492,148 @@ export class KnowledgeStepRunnerService {
 
       // PHASE 9: Check if big doc mode is active
       const isBigDocMode = Boolean((window as any).__RAG_BIG_DOC_MODE__);
+      const isStreamMode = Boolean((window as any).__RAG_STREAM_MODE__);
       const throttleDelay = isBigDocMode ? 80 : 0; // 80ms throttle for big docs
 
       if (isBigDocMode) {
         console.warn(`[STEP RUNNER] ⚡ BIG DOC MODE: Throttling embeddings (${throttleDelay}ms between chunks)`);
       }
 
-      // Generate embeddings for each chunk sequentially
-      for (let i = 0; i < chunks.length; i++) {
-        try {
-          const chunk = chunks[i];
-          console.log(`[STEP RUNNER] Embedding chunk ${i + 1}/${chunks.length}...`);
+      let successCount = 0;
+      let failureCount = 0;
 
-          // Call knowledge-brain service embedding function
-          const embedding = await knowledgeBrainService.generateEmbedding(chunk.content);
+      // PHASE 11: STREAMING EMBEDDING ENGINE
+      if (isStreamMode) {
+        console.log(`[STEP RUNNER] 🌊 STREAM MODE: Embedding chunks in micro-batches of 50...`);
+        const STREAM_BATCH_SIZE = 50;
+        let cursor = 0;
 
-          if (!embedding) {
-            console.warn(`[STEP RUNNER] ⚠️ Chunk ${i} embedding returned null`);
-            failureCount++;
-            // PHASE 9: Still throttle even on failure
-            if (throttleDelay > 0) {
+        while (true) {
+          // Check pipeline lock
+          if ((window as any).__RAG_PIPELINE_LOCKED__) {
+            console.warn(`[STEP RUNNER] 🔒 Pipeline locked during streaming embedding - aborting`);
+            throw new Error('Pipeline locked during streaming embedding');
+          }
+
+          // Fetch batch of chunks from DB
+          const { data: batch, error: fetchError } = await supabase
+            .from('knowledge_chunks')
+            .select('id, content, chunk_index')
+            .eq('document_id', documentId)
+            .order('chunk_index', { ascending: true })
+            .range(cursor, cursor + STREAM_BATCH_SIZE - 1);
+
+          if (fetchError) {
+            console.error(`[STEP RUNNER] Batch fetch error at offset ${cursor}:`, fetchError);
+            throw fetchError;
+          }
+
+          if (!batch || batch.length === 0) {
+            console.log(`[STEP RUNNER] 🌊 Stream embedding complete (${cursor} chunks processed)`);
+            break;
+          }
+
+          // Embed batch sequentially
+          for (let i = 0; i < batch.length; i++) {
+            try {
+              const chunk = batch[i];
+              const chunkNum = cursor + i + 1;
+
+              // Call knowledge-brain service embedding function
+              const embedding = await knowledgeBrainService.generateEmbedding(chunk.content);
+
+              if (!embedding) {
+                console.warn(`[STEP RUNNER] ⚠️ Chunk ${chunkNum} embedding returned null`);
+                failureCount++;
+              } else {
+                // Store embedding
+                const { error: updateError } = await supabase
+                  .from('knowledge_chunks')
+                  .update({
+                    embedding,
+                    embedding_generated_at: new Date().toISOString(),
+                  })
+                  .eq('id', chunk.id);
+
+                if (updateError) {
+                  console.error(`[STEP RUNNER] Failed to store embedding for chunk ${chunkNum}:`, updateError);
+                  failureCount++;
+                } else {
+                  successCount++;
+                }
+              }
+
+              // Throttle if needed
+              if (throttleDelay > 0) {
+                await new Promise(resolve => setTimeout(resolve, throttleDelay));
+              }
+            } catch (chunkError) {
+              console.error(`[STEP RUNNER] Error embedding chunk ${cursor + i}:`, chunkError);
+              failureCount++;
+            }
+          }
+
+          cursor += STREAM_BATCH_SIZE;
+          // Micro-throttle between batches
+          await new Promise(resolve => setTimeout(resolve, 30));
+        }
+      } else {
+        // Standard embedding for normal documents
+        const { data: chunks, error: fetchError } = await supabase
+          .from('knowledge_chunks')
+          .select('id, content')
+          .eq('document_id', documentId)
+          .order('chunk_index', { ascending: true });
+
+        if (fetchError || !chunks || chunks.length === 0) {
+          throw new Error('No chunks found to embed');
+        }
+
+        console.log(`[STEP RUNNER] Processing ${chunks.length} chunks...`);
+
+        // Generate embeddings for each chunk sequentially
+        for (let i = 0; i < chunks.length; i++) {
+          try {
+            const chunk = chunks[i];
+            console.log(`[STEP RUNNER] Embedding chunk ${i + 1}/${chunks.length}...`);
+
+            // Call knowledge-brain service embedding function
+            const embedding = await knowledgeBrainService.generateEmbedding(chunk.content);
+
+            if (!embedding) {
+              console.warn(`[STEP RUNNER] ⚠️ Chunk ${i} embedding returned null`);
+              failureCount++;
+              // PHASE 9: Still throttle even on failure
+              if (throttleDelay > 0) {
+                await new Promise(resolve => setTimeout(resolve, throttleDelay));
+              }
+              continue;
+            }
+
+            // Store embedding
+            const { error: updateError } = await supabase
+              .from('knowledge_chunks')
+              .update({
+                embedding,
+                embedding_generated_at: new Date().toISOString(),
+              })
+              .eq('id', chunk.id);
+
+            if (updateError) {
+              console.error(`[STEP RUNNER] Failed to store embedding for chunk ${i}:`, updateError);
+              failureCount++;
+            } else {
+              successCount++;
+            }
+
+            // PHASE 9: Throttle between chunks if big document
+            if (throttleDelay > 0 && i < chunks.length - 1) {
               await new Promise(resolve => setTimeout(resolve, throttleDelay));
             }
-            continue;
-          }
-
-          // Store embedding
-          const { error: updateError } = await supabase
-            .from('knowledge_chunks')
-            .update({
-              embedding,
-              embedding_generated_at: new Date().toISOString(),
-            })
-            .eq('id', chunk.id);
-
-          if (updateError) {
-            console.error(`[STEP RUNNER] Failed to store embedding for chunk ${i}:`, updateError);
+          } catch (chunkError) {
+            console.error(`[STEP RUNNER] Error embedding chunk ${i}:`, chunkError);
             failureCount++;
-          } else {
-            successCount++;
           }
-
-          // PHASE 9: Throttle between chunks if big document
-          if (throttleDelay > 0 && i < chunks.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, throttleDelay));
-          }
-        } catch (chunkError) {
-          console.error(`[STEP RUNNER] Error embedding chunk ${i}:`, chunkError);
-          failureCount++;
         }
       }
 
