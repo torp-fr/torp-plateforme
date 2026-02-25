@@ -83,18 +83,6 @@ export function getSupabase() {
 }
 
 export const supabase = getSupabase();
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-    storage: window.localStorage,
-  },
-  global: {
-    headers: {
-      'x-application-name': 'torp-web-app',
-    },
-  },
-});
 
 // DEBUG: Verify supabase client URL for Edge Function invoke debugging
 console.log('[SUPABASE CLIENT INIT]', {
