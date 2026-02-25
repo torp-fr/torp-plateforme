@@ -14,6 +14,7 @@
  */
 
 import { knowledgeBrainService } from '@/services/ai/knowledge-brain.service';
+import { ingestionStateMachineService } from './ingestionStateMachine.service';
 import { DocumentIngestionState, IngestionFailureReason } from './ingestionStates';
 import { supabase } from '@/lib/supabase';
 
@@ -22,16 +23,6 @@ export interface StepResult {
   nextState?: DocumentIngestionState;
   error?: string;
   duration: number;
-}
-
-/**
- * PHASE 38C: Lazy load ingestionStateMachineService to break circular dependency
- * Static imports create hidden circular references during module evaluation.
- * Lazy import defers resolution until runtime, after all modules are loaded.
- */
-async function getStateMachine() {
-  const mod = await import('./ingestionStateMachine.service');
-  return mod.ingestionStateMachineService;
 }
 
 export class KnowledgeStepRunnerService {
@@ -55,11 +46,8 @@ export class KnowledgeStepRunnerService {
     try {
       console.log(`[STEP RUNNER] 🚀 Running next step for document ${documentId}`);
 
-      // Lazy load state machine (breaks circular dependency)
-      const sm = await getStateMachine();
-
       // Get current state
-      const context = await sm.getStateContext(documentId);
+      const context = await ingestionStateMachineService.getStateContext(documentId);
       if (!context) {
         return {
           success: false,
@@ -84,19 +72,19 @@ export class KnowledgeStepRunnerService {
           };
 
         case DocumentIngestionState.EXTRACTING:
-          result = await this.runExtractionStep(documentId, sm);
+          result = await this.runExtractionStep(documentId);
           break;
 
         case DocumentIngestionState.CHUNKING:
-          result = await this.runChunkingStep(documentId, sm);
+          result = await this.runChunkingStep(documentId);
           break;
 
         case DocumentIngestionState.EMBEDDING:
-          result = await this.runEmbeddingStep(documentId, sm);
+          result = await this.runEmbeddingStep(documentId);
           break;
 
         case DocumentIngestionState.FINALIZING:
-          result = await this.runFinalizingStep(documentId, sm);
+          result = await this.runFinalizingStep(documentId);
           break;
 
         case DocumentIngestionState.COMPLETED:
@@ -143,7 +131,7 @@ export class KnowledgeStepRunnerService {
    * On success: transitions to CHUNKING
    * On failure: marks FAILED with EXTRACTION error
    */
-  private static async runExtractionStep(documentId: string, sm: any): Promise<StepResult> {
+  private static async runExtractionStep(documentId: string): Promise<StepResult> {
     const startTime = Date.now();
 
     try {
@@ -171,7 +159,7 @@ export class KnowledgeStepRunnerService {
 
       // Validate extraction
       if (!content || content.trim().length === 0) {
-        await sm.markFailed(
+        await ingestionStateMachineService.markFailed(
           documentId,
           IngestionFailureReason.EXTRACTION_EMPTY,
           'No text content extracted from document',
@@ -186,7 +174,7 @@ export class KnowledgeStepRunnerService {
       }
 
       // Transition to CHUNKING
-      const transitioned = await sm.transitionTo(
+      const transitioned = await ingestionStateMachineService.transitionTo(
         documentId,
         DocumentIngestionState.CHUNKING,
         'extraction_complete'
@@ -206,7 +194,7 @@ export class KnowledgeStepRunnerService {
       const errorMsg = error instanceof Error ? error.message : 'Unknown extraction error';
       console.error(`[STEP RUNNER] ❌ Extraction failed:`, errorMsg);
 
-      await sm.markFailed(
+      await ingestionStateMachineService.markFailed(
         documentId,
         IngestionFailureReason.EXTRACTION_ERROR || IngestionFailureReason.UNKNOWN_ERROR,
         errorMsg,
@@ -230,7 +218,7 @@ export class KnowledgeStepRunnerService {
    * On success: transitions to EMBEDDING
    * On failure: marks FAILED with CHUNKING error
    */
-  private static async runChunkingStep(documentId: string, sm: any): Promise<StepResult> {
+  private static async runChunkingStep(documentId: string): Promise<StepResult> {
     const startTime = Date.now();
 
     try {
@@ -267,7 +255,7 @@ export class KnowledgeStepRunnerService {
         .eq('id', documentId);
 
       // Transition to EMBEDDING
-      const transitioned = await sm.transitionTo(
+      const transitioned = await ingestionStateMachineService.transitionTo(
         documentId,
         DocumentIngestionState.EMBEDDING,
         'chunking_complete'
@@ -287,7 +275,7 @@ export class KnowledgeStepRunnerService {
       const errorMsg = error instanceof Error ? error.message : 'Unknown chunking error';
       console.error(`[STEP RUNNER] ❌ Chunking failed:`, errorMsg);
 
-      await sm.markFailed(
+      await ingestionStateMachineService.markFailed(
         documentId,
         IngestionFailureReason.CHUNKING_ERROR,
         errorMsg,
@@ -311,7 +299,7 @@ export class KnowledgeStepRunnerService {
    * On success: transitions to FINALIZING
    * On failure: marks FAILED with EMBEDDING error
    */
-  private static async runEmbeddingStep(documentId: string, sm: any): Promise<StepResult> {
+  private static async runEmbeddingStep(documentId: string): Promise<StepResult> {
     const startTime = Date.now();
 
     try {
@@ -379,7 +367,7 @@ export class KnowledgeStepRunnerService {
       }
 
       // Transition to FINALIZING
-      const transitioned = await sm.transitionTo(
+      const transitioned = await ingestionStateMachineService.transitionTo(
         documentId,
         DocumentIngestionState.FINALIZING,
         'embedding_complete'
@@ -399,7 +387,7 @@ export class KnowledgeStepRunnerService {
       const errorMsg = error instanceof Error ? error.message : 'Unknown embedding error';
       console.error(`[STEP RUNNER] ❌ Embedding failed:`, errorMsg);
 
-      await sm.markFailed(
+      await ingestionStateMachineService.markFailed(
         documentId,
         IngestionFailureReason.EMBEDDING_API_ERROR,
         errorMsg,
@@ -423,7 +411,7 @@ export class KnowledgeStepRunnerService {
    * On success: transitions to COMPLETED
    * On failure: marks FAILED with INTEGRITY error
    */
-  private static async runFinalizingStep(documentId: string, sm: any): Promise<StepResult> {
+  private static async runFinalizingStep(documentId: string): Promise<StepResult> {
     const startTime = Date.now();
 
     try {
@@ -463,7 +451,7 @@ export class KnowledgeStepRunnerService {
         .eq('id', documentId);
 
       // Transition to COMPLETED
-      const transitioned = await sm.transitionTo(
+      const transitioned = await ingestionStateMachineService.transitionTo(
         documentId,
         DocumentIngestionState.COMPLETED,
         'finalization_complete'
@@ -483,7 +471,7 @@ export class KnowledgeStepRunnerService {
       const errorMsg = error instanceof Error ? error.message : 'Unknown finalization error';
       console.error(`[STEP RUNNER] ❌ Finalization failed:`, errorMsg);
 
-      await sm.markFailed(
+      await ingestionStateMachineService.markFailed(
         documentId,
         IngestionFailureReason.INTEGRITY_CHECK_FAILED,
         errorMsg,
@@ -504,23 +492,21 @@ export class KnowledgeStepRunnerService {
    * Useful for UI to show what happens next
    */
   static async getNextState(documentId: string): Promise<DocumentIngestionState | null> {
-    const sm = await getStateMachine();
-    const context = await sm.getStateContext(documentId);
+    const context = await ingestionStateMachineService.getStateContext(documentId);
     if (!context) return null;
 
-    return sm.getNextStep(context.current_state);
+    return ingestionStateMachineService.getNextStep(context.current_state);
   }
 
   /**
    * Check if document can proceed to next step
    */
   static async canProceed(documentId: string): Promise<boolean> {
-    const sm = await getStateMachine();
-    const context = await sm.getStateContext(documentId);
+    const context = await ingestionStateMachineService.getStateContext(documentId);
     if (!context) return false;
 
     // Terminal states cannot proceed
-    if (sm.isTerminalState(context.current_state)) {
+    if (ingestionStateMachineService.isTerminalState(context.current_state)) {
       return false;
     }
 
