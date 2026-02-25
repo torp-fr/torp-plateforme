@@ -38,7 +38,6 @@ import Results from "./pages/Results";
 import JobStatusPage from "./pages/analysis/JobStatusPage";
 
 // Admin Pages
-import { Analytics } from "./pages/Analytics";
 import { DashboardPage } from "./pages/admin/DashboardPage";
 import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { SystemHealthPage } from "./pages/admin/SystemHealthPage";
@@ -74,7 +73,7 @@ const AppContent = () => {
           {/* ADMIN ROUTES - Admin-only protection */}
           {/* ============================================ */}
           <Route element={<AdminRoute><AdminLayout /></AdminRoute>}>
-            <Route path="/analytics" element={<Analytics />}>
+            <Route path="/analytics">
               <Route index element={<DashboardPage />} />
               <Route path="system" element={<SystemHealthPage />} />
               <Route path="intelligence" element={<LiveIntelligencePage />} />
