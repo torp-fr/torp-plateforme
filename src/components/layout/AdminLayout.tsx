@@ -30,7 +30,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import torpLogo from '@/assets/torp-logo-red.png';
+import { BRANDING } from '@/config/branding';
 
 interface AdminLayoutProps {
   children?: ReactNode;
@@ -146,7 +146,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       {/* Logo */}
       <div className="p-4 border-b border-sidebar-border">
         <Link to="/analytics" className="flex items-center gap-3">
-          <img src={torpLogo} alt="TORP" className="h-10 w-auto" />
+          <img src={BRANDING.logoPrimary} alt="TORP" className="h-10 w-auto" />
           <div>
             <div className="flex items-center gap-2">
               <span className="font-bold text-lg text-sidebar-foreground">TORP</span>
@@ -217,7 +217,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
               {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
             <Link to="/analytics" className="flex items-center gap-2">
-              <img src={torpLogo} alt="TORP" className="h-8 w-auto" />
+              <img src={BRANDING.logoPrimary} alt="TORP" className="h-8 w-auto" />
               <span className="font-bold">TORP</span>
             </Link>
           </div>
