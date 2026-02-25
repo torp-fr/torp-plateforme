@@ -15,6 +15,7 @@ import { env } from '@/config/env';
 import { hybridAIService, AIGenerationOptions } from './hybrid-ai.service';
 import { secureAI } from './secure-ai.service';
 import { structuredLogger } from '@/services/observability/structured-logger';
+import { aiTelemetry } from './aiTelemetry.service';
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -114,6 +115,9 @@ class AIOrchestrator {
     prompt: string,
     options?: AIGenerationOptions
   ): Promise<{ content: string; provider: string }> {
+    const requestId = this.generateTraceId();
+    const startTime = Date.now();
+
     try {
       const result = await this.runLLMCompletion({
         prompt,
@@ -123,11 +127,43 @@ class AIOrchestrator {
         preferredProvider: (options as any)?.preferredProvider,
       });
 
+      // Track successful completion
+      aiTelemetry.trackAIRequest({
+        requestId,
+        operation: 'completion',
+        primaryProvider: env.ai.primaryProvider || 'unknown',
+        providerUsed: result.provider,
+        fallbackTriggered: result.retriesUsed > 0,
+        latencyMs: Date.now() - startTime,
+        retriesUsed: result.retriesUsed,
+        inputLength: prompt.length,
+        outputLength: result.content.length,
+        timestamp: new Date().toISOString(),
+        success: true,
+      });
+
       return {
         content: result.content,
         provider: result.provider,
       };
     } catch (error) {
+      // Track failed completion
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      aiTelemetry.logAIError({
+        requestId,
+        operation: 'completion',
+        primaryProvider: env.ai.primaryProvider || 'unknown',
+        lastProviderTried: 'unknown',
+        retriesExhausted: true,
+        errorCode: error instanceof AIOrchestrationError ? error.code : 'UNKNOWN',
+        errorMessage: errorMsg,
+        latencyMs: Date.now() - startTime,
+        retriesUsed: 0,
+        inputLength: prompt.length,
+        timestamp: new Date().toISOString(),
+        success: false,
+      });
+
       throw this.normalizeError(error, 'COMPLETION_FAILED');
     }
   }
@@ -140,6 +176,9 @@ class AIOrchestrator {
     prompt: string,
     options?: AIGenerationOptions
   ): Promise<{ data: T; error?: undefined }> {
+    const requestId = this.generateTraceId();
+    const startTime = Date.now();
+
     try {
       const result = await this.runLLMCompletion({
         prompt,
@@ -158,18 +197,70 @@ class AIOrchestrator {
         }
 
         const data = JSON.parse(jsonMatch[0]) as T;
+
+        // Track successful JSON generation
+        aiTelemetry.trackAIRequest({
+          requestId,
+          operation: 'json',
+          primaryProvider: env.ai.primaryProvider || 'unknown',
+          providerUsed: result.provider,
+          fallbackTriggered: result.retriesUsed > 0,
+          latencyMs: Date.now() - startTime,
+          retriesUsed: result.retriesUsed,
+          inputLength: prompt.length,
+          outputLength: JSON.stringify(data).length,
+          timestamp: new Date().toISOString(),
+          success: true,
+        });
+
         return { data };
       } catch (parseError) {
+        // Track JSON parse failure
+        const errorMsg = parseError instanceof Error ? parseError.message : String(parseError);
+        aiTelemetry.logAIError({
+          requestId,
+          operation: 'json',
+          primaryProvider: env.ai.primaryProvider || 'unknown',
+          lastProviderTried: result.provider,
+          retriesExhausted: false,
+          errorCode: 'JSON_PARSE_ERROR',
+          errorMessage: errorMsg,
+          latencyMs: Date.now() - startTime,
+          retriesUsed: result.retriesUsed,
+          inputLength: prompt.length,
+          timestamp: new Date().toISOString(),
+          success: false,
+        });
+
         throw new AIOrchestrationError(
-          `Failed to parse JSON from LLM response: ${
-            parseError instanceof Error ? parseError.message : 'unknown'
-          }`,
+          `Failed to parse JSON from LLM response: ${errorMsg}`,
           'JSON_PARSE_ERROR',
           false,
           parseError instanceof Error ? parseError : undefined
         );
       }
     } catch (error) {
+      // Track outer completion failure
+      if (error instanceof AIOrchestrationError && error.code === 'JSON_PARSE_ERROR') {
+        throw error; // Already tracked
+      }
+
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      aiTelemetry.logAIError({
+        requestId,
+        operation: 'json',
+        primaryProvider: env.ai.primaryProvider || 'unknown',
+        lastProviderTried: 'unknown',
+        retriesExhausted: true,
+        errorCode: error instanceof AIOrchestrationError ? error.code : 'UNKNOWN',
+        errorMessage: errorMsg,
+        latencyMs: Date.now() - startTime,
+        retriesUsed: 0,
+        inputLength: prompt.length,
+        timestamp: new Date().toISOString(),
+        success: false,
+      });
+
       throw this.normalizeError(error, 'JSON_GENERATION_FAILED');
     }
   }
@@ -254,13 +345,32 @@ class AIOrchestrator {
       );
 
       if (primaryResult.success) {
-        return {
+        const result = {
           embedding: primaryResult.data!,
           dimension: primaryResult.data!.length,
           duration: Date.now() - startTime,
           retriesUsed: primaryResult.retriesUsed,
-          source: 'primary',
+          source: 'primary' as const,
         };
+
+        // Track successful primary embedding
+        aiTelemetry.trackAIRequest({
+          requestId: embeddingId,
+          operation: 'embedding',
+          primaryProvider: 'secureAI',
+          providerUsed: 'secureAI',
+          fallbackTriggered: false,
+          latencyMs: result.duration,
+          retriesUsed: result.retriesUsed,
+          inputLength: request.text.length,
+          outputLength: result.embedding.length,
+          embeddingDimension: result.dimension,
+          isSyntheticEmbedding: false,
+          timestamp: new Date().toISOString(),
+          success: true,
+        });
+
+        return result;
       }
 
       // Fallback: HybridAI completion with JSON extraction
@@ -287,13 +397,32 @@ class AIOrchestrator {
       );
 
       if (fallbackResult.success) {
-        return {
+        const result = {
           embedding: fallbackResult.data!,
           dimension: fallbackResult.data!.length,
           duration: Date.now() - startTime,
           retriesUsed: retriesUsed + fallbackResult.retriesUsed,
-          source: 'fallback',
+          source: 'fallback' as const,
         };
+
+        // Track successful fallback embedding (synthetic LLM-based)
+        aiTelemetry.trackAIRequest({
+          requestId: embeddingId,
+          operation: 'embedding_fallback',
+          primaryProvider: 'secureAI',
+          providerUsed: 'hybridAI',
+          fallbackTriggered: true,
+          latencyMs: result.duration,
+          retriesUsed: result.retriesUsed,
+          inputLength: request.text.length,
+          outputLength: result.embedding.length,
+          embeddingDimension: result.dimension,
+          isSyntheticEmbedding: true,
+          timestamp: new Date().toISOString(),
+          success: true,
+        });
+
+        return result;
       }
 
       // Both failed
@@ -310,6 +439,23 @@ class AIOrchestrator {
         duration,
         error: error instanceof Error ? error.message : String(error),
         retriesUsed,
+      });
+
+      // Track embedding failure
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      aiTelemetry.logAIError({
+        requestId: embeddingId,
+        operation: 'embedding',
+        primaryProvider: 'secureAI',
+        lastProviderTried: 'hybridAI', // Tried both
+        retriesExhausted: true,
+        errorCode: error instanceof AIOrchestrationError ? error.code : 'UNKNOWN',
+        errorMessage: errorMsg,
+        latencyMs: duration,
+        retriesUsed,
+        inputLength: request.text.length,
+        timestamp: new Date().toISOString(),
+        success: false,
       });
 
       throw this.normalizeError(error, 'EMBEDDING_GENERATION_FAILED');
