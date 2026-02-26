@@ -16,8 +16,8 @@ import { sanitizeText, getSanitizationStats } from '@/utils/text-sanitizer';
 import { chunkText, getChunkingStats, validateChunks } from '@/utils/chunking';
 // PHASE 36.10.5: Health monitoring and production observability
 import { KnowledgeHealthService } from './knowledge-health.service';
-// PHASE 36.11: PDF text extraction
-import * as pdfjs from 'pdfjs-dist';
+// PHASE 36.11: PDF text extraction (using centralized PDF.js wrapper)
+import { extractPdfText, isPdfFile, validatePdfSize } from '@/lib/pdfExtract';
 // PHASE 39: Step Runner trigger for progressive integration
 import { triggerStepRunner } from '@/api/knowledge-step-trigger';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
@@ -103,7 +103,7 @@ class KnowledgeBrainService {
 
   /**
    * PHASE 36.11: Extract readable text from document (PDF or plain text)
-   * Detects PDF header and extracts text using pdfjs-dist
+   * Uses centralized PDF.js wrapper for safe, robust extraction
    * Falls back to TextDecoder for plain text files
    * Never returns binary data
    */
@@ -123,20 +123,8 @@ class KnowledgeBrainService {
       if (header === '%PDF') {
         log('[KNOWLEDGE BRAIN] 📄 PDF detected - extracting text...');
         try {
-          const pdf = await pdfjs.getDocument({ data: uint8Array }).promise;
-          let extractedText = '';
-
-          for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const textContent = await page.getTextContent();
-            const pageText = textContent.items.map((item: any) => item.str).join('');
-            extractedText += pageText + '\n';
-          }
-
-          if (!extractedText || extractedText.trim().length === 0) {
-            warn('[KNOWLEDGE BRAIN] ⚠️ PDF text extraction returned empty');
-            return '';
-          }
+          // Use centralized PDF extraction utility
+          const extractedText = await extractPdfText(file);
           log('[KNOWLEDGE BRAIN] ✅ PDF text extracted:', extractedText.length, 'chars');
           return extractedText;
         } catch (pdfError) {

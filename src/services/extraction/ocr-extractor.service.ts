@@ -4,9 +4,10 @@
  */
 
 import * as pdfjsLib from 'pdfjs-dist';
+import { initPdfJs } from '@/lib/pdf';
 
-// Configure worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+// Initialize PDF.js with centralized configuration
+initPdfJs();
 
 export interface OcrExtractionResult {
   text: string;
