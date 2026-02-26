@@ -266,11 +266,48 @@ export class IngestionStateMachineService {
         return false;
       }
 
+      // PHASE 40: Clean up internal state for the failed document
+      this.cleanupDocumentState(documentId);
+
       log(`[STATE MACHINE] ✅ Document marked as FAILED`);
       return true;
     } catch (error) {
       console.error(`[STATE MACHINE] 💥 Error marking as failed:`, error);
       return false;
+    }
+  }
+
+  /**
+   * PHASE 40: Clean up internal state when document processing is complete or fails
+   * Prevents memory leaks and dangling timers/controllers
+   *
+   * Clears:
+   * - Retry count tracking
+   * - Document lock
+   * - Any pending timers
+   * - Stream controller state
+   */
+  private cleanupDocumentState(documentId: string): void {
+    try {
+      // Clear retry count
+      if ((window as any).__RAG_RETRY_COUNTS__) {
+        delete (window as any).__RAG_RETRY_COUNTS__[documentId];
+      }
+
+      // Clear document lock
+      if ((window as any).__RAG_DOC_LOCKS__) {
+        delete (window as any).__RAG_DOC_LOCKS__[documentId];
+      }
+
+      // Clear stream controller if present
+      if ((window as any).__RAG_STREAM_CONTROLLER__) {
+        // Don't delete the whole controller, just mark it clean
+        (window as any).__RAG_STREAM_CONTROLLER__.activeDocument = null;
+      }
+
+      log(`[STATE MACHINE] 🧹 Cleaned up internal state for document ${documentId}`);
+    } catch (error) {
+      warn(`[STATE MACHINE] Cleanup error for ${documentId}:`, error);
     }
   }
 

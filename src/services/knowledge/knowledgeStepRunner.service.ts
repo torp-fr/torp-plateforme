@@ -35,7 +35,16 @@ export class KnowledgeStepRunnerService {
     if (!(window as any).__RAG_DOC_LOCKS__) {
       (window as any).__RAG_DOC_LOCKS__ = {};
     }
+    // PHASE 40: Initialize retry tracking per document
+    if (!(window as any).__RAG_RETRY_COUNTS__) {
+      (window as any).__RAG_RETRY_COUNTS__ = {};
+    }
   }
+
+  /**
+   * PHASE 40: Maximum retry attempts per document to prevent infinite loops
+   */
+  private static readonly MAX_RETRIES_PER_DOCUMENT = 3;
 
   /**
    * PHASE 12: Adaptive Stream Controller Configuration
@@ -408,13 +417,39 @@ export class KnowledgeStepRunnerService {
     // PHASE 19.9: CRITICAL FIX - Auto-chain AFTER finally (lock is released)
     // This code executes AFTER the finally block completes
     // Ensures document lock is released before scheduling next step
+    // PHASE 40: Added retry bounds to prevent infinite loops
     if (result?.success && result?.nextState) {
-      log('[STEP RUNNER] 🔁 Auto-chain next step:', result.nextState);
-      setTimeout(() => {
-        KnowledgeStepRunnerService.runNextStep(documentId).catch((err) =>
-          warn('[STEP RUNNER] ⚠️ Auto-chain error:', err)
+      const retryCount = (window as any).__RAG_RETRY_COUNTS__[documentId] ?? 0;
+
+      // Check if we've exceeded max retries
+      if (retryCount >= this.MAX_RETRIES_PER_DOCUMENT) {
+        console.error(
+          `[STEP RUNNER] 🚫 FATAL: Document ${documentId} exceeded max retries (${this.MAX_RETRIES_PER_DOCUMENT}). ` +
+          `State: ${result.nextState}. Marking FAILED to prevent infinite loop.`
         );
-      }, 0);
+        await ingestionStateMachineService.markFailed(
+          documentId,
+          IngestionFailureReason.UNKNOWN_ERROR,
+          `Exceeded maximum retries (${this.MAX_RETRIES_PER_DOCUMENT}). Possible infinite loop detected.`,
+          undefined
+        );
+      } else {
+        // Increment retry count for this document
+        (window as any).__RAG_RETRY_COUNTS__[documentId] = retryCount + 1;
+
+        log('[STEP RUNNER] 🔁 Auto-chain next step:', result.nextState, `(attempt ${retryCount + 1}/${this.MAX_RETRIES_PER_DOCUMENT})`);
+
+        // PHASE 40: Add exponential backoff to prevent tight loops
+        const delayMs = Math.min(100 * Math.pow(2, retryCount), 2000);
+        setTimeout(() => {
+          KnowledgeStepRunnerService.runNextStep(documentId).catch((err) =>
+            warn('[STEP RUNNER] ⚠️ Auto-chain error:', err)
+          );
+        }, delayMs);
+      }
+    } else if (result?.success) {
+      // Terminal state reached - reset retry counter
+      delete (window as any).__RAG_RETRY_COUNTS__[documentId];
     }
 
     return result;
@@ -1196,6 +1231,10 @@ export class KnowledgeStepRunnerService {
       if (!transitioned) {
         throw new Error('Failed to transition to COMPLETED state');
       }
+
+      // PHASE 40: Clean up state for successful completion
+      delete (window as any).__RAG_RETRY_COUNTS__[documentId];
+      delete (window as any).__RAG_DOC_LOCKS__[documentId];
 
       log(`[STEP RUNNER] 🎉 FINALIZING complete → COMPLETED ✅`);
       return {

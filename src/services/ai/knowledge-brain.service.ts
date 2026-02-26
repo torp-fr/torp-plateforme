@@ -812,11 +812,25 @@ class KnowledgeBrainService {
     try {
       log('[KNOWLEDGE BRAIN] 🔄 Embedding generation (via orchestrator)');
 
+      // PHASE 40: Guard check - verify aiOrchestrator has generateEmbedding function
+      if (typeof aiOrchestrator.generateEmbedding !== 'function') {
+        const errorMsg = '[SECURITY] aiOrchestrator.generateEmbedding is not a function - circular dependency or initialization issue';
+        console.error('[KNOWLEDGE BRAIN] 🔴 ' + errorMsg);
+        throw new Error(errorMsg);
+      }
+
       // PHASE 36.12: Use AI Orchestrator for centralized embedding with retry/fallback
       const result = await aiOrchestrator.generateEmbedding({
         text: content,
         model: 'text-embedding-3-small',
       });
+
+      // Validate result structure
+      if (!result || !result.embedding || !Array.isArray(result.embedding)) {
+        const errorMsg = '[SECURITY] Invalid embedding result - missing embedding array';
+        console.error('[KNOWLEDGE BRAIN] 🔴 ' + errorMsg);
+        throw new Error(errorMsg);
+      }
 
       const embedding = result.embedding;
       log('[KNOWLEDGE BRAIN] 📊 Embedding received:', {
