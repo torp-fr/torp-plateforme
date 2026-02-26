@@ -60,6 +60,7 @@ class SecureAIService {
     console.log('[EDGE CALL] projectUrl:', projectUrl);
     console.log('[EDGE INVOKE FINAL]', supabase.supabaseUrl);
 
+    console.log('EDGE INVOKING VIA SDK');
     const invokeStart = Date.now();
     const { data, error } = await supabase.functions.invoke(
       'generate-embedding',
