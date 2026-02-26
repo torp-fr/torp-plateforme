@@ -681,14 +681,26 @@ export class KnowledgeStepRunnerService {
       }
 
       // PHASE 19.11C: REAL CHUNK PERSISTENCE (SCHEMA-COMPATIBLE)
+      // PHASE 19.13: Normalize chunk shape (text or content field)
       // Insert non-stream chunks with content_length for integrity checks
       if (!isStreamMode && chunks.length > 0) {
-        const rows = chunks.map((chunk, index) => ({
-          document_id: documentId,
-          content: chunk.text,
-          chunk_index: index,
-          content_length: chunk.text.length,
-        }));
+        const rows = chunks
+          .map((chunk, index) => {
+            const text = chunk?.text ?? chunk?.content ?? null;
+            if (!text) {
+              console.warn('[STEP RUNNER] ⚠️ Skipping empty chunk at index', index);
+              return null;
+            }
+            return {
+              document_id: documentId,
+              content: text,
+              chunk_index: index,
+              content_length: text.length,
+            };
+          })
+          .filter(Boolean);
+
+        console.log('[STEP RUNNER] 🧩 Normalized chunks:', rows.length);
         console.log('[STEP RUNNER] 💾 Persisting chunks:', rows.length);
         const { error } = await supabase
           .from('knowledge_chunks')
