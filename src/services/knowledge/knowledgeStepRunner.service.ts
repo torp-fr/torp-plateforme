@@ -544,10 +544,11 @@ export class KnowledgeStepRunnerService {
         };
       }
 
-      // PHASE 15 FIX: Fetch content with fallback to preview_content
+      // PHASE 19.8: TEXT-FIRST ARCHITECTURE
+      // Fetch content directly from database (inserted by Brain)
       const { data: doc, error: fetchError } = await supabase
         .from('knowledge_documents')
-        .select('id, original_content, preview_content')
+        .select('id, content, sanitized_content, preview_content')
         .eq('id', documentId)
         .single();
 
@@ -555,13 +556,15 @@ export class KnowledgeStepRunnerService {
         throw new Error('Failed to fetch document');
       }
 
+      // Priority: sanitized_content > content > preview_content
       const sourceContent =
-        doc?.original_content ??
+        doc?.sanitized_content ??
+        doc?.content ??
         doc?.preview_content ??
         '';
 
       if (!sourceContent) {
-        throw new Error('No content available for chunking');
+        throw new Error('Missing text content for chunking');
       }
 
       const contentLength = sourceContent.length;
