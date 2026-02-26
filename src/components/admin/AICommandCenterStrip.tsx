@@ -72,6 +72,16 @@ export function AICommandCenterStrip() {
     window.addEventListener('RAG_OPS_EVENT', updateCommandState);
     window.addEventListener('RAG_COMMAND_CENTER_UPDATE', updateCommandState);
 
+    // PHASE 14: Listen for real edge status updates
+    const handleEdgeUpdate = () => {
+      const offline = Boolean((window as any).RAG_EDGE_OFFLINE);
+      setState(prev => ({
+        ...prev,
+        orchestratorState: offline ? 'FALLBACK' : prev.orchestratorState,
+      }));
+    };
+    window.addEventListener('RAG_EDGE_STATUS_UPDATED', handleEdgeUpdate);
+
     // PHASE 9: Listen for big document mode events
     const handleBigDocMode = () => {
       console.log('[RAG COMMAND CENTER] 📚 Big document mode activated');
@@ -146,6 +156,7 @@ export function AICommandCenterStrip() {
     return () => {
       window.removeEventListener('RAG_OPS_EVENT', updateCommandState);
       window.removeEventListener('RAG_COMMAND_CENTER_UPDATE', updateCommandState);
+      window.removeEventListener('RAG_EDGE_STATUS_UPDATED', handleEdgeUpdate);
       window.removeEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocMode);
       window.removeEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocClear);
       window.removeEventListener('RAG_PIPELINE_LOCKED', handlePipelineLocked);

@@ -184,6 +184,16 @@ export class KnowledgeStepRunnerService {
     const startTime = Date.now();
 
     try {
+      // PHASE 14: Check for pipeline lock - hard guard against all step execution
+      if ((window as any).__RAG_PIPELINE_LOCKED__) {
+        console.warn(`[STEP RUNNER] 🔒 PIPELINE LOCKED - rejecting step execution for ${documentId}`);
+        return {
+          success: false,
+          error: 'Pipeline is locked - worker prevented from running',
+          duration: Date.now() - startTime,
+        };
+      }
+
       // PATCH 7: PREVENT DOUBLE PIPELINE - check if one is already running
       if ((window as any).__RAG_PIPELINE_RUNNING__) {
         console.warn(`[STEP RUNNER] ⚠️ PIPELINE ALREADY RUNNING - ignoring duplicate request for ${documentId}`);
