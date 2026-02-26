@@ -680,13 +680,14 @@ export class KnowledgeStepRunnerService {
         }
       }
 
-      // PHASE 19.11B: REAL CHUNK INSERT FIX
-      // Insert non-stream chunks (standard mode chunks that haven't been inserted yet)
+      // PHASE 19.11C: REAL CHUNK PERSISTENCE (SCHEMA-COMPATIBLE)
+      // Insert non-stream chunks with content_length for integrity checks
       if (!isStreamMode && chunks.length > 0) {
         const rows = chunks.map((chunk, index) => ({
           document_id: documentId,
-          content: chunk.text || chunk.content,
+          content: chunk.text,
           chunk_index: index,
+          content_length: chunk.text.length,
         }));
         console.log('[STEP RUNNER] 💾 Persisting chunks:', rows.length);
         const { error } = await supabase
