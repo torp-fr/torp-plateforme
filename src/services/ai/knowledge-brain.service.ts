@@ -450,11 +450,11 @@ class KnowledgeBrainService {
       }
 
       // ✅ PHASE 36.9 STEP 4: TWO-STEP INSERT FOR LARGE DOCUMENTS
-      // PHASE INSERT STABILIZATION: Split insert into metadata + content
+      // PHASE INSERT STABILIZATION: Supabase PostgREST fix - NO RETURNING after INSERT
       console.log('[KNOWLEDGE BRAIN] 📝 Inserting document FIRST (minimal metadata)...');
 
-      // STEP A: Insert minimal record with metadata only
-      const { data: doc, error: docError } = await supabase
+      // STEP A — Insert minimal metadata (NO SELECT/RETURNING to prevent REST blocking)
+      const { error: insertError } = await supabase
         .from('knowledge_documents')
         .insert({
           title: safeTitle,
@@ -463,17 +463,37 @@ class KnowledgeBrainService {
           is_active: true,
           ingestion_status: 'pending',
           ingestion_progress: 0,
-        })
-        .select()
-        .single();
+        });
 
-      if (docError || !doc) {
-        const errorMsg = docError?.message || 'No document returned';
-        console.error('[KNOWLEDGE BRAIN] ❌ Insert failed:', errorMsg);
-        throw new Error(`Insert failed: ${errorMsg}`);
+      if (insertError) {
+        console.error('[KNOWLEDGE BRAIN] ❌ Insert failed:', insertError.message);
+        throw new Error(`Insert failed: ${insertError.message}`);
       }
 
-      console.log('[KNOWLEDGE BRAIN] ✅ Document inserted:', doc.id);
+      console.log('[KNOWLEDGE BRAIN] ✅ Metadata inserted successfully');
+
+      // STEP A.2 — Fetch inserted document ID safely (single targeted SELECT)
+      // Use title + timestamp to uniquely identify the just-inserted document
+      console.log('[KNOWLEDGE BRAIN] 🔍 Fetching inserted document ID...');
+      const { data: insertedDoc, error: fetchError } = await supabase
+        .from('knowledge_documents')
+        .select('id')
+        .eq('title', safeTitle)
+        .eq('category', category)
+        .eq('source', source)
+        .eq('ingestion_status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (fetchError || !insertedDoc) {
+        const errorMsg = fetchError?.message || 'No document found';
+        console.error('[KNOWLEDGE BRAIN] ❌ Failed to fetch inserted document ID:', errorMsg);
+        throw new Error(`Failed to fetch inserted document ID: ${errorMsg}`);
+      }
+
+      const documentId = insertedDoc.id;
+      console.log('[KNOWLEDGE BRAIN] 📌 Document ID retrieved:', documentId);
 
       // STEP B: Update with large content fields separately
       // This prevents JSON payload size issues for large documents
@@ -481,27 +501,43 @@ class KnowledgeBrainService {
       const previewBytes = new TextEncoder().encode(preview).length;
 
       console.log('[KNOWLEDGE BRAIN] 📦 Updating content fields', {
-        documentId: doc.id,
+        documentId,
         sanitized_content_bytes: `${(sanitizedBytes / 1024).toFixed(2)}KB`,
         preview_content_bytes: `${(previewBytes / 1024).toFixed(2)}KB`,
       });
 
-      const { error: updateError } = await supabase
+      // STEP B.1 — Update content with timeout safety
+      const updatePromise = supabase
         .from('knowledge_documents')
         .update({
           content: sanitized,
           sanitized_content: sanitized,
           preview_content: preview,
         })
-        .eq('id', doc.id);
+        .eq('id', documentId);
+
+      const { error: updateError } = await Promise.race([
+        updatePromise,
+        new Promise<any>((_, reject) =>
+          setTimeout(() => reject(new Error('Content update timeout (>15s)')), 15000)
+        ),
+      ]);
 
       if (updateError) {
-        const errorMsg = updateError.message;
+        const errorMsg = updateError.message || 'Content update failed';
         console.error('[KNOWLEDGE BRAIN] ❌ Content update failed:', errorMsg);
         throw new Error(`Content update failed: ${errorMsg}`);
       }
 
-      console.log('[KNOWLEDGE BRAIN] ✅ Content updated:', doc.id);
+      console.log('[KNOWLEDGE BRAIN] ✅ Content updated:', documentId);
+
+      // Create a minimal document object matching the return contract
+      const doc = {
+        id: documentId,
+        title: safeTitle,
+        category,
+        source,
+      };
 
       // PHASE 39: Trigger Step Runner for progressive integration
       console.log('[STEP TRIGGER] launching for', doc.id);
