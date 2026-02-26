@@ -571,6 +571,7 @@ function EngineStatusLiveCard() {
               // Timeline updated in same batch
               setTimeline((prev) => [
                 ...updates.map((snap) => ({
+                  id: `${snap.engine_name}-${snap.created_at}-${Math.random()}`,
                   engine: snap.engine_name,
                   score: snap.score,
                   duration: snap.duration_ms,
@@ -709,8 +710,8 @@ function EngineStatusLiveCard() {
           <div className="mt-6 pt-4 border-t border-muted">
             <h4 className="text-sm font-semibold text-foreground mb-3">📊 Engine Activity (Last 20)</h4>
             <div className="space-y-1 max-h-48 overflow-y-auto">
-              {timeline.map((item, idx) => (
-                <div key={idx} className="text-xs p-2 rounded bg-muted/30 text-muted-foreground hover:bg-muted/50 transition-colors">
+              {timeline.map((item) => (
+                <div key={item.id} className="text-xs p-2 rounded bg-muted/30 text-muted-foreground hover:bg-muted/50 transition-colors">
                   <span className="font-medium">[{item.engine}]</span>
                   {' '}
                   <span className="text-blue-600">
