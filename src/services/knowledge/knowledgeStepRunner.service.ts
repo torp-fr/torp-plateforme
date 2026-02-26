@@ -296,16 +296,49 @@ export class KnowledgeStepRunnerService {
       let result: StepResult;
 
       switch (currentState) {
+        case DocumentIngestionState.PENDING:
+          // PHASE 19.6: Document in PENDING state (inserted by passive Brain)
+          // Transition to EXTRACTING to start pipeline
+          console.log(`[STEP RUNNER] 🔄 Document PENDING - claiming and starting extraction`);
+          await ingestionStateMachineService.transitionTo(
+            documentId,
+            DocumentIngestionState.EXTRACTING,
+            'extraction_starting'
+          );
+          result = {
+            success: true,
+            nextState: DocumentIngestionState.EXTRACTING,
+            duration: Date.now() - startTime,
+          };
+          break;
+
         case DocumentIngestionState.UPLOADED:
           console.log(`[STEP RUNNER] ℹ️ Document UPLOADED - waiting for extraction trigger`);
-          return {
+          result = {
             success: true,
             nextState: DocumentIngestionState.UPLOADED,
             duration: Date.now() - startTime,
           };
+          break;
 
         case DocumentIngestionState.EXTRACTING:
-          result = await this.runExtractionStep(documentId);
+          // PHASE 19.6: Extraction step bypass (text-first architecture)
+          // Brain already extracted text during document insert
+          // StepRunner bypasses extraction and proceeds to chunking
+          console.log('[STEP RUNNER] ⏩ Extraction bypassed (PHASE 19.6 - text already available)');
+
+          await ingestionStateMachineService.transitionTo(
+            documentId,
+            DocumentIngestionState.CHUNKING,
+            'extraction_bypassed'
+          );
+
+          result = {
+            success: true,
+            nextState: DocumentIngestionState.CHUNKING,
+            bypassed: true,
+            duration: Date.now() - startTime,
+          };
           break;
 
         case DocumentIngestionState.CHUNKING:
@@ -322,26 +355,42 @@ export class KnowledgeStepRunnerService {
 
         case DocumentIngestionState.COMPLETED:
           console.log(`[STEP RUNNER] ✅ Document already COMPLETED`);
-          return {
+          result = {
             success: true,
-            nextState: DocumentIngestionState.COMPLETED,
+            // No nextState - COMPLETED is terminal
             duration: Date.now() - startTime,
           };
+          break;
 
         case DocumentIngestionState.FAILED:
           console.log(`[STEP RUNNER] ❌ Document in FAILED state`);
-          return {
+          result = {
             success: false,
             error: context.error_message || 'Document processing failed',
+            // No nextState - FAILED is terminal
             duration: Date.now() - startTime,
           };
+          break;
 
         default:
-          return {
+          result = {
             success: false,
             error: `Unknown state: ${currentState}`,
             duration: Date.now() - startTime,
           };
+          break;
+      }
+
+      // PHASE 19.7: Auto-chain execution
+      // After successful transition, automatically continue to next step
+      // Uses setTimeout(..., 0) to avoid stack recursion and maintain event loop
+      if (result?.success && result?.nextState) {
+        console.log('[STEP RUNNER] 🔁 Auto-chain next step:', result.nextState);
+        setTimeout(() => {
+          KnowledgeStepRunnerService.runNextStep(documentId).catch((err) =>
+            console.warn('[STEP RUNNER] ⚠️ Auto-chain error:', err)
+          );
+        }, 0);
       }
 
       return result;

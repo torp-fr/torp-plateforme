@@ -153,6 +153,13 @@ export class IngestionStateMachineService {
       }
 
       // Update state in database
+      // PHASE 19.4: Debug logging for SQL drift detection
+      console.log('[STATE MACHINE DEBUG] Attempting update:', {
+        documentId,
+        newState: toState,
+        payload: updateData,
+      });
+
       const { error: updateError } = await supabase
         .from('knowledge_documents')
         .update(updateData)
@@ -160,6 +167,14 @@ export class IngestionStateMachineService {
 
       if (updateError) {
         console.error(`[STATE MACHINE] 🔴 State update failed:`, updateError);
+        // PHASE 19.4: Full error context for debugging SQL issues
+        console.error('[STATE MACHINE DEBUG] Supabase error FULL:', {
+          message: updateError.message,
+          code: (updateError as any).code,
+          details: (updateError as any).details,
+          hint: (updateError as any).hint,
+          fullError: updateError,
+        });
         return false;
       }
 
