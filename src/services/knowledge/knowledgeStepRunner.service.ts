@@ -759,13 +759,8 @@ export class KnowledgeStepRunnerService {
       // This line is no longer needed - limit is enforced pre-emptively
       console.log(`[STEP RUNNER] ✅ Created ${chunks.length} chunks`);
 
-      // Store chunks count metadata (for later reference)
-      await supabase
-        .from('knowledge_documents')
-        .update({
-          chunks_created: chunks.length,
-        })
-        .eq('id', documentId);
+      // PHASE STABILIZATION: Store chunks count comment (removed unsafe DB update)
+      console.log(`[STEP RUNNER] 💾 Chunk count metadata: ${chunks.length} chunks created`);
 
       // Transition to EMBEDDING
       const transitioned = await ingestionStateMachineService.transitionTo(
@@ -1187,14 +1182,8 @@ export class KnowledgeStepRunnerService {
         );
       }
 
-      // Update document metadata
-      await supabase
-        .from('knowledge_documents')
-        .update({
-          chunks_embedded: embeddedChunks,
-          embedding_integrity_checked: true,
-        })
-        .eq('id', documentId);
+      // PHASE STABILIZATION: Document metadata comment (removed unsafe DB update)
+      console.log(`[STEP RUNNER] 📊 Embedding integrity check: ${embeddedChunks} chunks embedded successfully`);
 
       // Transition to COMPLETED
       const transitioned = await ingestionStateMachineService.transitionTo(
