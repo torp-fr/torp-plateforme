@@ -138,6 +138,10 @@ export function RAGStatusStrip() {
     };
     window.addEventListener('RAG_STREAM_CONTROLLER_UPDATED', handleStreamControllerUpdated);
 
+    // PHASE 17: Listen for document lock events
+    window.addEventListener('RAG_DOC_LOCKED', fetchStatus);
+    window.addEventListener('RAG_DOC_UNLOCKED', fetchStatus);
+
     return () => {
       clearInterval(interval);
       window.removeEventListener('RAG_OPS_EVENT', handleOpsEvent);
@@ -151,6 +155,8 @@ export function RAGStatusStrip() {
       window.removeEventListener('RAG_STREAM_MODE_ACTIVATED', handleStreamModeActivated);
       window.removeEventListener('RAG_STREAM_MODE_CLEARED', handleStreamModeCleared);
       window.removeEventListener('RAG_STREAM_CONTROLLER_UPDATED', handleStreamControllerUpdated);
+      window.removeEventListener('RAG_DOC_LOCKED', fetchStatus);
+      window.removeEventListener('RAG_DOC_UNLOCKED', fetchStatus);
     };
   }, []);
 

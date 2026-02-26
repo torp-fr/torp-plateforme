@@ -27,6 +27,16 @@ export interface StepResult {
 
 export class KnowledgeStepRunnerService {
   /**
+   * PHASE 17: Document-level lock registry
+   * Replaces global __RAG_PIPELINE_LOCKED__ with per-document isolation
+   */
+  static {
+    if (!(window as any).__RAG_DOC_LOCKS__) {
+      (window as any).__RAG_DOC_LOCKS__ = {};
+    }
+  }
+
+  /**
    * PHASE 12: Adaptive Stream Controller Configuration
    */
   private static getAdaptiveStreamConfig() {
@@ -190,12 +200,12 @@ export class KnowledgeStepRunnerService {
     }
 
     try {
-      // PHASE 14: Check for pipeline lock - hard guard against all step execution
-      if ((window as any).__RAG_PIPELINE_LOCKED__) {
-        console.warn(`[STEP RUNNER] 🔒 PIPELINE LOCKED - rejecting step execution for ${documentId}`);
+      // PHASE 17: Check for document-level lock
+      if ((window as any).__RAG_DOC_LOCKS__?.[documentId]) {
+        console.warn(`[UNIFIED KERNEL] 🔒 Document locked — skipping ${documentId}`);
         return {
           success: false,
-          error: 'Pipeline is locked - worker prevented from running',
+          error: 'Document is locked - worker skipping this doc',
           duration: Date.now() - startTime,
         };
       }
@@ -468,10 +478,10 @@ export class KnowledgeStepRunnerService {
         const STREAM_BATCH_SIZE = 40;
 
         for (let offset = 0; offset < sourceContent.length; offset += STREAM_SLICE_SIZE) {
-          // Check pipeline lock
-          if ((window as any).__RAG_PIPELINE_LOCKED__) {
-            console.warn(`[STEP RUNNER] 🔒 Pipeline locked during streaming - aborting`);
-            throw new Error('Pipeline locked during streaming ingestion');
+          // PHASE 17: Check document-level lock during streaming
+          if ((window as any).__RAG_DOC_LOCKS__?.[documentId]) {
+            console.warn(`[STREAM CHUNKING] 🔒 Document locked mid-stream`);
+            throw new Error('Document locked during streaming ingestion');
           }
 
           const slice = sourceContent.slice(offset, offset + STREAM_SLICE_SIZE);
@@ -633,12 +643,12 @@ export class KnowledgeStepRunnerService {
         };
       }
 
-      // PHASE 10: GLOBAL PIPELINE LOCK GUARD - stop if pipeline locked
-      if ((window as any).__RAG_PIPELINE_LOCKED__) {
-        console.warn(`[STEP RUNNER] 🔒 Global pipeline locked - abort embedding`);
+      // PHASE 17: Check document-level lock before embedding
+      if ((window as any).__RAG_DOC_LOCKS__?.[documentId]) {
+        console.warn(`[STEP RUNNER] 🔒 Document locked - abort embedding`);
         return {
           success: false,
-          error: 'Pipeline locked globally',
+          error: 'Document is locked',
           duration: Date.now() - startTime,
         };
       }
@@ -690,10 +700,10 @@ export class KnowledgeStepRunnerService {
         }
 
         while (true) {
-          // Check pipeline lock
-          if ((window as any).__RAG_PIPELINE_LOCKED__) {
-            console.warn(`[STEP RUNNER] 🔒 Pipeline locked during streaming embedding - aborting`);
-            throw new Error('Pipeline locked during streaming embedding');
+          // PHASE 17: Check document-level lock during streaming embedding
+          if ((window as any).__RAG_DOC_LOCKS__?.[documentId]) {
+            console.warn('[STREAM CTRL] 🔒 Document locked mid-stream');
+            break;
           }
 
           // PHASE 12: Get adaptive configuration
