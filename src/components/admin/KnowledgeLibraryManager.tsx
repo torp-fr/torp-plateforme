@@ -20,7 +20,7 @@ interface KnowledgeDocument {
   title: string;
   category?: string;
   created_at: string;
-  preview?: string;
+  preview_content?: string;
 }
 
 const getDerivedRagState = (createdAt: string): { label: string; color: string } => {
@@ -47,7 +47,7 @@ export function KnowledgeLibraryManager() {
 
       const { data, error: dbError } = await supabase
         .from('knowledge_documents')
-        .select('id,title,category,preview,created_at,is_active')
+        .select('id,title,category,preview_content,created_at,is_active')
         .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(100);
@@ -211,7 +211,7 @@ export function KnowledgeLibraryManager() {
               <TableBody>
                 {documents.map((doc) => {
                   const safeTitle = doc.title ?? 'Document';
-                  const safePreview = doc.preview ?? '';
+                  const safePreview = doc.preview_content ?? '';
                   const safeCategory = doc.category ?? 'général';
                   const ragState = getDerivedRagState(doc.created_at);
                   const previewTruncated =

@@ -8,7 +8,7 @@ import { X } from 'lucide-react';
 interface KnowledgeDocument {
   id: string;
   title: string;
-  preview?: string;
+  preview_content?: string;
   category?: string;
   created_at: string;
 }
@@ -25,7 +25,7 @@ export function KnowledgeInspectDrawer({ document, onClose }: KnowledgeInspectDr
 
   const safeTitle = document.title ?? 'Document';
   const safeCategory = document.category ?? 'général';
-  const safePreview = document.preview ?? '';
+  const safePreview = document.preview_content ?? '';
 
   const chunkEstimate = safePreview ? Math.ceil(safePreview.length / 1000) : 0;
   const edgeOnline = !window.__RAG_EDGE_OFFLINE__;
