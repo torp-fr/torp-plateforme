@@ -680,6 +680,25 @@ export class KnowledgeStepRunnerService {
         }
       }
 
+      // PHASE 19.11B: REAL CHUNK INSERT FIX
+      // Insert non-stream chunks (standard mode chunks that haven't been inserted yet)
+      if (!isStreamMode && chunks.length > 0) {
+        const rows = chunks.map((chunk, index) => ({
+          document_id: documentId,
+          content: chunk.text || chunk.content,
+          chunk_index: index,
+        }));
+        console.log('[STEP RUNNER] 💾 Persisting chunks:', rows.length);
+        const { error } = await supabase
+          .from('knowledge_chunks')
+          .insert(rows);
+        if (error) {
+          console.error('[STEP RUNNER] 🔴 Chunk insert error:', error);
+          throw new Error(`Chunk persistence failed: ${error.message}`);
+        }
+        console.log('[STEP RUNNER] ✅ Chunks persisted successfully');
+      }
+
       // PATCH 3: HARD STOP if chunking returns empty
       if (!chunks || chunks.length === 0) {
         console.error(`[STEP RUNNER] 🚫 CHUNKING FAILED: No chunks created - marking FAILED and STOPPING`);
