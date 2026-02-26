@@ -314,11 +314,12 @@ export class KnowledgeStepRunnerService {
 
         case DocumentIngestionState.UPLOADED:
           console.log(`[STEP RUNNER] ℹ️ Document UPLOADED - waiting for extraction trigger`);
-          return {
+          result = {
             success: true,
             nextState: DocumentIngestionState.UPLOADED,
             duration: Date.now() - startTime,
           };
+          break;
 
         case DocumentIngestionState.EXTRACTING:
           // PHASE 19.6: Extraction step bypass (text-first architecture)
@@ -354,26 +355,30 @@ export class KnowledgeStepRunnerService {
 
         case DocumentIngestionState.COMPLETED:
           console.log(`[STEP RUNNER] ✅ Document already COMPLETED`);
-          return {
+          result = {
             success: true,
-            nextState: DocumentIngestionState.COMPLETED,
+            // No nextState - COMPLETED is terminal
             duration: Date.now() - startTime,
           };
+          break;
 
         case DocumentIngestionState.FAILED:
           console.log(`[STEP RUNNER] ❌ Document in FAILED state`);
-          return {
+          result = {
             success: false,
             error: context.error_message || 'Document processing failed',
+            // No nextState - FAILED is terminal
             duration: Date.now() - startTime,
           };
+          break;
 
         default:
-          return {
+          result = {
             success: false,
             error: `Unknown state: ${currentState}`,
             duration: Date.now() - startTime,
           };
+          break;
       }
 
       // PHASE 19.7: Auto-chain execution
