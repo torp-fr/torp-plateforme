@@ -193,13 +193,44 @@ export class KnowledgeStepRunnerService {
   static async runNextStep(documentId: string): Promise<StepResult> {
     const startTime = Date.now();
 
-    // PHASE 15 FIX: Set ownership flag (lazy initialization)
-    if (!(window as any).__RAG_RUNNER_OWNER__) {
-      (window as any).__RAG_RUNNER_OWNER__ = true;
-      console.log('[STEP RUNNER] 🏆 Ownership claimed - runner is authoritative ingestion engine');
+    // PHASE 19: Initialize active pipeline counter (safe global tracking)
+    if ((window as any).__RAG_ACTIVE_PIPELINES__ === undefined) {
+      (window as any).__RAG_ACTIVE_PIPELINES__ = 0;
+      console.log('[LOAD SAFETY] 📊 Active pipeline counter initialized');
+    }
+
+    // PHASE 18.1: Generate unique runtime instance ID (once per browser tab/window)
+    if (!(window as any).__RAG_RUNNER_INSTANCE_ID__) {
+      const timestamp = Date.now().toString(36);
+      const randomPart = Math.random().toString(36).substring(2, 9);
+      (window as any).__RAG_RUNNER_INSTANCE_ID__ = `steprunner_${timestamp}_${randomPart}`;
+      console.log(`[STEP RUNNER] 🆔 Phase 18.1 - Instance ID assigned: ${(window as any).__RAG_RUNNER_INSTANCE_ID__}`);
+    }
+
+    const currentInstanceId = (window as any).__RAG_RUNNER_INSTANCE_ID__;
+
+    // PHASE 18: Ownership guard - prevent concurrent runner instances from different tabs/contexts
+    const ownerInstanceId = (window as any).__RAG_RUNNER_OWNER_ID__;
+
+    if (ownerInstanceId && ownerInstanceId !== currentInstanceId) {
+      console.warn(`[STEP RUNNER] 🚫 Ownership conflict: pipeline owned by different instance (${ownerInstanceId})`);
+      return {
+        success: false,
+        error: `Pipeline already owned by different instance: ${ownerInstanceId}`,
+        duration: Date.now() - startTime,
+      };
     }
 
     try {
+      // PHASE 15 FIX: Set ownership flag (lazy initialization)
+      if (!(window as any).__RAG_RUNNER_OWNER__) {
+        (window as any).__RAG_RUNNER_OWNER__ = true;
+        (window as any).__RAG_RUNNER_OWNER_ID__ = currentInstanceId;
+        console.log('[STEP RUNNER] 🏆 Ownership claimed - runner is authoritative ingestion engine');
+        console.log(`[STEP RUNNER] 📋 Instance: ${currentInstanceId}`);
+        console.log('[STEP RUNNER] 📋 All ingestion pipelines now delegated to StepRunner');
+      }
+
       // PHASE 17: Check for document-level lock
       if ((window as any).__RAG_DOC_LOCKS__?.[documentId]) {
         console.warn(`[UNIFIED KERNEL] 🔒 Document locked — skipping ${documentId}`);
@@ -210,24 +241,19 @@ export class KnowledgeStepRunnerService {
         };
       }
 
-      // PATCH 7: PREVENT DOUBLE PIPELINE - check if one is already running
-      if ((window as any).__RAG_PIPELINE_RUNNING__) {
-        console.warn(`[STEP RUNNER] ⚠️ PIPELINE ALREADY RUNNING - ignoring duplicate request for ${documentId}`);
-        return {
-          success: false,
-          error: 'Pipeline already running for another document',
-          duration: Date.now() - startTime,
-        };
-      }
+      // PHASE 18.2: REMOVED __RAG_PIPELINE_RUNNING__ global lock
+      // Keep ONLY document-level locking (PHASE 17)
+      // Allows multiple documents to be processed in parallel
 
-      // Set flag to prevent concurrent pipelines
-      (window as any).__RAG_PIPELINE_RUNNING__ = true;
+      // Set flag to prevent concurrent pipelines ON THIS DOCUMENT
+      (window as any).__RAG_DOC_LOCKS__ = (window as any).__RAG_DOC_LOCKS__ || {};
+      (window as any).__RAG_DOC_LOCKS__[documentId] = true;
       console.log(`[STEP RUNNER] 🚀 Running next step for document ${documentId}`);
 
       // Get current state
       const context = await ingestionStateMachineService.getStateContext(documentId);
       if (!context) {
-        (window as any).__RAG_PIPELINE_RUNNING__ = false;
+        delete (window as any).__RAG_DOC_LOCKS__[documentId];
         return {
           success: false,
           error: 'Failed to fetch document state',
@@ -235,8 +261,36 @@ export class KnowledgeStepRunnerService {
         };
       }
 
+      // PHASE 19.1: MOVED INCREMENT HERE - only after all guards pass
+      // Prevents counter drift from failed validation attempts
+      (window as any).__RAG_ACTIVE_PIPELINES__++;
+      const activeCount = (window as any).__RAG_ACTIVE_PIPELINES__;
+      console.log(`[LOAD SAFETY] 📈 Pipeline active: ${activeCount} total (document: ${documentId})`);
+
       const currentState = context.current_state;
       console.log(`[STEP RUNNER] Current state: ${currentState}`);
+
+      // PHASE 19: Adaptive concurrency limit (load safety)
+      const isBigDocMode = Boolean((window as any).__RAG_BIG_DOC_MODE__);
+      const CONCURRENCY_LIMIT = 3;
+
+      if (activeCount > CONCURRENCY_LIMIT && !isBigDocMode) {
+        console.warn(`[LOAD SAFETY] 🛑 Throttling: ${activeCount} active pipelines (limit: ${CONCURRENCY_LIMIT})`);
+        return {
+          success: false,
+          error: 'Load safety throttle: concurrency limit exceeded',
+          throttled: true,
+          duration: Date.now() - startTime,
+        };
+      }
+
+      // PHASE 19: Latency-aware backoff
+      const predictor = (window as any).__RAG_LATENCY_PREDICTOR__;
+      if (predictor && predictor.predictedRisk === 'HIGH') {
+        const backoffDelay = 500 + Math.random() * 500;
+        console.warn(`[LOAD SAFETY] ⏳ Latency backoff applied: ${backoffDelay.toFixed(0)}ms (predicted risk: ${predictor.predictedRisk})`);
+        await new Promise(resolve => setTimeout(resolve, backoffDelay));
+      }
 
       // Determine next step and run it
       let result: StepResult;
@@ -300,8 +354,14 @@ export class KnowledgeStepRunnerService {
         duration: Date.now() - startTime,
       };
     } finally {
-      // PATCH 7: CLEANUP - release pipeline lock
-      (window as any).__RAG_PIPELINE_RUNNING__ = false;
+      // PHASE 18.2: Remove document-level lock
+      if ((window as any).__RAG_DOC_LOCKS__) {
+        delete (window as any).__RAG_DOC_LOCKS__[documentId];
+      }
+
+      // PHASE 19: Decrement active pipeline count
+      (window as any).__RAG_ACTIVE_PIPELINES__--;
+      console.log(`[LOAD SAFETY] 📉 Pipeline inactive: ${(window as any).__RAG_ACTIVE_PIPELINES__} remaining`);
     }
   }
 
@@ -708,8 +768,18 @@ export class KnowledgeStepRunnerService {
 
           // PHASE 12: Get adaptive configuration
           const config = this.getAdaptiveStreamConfig();
-          const batchSize = config.batchSize;
+          let batchSize = config.batchSize;
           let batchThrottleMs = config.throttleMs;
+
+          // PHASE 19: Embedding burst protection - reduce batch size under high load
+          const activeCount = (window as any).__RAG_ACTIVE_PIPELINES__ || 0;
+          if (activeCount >= 2) {
+            const originalBatchSize = batchSize;
+            batchSize = Math.max(Math.floor(batchSize * 0.75), 20);
+            if (batchSize < originalBatchSize) {
+              console.log(`[LOAD SAFETY] 📉 Embedding batch reduced: ${originalBatchSize} → ${batchSize} (${activeCount} active pipelines)`);
+            }
+          }
 
           // PHASE 13: Use preloaded buffer if available, else fetch from DB
           let batch: any[] | null = null;
