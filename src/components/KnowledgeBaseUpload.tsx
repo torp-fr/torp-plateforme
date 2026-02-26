@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { KNOWLEDGE_CATEGORY_LABELS, getAllCategories } from '@/constants/knowledge-categories';
 import { knowledgeBrainService } from '@/services/ai/knowledge-brain.service';
+import { env } from '@/config/env';
 
 // Map of sources with French labels
 const SOURCES = {
@@ -67,11 +68,12 @@ export function KnowledgeBaseUpload() {
       return;
     }
 
-    // Validate file size (10MB max)
-    if (file.size > 10 * 1024 * 1024) {
+    // Validate file size (use configured max from env)
+    if (file.size > env.upload.maxFileSize) {
+      const maxSizeMB = (env.upload.maxFileSize / (1024 * 1024)).toFixed(0);
       setState(prev => ({
         ...prev,
-        error: 'Le fichier ne doit pas dépasser 10 MB',
+        error: `Le fichier ne doit pas dépasser ${maxSizeMB} MB`,
       }));
       return;
     }
@@ -225,7 +227,7 @@ export function KnowledgeBaseUpload() {
               </div>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">Max 10MB. PDF ou TXT uniquement.</p>
+          <p className="text-xs text-muted-foreground">Max {(env.upload.maxFileSize / (1024 * 1024)).toFixed(0)}MB. PDF ou TXT uniquement.</p>
         </div>
 
         {/* Category - PHASE 36.2: Display French labels */}
