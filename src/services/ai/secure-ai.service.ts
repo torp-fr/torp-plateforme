@@ -41,12 +41,6 @@ class SecureAIService {
 
     const session = await this.waitForSession();
 
-    // PHASE 19.14: Add network safety check before edge invocation
-    if (!navigator.onLine) {
-      console.error('[EDGE CALL] 🚫 Network offline - cannot invoke edge function');
-      throw new Error('EDGE_UNREACHABLE_OFFLINE');
-    }
-
     // EDGE DEBUG — BEFORE INVOKE
     const projectUrl = supabase.supabaseUrl;
     const hasSession = !!session?.access_token;
