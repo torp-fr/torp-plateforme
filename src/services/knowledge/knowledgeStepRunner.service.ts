@@ -305,11 +305,12 @@ export class KnowledgeStepRunnerService {
             DocumentIngestionState.EXTRACTING,
             'extraction_starting'
           );
-          return {
+          result = {
             success: true,
             nextState: DocumentIngestionState.EXTRACTING,
             duration: Date.now() - startTime,
           };
+          break;
 
         case DocumentIngestionState.UPLOADED:
           console.log(`[STEP RUNNER] ℹ️ Document UPLOADED - waiting for extraction trigger`);
@@ -331,12 +332,13 @@ export class KnowledgeStepRunnerService {
             'extraction_bypassed'
           );
 
-          return {
+          result = {
             success: true,
             nextState: DocumentIngestionState.CHUNKING,
             bypassed: true,
             duration: Date.now() - startTime,
           };
+          break;
 
         case DocumentIngestionState.CHUNKING:
           result = await this.runChunkingStep(documentId);
@@ -372,6 +374,18 @@ export class KnowledgeStepRunnerService {
             error: `Unknown state: ${currentState}`,
             duration: Date.now() - startTime,
           };
+      }
+
+      // PHASE 19.7: Auto-chain execution
+      // After successful transition, automatically continue to next step
+      // Uses setTimeout(..., 0) to avoid stack recursion and maintain event loop
+      if (result?.success && result?.nextState) {
+        console.log('[STEP RUNNER] 🔁 Auto-chain next step:', result.nextState);
+        setTimeout(() => {
+          KnowledgeStepRunnerService.runNextStep(documentId).catch((err) =>
+            console.warn('[STEP RUNNER] ⚠️ Auto-chain error:', err)
+          );
+        }, 0);
       }
 
       return result;
