@@ -170,8 +170,8 @@ export function AdvancedAnalytics({ userType }: AnalyticsProps) {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {conversionFunnel.map((stage, index) => (
-                <div key={index} className="space-y-2">
+              {conversionFunnel.map((stage) => (
+                <div key={`funnel-${stage.stage}`} className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span>{stage.stage}</span>
                     <span className="font-medium">{stage.value} ({stage.percentage}%)</span>
@@ -193,8 +193,8 @@ export function AdvancedAnalytics({ userType }: AnalyticsProps) {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {topClients.map((client, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+              {topClients.map((client) => (
+                <div key={`client-${client.name}`} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
                   <div className="flex-1">
                     <h4 className="font-medium text-sm">{client.name}</h4>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
@@ -242,8 +242,8 @@ export function AdvancedAnalytics({ userType }: AnalyticsProps) {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {recentLeads.map((lead, index) => (
-              <div key={index} className="p-4 border rounded-lg">
+            {recentLeads.map((lead) => (
+              <div key={`lead-${lead.client}`} className="p-4 border rounded-lg">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">

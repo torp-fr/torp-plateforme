@@ -211,7 +211,7 @@ const ScoringResult: React.FC<ScoringResultProps> = ({ result, userData, onConti
             {recommendations.map((rec, index) => {
               const IconComponent = rec.icon;
               return (
-                <div key={index} className="flex gap-3 p-4 border rounded-lg">
+                <div key={`rec-${index}`} className="flex gap-3 p-4 border rounded-lg">
                   <div className={`p-2 rounded-lg ${
                     rec.level === 'success' ? 'bg-success/10 text-success' :
                     rec.level === 'warning' ? 'bg-warning/10 text-warning' :

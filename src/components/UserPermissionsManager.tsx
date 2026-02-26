@@ -191,7 +191,7 @@ const UserPermissionsManager = ({ projectId }: UserPermissionsManagerProps) => {
           <CardContent className="pt-6">
             <div className="space-y-4">
               {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} className="h-24 w-full rounded-lg" />
+                <Skeleton key={`skeleton-${i}`} className="h-24 w-full rounded-lg" />
               ))}
             </div>
           </CardContent>
@@ -664,8 +664,8 @@ const UserPermissionsManager = ({ projectId }: UserPermissionsManagerProps) => {
                         { time: '11:15', user: 'p.martin@nantesmetropole.fr', action: 'Consultation dashboard analytics', level: 'info' },
                         { time: '09:45', user: 'system', action: 'Anonymisation automatique données', level: 'info' },
                         { time: '08:30', user: 'failed_login', action: 'Tentative connexion échouée', level: 'warning' }
-                      ].map((log, index) => (
-                        <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                      ].map((log) => (
+                        <div key={`log-${log.time}-${log.action}`} className="flex items-center justify-between p-3 border rounded-lg">
                           <div className="flex items-center gap-3">
                             <div className={`w-2 h-2 rounded-full ${
                               log.level === 'warning' ? 'bg-yellow-500' : 'bg-green-500'

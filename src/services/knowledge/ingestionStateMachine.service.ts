@@ -119,7 +119,6 @@ export class IngestionStateMachineService {
       // Build update object with existing Supabase columns
       const updateData: any = {
         ingestion_status: toState,
-        last_ingestion_step: stepName,
         ingestion_progress: this.getProgressPercent(toState),
         updated_at: new Date().toISOString(),
       };
@@ -152,27 +151,35 @@ export class IngestionStateMachineService {
         );
       }
 
-      // Update state in database
-      // PHASE 19.4: Debug logging for SQL drift detection
-      console.log('[STATE MACHINE DEBUG] Attempting update:', {
+      // Update state in database with SAFE payload validation
+      // PHASE STABILIZATION: Only send valid columns
+      const safeUpdateData = {
+        ingestion_status: updateData.ingestion_status,
+        ingestion_progress: updateData.ingestion_progress,
+        updated_at: updateData.updated_at,
+        ...(updateData.ingestion_started_at && { ingestion_started_at: updateData.ingestion_started_at }),
+        ...(updateData.ingestion_completed_at && { ingestion_completed_at: updateData.ingestion_completed_at }),
+      };
+
+      console.log('[STATE MACHINE] 🔄 Attempting state transition:', {
         documentId,
-        newState: toState,
-        payload: updateData,
+        fromState: currentState,
+        toState: toState,
+        payload: safeUpdateData,
       });
 
       const { error: updateError } = await supabase
         .from('knowledge_documents')
-        .update(updateData)
+        .update(safeUpdateData)
         .eq('id', documentId);
 
       if (updateError) {
         console.error(`[STATE MACHINE] 🔴 State update failed:`, updateError);
-        // PHASE 19.4: Full error context for debugging SQL issues
-        console.error('[STATE MACHINE DEBUG] Supabase error FULL:', {
+        console.error('[STATE MACHINE PATCH ERROR]', {
           message: updateError.message,
           code: (updateError as any).code,
-          details: (updateError as any).details,
-          hint: (updateError as any).hint,
+          documentId,
+          payload: safeUpdateData,
           fullError: updateError,
         });
         return false;

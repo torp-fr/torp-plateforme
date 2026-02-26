@@ -154,7 +154,7 @@ export function RGEStatusCard({ rgeData, loading = false, showDetails = true }: 
           <div className="space-y-2">
             {rgeData.alertes.map((alerte, i) => (
               <div
-                key={i}
+                key={`item-${i}`}
                 className={`flex items-start gap-2 p-2 rounded-lg text-sm ${
                   alerte.type === 'expiration_proche'
                     ? 'bg-yellow-50 border border-yellow-200'
@@ -205,7 +205,7 @@ export function RGEStatusCard({ rgeData, loading = false, showDetails = true }: 
               <div className="flex flex-wrap gap-1.5">
                 {rgeData.metaDomainesActifs.map((domaine, i) => (
                   <Badge
-                    key={i}
+                    key={`item-${i}`}
                     variant="outline"
                     className="text-xs bg-green-50 border-green-200 flex items-center gap-1"
                   >
@@ -224,7 +224,7 @@ export function RGEStatusCard({ rgeData, loading = false, showDetails = true }: 
               </h5>
               <div className="flex flex-wrap gap-1.5">
                 {rgeData.organismesCertificateurs.map((org, i) => (
-                  <Badge key={i} variant="secondary" className="text-xs capitalize">
+                  <Badge key={`item-${i}`} variant="secondary" className="text-xs capitalize">
                     {org}
                   </Badge>
                 ))}
@@ -239,7 +239,7 @@ export function RGEStatusCard({ rgeData, loading = false, showDetails = true }: 
               </h5>
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {rgeData.qualificationsActives.map((qual, i) => (
-                  <QualificationItem key={i} qualification={qual} />
+                  <QualificationItem key={`item-${i}`} qualification={qual} />
                 ))}
               </div>
             </div>
@@ -254,7 +254,7 @@ export function RGEStatusCard({ rgeData, loading = false, showDetails = true }: 
                 <div className="flex flex-wrap gap-2">
                   {rgeData.certificats.slice(0, 3).map((cert, i) => (
                     <a
-                      key={i}
+                      key={`item-${i}`}
                       href={cert.url}
                       target="_blank"
                       rel="noopener noreferrer"

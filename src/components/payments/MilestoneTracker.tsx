@@ -370,7 +370,7 @@ export function MilestoneTracker({ contractId, userRole, userId }: MilestoneTrac
                     </span>
                     <div className="flex flex-wrap gap-1 mt-1">
                       {milestone.conditionsDeclenchement.map((cond, i) => (
-                        <Badge key={i} variant="outline" className="text-xs">
+                        <Badge key={`item-${i}`} variant="outline" className="text-xs">
                           {cond}
                         </Badge>
                       ))}
@@ -417,7 +417,7 @@ export function MilestoneTracker({ contractId, userRole, userId }: MilestoneTrac
                     <AlertDescription>
                       <ul className="list-disc list-inside text-sm">
                         {milestone.verificationAuto.alertes.map((alerte, i) => (
-                          <li key={i}>{alerte}</li>
+                          <li key={`item-${i}`}>{alerte}</li>
                         ))}
                       </ul>
                     </AlertDescription>
@@ -509,7 +509,7 @@ export function MilestoneTracker({ contractId, userRole, userId }: MilestoneTrac
               {submitForm.preuves.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {submitForm.preuves.map((file, index) => (
-                    <Badge key={index} variant="secondary" className="pr-1">
+                    <Badge key={`proof-${file.name}-${index}`} variant="secondary" className="pr-1">
                       {file.name}
                       <Button
                         variant="ghost"

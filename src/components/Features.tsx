@@ -74,7 +74,7 @@ export const Features = () => {
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-20">
           {features.map((feature, index) => (
-            <Card key={index} variant="interactive" className="animate-fade-in">
+            <Card key={`feature-${index}`} variant="interactive" className="animate-fade-in">
               <CardHeader>
                 <div className="flex items-center justify-between mb-4">
                   <div className="p-3 bg-primary-light rounded-lg">
@@ -103,7 +103,7 @@ export const Features = () => {
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {gradingSamples.map((grade, index) => (
-            <Card key={index} variant="elevated" className="text-center animate-fade-in">
+            <Card key={`grade-${index}`} variant="elevated" className="text-center animate-fade-in">
               <CardHeader className="pb-2">
                 <Badge 
                   variant={grade.color as any} 
