@@ -296,6 +296,21 @@ export class KnowledgeStepRunnerService {
       let result: StepResult;
 
       switch (currentState) {
+        case DocumentIngestionState.PENDING:
+          // PHASE 19.6: Document in PENDING state (inserted by passive Brain)
+          // Transition to EXTRACTING to start pipeline
+          console.log(`[STEP RUNNER] 🔄 Document PENDING - claiming and starting extraction`);
+          await ingestionStateMachineService.transitionTo(
+            documentId,
+            DocumentIngestionState.EXTRACTING,
+            'extraction_starting'
+          );
+          return {
+            success: true,
+            nextState: DocumentIngestionState.EXTRACTING,
+            duration: Date.now() - startTime,
+          };
+
         case DocumentIngestionState.UPLOADED:
           console.log(`[STEP RUNNER] ℹ️ Document UPLOADED - waiting for extraction trigger`);
           return {
@@ -305,8 +320,23 @@ export class KnowledgeStepRunnerService {
           };
 
         case DocumentIngestionState.EXTRACTING:
-          result = await this.runExtractionStep(documentId);
-          break;
+          // PHASE 19.6: Extraction step bypass (text-first architecture)
+          // Brain already extracted text during document insert
+          // StepRunner bypasses extraction and proceeds to chunking
+          console.log('[STEP RUNNER] ⏩ Extraction bypassed (PHASE 19.6 - text already available)');
+
+          await ingestionStateMachineService.transitionTo(
+            documentId,
+            DocumentIngestionState.CHUNKING,
+            'extraction_bypassed'
+          );
+
+          return {
+            success: true,
+            nextState: DocumentIngestionState.CHUNKING,
+            bypassed: true,
+            duration: Date.now() - startTime,
+          };
 
         case DocumentIngestionState.CHUNKING:
           result = await this.runChunkingStep(documentId);
