@@ -142,6 +142,14 @@ export class IngestionStateMachineService {
         // PHASE 11: Clear stream mode when document completes
         (window as any).__RAG_STREAM_MODE__ = false;
         window.dispatchEvent(new Event('RAG_STREAM_MODE_CLEARED'));
+
+        // PHASE 17: Unlock document when completion
+        if ((window as any).__RAG_DOC_LOCKS__) {
+          delete (window as any).__RAG_DOC_LOCKS__[documentId];
+        }
+        window.dispatchEvent(
+          new CustomEvent('RAG_DOC_UNLOCKED', { detail: { documentId } })
+        );
       }
 
       // Update state in database
@@ -197,14 +205,18 @@ export class IngestionStateMachineService {
         window.dispatchEvent(new Event('RAG_EMBEDDING_PAUSED'));
       }
 
-      // PHASE 10: HARD LOCK on critical failures
+      // PHASE 17: DOCUMENT-LEVEL LOCK on critical failures
       if (reason === IngestionFailureReason.EMBEDDING_API_ERROR ||
           reason === IngestionFailureReason.EMBEDDING_TIMEOUT ||
           reason === IngestionFailureReason.EMBEDDING_PARTIAL_FAILURE ||
           reason === IngestionFailureReason.CHUNKING_ERROR) {
-        console.warn(`[STATE MACHINE] 🔒 ACTIVATING HARD LOCK: Pipeline locked to prevent worker storm`);
-        (window as any).__RAG_PIPELINE_LOCKED__ = true;
-        window.dispatchEvent(new Event('RAG_PIPELINE_LOCKED'));
+        console.warn(`[STATE MACHINE] 🔒 DOCUMENT LOCK: Isolating failed document to prevent retry storm`);
+        (window as any).__RAG_DOC_LOCKS__ ??= {};
+        (window as any).__RAG_DOC_LOCKS__[documentId] = true;
+        console.warn(`[DOC LOCK] 🔒 Locked document ${documentId}`);
+        window.dispatchEvent(
+          new CustomEvent('RAG_DOC_LOCKED', { detail: { documentId } })
+        );
       }
 
       // Build error details as JSON string for storage in last_ingestion_error

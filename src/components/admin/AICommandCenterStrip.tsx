@@ -8,7 +8,7 @@ interface CommandState {
   heartbeat: 'beating' | 'stale';
   lastEventTime: number | null;
   bigDocMode: boolean;
-  pipelineLocked: boolean;
+  lockedDocCount: number;
   streamMode: boolean;
   adaptiveLevel: 'FAST' | 'NORMAL' | 'SAFE' | 'CRITICAL';
   latencyTrend: 'STABLE' | 'RISING' | 'FALLING';
@@ -21,7 +21,7 @@ export function AICommandCenterStrip() {
     heartbeat: 'beating',
     lastEventTime: Date.now(),
     bigDocMode: false,
-    pipelineLocked: false,
+    lockedDocCount: 0,
     streamMode: false,
     adaptiveLevel: 'NORMAL',
     latencyTrend: 'STABLE',
@@ -43,7 +43,10 @@ export function AICommandCenterStrip() {
       // PHASE 8: AUTO-HEAL LOGIC
       // If edge comes back ONLINE and EMBEDDING_PAUSED, clear pause
       const wasEmbeddingPaused = Boolean((window as any).__RAG_EMBEDDING_PAUSED__);
-      const pipelineLocked = Boolean((window as any).__RAG_PIPELINE_LOCKED__);
+
+      // PHASE 17: Count locked documents
+      const docLocks = (window as any).__RAG_DOC_LOCKS__ || {};
+      const lockedDocCount = Object.keys(docLocks).length;
 
       if (!edgeOffline && wasEmbeddingPaused) {
         console.log('[RAG COMMAND CENTER] 🟢 EDGE RECOVERED: Clearing embedding pause');
@@ -53,15 +56,15 @@ export function AICommandCenterStrip() {
         window.dispatchEvent(new CustomEvent('RAG_OPS_EVENT', { detail: { event: 'edge_recovered' } }));
       }
 
-      // PHASE 10: Check for pipeline lock
-      if (pipelineLocked && orchestratorState !== 'DEGRADED') {
+      // PHASE 17: Check for locked documents
+      if (lockedDocCount > 0 && orchestratorState !== 'DEGRADED') {
         orchestratorState = 'DEGRADED';
       }
 
       setState((prev) => ({
         ...prev,
         orchestratorState,
-        pipelineLocked,
+        lockedDocCount,
         lastEventTime: Date.now(),
       }));
 
@@ -94,17 +97,21 @@ export function AICommandCenterStrip() {
     window.addEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocMode);
     window.addEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocClear);
 
-    // PHASE 10: Listen for pipeline lock events
-    const handlePipelineLocked = () => {
-      console.log('[RAG COMMAND CENTER] 🔒 Pipeline locked');
-      setState(prev => ({ ...prev, pipelineLocked: true, orchestratorState: 'DEGRADED' }));
+    // PHASE 17: Listen for document lock events
+    const handleDocLocked = () => {
+      const docLocks = (window as any).__RAG_DOC_LOCKS__ || {};
+      const lockedDocCount = Object.keys(docLocks).length;
+      console.log(`[RAG COMMAND CENTER] 🔒 Document locked - ${lockedDocCount} total locked`);
+      setState(prev => ({ ...prev, lockedDocCount, orchestratorState: 'DEGRADED' }));
     };
-    const handlePipelineUnlocked = () => {
-      console.log('[RAG COMMAND CENTER] 🔓 Pipeline unlocked');
-      setState(prev => ({ ...prev, pipelineLocked: false }));
+    const handleDocUnlocked = () => {
+      const docLocks = (window as any).__RAG_DOC_LOCKS__ || {};
+      const lockedDocCount = Object.keys(docLocks).length;
+      console.log(`[RAG COMMAND CENTER] 🔓 Document unlocked - ${lockedDocCount} remaining locked`);
+      setState(prev => ({ ...prev, lockedDocCount }));
     };
-    window.addEventListener('RAG_PIPELINE_LOCKED', handlePipelineLocked);
-    window.addEventListener('RAG_PIPELINE_UNLOCKED', handlePipelineUnlocked);
+    window.addEventListener('RAG_DOC_LOCKED', handleDocLocked);
+    window.addEventListener('RAG_DOC_UNLOCKED', handleDocUnlocked);
 
     // PHASE 11: Listen for stream mode events
     const handleStreamModeActivated = () => {
@@ -164,8 +171,8 @@ export function AICommandCenterStrip() {
       window.removeEventListener('RAG_EDGE_STATUS_UPDATED', handleEdgeUpdate);
       window.removeEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocMode);
       window.removeEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocClear);
-      window.removeEventListener('RAG_PIPELINE_LOCKED', handlePipelineLocked);
-      window.removeEventListener('RAG_PIPELINE_UNLOCKED', handlePipelineUnlocked);
+      window.removeEventListener('RAG_DOC_LOCKED', handleDocLocked);
+      window.removeEventListener('RAG_DOC_UNLOCKED', handleDocUnlocked);
       window.removeEventListener('RAG_STREAM_MODE_ACTIVATED', handleStreamModeActivated);
       window.removeEventListener('RAG_STREAM_MODE_CLEARED', handleStreamModeCleared);
       window.removeEventListener('RAG_STREAM_CONTROLLER_UPDATED', handleStreamControllerUpdated);
@@ -220,10 +227,10 @@ export function AICommandCenterStrip() {
             </Badge>
           )}
 
-          {/* PHASE 10: Pipeline Locked Badge */}
-          {state.pipelineLocked && (
+          {/* PHASE 17: Document Locks Badge */}
+          {state.lockedDocCount > 0 && (
             <Badge className="bg-red-100 text-red-700 border-red-200">
-              🔒 PIPELINE LOCKED
+              🔒 {state.lockedDocCount} DOC LOCKED
             </Badge>
           )}
 
