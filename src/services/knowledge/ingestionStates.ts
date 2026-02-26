@@ -13,6 +13,10 @@
  *            (any state can fail → FAILED)
  */
 export enum DocumentIngestionState {
+  // Initial state: Document created by Brain, awaiting StepRunner ingestion start
+  // PHASE 19.3: Added to support passive Brain (documents remain PENDING until StepRunner claims them)
+  PENDING = 'pending',
+
   // Initial state: Document uploaded, awaiting processing
   UPLOADED = 'uploaded',
 
@@ -116,6 +120,12 @@ export interface IngestionStateContext {
  * Maps from state → list of allowed next states
  */
 export const VALID_TRANSITIONS: Record<DocumentIngestionState, DocumentIngestionState[]> = {
+  // PHASE 19.3: Allow StepRunner to claim PENDING documents and start ingestion
+  [DocumentIngestionState.PENDING]: [
+    DocumentIngestionState.EXTRACTING,
+    DocumentIngestionState.FAILED,
+  ],
+
   [DocumentIngestionState.UPLOADED]: [
     DocumentIngestionState.EXTRACTING,
     DocumentIngestionState.FAILED,
@@ -151,6 +161,7 @@ export const VALID_TRANSITIONS: Record<DocumentIngestionState, DocumentIngestion
  * Used for UI progress indicators
  */
 export const STATE_PROGRESS_MAP: Record<DocumentIngestionState, number> = {
+  [DocumentIngestionState.PENDING]: 0,
   [DocumentIngestionState.UPLOADED]: 5,
   [DocumentIngestionState.EXTRACTING]: 20,
   [DocumentIngestionState.CHUNKING]: 40,
