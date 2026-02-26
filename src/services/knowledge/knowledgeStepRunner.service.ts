@@ -249,7 +249,11 @@ export class KnowledgeStepRunnerService {
 
         // Set flag to prevent concurrent pipelines ON THIS DOCUMENT
         (window as any).__RAG_DOC_LOCKS__ = (window as any).__RAG_DOC_LOCKS__ || {};
-        (window as any).__RAG_DOC_LOCKS__[documentId] = true;
+        // PHASE 19.10: Store lock with ownership information
+        (window as any).__RAG_DOC_LOCKS__[documentId] = {
+          owner: currentInstanceId,
+          acquiredAt: Date.now(),
+        };
         console.log(`[STEP RUNNER] 🚀 Running next step for document ${documentId}`);
 
         // Get current state
@@ -783,13 +787,21 @@ export class KnowledgeStepRunnerService {
       }
 
       // PHASE 17: Check document-level lock before embedding
-      if ((window as any).__RAG_DOC_LOCKS__?.[documentId]) {
-        console.warn(`[STEP RUNNER] 🔒 Document locked - abort embedding`);
+      // PHASE 19.10: Verify lock ownership (allow self-owned locks)
+      const lockInfo = (window as any).__RAG_DOC_LOCKS__?.[documentId];
+      const currentInstanceId = (window as any).__RAG_RUNNER_INSTANCE_ID__;
+
+      if (lockInfo && lockInfo.owner && lockInfo.owner !== currentInstanceId) {
+        console.warn(`[STEP RUNNER] 🔒 Document locked by another runner - abort embedding`);
         return {
           success: false,
-          error: 'Document is locked',
+          error: 'Document is locked by another runner',
           duration: Date.now() - startTime,
         };
+      }
+
+      if (lockInfo && lockInfo.owner === currentInstanceId) {
+        console.log(`[STEP RUNNER] 🔓 Lock owned by this runner — continuing`);
       }
 
       console.log(`[STEP RUNNER] 🔢 EMBEDDING STEP: Generating embeddings for chunks...`);
