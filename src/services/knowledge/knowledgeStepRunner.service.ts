@@ -860,6 +860,8 @@ export class KnowledgeStepRunnerService {
 
       let successCount = 0;
       let failureCount = 0;
+      let chunks: any[] = []; // PHASE 19.14: Declare at higher scope for both stream/non-stream paths
+      let totalChunksForLogging = 0; // PHASE 19.14: Track total chunks for final logging
 
       // PHASE 11: STREAMING EMBEDDING ENGINE with PHASE 12 adaptive control
       if (isStreamMode) {
@@ -867,6 +869,19 @@ export class KnowledgeStepRunnerService {
         let cursor = 0;
         let preloadBuffer: any[] = []; // PHASE 13: Smart queue preload buffer
         let preloadPromise: Promise<any> | null = null; // PHASE 13: Preload promise
+
+        // PHASE 19.14: Fetch total chunk count for logging
+        const { count: totalChunkCount } = await supabase
+          .from('knowledge_chunks')
+          .select('id', { count: 'exact', head: true })
+          .eq('document_id', documentId);
+
+        if (!totalChunkCount || totalChunkCount === 0) {
+          console.warn('[STEP RUNNER] ⚠️ No chunks to embed');
+          return { success: false };
+        }
+
+        totalChunksForLogging = totalChunkCount;
 
         // PHASE 12: Initialize stream controller if needed
         if (!(window as any).__RAG_STREAM_CONTROLLER__) {
@@ -1009,16 +1024,25 @@ export class KnowledgeStepRunnerService {
       } else {
         // Standard embedding for normal documents
         // PHASE 19.12: Simplified query to fetch ALL chunks (no additional filters)
-        const { data: chunks, error: fetchError } = await supabase
+        const { data: fetchedChunks, error: fetchError } = await supabase
           .from('knowledge_chunks')
           .select('*')
           .eq('document_id', documentId)
           .order('chunk_index', { ascending: true });
 
-        console.log('[STEP RUNNER] 📦 EMBEDDING fetched chunks:', chunks?.length);
+        // PHASE 19.14: Normalize chunk structure and add safety guard
+        chunks = fetchedChunks ?? [];
+        totalChunksForLogging = chunks.length;
 
-        if (fetchError || !chunks || chunks.length === 0) {
-          throw new Error('No chunks found to embed');
+        console.log('[STEP RUNNER] 📦 EMBEDDING fetched chunks:', chunks.length);
+
+        if (!chunks.length) {
+          console.warn('[STEP RUNNER] ⚠️ No chunks to embed');
+          return { success: false };
+        }
+
+        if (fetchError) {
+          throw new Error('Chunk fetch error: ' + fetchError.message);
         }
 
         console.log(`[STEP RUNNER] Processing ${chunks.length} chunks...`);
@@ -1070,7 +1094,7 @@ export class KnowledgeStepRunnerService {
       }
 
       console.log(
-        `[STEP RUNNER] ✅ Embedding complete: ${successCount}/${chunks.length} successful`
+        `[STEP RUNNER] ✅ Embedding complete: ${successCount}/${totalChunksForLogging} successful`
       );
 
       // Check if all chunks were embedded

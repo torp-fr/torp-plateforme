@@ -41,8 +41,14 @@ class SecureAIService {
 
     const session = await this.waitForSession();
 
+    // PHASE 19.14: Add network safety check before edge invocation
+    if (!navigator.onLine) {
+      console.error('[EDGE CALL] 🚫 Network offline - cannot invoke edge function');
+      throw new Error('EDGE_UNREACHABLE_OFFLINE');
+    }
+
     // EDGE DEBUG — BEFORE INVOKE
-    const projectUrl = session?.user?.id ? 'authenticated' : 'guest';
+    const projectUrl = supabase.supabaseUrl;
     const hasSession = !!session?.access_token;
     const payloadSize = JSON.stringify({ text: truncatedText, model }).length;
 
@@ -57,7 +63,7 @@ class SecureAIService {
     });
 
     // CRITICAL: Verify supabase client URL (fixes edge invoke origin mismatch)
-    console.log('[EDGE DEBUG URL]', supabase.supabaseUrl);
+    console.log('[EDGE CALL] projectUrl:', projectUrl);
     console.log('[EDGE INVOKE FINAL]', supabase.supabaseUrl);
 
     const invokeStart = Date.now();
@@ -86,7 +92,7 @@ class SecureAIService {
     });
 
     if (error) {
-      console.error('[SECURE AI] EDGE ERROR', {
+      console.error('[EDGE CALL FAILED]', {
         message: error.message,
         context: error.context,
         statusCode: error.status || 'unknown',
