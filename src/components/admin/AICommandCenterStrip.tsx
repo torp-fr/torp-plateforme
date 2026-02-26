@@ -9,6 +9,10 @@ interface CommandState {
   lastEventTime: number | null;
   bigDocMode: boolean;
   pipelineLocked: boolean;
+  streamMode: boolean;
+  adaptiveLevel: 'FAST' | 'NORMAL' | 'SAFE' | 'CRITICAL';
+  latencyTrend: 'STABLE' | 'RISING' | 'FALLING';
+  predictedRisk: 'LOW' | 'MEDIUM' | 'HIGH';
 }
 
 export function AICommandCenterStrip() {
@@ -18,6 +22,10 @@ export function AICommandCenterStrip() {
     lastEventTime: Date.now(),
     bigDocMode: false,
     pipelineLocked: false,
+    streamMode: false,
+    adaptiveLevel: 'NORMAL',
+    latencyTrend: 'STABLE',
+    predictedRisk: 'LOW',
   });
 
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -64,6 +72,16 @@ export function AICommandCenterStrip() {
     window.addEventListener('RAG_OPS_EVENT', updateCommandState);
     window.addEventListener('RAG_COMMAND_CENTER_UPDATE', updateCommandState);
 
+    // PHASE 14: Listen for real edge status updates
+    const handleEdgeUpdate = () => {
+      const offline = Boolean((window as any).RAG_EDGE_OFFLINE);
+      setState(prev => ({
+        ...prev,
+        orchestratorState: offline ? 'FALLBACK' : prev.orchestratorState,
+      }));
+    };
+    window.addEventListener('RAG_EDGE_STATUS_UPDATED', handleEdgeUpdate);
+
     // PHASE 9: Listen for big document mode events
     const handleBigDocMode = () => {
       console.log('[RAG COMMAND CENTER] 📚 Big document mode activated');
@@ -88,6 +106,31 @@ export function AICommandCenterStrip() {
     window.addEventListener('RAG_PIPELINE_LOCKED', handlePipelineLocked);
     window.addEventListener('RAG_PIPELINE_UNLOCKED', handlePipelineUnlocked);
 
+    // PHASE 11: Listen for stream mode events
+    const handleStreamModeActivated = () => {
+      console.log('[RAG COMMAND CENTER] 🌊 Stream mode activated');
+      setState(prev => ({ ...prev, streamMode: true }));
+    };
+    const handleStreamModeCleared = () => {
+      console.log('[RAG COMMAND CENTER] 🌊 Stream mode cleared');
+      setState(prev => ({ ...prev, streamMode: false }));
+    };
+    window.addEventListener('RAG_STREAM_MODE_ACTIVATED', handleStreamModeActivated);
+    window.addEventListener('RAG_STREAM_MODE_CLEARED', handleStreamModeCleared);
+
+    // PHASE 12: Listen for adaptive stream controller updates
+    const handleStreamControllerUpdated = () => {
+      const controller = (window as any).__RAG_STREAM_CONTROLLER__ || {};
+      const predictor = (window as any).__RAG_LATENCY_PREDICTOR__ || {};
+      setState(prev => ({
+        ...prev,
+        adaptiveLevel: controller.adaptiveLevel || 'NORMAL',
+        latencyTrend: predictor.trend || 'STABLE',
+        predictedRisk: predictor.predictedRisk || 'LOW',
+      }));
+    };
+    window.addEventListener('RAG_STREAM_CONTROLLER_UPDATED', handleStreamControllerUpdated);
+
     // PATCH 5: HEARTBEAT MONITOR - stabilized interval
     // If edge is offline (FALLBACK), use 15s interval to reduce load
     // Otherwise use 5s for responsiveness
@@ -95,6 +138,11 @@ export function AICommandCenterStrip() {
     console.log(`[RAG COMMAND CENTER] Heartbeat interval: ${heartbeatInterval}ms (Edge: ${(window as any).RAG_EDGE_OFFLINE ? 'OFFLINE' : 'ONLINE'})`);
 
     heartbeatIntervalRef.current = setInterval(() => {
+      // PHASE 15 FIX: Stop heartbeat loop when pipeline locked
+      if ((window as any).__RAG_PIPELINE_LOCKED__) {
+        return;
+      }
+
       setState((prev) => {
         const now = Date.now();
         const lastEvent = prev.lastEventTime || Date.now();
@@ -113,10 +161,14 @@ export function AICommandCenterStrip() {
     return () => {
       window.removeEventListener('RAG_OPS_EVENT', updateCommandState);
       window.removeEventListener('RAG_COMMAND_CENTER_UPDATE', updateCommandState);
+      window.removeEventListener('RAG_EDGE_STATUS_UPDATED', handleEdgeUpdate);
       window.removeEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocMode);
       window.removeEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocClear);
       window.removeEventListener('RAG_PIPELINE_LOCKED', handlePipelineLocked);
       window.removeEventListener('RAG_PIPELINE_UNLOCKED', handlePipelineUnlocked);
+      window.removeEventListener('RAG_STREAM_MODE_ACTIVATED', handleStreamModeActivated);
+      window.removeEventListener('RAG_STREAM_MODE_CLEARED', handleStreamModeCleared);
+      window.removeEventListener('RAG_STREAM_CONTROLLER_UPDATED', handleStreamControllerUpdated);
       if (heartbeatIntervalRef.current) {
         clearInterval(heartbeatIntervalRef.current);
       }
@@ -172,6 +224,55 @@ export function AICommandCenterStrip() {
           {state.pipelineLocked && (
             <Badge className="bg-red-100 text-red-700 border-red-200">
               🔒 PIPELINE LOCKED
+            </Badge>
+          )}
+
+          {/* PHASE 11: Stream Mode Badge */}
+          {state.streamMode && (
+            <Badge className="bg-cyan-100 text-cyan-700 border-cyan-200">
+              🌊 STREAM MODE
+            </Badge>
+          )}
+
+          {/* PHASE 12: Adaptive Level Badge */}
+          {state.streamMode && (
+            <Badge
+              className={
+                state.adaptiveLevel === 'FAST'
+                  ? 'bg-green-100 text-green-700 border-green-200'
+                  : state.adaptiveLevel === 'NORMAL'
+                    ? 'bg-blue-100 text-blue-700 border-blue-200'
+                    : state.adaptiveLevel === 'SAFE'
+                      ? 'bg-orange-100 text-orange-700 border-orange-200'
+                      : 'bg-red-100 text-red-700 border-red-200'
+              }
+            >
+              {state.adaptiveLevel === 'FAST'
+                ? '🟢 FAST'
+                : state.adaptiveLevel === 'NORMAL'
+                  ? '🟡 NORMAL'
+                  : state.adaptiveLevel === 'SAFE'
+                    ? '🟠 SAFE'
+                    : '🔴 CRITICAL'}
+            </Badge>
+          )}
+
+          {/* PHASE 13: Predicted Risk Badge */}
+          {state.streamMode && (
+            <Badge
+              className={
+                state.predictedRisk === 'HIGH'
+                  ? 'bg-red-100 text-red-700 border-red-200'
+                  : state.predictedRisk === 'MEDIUM'
+                    ? 'bg-orange-100 text-orange-700 border-orange-200'
+                    : 'bg-green-100 text-green-700 border-green-200'
+              }
+            >
+              {state.predictedRisk === 'HIGH'
+                ? '🔮 HIGH'
+                : state.predictedRisk === 'MEDIUM'
+                  ? '🔮 MEDIUM'
+                  : '🔮 LOW'}
             </Badge>
           )}
 

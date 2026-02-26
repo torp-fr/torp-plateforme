@@ -138,6 +138,10 @@ export class IngestionStateMachineService {
         // PHASE 9: Clear big doc mode when document completes
         (window as any).__RAG_BIG_DOC_MODE__ = false;
         window.dispatchEvent(new Event('RAG_BIG_DOC_MODE_CLEARED'));
+
+        // PHASE 11: Clear stream mode when document completes
+        (window as any).__RAG_STREAM_MODE__ = false;
+        window.dispatchEvent(new Event('RAG_STREAM_MODE_CLEARED'));
       }
 
       // Update state in database
