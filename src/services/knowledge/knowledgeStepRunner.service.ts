@@ -546,15 +546,33 @@ export class KnowledgeStepRunnerService {
 
       // PHASE 19.8: TEXT-FIRST ARCHITECTURE
       // Fetch content directly from database (inserted by Brain)
+      console.log(`[STEP RUNNER] 📚 Chunking: Fetching document ${documentId} from database`);
+
       const { data: doc, error: fetchError } = await supabase
         .from('knowledge_documents')
         .select('id, content, sanitized_content, preview_content')
         .eq('id', documentId)
         .single();
 
-      if (fetchError || !doc) {
-        throw new Error('Failed to fetch document');
+      if (fetchError) {
+        console.error('[STEP RUNNER] 🔴 Fetch error details:', {
+          message: fetchError.message,
+          code: (fetchError as any).code,
+          details: (fetchError as any).details,
+        });
+        throw new Error(`Failed to fetch document: ${fetchError.message}`);
       }
+
+      if (!doc) {
+        console.error('[STEP RUNNER] 🔴 Document not found in database');
+        throw new Error('Document not found in database');
+      }
+
+      console.log(`[STEP RUNNER] ✅ Document fetched. Available columns:`, {
+        has_content: !!doc.content,
+        has_sanitized_content: !!doc.sanitized_content,
+        has_preview_content: !!doc.preview_content,
+      });
 
       // Priority: sanitized_content > content > preview_content
       const sourceContent =
@@ -563,9 +581,17 @@ export class KnowledgeStepRunnerService {
         doc?.preview_content ??
         '';
 
-      if (!sourceContent) {
+      if (!sourceContent || sourceContent.length === 0) {
+        console.error('[STEP RUNNER] 🔴 No text content available in any column:', {
+          doc_id: doc.id,
+          has_sanitized_content: !!doc.sanitized_content,
+          has_content: !!doc.content,
+          has_preview_content: !!doc.preview_content,
+        });
         throw new Error('Missing text content for chunking');
       }
+
+      console.log(`[STEP RUNNER] 📝 Using text content (${sourceContent.length} chars) for chunking`);
 
       const contentLength = sourceContent.length;
       const isBigDoc = contentLength > 1_000_000; // 1MB threshold
