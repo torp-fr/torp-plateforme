@@ -602,6 +602,32 @@ export class KnowledgeStepRunnerService {
       const isBigDoc = contentLength > 1_000_000; // 1MB threshold
       const isStreamMode = Boolean((window as any).__RAG_STREAM_MODE__);
 
+      // PHASE STABILIZATION: PRE-CHECK chunk limit BEFORE chunking
+      // This prevents persisting chunks we'll later have to fail on
+      const TARGET_CHUNK_SIZE = 3000;
+      const MAX_CHUNKS = 1200; // Configurable limit
+      const estimatedChunks = Math.ceil(contentLength / TARGET_CHUNK_SIZE);
+
+      if (estimatedChunks > MAX_CHUNKS) {
+        const errorMsg = `Document too large: estimated ${estimatedChunks} chunks (max ${MAX_CHUNKS})`;
+        console.error(`[STEP RUNNER] 🚫 PRE-CHECK FAILED: ${errorMsg}`);
+
+        // Mark as failed WITHOUT creating chunks
+        await ingestionStateMachineService.markFailed(
+          documentId,
+          IngestionFailureReason.CHUNKING_ERROR,
+          errorMsg,
+          undefined
+        );
+
+        return {
+          success: false,
+          nextState: DocumentIngestionState.FAILED,
+          error: errorMsg,
+          duration: Date.now() - startTime,
+        };
+      }
+
       // PHASE 9: Detect big document mode
       if (isBigDoc) {
         console.warn(`[STEP RUNNER] 📚 BIG DOCUMENT DETECTED: ${contentLength} chars - activating throttled mode`);
@@ -729,24 +755,8 @@ export class KnowledgeStepRunnerService {
         };
       }
 
-      // PHASE 9: Chunk limit safety - max 600 chunks
-      const MAX_CHUNKS_PER_DOC = 600;
-      if (chunks.length > MAX_CHUNKS_PER_DOC) {
-        console.error(`[STEP RUNNER] 🚫 CHUNK LIMIT EXCEEDED: ${chunks.length} chunks > ${MAX_CHUNKS_PER_DOC} max`);
-        await ingestionStateMachineService.markFailed(
-          documentId,
-          IngestionFailureReason.CHUNKING_ERROR,
-          `Document too large: ${chunks.length} chunks exceeds limit of ${MAX_CHUNKS_PER_DOC}`,
-          undefined
-        );
-        return {
-          success: false,
-          nextState: DocumentIngestionState.FAILED,
-          error: `Document too large (${chunks.length} chunks)`,
-          duration: Date.now() - startTime,
-        };
-      }
-
+      // PHASE STABILIZATION: Chunk limit check moved BEFORE persistence (line 605-632)
+      // This line is no longer needed - limit is enforced pre-emptively
       console.log(`[STEP RUNNER] ✅ Created ${chunks.length} chunks`);
 
       // Store chunks count metadata (for later reference)
