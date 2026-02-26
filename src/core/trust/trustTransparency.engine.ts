@@ -5,6 +5,7 @@
  */
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Audit trail for decision tracking
@@ -80,7 +81,7 @@ function generateScoreExplanation(context: EngineExecutionContext): string[] {
 
     return explanations;
   } catch (error) {
-    console.warn('[TrustTransparency] Error generating score explanation:', error);
+    warn('[TrustTransparency] Error generating score explanation:', error);
     return ['Score explanation could not be generated.'];
   }
 }
@@ -149,7 +150,7 @@ function generateAdaptiveExplanation(context: EngineExecutionContext): string[] 
 
     return explanations;
   } catch (error) {
-    console.warn('[TrustTransparency] Error generating adaptive explanation:', error);
+    warn('[TrustTransparency] Error generating adaptive explanation:', error);
     return ['Adaptive scoring explanation could not be generated.'];
   }
 }
@@ -187,7 +188,7 @@ function generateGradeExplanation(context: EngineExecutionContext): string[] {
 
     return explanations;
   } catch (error) {
-    console.warn('[TrustTransparency] Error generating grade explanation:', error);
+    warn('[TrustTransparency] Error generating grade explanation:', error);
     return ['Grade explanation could not be generated.'];
   }
 }
@@ -248,7 +249,7 @@ function generateCappingExplanation(context: EngineExecutionContext): string[] {
 
     return explanations;
   } catch (error) {
-    console.warn('[TrustTransparency] Error generating capping explanation:', error);
+    warn('[TrustTransparency] Error generating capping explanation:', error);
     return ['Capping explanation could not be generated.'];
   }
 }
@@ -300,7 +301,7 @@ function generateConsistencyExplanation(context: EngineExecutionContext): string
 
     return explanations;
   } catch (error) {
-    console.warn('[TrustTransparency] Error generating consistency explanation:', error);
+    warn('[TrustTransparency] Error generating consistency explanation:', error);
     return ['Consistency explanation could not be generated.'];
   }
 }
@@ -372,7 +373,7 @@ function generateFraudExplanation(context: EngineExecutionContext): string[] {
 
     return explanations;
   } catch (error) {
-    console.warn('[TrustTransparency] Error generating fraud explanation:', error);
+    warn('[TrustTransparency] Error generating fraud explanation:', error);
     return ['Fraud analysis explanation could not be generated.'];
   }
 }
@@ -407,7 +408,7 @@ function generateDecisionSummary(context: EngineExecutionContext): string {
       `This assessment is based on comprehensive analysis of pricing, compliance, enterprise capabilities, and structural coherence.`
     );
   } catch (error) {
-    console.warn('[TrustTransparency] Error generating decision summary:', error);
+    warn('[TrustTransparency] Error generating decision summary:', error);
     return 'An error occurred during summary generation.';
   }
 }
@@ -450,7 +451,7 @@ function buildAuditTrail(context: EngineExecutionContext): AuditTrailData {
       trail.originalGrade = (context as any).trustCappingResult.originalGrade;
     }
   } catch (error) {
-    console.warn('[TrustTransparency] Error building audit trail:', error);
+    warn('[TrustTransparency] Error building audit trail:', error);
   }
 
   return trail;
@@ -463,7 +464,7 @@ export async function runTrustTransparencyEngine(
   executionContext: EngineExecutionContext
 ): Promise<TrustTransparencyResult> {
   try {
-    console.log('[TrustTransparency] Starting transparency analysis');
+    log('[TrustTransparency] Starting transparency analysis');
 
     const result: TrustTransparencyResult = {
       scoreExplanation: generateScoreExplanation(executionContext),
@@ -483,7 +484,7 @@ export async function runTrustTransparencyEngine(
     // Enrich context (non-destructive)
     (executionContext as any).trustTransparency = result;
 
-    console.log('[TrustTransparency] Transparency analysis complete');
+    log('[TrustTransparency] Transparency analysis complete');
 
     return result;
   } catch (error) {

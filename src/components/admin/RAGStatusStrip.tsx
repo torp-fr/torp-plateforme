@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { Brain, Zap, Database, Clock } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 interface RAGStatus {
   totalDocuments: number;
@@ -64,7 +65,7 @@ export function RAGStatusStrip() {
       // Dispatch command center update
       window.dispatchEvent(new Event('RAG_COMMAND_CENTER_UPDATE'));
 
-      console.log('[RAGStatus] Updated:', { count, edgeOnline: isEdgeOnline });
+      log('[RAGStatus] Updated:', { count, edgeOnline: isEdgeOnline });
     } catch (err) {
       console.error('[RAGStatus] Error:', err);
     } finally {
@@ -83,11 +84,11 @@ export function RAGStatusStrip() {
 
     // PHASE 8: Listen for embedding pause/resume events
     const handleEmbeddingPause = () => {
-      console.log('[RAGStatusStrip] Embedding paused');
+      log('[RAGStatusStrip] Embedding paused');
       fetchStatus();
     };
     const handleEmbeddingResume = () => {
-      console.log('[RAGStatusStrip] Embedding resumed');
+      log('[RAGStatusStrip] Embedding resumed');
       fetchStatus();
     };
     window.addEventListener('RAG_EMBEDDING_PAUSED', handleEmbeddingPause);
@@ -95,11 +96,11 @@ export function RAGStatusStrip() {
 
     // PHASE 9: Listen for big document mode events
     const handleBigDocActivated = () => {
-      console.log('[RAGStatusStrip] Big doc mode activated');
+      log('[RAGStatusStrip] Big doc mode activated');
       setBigDocMode(true);
     };
     const handleBigDocCleared = () => {
-      console.log('[RAGStatusStrip] Big doc mode cleared');
+      log('[RAGStatusStrip] Big doc mode cleared');
       setBigDocMode(false);
     };
     window.addEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocActivated);
@@ -107,11 +108,11 @@ export function RAGStatusStrip() {
 
     // PHASE 10: Listen for pipeline lock events
     const handlePipelineLocked = () => {
-      console.log('[RAGStatusStrip] Pipeline locked');
+      log('[RAGStatusStrip] Pipeline locked');
       setPipelineLocked(true);
     };
     const handlePipelineUnlocked = () => {
-      console.log('[RAGStatusStrip] Pipeline unlocked');
+      log('[RAGStatusStrip] Pipeline unlocked');
       setPipelineLocked(false);
     };
     window.addEventListener('RAG_PIPELINE_LOCKED', handlePipelineLocked);
@@ -119,11 +120,11 @@ export function RAGStatusStrip() {
 
     // PHASE 11: Listen for stream mode events
     const handleStreamModeActivated = () => {
-      console.log('[RAGStatusStrip] Stream mode activated');
+      log('[RAGStatusStrip] Stream mode activated');
       setStreamMode(true);
     };
     const handleStreamModeCleared = () => {
-      console.log('[RAGStatusStrip] Stream mode cleared');
+      log('[RAGStatusStrip] Stream mode cleared');
       setStreamMode(false);
     };
     window.addEventListener('RAG_STREAM_MODE_ACTIVATED', handleStreamModeActivated);

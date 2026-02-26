@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Géorisques Service (P1)
  * Accès aux données environnementales et risques géographiques
@@ -48,7 +50,7 @@ export class GeorisquesService {
     longitude: number
   ): Promise<GeorisquesData | null> {
     try {
-      console.log(`⚠️ [P1] Getting Géorisques data: ${latitude}, ${longitude}`);
+      log(`⚠️ [P1] Getting Géorisques data: ${latitude}, ${longitude}`);
 
       // TODO: P1 Implementation
       // const response = await fetch(
@@ -72,7 +74,7 @@ export class GeorisquesService {
     longitude: number
   ): Promise<EnvironmentalConstraints | null> {
     try {
-      console.log(`🌿 [P1] Checking environmental constraints: ${latitude}, ${longitude}`);
+      log(`🌿 [P1] Checking environmental constraints: ${latitude}, ${longitude}`);
 
       // TODO: P1 Implementation
       // Stub pour MVP
@@ -89,7 +91,7 @@ export class GeorisquesService {
    */
   async getRadonPotential(postalCode: string): Promise<'low' | 'medium' | 'high' | null> {
     try {
-      console.log(`☢️ [P1] Checking radon potential for: ${postalCode}`);
+      log(`☢️ [P1] Checking radon potential for: ${postalCode}`);
 
       // TODO: P1 Implementation
       // Stub pour MVP
@@ -110,7 +112,7 @@ export class GeorisquesService {
     historicalFlood: boolean;
   } | null> {
     try {
-      console.log(`💧 [P1] Checking flood zones: ${latitude}, ${longitude}`);
+      log(`💧 [P1] Checking flood zones: ${latitude}, ${longitude}`);
 
       // TODO: P1 Implementation
       // Stub pour MVP

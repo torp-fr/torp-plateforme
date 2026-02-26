@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Structured Logger Service - PHASE 31
  * Provides structured logging for observability
@@ -185,7 +187,7 @@ export class StructuredLoggerService {
       message += `\n${JSON.stringify(entry.data, null, 2)}`;
     }
 
-    console.log(message);
+    log(message);
   }
 
   /**

@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Check if system has an admin
@@ -51,7 +52,7 @@ export async function promoteFirstAdmin(email: string) {
       };
     }
 
-    console.log('[Promote Admin] Success:', data);
+    log('[Promote Admin] Success:', data);
     return data;
   } catch (error) {
     console.error('[Promote Admin] Exception:', error);
@@ -70,7 +71,7 @@ export async function getCurrentUserAdminStatus() {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      console.log('[User Admin Status] No authenticated user');
+      log('[User Admin Status] No authenticated user');
       return null;
     }
 
@@ -82,7 +83,7 @@ export async function getCurrentUserAdminStatus() {
       .single();
 
     if (dataError) {
-      console.warn('[User Admin Status] Error fetching user:', dataError);
+      warn('[User Admin Status] Error fetching user:', dataError);
       return null;
     }
 

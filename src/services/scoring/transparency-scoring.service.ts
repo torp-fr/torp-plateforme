@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Service d'analyse de la transparence et qualité de documentation du devis
  *
@@ -280,7 +282,7 @@ class TransparencyScoringService {
     // Générer points forts/faibles/recommandations
     const { pointsForts, pointsFaibles, recommandations } = this.genererSynthese(criteres);
 
-    console.log(`[Transparency] Score: ${scoreTotal}/100 (${niveau})`);
+    log(`[Transparency] Score: ${scoreTotal}/100 (${niveau})`);
 
     return {
       scoreTotal,

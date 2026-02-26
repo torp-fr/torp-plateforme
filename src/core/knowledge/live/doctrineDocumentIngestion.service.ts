@@ -7,6 +7,7 @@
 import { supabase } from '@/lib/supabase';
 import { normalizeDoctrineDocument, type NormalizedDocument } from './doctrineNormalization.service';
 import { getDoctrineSource, type DoctrineSource } from './doctrineSourceRegistry';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface DoctrineDocumentMetadata {
   sourceId: string;
@@ -40,12 +41,12 @@ function extractTextFromBuffer(buffer: Buffer, mimeType: string): string {
     // For now, assume plain text or UTF-8 encoded
 
     if (mimeType.includes('pdf')) {
-      console.warn('[DoctrineIngestion] PDF parsing requires pdf-parse library');
+      warn('[DoctrineIngestion] PDF parsing requires pdf-parse library');
       return '';
     }
 
     if (mimeType.includes('word') || mimeType.includes('officedocument')) {
-      console.warn('[DoctrineIngestion] DOCX parsing requires docxtemplater library');
+      warn('[DoctrineIngestion] DOCX parsing requires docxtemplater library');
       return '';
     }
 
@@ -161,7 +162,7 @@ async function storeNormalizedDocument(
       return null;
     }
 
-    console.log(`[DoctrineIngestion] Stored normalized document: ${documentId}`);
+    log(`[DoctrineIngestion] Stored normalized document: ${documentId}`);
     return documentId;
   } catch (error) {
     console.error('[DoctrineIngestion] Storage failed:', error);
@@ -217,7 +218,7 @@ export async function ingestDoctrineDocument(
   userId: string
 ): Promise<DoctrineIngestionResult> {
   try {
-    console.log(`[DoctrineIngestion] Starting ingestion: ${filename} for source: ${sourceId}`);
+    log(`[DoctrineIngestion] Starting ingestion: ${filename} for source: ${sourceId}`);
 
     // Step 1: Get source metadata
     const source = getDoctrineSource(sourceId);
@@ -231,7 +232,7 @@ export async function ingestDoctrineDocument(
       };
     }
 
-    console.log(`[DoctrineIngestion] Source found: ${source.name}`);
+    log(`[DoctrineIngestion] Source found: ${source.name}`);
 
     // Step 2: Extract text from buffer
     const mimeType = filename.endsWith('.pdf') ? 'application/pdf' : 'text/plain';
@@ -247,18 +248,18 @@ export async function ingestDoctrineDocument(
       };
     }
 
-    console.log(`[DoctrineIngestion] Extracted ${text.length} characters`);
+    log(`[DoctrineIngestion] Extracted ${text.length} characters`);
 
     // Step 3: Validate document
     const validation = validateDocumentAgainstSource(text, source);
     if (!validation.valid) {
-      console.warn('[DoctrineIngestion] Validation issues:', validation.issues);
+      warn('[DoctrineIngestion] Validation issues:', validation.issues);
     }
 
     // Step 4: Normalize document
     const normalized = normalizeDoctrineDocument(sourceId, text);
 
-    console.log(
+    log(
       `[DoctrineIngestion] Normalized: ${normalized.obligations.length} obligations, ${normalized.thresholds.length} thresholds`
     );
 
@@ -295,7 +296,7 @@ export async function ingestDoctrineDocument(
       };
     }
 
-    console.log(`[DoctrineIngestion] Ingestion complete: ${documentId}`);
+    log(`[DoctrineIngestion] Ingestion complete: ${documentId}`);
 
     return {
       success: true,
@@ -326,7 +327,7 @@ export async function batchIngestDoctrineDocuments(
   userId: string
 ): Promise<DoctrineIngestionResult[]> {
   try {
-    console.log(`[DoctrineIngestion] Batch ingestion: ${files.length} documents`);
+    log(`[DoctrineIngestion] Batch ingestion: ${files.length} documents`);
 
     const results: DoctrineIngestionResult[] = [];
 
@@ -336,7 +337,7 @@ export async function batchIngestDoctrineDocuments(
     }
 
     const successCount = results.filter((r) => r.success).length;
-    console.log(`[DoctrineIngestion] Batch complete: ${successCount}/${files.length} successful`);
+    log(`[DoctrineIngestion] Batch complete: ${successCount}/${files.length} successful`);
 
     return results;
   } catch (error) {

@@ -6,6 +6,7 @@
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 import { getRulesByCategory, getRuleById } from '@/core/rules/ruleRegistry';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Rule obligation structure with type, severity and weight
@@ -62,7 +63,7 @@ export async function runRuleEngine(
   const startTime = Date.now();
 
   try {
-    console.log('[RuleEngine] Starting rule evaluation');
+    log('[RuleEngine] Starting rule evaluation');
 
     // Extract normalized lots from execution context
     const normalizedLots = executionContext.lots?.normalizedLots || [];
@@ -154,7 +155,7 @@ export async function runRuleEngine(
       },
     };
 
-    console.log('[RuleEngine] Rule evaluation completed', {
+    log('[RuleEngine] Rule evaluation completed', {
       totalObligations: obligations.length,
       uniqueRules: uniqueObligations.length,
       totalWeight,

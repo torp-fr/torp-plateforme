@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface KnowledgeQualityMetrics {
   quality_score: number;
@@ -29,7 +30,7 @@ class KnowledgeGovernanceService {
     }
   ): Promise<boolean> {
     try {
-      console.log('[GOVERNANCE] 📊 Recording usage:', { document_id, impact_score });
+      log('[GOVERNANCE] 📊 Recording usage:', { document_id, impact_score });
 
       const { error: insertError } = await supabase.from('knowledge_usage_metrics').insert({
         document_id,
@@ -48,7 +49,7 @@ class KnowledgeGovernanceService {
       // Update document usage count asynchronously
       this.updateUsageCount(document_id);
 
-      console.log('[GOVERNANCE] ✅ Usage recorded');
+      log('[GOVERNANCE] ✅ Usage recorded');
       return true;
     } catch (error) {
       console.error('[GOVERNANCE] 💥 Recording error:', error);
@@ -64,9 +65,9 @@ class KnowledgeGovernanceService {
       await supabase.rpc('update_knowledge_usage_count', {
         p_document_id: document_id,
       });
-      console.log('[GOVERNANCE] ✅ Usage count updated');
+      log('[GOVERNANCE] ✅ Usage count updated');
     } catch (error) {
-      console.warn('[GOVERNANCE] ⚠️ Could not update usage count:', error);
+      warn('[GOVERNANCE] ⚠️ Could not update usage count:', error);
       // Don't crash
     }
   }
@@ -76,7 +77,7 @@ class KnowledgeGovernanceService {
    */
   async calculateQualityScore(document_id: string): Promise<number> {
     try {
-      console.log('[GOVERNANCE] 🧮 Calculating quality score...');
+      log('[GOVERNANCE] 🧮 Calculating quality score...');
 
       // Fetch document metrics
       const { data: doc, error: fetchError } = await supabase
@@ -86,7 +87,7 @@ class KnowledgeGovernanceService {
         .single();
 
       if (fetchError || !doc) {
-        console.warn('[GOVERNANCE] Could not fetch document');
+        warn('[GOVERNANCE] Could not fetch document');
         return 50;
       }
 
@@ -125,7 +126,7 @@ class KnowledgeGovernanceService {
 
       const finalScore = Math.round(Math.max(0, Math.min(100, quality)));
 
-      console.log('[GOVERNANCE] ✅ Quality score calculated:', finalScore);
+      log('[GOVERNANCE] ✅ Quality score calculated:', finalScore);
       return finalScore;
     } catch (error) {
       console.error('[GOVERNANCE] 💥 Quality calculation error:', error);
@@ -138,7 +139,7 @@ class KnowledgeGovernanceService {
    */
   async detectLowQualityDocuments(): Promise<Array<{ document_id: string; reason: string }>> {
     try {
-      console.log('[GOVERNANCE] 🔍 Detecting low quality documents...');
+      log('[GOVERNANCE] 🔍 Detecting low quality documents...');
 
       const { data: issues, error } = await supabase.rpc('detect_low_quality_documents');
 
@@ -148,7 +149,7 @@ class KnowledgeGovernanceService {
       }
 
       if (issues && issues.length > 0) {
-        console.log('[GOVERNANCE] ⚠️ Found', issues.length, 'potential low quality documents');
+        log('[GOVERNANCE] ⚠️ Found', issues.length, 'potential low quality documents');
 
         // Flag them
         for (const issue of issues) {
@@ -176,7 +177,7 @@ class KnowledgeGovernanceService {
     new_reliability: number
   ): Promise<string | null> {
     try {
-      console.log('[GOVERNANCE] 📝 Creating new document version...');
+      log('[GOVERNANCE] 📝 Creating new document version...');
 
       // Get old document info
       const { data: oldDoc, error: fetchError } = await supabase
@@ -217,7 +218,7 @@ class KnowledgeGovernanceService {
         .update({ is_superseded: true })
         .eq('id', old_document_id);
 
-      console.log('[GOVERNANCE] ✅ New version created:', newDoc.id);
+      log('[GOVERNANCE] ✅ New version created:', newDoc.id);
       return newDoc.id;
     } catch (error) {
       console.error('[GOVERNANCE] 💥 Versioning error:', error);
@@ -235,7 +236,7 @@ class KnowledgeGovernanceService {
     low_quality_count: number;
   } | null> {
     try {
-      console.log('[GOVERNANCE] 📊 Fetching impact summary...');
+      log('[GOVERNANCE] 📊 Fetching impact summary...');
 
       // Get total active documents
       const { count: totalActive } = await supabase
@@ -269,7 +270,7 @@ class KnowledgeGovernanceService {
         .eq('is_active', true)
         .eq('is_low_quality', true);
 
-      console.log('[GOVERNANCE] ✅ Impact summary fetched');
+      log('[GOVERNANCE] ✅ Impact summary fetched');
       return {
         total_active: totalActive || 0,
         avg_quality: avgQuality,

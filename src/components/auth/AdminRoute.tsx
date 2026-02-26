@@ -7,6 +7,7 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useApp } from '@/context/AppContext';
 import { useUserRole } from '@/hooks/useUserRole';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 interface AdminRouteProps {
   children: React.ReactNode;
@@ -36,7 +37,7 @@ export function AdminRoute({ children }: AdminRouteProps) {
 
   // Not admin (role from Supabase profiles)
   if (!isAdmin) {
-    console.warn('[AdminRoute] Access denied: user is not admin');
+    warn('[AdminRoute] Access denied: user is not admin');
     return <Navigate to="/dashboard" replace />;
   }
 

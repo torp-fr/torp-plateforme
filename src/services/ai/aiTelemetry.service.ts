@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * AI Telemetry Service
  * Lightweight observability for AI operations (structured JSON logging)
@@ -112,7 +114,7 @@ class AITelemetryService {
     };
 
     // Output as structured JSON (for parsing by logs infrastructure)
-    console.log(JSON.stringify(log));
+    log(JSON.stringify(log));
   }
 
   /**

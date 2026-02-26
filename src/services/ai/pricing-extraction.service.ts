@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface PricingData {
   min_price?: number;
@@ -26,7 +27,7 @@ class PricingExtractionService {
     }
 
     try {
-      console.log('[PRICING] 💰 Extracting pricing data...');
+      log('[PRICING] 💰 Extracting pricing data...');
 
       // Regex patterns for price extraction
       const patterns = [
@@ -46,7 +47,7 @@ class PricingExtractionService {
         let match;
         while ((match = pattern.exec(content)) !== null) {
           foundMatch = true;
-          console.log('[PRICING] 🔍 Found price match:', match[0]);
+          log('[PRICING] 🔍 Found price match:', match[0]);
 
           if (match.length >= 3) {
             const num1 = parseInt(match[1]);
@@ -61,7 +62,7 @@ class PricingExtractionService {
       }
 
       if (!foundMatch || prices.length === 0) {
-        console.log('[PRICING] ℹ️ No pricing data found');
+        log('[PRICING] ℹ️ No pricing data found');
         return null;
       }
 
@@ -80,7 +81,7 @@ class PricingExtractionService {
         source_text: content.substring(0, 500),
       };
 
-      console.log('[PRICING] ✅ Pricing extracted:', pricingData);
+      log('[PRICING] ✅ Pricing extracted:', pricingData);
       return pricingData;
     } catch (error) {
       console.error('[PRICING] ❌ Extraction error:', error);
@@ -128,11 +129,11 @@ class PricingExtractionService {
   ): Promise<boolean> {
     try {
       if (!pricingData.type_travaux) {
-        console.warn('[PRICING] ⚠️ No type_travaux, skipping storage');
+        warn('[PRICING] ⚠️ No type_travaux, skipping storage');
         return false;
       }
 
-      console.log('[PRICING] 💾 Storing pricing reference...');
+      log('[PRICING] 💾 Storing pricing reference...');
 
       const { error } = await supabase.from('market_price_references').insert({
         type_travaux: pricingData.type_travaux,
@@ -163,7 +164,7 @@ class PricingExtractionService {
         })
         .eq('id', document_id);
 
-      console.log('[PRICING] ✅ Pricing reference stored');
+      log('[PRICING] ✅ Pricing reference stored');
       return true;
     } catch (error) {
       console.error('[PRICING] 💥 Error:', error);
@@ -180,7 +181,7 @@ class PricingExtractionService {
     avg_price_by_type: Record<string, number>;
   } | null> {
     try {
-      console.log('[PRICING] 📊 Fetching pricing statistics...');
+      log('[PRICING] 📊 Fetching pricing statistics...');
 
       // PHASE 36.2 FIX: Remove is_active filter (column doesn't exist in market_price_references)
       const { data: references, error } = await supabase
@@ -214,7 +215,7 @@ class PricingExtractionService {
         avg_price_by_type,
       };
 
-      console.log('[PRICING] ✅ Statistics fetched:', stats);
+      log('[PRICING] ✅ Statistics fetched:', stats);
       return stats;
     } catch (error) {
       console.error('[PRICING] 💥 Stats error:', error instanceof Error ? error.message : error);

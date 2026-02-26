@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * BAN Service (Adresse Nationale)
  * Géolocalisation et validation d'adresses
@@ -28,7 +30,7 @@ export class BANService {
    */
   async autocompleteAddress(query: string, limit = 10): Promise<AddressResult[]> {
     try {
-      console.log(`🏘️ [P1] BAN autocomplete: ${query}`);
+      log(`🏘️ [P1] BAN autocomplete: ${query}`);
 
       // TODO: P1 Implementation
       // const response = await fetch(
@@ -49,7 +51,7 @@ export class BANService {
    */
   async geocodeAddress(address: string): Promise<GeocodeResult | null> {
     try {
-      console.log(`📍 [P1] Geocoding: ${address}`);
+      log(`📍 [P1] Geocoding: ${address}`);
 
       // TODO: P1 Implementation
       // Stub pour MVP
@@ -66,7 +68,7 @@ export class BANService {
    */
   async reverseGeocode(lat: number, lng: number): Promise<string | null> {
     try {
-      console.log(`🔄 [P1] Reverse geocoding: ${lat}, ${lng}`);
+      log(`🔄 [P1] Reverse geocoding: ${lat}, ${lng}`);
 
       // TODO: P1 Implementation
       // Stub pour MVP
@@ -85,7 +87,7 @@ export class BANService {
     suggestions: AddressResult[];
   }> {
     try {
-      console.log(`✓ [P1] Validating address: ${address}`);
+      log(`✓ [P1] Validating address: ${address}`);
 
       // TODO: P1 Implementation
       // Stub pour MVP

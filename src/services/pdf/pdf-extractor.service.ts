@@ -4,6 +4,7 @@
  */
 
 import * as pdfjsLib from 'pdfjs-dist';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 // Set worker source - use local worker from public directory
 // In production (Vite), files in /public are served at root
@@ -49,7 +50,7 @@ export class PDFExtractorService {
         throw new Error('No text content found in PDF');
       }
 
-      console.log(`[PDF] Extracted ${fullText.length} characters from ${numPages} pages`);
+      log(`[PDF] Extracted ${fullText.length} characters from ${numPages} pages`);
 
       return fullText;
     } catch (error) {

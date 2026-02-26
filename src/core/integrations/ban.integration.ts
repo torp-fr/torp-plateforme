@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * BAN Integration (Phase 30)
  * French National Address Database - Address validation and normalization
@@ -111,7 +113,7 @@ function normalizeAddressString(address: string): string {
  */
 export async function validateAddress(addressStr: string): Promise<BanValidationResult> {
   try {
-    console.log(`[BAN] Validating address: ${addressStr}`);
+    log(`[BAN] Validating address: ${addressStr}`);
 
     // Check format
     if (!addressStr || addressStr.trim().length < 10) {

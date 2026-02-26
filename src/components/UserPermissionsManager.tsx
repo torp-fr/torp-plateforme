@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useProjectUsers } from '@/hooks/useProjectUsers';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 import {
   CheckCircle,
   Crown,
@@ -121,7 +122,7 @@ const UserPermissionsManager = ({ projectId }: UserPermissionsManagerProps) => {
   const updateUserPermission = (userId: string, permission: keyof User['permissions'], value: boolean) => {
     // Note: Les permissions sont basées sur le rôle dans le système actuel
     // Pour modifier les permissions individuelles, il faudrait étendre le schéma DB
-    console.log('[UserPermissionsManager] Permission update requested:', { userId, permission, value });
+    log('[UserPermissionsManager] Permission update requested:', { userId, permission, value });
   };
 
   const handleRemoveUser = (userId: string) => {

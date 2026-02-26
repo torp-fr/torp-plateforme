@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * INSEE Integration (Phase 30)
  * Verifies SIRET validity and retrieves enterprise information
@@ -68,7 +70,7 @@ async function querySIRENEAPI(siret: string): Promise<INSEEEnterprise | null> {
     const apiKey = process.env.INSEE_API_KEY;
 
     if (!apiKey) {
-      console.warn('[INSEE] API key not configured - using offline validation only');
+      warn('[INSEE] API key not configured - using offline validation only');
       return null;
     }
 
@@ -82,7 +84,7 @@ async function querySIRENEAPI(siret: string): Promise<INSEEEnterprise | null> {
 
     if (!response.ok) {
       if (response.status === 404) {
-        console.warn(`[INSEE] SIRET not found: ${siret}`);
+        warn(`[INSEE] SIRET not found: ${siret}`);
         return null;
       }
       console.error(`[INSEE] API error: ${response.statusText}`);
@@ -188,7 +190,7 @@ function formatAddress(etablissement: any): string {
  */
 export async function verifySIRET(siret: string): Promise<INSEEVerificationResult> {
   try {
-    console.log(`[INSEE] Verifying SIRET: ${siret}`);
+    log(`[INSEE] Verifying SIRET: ${siret}`);
 
     // Step 1: Format validation
     if (!validateSIRETFormat(siret)) {
@@ -220,7 +222,7 @@ export async function verifySIRET(siret: string): Promise<INSEEVerificationResul
     }
 
     // Step 4: If API fails, accept based on format/checksum
-    console.warn(`[INSEE] API unavailable, accepting ${siret} based on format validation`);
+    warn(`[INSEE] API unavailable, accepting ${siret} based on format validation`);
 
     return {
       valid: true,
@@ -260,7 +262,7 @@ export async function getEnterpriseBySIREN(siren: string): Promise<INSEEEnterpri
 
     // In production, would query INSEE SIRENE API for SIREN
     // For now, return placeholder
-    console.log(`[INSEE] Looking up SIREN: ${siren}`);
+    log(`[INSEE] Looking up SIREN: ${siren}`);
 
     return null;
   } catch (error) {

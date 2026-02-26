@@ -10,6 +10,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { BRANDING } from '@/config/branding';
 import { authService } from '@/services/api';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -22,7 +23,7 @@ export default function Login() {
   // Redirect if session already exists (e.g., after page refresh)
   useEffect(() => {
     if (!isAuthLoading && user) {
-      console.log('[Login] Session exists, redirecting based on role:', user.role, 'isAdmin:', user.isAdmin);
+      log('[Login] Session exists, redirecting based on role:', user.role, 'isAdmin:', user.isAdmin);
 
       // Use same redirect logic as handleLogin
       if (user.isAdmin === true) {
@@ -47,14 +48,14 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      console.log('[Login] Connexion avec:', email);
+      log('[Login] Connexion avec:', email);
 
       const response = await authService.login({
         email,
         password,
       });
 
-      console.log('[Login] Connexion réussie:', response.user.email, 'Role:', response.user.role, 'isAdmin:', response.user.isAdmin, 'type:', response.user.type, '(typeof isAdmin:', typeof response.user.isAdmin, ')');
+      log('[Login] Connexion réussie:', response.user.email, 'Role:', response.user.role, 'isAdmin:', response.user.isAdmin, 'type:', response.user.type, '(typeof isAdmin:', typeof response.user.isAdmin, ')');
 
       setUser(response.user);
 
@@ -67,13 +68,13 @@ export default function Login() {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       if (response.user.isAdmin === true) {
-        console.log('[Login] Admin détecté, redirection vers /analytics');
+        log('[Login] Admin détecté, redirection vers /analytics');
         navigate('/analytics');
       } else if (response.user.type === 'B2B') {
-        console.log('[Login] Utilisateur B2B, redirection vers /projets');
+        log('[Login] Utilisateur B2B, redirection vers /projets');
         navigate('/projets');
       } else {
-        console.log('[Login] Utilisateur B2C, redirection vers /dashboard');
+        log('[Login] Utilisateur B2C, redirection vers /dashboard');
         navigate('/dashboard');
       }
     } catch (error) {

@@ -19,6 +19,7 @@ import { runTrustCappingEngine, TrustCappingResult } from '@/core/trust/trustCap
 import { runStructuralConsistencyEngine, StructuralConsistencyResult } from '@/core/trust/structuralConsistency.engine';
 import { createAuditSnapshot } from '@/core/platform/auditSnapshot.manager';
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Statut d'orchestration
@@ -73,7 +74,7 @@ let lastOrchestration: OrchestrationResult | null = null;
 export async function runOrchestration(
   context: OrchestrationContext = {}
 ): Promise<OrchestrationResult> {
-  console.log('[EngineOrchestrator] Orchestration started', { context });
+  log('[EngineOrchestrator] Orchestration started', { context });
 
   const orchestrationId = generateOrchestrationId();
   const startTime = new Date().toISOString();
@@ -106,7 +107,7 @@ export async function runOrchestration(
       try {
         // Execute Context Engine if active
         if (engine.id === 'contextEngine') {
-          console.log('[EngineOrchestrator] Executing Context Engine');
+          log('[EngineOrchestrator] Executing Context Engine');
           const contextResult: ContextEngineResult = await runContextEngine({
             projectId: context.projectId,
             data: context.data,
@@ -130,7 +131,7 @@ export async function runOrchestration(
         }
         // Execute Lot Engine if active (depends on Context Engine)
         else if (engine.id === 'lotEngine') {
-          console.log('[EngineOrchestrator] Executing Lot Engine');
+          log('[EngineOrchestrator] Executing Lot Engine');
           const lotResult: LotEngineResult = await runLotEngine(executionContext);
           engineResults['lotEngine'] = lotResult;
 
@@ -150,7 +151,7 @@ export async function runOrchestration(
         }
         // Execute Rule Engine if active (depends on Lot Engine)
         else if (engine.id === 'ruleEngine') {
-          console.log('[EngineOrchestrator] Executing Rule Engine');
+          log('[EngineOrchestrator] Executing Rule Engine');
           const ruleResult: RuleEngineResult = await runRuleEngine(executionContext);
           engineResults['ruleEngine'] = ruleResult;
 
@@ -174,7 +175,7 @@ export async function runOrchestration(
         }
         // Execute Scoring Engine if active (depends on Rule Engine and Lot Engine)
         else if (engine.id === 'scoringEngine') {
-          console.log('[EngineOrchestrator] Executing Scoring Engine');
+          log('[EngineOrchestrator] Executing Scoring Engine');
           const scoringResult: ScoringEngineResult = await runScoringEngine(executionContext);
           engineResults['scoringEngine'] = scoringResult;
 
@@ -195,7 +196,7 @@ export async function runOrchestration(
         }
         // Execute Enrichment Engine if active (depends on all prior engines)
         else if (engine.id === 'enrichmentEngine') {
-          console.log('[EngineOrchestrator] Executing Enrichment Engine');
+          log('[EngineOrchestrator] Executing Enrichment Engine');
           const enrichmentResult: EnrichmentEngineResult = await runEnrichmentEngine(executionContext);
           engineResults['enrichmentEngine'] = enrichmentResult;
 
@@ -217,7 +218,7 @@ export async function runOrchestration(
         }
         // Execute Audit Engine if active (depends on all prior engines - final pipeline stage)
         else if (engine.id === 'auditEngine') {
-          console.log('[EngineOrchestrator] Executing Audit Engine');
+          log('[EngineOrchestrator] Executing Audit Engine');
           const auditResult: AuditEngineResult = await runAuditEngine(executionContext);
           engineResults['auditEngine'] = auditResult;
 
@@ -232,14 +233,14 @@ export async function runOrchestration(
                 auditResult.report
               );
               executionContext.auditSnapshot = snapshot;
-              console.log('[EngineOrchestrator] Audit snapshot created', {
+              log('[EngineOrchestrator] Audit snapshot created', {
                 projectId: executionContext.context.projectId,
                 snapshotId: snapshot.id,
                 version: snapshot.version,
               });
             } catch (snapshotError) {
               const errorMsg = snapshotError instanceof Error ? snapshotError.message : 'Unknown error';
-              console.warn('[EngineOrchestrator] Failed to create audit snapshot', {
+              warn('[EngineOrchestrator] Failed to create audit snapshot', {
                 projectId: executionContext.context.projectId,
                 error: errorMsg,
               });
@@ -255,7 +256,7 @@ export async function runOrchestration(
         }
         // Execute Enterprise Engine if active (global scoring pillar)
         else if (engine.id === 'enterpriseEngine') {
-          console.log('[EngineOrchestrator] Executing Enterprise Engine');
+          log('[EngineOrchestrator] Executing Enterprise Engine');
           const enterpriseResult: EnterpriseEngineResult = await runEnterpriseEngine(executionContext);
           engineResults['enterpriseEngine'] = enterpriseResult;
           executionContext.enterprise = enterpriseResult;
@@ -267,7 +268,7 @@ export async function runOrchestration(
         }
         // Execute Pricing Engine if active (global scoring pillar)
         else if (engine.id === 'pricingEngine') {
-          console.log('[EngineOrchestrator] Executing Pricing Engine');
+          log('[EngineOrchestrator] Executing Pricing Engine');
           const pricingResult: PricingEngineResult = await runPricingEngine(executionContext);
           engineResults['pricingEngine'] = pricingResult;
           executionContext.pricing = pricingResult;
@@ -279,7 +280,7 @@ export async function runOrchestration(
         }
         // Execute Quality Engine if active (global scoring pillar)
         else if (engine.id === 'qualityEngine') {
-          console.log('[EngineOrchestrator] Executing Quality Engine');
+          log('[EngineOrchestrator] Executing Quality Engine');
           const qualityResult: QualityEngineResult = await runQualityEngine(executionContext);
           engineResults['qualityEngine'] = qualityResult;
           executionContext.quality = qualityResult;
@@ -291,7 +292,7 @@ export async function runOrchestration(
         }
         // Execute Global Scoring Engine if active (final scoring consolidation)
         else if (engine.id === 'globalScoringEngine') {
-          console.log('[EngineOrchestrator] Executing Global Scoring Engine');
+          log('[EngineOrchestrator] Executing Global Scoring Engine');
           const globalScoringResult: GlobalScoringEngineResult = await runGlobalScoringEngine(executionContext);
           engineResults['globalScoringEngine'] = globalScoringResult;
           executionContext.globalScore = globalScoringResult;
@@ -303,7 +304,7 @@ export async function runOrchestration(
         }
         // Execute Trust Capping Engine if active (intelligent grade capping)
         else if (engine.id === 'trustCappingEngine') {
-          console.log('[EngineOrchestrator] Executing Trust Capping Engine');
+          log('[EngineOrchestrator] Executing Trust Capping Engine');
           const trustCappingResult: TrustCappingResult = await runTrustCappingEngine(executionContext);
           engineResults['trustCappingEngine'] = trustCappingResult;
           executionContext.trustCappingResult = trustCappingResult;
@@ -311,7 +312,7 @@ export async function runOrchestration(
           // Official grade authority: set finalProfessionalGrade from trust capping result
           if (trustCappingResult?.finalGrade) {
             executionContext.finalProfessionalGrade = trustCappingResult.finalGrade;
-            console.log('[EngineOrchestrator] Official grade set', {
+            log('[EngineOrchestrator] Official grade set', {
               finalGrade: trustCappingResult.finalGrade,
               originalGrade: trustCappingResult.originalGrade,
               cappingApplied: trustCappingResult.cappingApplied,
@@ -326,7 +327,7 @@ export async function runOrchestration(
         }
         // Execute Structural Consistency Engine if active (analytical pillar balance)
         else if (engine.id === 'structuralConsistencyEngine') {
-          console.log('[EngineOrchestrator] Executing Structural Consistency Engine');
+          log('[EngineOrchestrator] Executing Structural Consistency Engine');
           const structuralConsistencyResult: StructuralConsistencyResult = await runStructuralConsistencyEngine(executionContext);
           engineResults['structuralConsistencyEngine'] = structuralConsistencyResult;
           executionContext.structuralConsistency = structuralConsistencyResult;
@@ -368,7 +369,7 @@ export async function runOrchestration(
     lastOrchestration = result;
     orchestrationState = 'idle';
 
-    console.log('[EngineOrchestrator] Orchestration completed', result);
+    log('[EngineOrchestrator] Orchestration completed', result);
     return result;
   } catch (error) {
     orchestrationState = 'error';
@@ -430,7 +431,7 @@ export function getLastOrchestration(): OrchestrationResult | null {
 export function resetOrchestrationState(): void {
   orchestrationState = 'idle';
   lastOrchestration = null;
-  console.log('[EngineOrchestrator] State reset');
+  log('[EngineOrchestrator] State reset');
 }
 
 /**
@@ -439,7 +440,7 @@ export function resetOrchestrationState(): void {
 export function pauseOrchestration(): void {
   if (orchestrationState === 'running') {
     orchestrationState = 'paused';
-    console.log('[EngineOrchestrator] Orchestration paused');
+    log('[EngineOrchestrator] Orchestration paused');
   }
 }
 
@@ -449,7 +450,7 @@ export function pauseOrchestration(): void {
 export function resumeOrchestration(): void {
   if (orchestrationState === 'paused') {
     orchestrationState = 'running';
-    console.log('[EngineOrchestrator] Orchestration resumed');
+    log('[EngineOrchestrator] Orchestration resumed');
   }
 }
 
@@ -458,7 +459,7 @@ export function resumeOrchestration(): void {
  */
 export function stopOrchestration(): void {
   orchestrationState = 'idle';
-  console.log('[EngineOrchestrator] Orchestration stopped');
+  log('[EngineOrchestrator] Orchestration stopped');
 }
 
 /**
@@ -476,10 +477,10 @@ async function recordEngineSnapshot(engineId: string, result: any, status: strin
         duration_ms: durationMs,
         meta: result ?? {},
       }).catch((err: any) => {
-        console.warn(`[EngineOrchestrator] ⚠️ Score snapshot failed for ${engineId} (non-blocking):`, err);
+        warn(`[EngineOrchestrator] ⚠️ Score snapshot failed for ${engineId} (non-blocking):`, err);
       });
     } catch (e) {
-      console.warn(`[EngineOrchestrator] ⚠️ Snapshot error for ${engineId} (non-blocking):`, e);
+      warn(`[EngineOrchestrator] ⚠️ Snapshot error for ${engineId} (non-blocking):`, e);
     }
   }, 0);
 }

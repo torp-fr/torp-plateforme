@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Cadastre Integration (Phase 30)
  * French Land Registry - Parcel information
@@ -54,7 +56,7 @@ async function queryCadastreAPI(latitude: number, longitude: number): Promise<Pa
     });
 
     if (!response.ok) {
-      console.warn(`[Cadastre] API error: ${response.statusText}`);
+      warn(`[Cadastre] API error: ${response.statusText}`);
       return null;
     }
 
@@ -160,7 +162,7 @@ export async function getParcelInfo(
   longitude: number
 ): Promise<CadastreResult> {
   try {
-    console.log(`[Cadastre] Looking up parcel at ${latitude}, ${longitude}`);
+    log(`[Cadastre] Looking up parcel at ${latitude}, ${longitude}`);
 
     // Validate coordinates
     if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
@@ -205,7 +207,7 @@ export async function getParcelByNumber(
   parcelNumber: string
 ): Promise<CadastreResult> {
   try {
-    console.log(`[Cadastre] Looking up ${municipality}/${section}/${parcelNumber}`);
+    log(`[Cadastre] Looking up ${municipality}/${section}/${parcelNumber}`);
 
     // In production, would query Cadastre API directly
     // For now, placeholder

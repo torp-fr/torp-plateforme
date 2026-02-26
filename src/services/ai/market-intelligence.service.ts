@@ -6,6 +6,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { knowledgeBrainService } from './knowledge-brain.service';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface MarketDataSource {
   name: string;
@@ -57,11 +58,11 @@ class MarketIntelligenceService {
     try {
       const source = WHITELISTED_SOURCES[source_key];
       if (!source) {
-        console.warn('[MARKET INTELLIGENCE] Unauthorized source:', source_key);
+        warn('[MARKET INTELLIGENCE] Unauthorized source:', source_key);
         return 0;
       }
 
-      console.log('[MARKET INTELLIGENCE] Ingesting from source:', source.name, '- Records:', data.length);
+      log('[MARKET INTELLIGENCE] Ingesting from source:', source.name, '- Records:', data.length);
 
       let insertedCount = 0;
 
@@ -97,14 +98,14 @@ class MarketIntelligenceService {
           );
 
           if (docAdded) {
-            console.log('[MARKET INTELLIGENCE] Knowledge document created:', docAdded.id);
+            log('[MARKET INTELLIGENCE] Knowledge document created:', docAdded.id);
           }
         } else {
           console.error('[MARKET INTELLIGENCE] Failed to insert record:', error);
         }
       }
 
-      console.log('[MARKET INTELLIGENCE] Ingestion complete:', insertedCount, '/', data.length, 'records');
+      log('[MARKET INTELLIGENCE] Ingestion complete:', insertedCount, '/', data.length, 'records');
       return insertedCount;
     } catch (error) {
       console.error('[MARKET INTELLIGENCE] Ingestion error:', error);
@@ -122,7 +123,7 @@ class MarketIntelligenceService {
     source: string = 'user_feedback'
   ): Promise<boolean> {
     try {
-      console.log('[MARKET INTELLIGENCE] Updating price average:', { type_travaux, region, new_price });
+      log('[MARKET INTELLIGENCE] Updating price average:', { type_travaux, region, new_price });
 
       // Get existing reference
       const { data: existing, error: fetchError } = await supabase
@@ -137,7 +138,7 @@ class MarketIntelligenceService {
 
       if (fetchError && fetchError.code !== 'PGRST116') {
         // PGRST116 = no rows - that's fine
-        console.warn('[MARKET INTELLIGENCE] Fetch error:', fetchError);
+        warn('[MARKET INTELLIGENCE] Fetch error:', fetchError);
       }
 
       if (existing) {
@@ -163,7 +164,7 @@ class MarketIntelligenceService {
           return false;
         }
 
-        console.log('[MARKET INTELLIGENCE] Price average updated:', {
+        log('[MARKET INTELLIGENCE] Price average updated:', {
           old_avg: existing.avg_price,
           new_avg,
           data_count: new_count,
@@ -186,7 +187,7 @@ class MarketIntelligenceService {
           return false;
         }
 
-        console.log('[MARKET INTELLIGENCE] New price reference created');
+        log('[MARKET INTELLIGENCE] New price reference created');
       }
 
       return true;
@@ -211,14 +212,14 @@ class MarketIntelligenceService {
     try {
       const market = await knowledgeBrainService.getMarketPricing(type_travaux, region);
       if (!market) {
-        console.log('[MARKET INTELLIGENCE] No market data for comparison');
+        log('[MARKET INTELLIGENCE] No market data for comparison');
         return null;
       }
 
       const deviation_percent = ((quote_price - market.avg_price) / market.avg_price) * 100;
       const is_anomaly = Math.abs(deviation_percent) > 20;
 
-      console.log('[MARKET INTELLIGENCE] Anomaly check:', {
+      log('[MARKET INTELLIGENCE] Anomaly check:', {
         quote_price,
         market_avg: market.avg_price,
         deviation_percent: deviation_percent.toFixed(1),
@@ -242,11 +243,11 @@ class MarketIntelligenceService {
     base_score: number
   ): Promise<number> {
     try {
-      console.log('[MARKET INTELLIGENCE] Adjusting price score based on market data');
+      log('[MARKET INTELLIGENCE] Adjusting price score based on market data');
 
       const market = await knowledgeBrainService.getMarketPricing(type_travaux, region);
       if (!market) {
-        console.log('[MARKET INTELLIGENCE] No market adjustment available');
+        log('[MARKET INTELLIGENCE] No market adjustment available');
         return base_score;
       }
 
@@ -259,11 +260,11 @@ class MarketIntelligenceService {
       if (quote_price < min_range) {
         // Suspiciously low - might be missing services
         adjusted_score = Math.max(0, base_score - 30);
-        console.log('[MARKET INTELLIGENCE] Price suspiciously low - decreased score by 30');
+        log('[MARKET INTELLIGENCE] Price suspiciously low - decreased score by 30');
       } else if (quote_price > max_range) {
         // Suspiciously high - might be overpriced
         adjusted_score = Math.max(0, base_score - 20);
-        console.log('[MARKET INTELLIGENCE] Price suspiciously high - decreased score by 20');
+        log('[MARKET INTELLIGENCE] Price suspiciously high - decreased score by 20');
       } else if (quote_price < market.min_price) {
         // Below market but reasonable
         adjusted_score = base_score - 5;
@@ -273,10 +274,10 @@ class MarketIntelligenceService {
       } else {
         // Within market range - bonus
         adjusted_score = Math.min(100, base_score + 10);
-        console.log('[MARKET INTELLIGENCE] Price within market range - increased score by 10');
+        log('[MARKET INTELLIGENCE] Price within market range - increased score by 10');
       }
 
-      console.log('[MARKET INTELLIGENCE] Score adjusted:', { base_score, adjusted_score, market_avg: market.avg_price });
+      log('[MARKET INTELLIGENCE] Score adjusted:', { base_score, adjusted_score, market_avg: market.avg_price });
       return adjusted_score;
     } catch (error) {
       console.error('[MARKET INTELLIGENCE] Score adjustment error:', error);

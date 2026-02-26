@@ -13,6 +13,7 @@ import type {
   WorkType,
 } from '@/types/ProjectContext';
 import { ProjectType, Urgency } from '@/types/ProjectContext';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export class ProjectContextService {
   /**
@@ -31,7 +32,7 @@ export class ProjectContextService {
 
       // Afficher les warnings
       if (validation.warnings.length > 0) {
-        console.warn('⚠️ Validation warnings:', validation.warnings);
+        warn('⚠️ Validation warnings:', validation.warnings);
       }
 
       // Créer le contexte
@@ -56,7 +57,7 @@ export class ProjectContextService {
 
       if (contextError) throw contextError;
 
-      console.log(`✅ Project context created: ${contextData.id}`);
+      log(`✅ Project context created: ${contextData.id}`);
 
       // Ajouter les pièces si elles existent
       let rooms: Room[] = [];
@@ -178,7 +179,7 @@ export class ProjectContextService {
         .eq('id', projectId);
 
       if (error) throw error;
-      console.log(`✅ Project context deleted: ${projectId}`);
+      log(`✅ Project context deleted: ${projectId}`);
     } catch (error) {
       console.error('❌ Delete context error:', error);
       throw error;
@@ -224,7 +225,7 @@ export class ProjectContextService {
         );
       }
 
-      console.log(`✅ Room added: ${roomData.id}`);
+      log(`✅ Room added: ${roomData.id}`);
 
       return this.mapToRoom(roomData, works);
     } catch (error) {
@@ -258,7 +259,7 @@ export class ProjectContextService {
         .single();
 
       if (workError) throw workError;
-      console.log(`✅ Work added: ${workData.id}`);
+      log(`✅ Work added: ${workData.id}`);
 
       return this.mapToRoomWork(workData);
     } catch (error) {
@@ -305,7 +306,7 @@ export class ProjectContextService {
         .eq('id', roomId);
 
       if (error) throw error;
-      console.log(`✅ Room deleted: ${roomId}`);
+      log(`✅ Room deleted: ${roomId}`);
     } catch (error) {
       console.error('❌ Delete room error:', error);
       throw error;
@@ -370,7 +371,7 @@ export class ProjectContextService {
         .eq('id', workId);
 
       if (error) throw error;
-      console.log(`✅ Work deleted: ${workId}`);
+      log(`✅ Work deleted: ${workId}`);
     } catch (error) {
       console.error('❌ Delete work error:', error);
       throw error;

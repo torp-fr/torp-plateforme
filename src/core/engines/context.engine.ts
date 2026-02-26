@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Context Engine v1.0
  * Extracts and structures project context
@@ -72,7 +74,7 @@ export async function runContextEngine(
 ): Promise<ContextEngineResult> {
   const startTime = Date.now();
 
-  console.log('[ContextEngine] Starting context extraction', { projectId: input.projectId });
+  log('[ContextEngine] Starting context extraction', { projectId: input.projectId });
 
   try {
     // Extract basic structure from input
@@ -143,7 +145,7 @@ export async function runContextEngine(
     // Calculate processing time
     result.meta.processingTime = Date.now() - startTime;
 
-    console.log('[ContextEngine] Context extraction completed', {
+    log('[ContextEngine] Context extraction completed', {
       projectId: input.projectId,
       lots: result.detectedLots.length,
       spaces: result.spaces.length,

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import type { EnrichedEntrepriseData, HealthScore } from '@/services/api/pappers.service';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 import {
   Building2,
   MapPin,
@@ -179,7 +180,7 @@ export const InfosEntreprisePappers = ({
 
       // For now, disable direct display since we don't have EnrichedEntrepriseData transformation
       // In a real scenario, you'd map the proxyData to EnrichedEntrepriseData format
-      console.log('[InfosEntreprisePappers] Pappers data retrieved successfully');
+      log('[InfosEntreprisePappers] Pappers data retrieved successfully');
       setError('Données Pappers disponibles via API de proxy sécurisée. Affichage limité pour cette version.');
       setLoaded(true);
     } catch (err) {

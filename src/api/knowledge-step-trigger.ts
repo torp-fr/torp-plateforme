@@ -11,6 +11,7 @@
 import { ingestionStateMachineService } from '@/services/knowledge/ingestionStateMachine.service';
 import { KnowledgeStepRunnerService } from '@/services/knowledge/knowledgeStepRunner.service';
 import { DocumentIngestionState } from '@/services/knowledge/ingestionStates';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface TrigerStepRunnerRequest {
   documentId: string;
@@ -36,7 +37,7 @@ export async function triggerStepRunner(
   documentId: string
 ): Promise<TriggerStepRunnerResponse> {
   try {
-    console.log(`[STEP TRIGGER] 🚀 Triggering step runner for document ${documentId}`);
+    log(`[STEP TRIGGER] 🚀 Triggering step runner for document ${documentId}`);
 
     // ÉTAPE 2 - SAFETY GUARD: Check if document can proceed
     const canProceed = await KnowledgeStepRunnerService.canProceed(documentId);
@@ -49,7 +50,7 @@ export async function triggerStepRunner(
       };
     }
 
-    console.log(`[STEP TRIGGER] ✅ canProceed=${canProceed} - proceeding to trigger`);
+    log(`[STEP TRIGGER] ✅ canProceed=${canProceed} - proceeding to trigger`);
 
     // Transition to EXTRACTING state
     await ingestionStateMachineService.transitionTo(
@@ -58,14 +59,14 @@ export async function triggerStepRunner(
       'extraction_initiated_by_trigger'
     );
 
-    console.log(`[STEP TRIGGER] 📝 State transitioned to EXTRACTING`);
+    log(`[STEP TRIGGER] 📝 State transitioned to EXTRACTING`);
 
     // ÉTAPE 1 - FIRE-AND-SAFE: Launch runNextStep non-blocking
     // This runs in the background without awaiting
     // Existing pipeline continues immediately
     KnowledgeStepRunnerService.runNextStep(documentId)
       .then(() => {
-        console.log(`[STEP TRIGGER] ✅ Step runner completed for ${documentId}`);
+        log(`[STEP TRIGGER] ✅ Step runner completed for ${documentId}`);
       })
       .catch((error) => {
         console.error(`[STEP TRIGGER] ❌ Step runner failed for ${documentId}:`, error);

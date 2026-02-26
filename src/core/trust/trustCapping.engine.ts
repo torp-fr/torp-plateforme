@@ -19,6 +19,7 @@ import {
   getObligationProfile,
 } from './trustFramework.registry';
 import { blocksGrade } from './trustTypes';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Incoherence detected in project
@@ -139,7 +140,7 @@ function checkCoherence(context: EngineExecutionContext): DetectedIncoherence[] 
 
     return incoherences;
   } catch (error) {
-    console.warn('[TrustCappingEngine] Error checking coherence', error);
+    warn('[TrustCappingEngine] Error checking coherence', error);
     return incoherences;
   }
 }
@@ -198,7 +199,7 @@ function checkPriceAnomalies(context: EngineExecutionContext): PriceAnomaly[] {
 
     return anomalies;
   } catch (error) {
-    console.warn('[TrustCappingEngine] Error checking price anomalies', error);
+    warn('[TrustCappingEngine] Error checking price anomalies', error);
     return anomalies;
   }
 }
@@ -231,7 +232,7 @@ function identifyBlockingObligations(context: EngineExecutionContext): BlockingO
 
     return blockingObligations;
   } catch (error) {
-    console.warn('[TrustCappingEngine] Error identifying blocking obligations', error);
+    warn('[TrustCappingEngine] Error identifying blocking obligations', error);
     return blockingObligations;
   }
 }
@@ -300,7 +301,7 @@ export async function runTrustCappingEngine(
   const startTime = Date.now();
 
   try {
-    console.log('[TrustCappingEngine] Starting trust capping evaluation');
+    log('[TrustCappingEngine] Starting trust capping evaluation');
 
     // Get original grade from global scoring
     const originalGrade = executionContext.globalScore?.grade || 'C';
@@ -361,7 +362,7 @@ export async function runTrustCappingEngine(
       },
     };
 
-    console.log('[TrustCappingEngine] Trust capping complete', {
+    log('[TrustCappingEngine] Trust capping complete', {
       originalGrade,
       maxAllowedGrade,
       finalGrade,

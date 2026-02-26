@@ -5,6 +5,7 @@
 
 import { supabase } from '@/lib/supabase';
 import type { KBChunk, ProcessedDocument, VectorizationResult } from './types';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export class VectorizationService {
   private readonly CHUNK_SIZE = 500; // tokens par chunk
@@ -15,7 +16,7 @@ export class VectorizationService {
    */
   async vectorizeDocument(docId: string): Promise<VectorizationResult> {
     try {
-      console.log(`🔄 Starting vectorization for document: ${docId}`);
+      log(`🔄 Starting vectorization for document: ${docId}`);
 
       // 1. Récupérer le document
       const { data: docData, error: docError } = await supabase
@@ -80,7 +81,7 @@ export class VectorizationService {
         })
         .eq('id', docId);
 
-      console.log(`✅ Vectorization complete: ${vectorizedCount} chunks created`);
+      log(`✅ Vectorization complete: ${vectorizedCount} chunks created`);
 
       return {
         docId,
@@ -116,7 +117,7 @@ export class VectorizationService {
     try {
       // En production, télécharger le fichier et faire OCR
       // Pour MVP, retourner un texte simulé
-      console.log(`📄 Extracting text from: ${doc.source_file}`);
+      log(`📄 Extracting text from: ${doc.source_file}`);
 
       // Simuler l'extraction
       return `
@@ -335,7 +336,7 @@ Contenu de démonstration du document.
         .eq('doc_id', docId);
 
       if (error) throw error;
-      console.log(`✅ Deleted chunks for document: ${docId}`);
+      log(`✅ Deleted chunks for document: ${docId}`);
     } catch (error) {
       console.error('❌ Delete chunks error:', error);
       throw error;

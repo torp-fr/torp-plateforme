@@ -5,6 +5,7 @@
  */
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Normalized lot structure
@@ -43,7 +44,7 @@ export async function runLotEngine(
   const startTime = Date.now();
 
   try {
-    console.log('[LotEngine] Starting lot normalization');
+    log('[LotEngine] Starting lot normalization');
 
     // Extract detected lots from context engine results
     const detectedLots = executionContext.context?.detectedLots || [];
@@ -86,7 +87,7 @@ export async function runLotEngine(
       },
     };
 
-    console.log('[LotEngine] Lot normalization completed', {
+    log('[LotEngine] Lot normalization completed', {
       totalLots: normalizedLots.length,
       primaryLots: primaryLots.length,
       categories: Object.keys(categorySummary),

@@ -19,6 +19,7 @@ import { TransparencyCard } from '@/components/devis/TransparencyCard';
 import { generateAnalysisReportPDF } from '@/utils/pdfGenerator';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export default function Results() {
   const { currentProject, setCurrentProject, userType, user } = useApp();
@@ -211,11 +212,11 @@ export default function Results() {
         const scoreInnovationDurableData = parseIfString(data.score_innovation_durable);
         const scoreTransparenceData = parseIfString(data.score_transparence);
 
-        console.log('[Results] Parsed score_entreprise:', scoreEntrepriseData);
-        console.log('[Results] Parsed recommendations:', recommendationsData);
-        console.log('[Results] Parsed extracted_data:', extractedData);
-        console.log('[Results] Parsed score_transparence:', scoreTransparenceData);
-        console.log('[Results] Parsed score_innovation_durable:', scoreInnovationDurableData);
+        log('[Results] Parsed score_entreprise:', scoreEntrepriseData);
+        log('[Results] Parsed recommendations:', recommendationsData);
+        log('[Results] Parsed extracted_data:', extractedData);
+        log('[Results] Parsed score_transparence:', scoreTransparenceData);
+        log('[Results] Parsed score_innovation_durable:', scoreInnovationDurableData);
 
         // Extraire l'adresse du chantier depuis différentes sources possibles
         const adresseChantier =
@@ -225,7 +226,7 @@ export default function Results() {
           data.adresse_chantier ||
           null;
 
-        console.log('[Results] Adresse chantier détectée:', adresseChantier);
+        log('[Results] Adresse chantier détectée:', adresseChantier);
 
         // Extract scores from analysis objects and convert to percentages
         // TORP scores: Entreprise /250, Prix /300, Complétude /200, Conformité /150, Délais /100
@@ -235,7 +236,7 @@ export default function Results() {
         const scoreConformite = Math.round(((scoreConformiteData?.scoreTotal || 0) / 150) * 100);
         const scoreDelais = Math.round(((scoreDelaisData?.scoreTotal || 0) / 100) * 100);
 
-        console.log('[Results] Calculated scores:', { scoreEntreprise, scorePrix, scoreCompletude, scoreConformite, scoreDelais });
+        log('[Results] Calculated scores:', { scoreEntreprise, scorePrix, scoreCompletude, scoreConformite, scoreDelais });
 
         // Extract different types of information from recommendations
         const pointsForts = recommendationsData.pointsForts || [];
@@ -244,7 +245,7 @@ export default function Results() {
         const pointsNegociation = recommendationsData.pointsNegociation || [];
         const recommandationsActions = recommendationsData.recommandations || [];
 
-        console.log('[Results] Recommendations data:', { pointsForts, pointsFaibles, questionsAPoser });
+        log('[Results] Recommendations data:', { pointsForts, pointsFaibles, questionsAPoser });
 
         // Convert Supabase data to Project format
         const project: Project = {
@@ -753,7 +754,7 @@ export default function Results() {
                         className="h-auto p-4 flex flex-col items-center gap-2"
                         onClick={() => {
                           // Valider le devis et marquer comme finalisé
-                          console.log('Valider le devis');
+                          log('Valider le devis');
                         }}
                       >
                         <CheckCircle className="w-6 h-6 text-success" />
@@ -783,7 +784,7 @@ export default function Results() {
                         variant="outline"
                         className="h-auto p-4 flex flex-col items-center gap-2"
                         onClick={() => {
-                          console.log('Accepter le devis');
+                          log('Accepter le devis');
                         }}
                       >
                         <CheckCircle className="w-6 h-6 text-success" />
@@ -794,7 +795,7 @@ export default function Results() {
                         variant="outline"
                         className="h-auto p-4 flex flex-col items-center gap-2"
                         onClick={() => {
-                          console.log('Négocier le devis');
+                          log('Négocier le devis');
                         }}
                       >
                         <Lightbulb className="w-6 h-6 text-warning" />
@@ -805,7 +806,7 @@ export default function Results() {
                         variant="outline"
                         className="h-auto p-4 flex flex-col items-center gap-2"
                         onClick={() => {
-                          console.log('Refuser le devis');
+                          log('Refuser le devis');
                         }}
                       >
                         <AlertTriangle className="w-6 h-6 text-destructive" />

@@ -5,6 +5,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface PappersProxyResponse {
   siret?: string;
@@ -33,11 +34,11 @@ class PappersProxyService {
       // Validate SIRET format
       const cleanedSiret = siret.replace(/\s/g, '');
       if (!/^\d{14}$/.test(cleanedSiret)) {
-        console.warn(`[PappersProxy] Invalid SIRET format: ${siret}`);
+        warn(`[PappersProxy] Invalid SIRET format: ${siret}`);
         return null;
       }
 
-      console.log(`[PappersProxy] Searching company: ${cleanedSiret}`);
+      log(`[PappersProxy] Searching company: ${cleanedSiret}`);
 
       // Call Edge Function
       const { data, error } = await supabase.functions.invoke('pappers-proxy', {
@@ -50,7 +51,7 @@ class PappersProxyService {
       }
 
       if (!data) {
-        console.warn(`[PappersProxy] No data returned for SIRET: ${cleanedSiret}`);
+        warn(`[PappersProxy] No data returned for SIRET: ${cleanedSiret}`);
         return null;
       }
 
@@ -60,7 +61,7 @@ class PappersProxyService {
         return null;
       }
 
-      console.log(`[PappersProxy] Successfully fetched data for SIRET: ${cleanedSiret}`);
+      log(`[PappersProxy] Successfully fetched data for SIRET: ${cleanedSiret}`);
       return data;
     } catch (error) {
       console.error(`[PappersProxy] Error:`, error);

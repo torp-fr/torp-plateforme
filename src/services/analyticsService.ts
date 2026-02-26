@@ -5,6 +5,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface AnalyticsMetrics {
   totalAnalyses: number;
@@ -27,7 +28,7 @@ export interface AnalyticsMetrics {
  */
 export async function fetchAnalyticsOverview(): Promise<Partial<AnalyticsMetrics> | null> {
   try {
-    console.log('[AnalyticsService] Fetching analytics overview...');
+    log('[AnalyticsService] Fetching analytics overview...');
 
     const { data, error } = await supabase.from('analytics_overview_with_intelligence').select('*').single();
 
@@ -63,7 +64,7 @@ export async function fetchLiveIntelligenceStatus(): Promise<{
   apiCallsToday: number;
 } | null> {
   try {
-    console.log('[AnalyticsService] Fetching live intelligence status...');
+    log('[AnalyticsService] Fetching live intelligence status...');
 
     const { data, error } = await supabase
       .from('engine_execution_with_live_intelligence')
@@ -72,7 +73,7 @@ export async function fetchLiveIntelligenceStatus(): Promise<{
       .single();
 
     if (error) {
-      console.warn('[AnalyticsService] Live intelligence engine not found in stats:', error);
+      warn('[AnalyticsService] Live intelligence engine not found in stats:', error);
       return {
         status: 'idle',
         lastExecution: 'N/A',
@@ -127,7 +128,7 @@ export async function fetchAPIHealthStatus(): Promise<
   > | null
 > {
   try {
-    console.log('[AnalyticsService] Fetching API health status...');
+    log('[AnalyticsService] Fetching API health status...');
 
     const { data, error } = await supabase.from('api_health_stats').select('*');
 
@@ -181,7 +182,7 @@ export async function fetchFraudDistributionWithIntelligence(): Promise<
   > | null
 > {
   try {
-    console.log('[AnalyticsService] Fetching fraud distribution with intelligence...');
+    log('[AnalyticsService] Fetching fraud distribution with intelligence...');
 
     const { data, error } = await supabase.from('fraud_distribution_with_intelligence').select('*');
 
@@ -230,7 +231,7 @@ export async function fetchGradeDistributionWithIntelligence(): Promise<
   > | null
 > {
   try {
-    console.log('[AnalyticsService] Fetching grade distribution with intelligence...');
+    log('[AnalyticsService] Fetching grade distribution with intelligence...');
 
     const { data, error } = await supabase
       .from('grade_distribution_with_intelligence')
@@ -269,7 +270,7 @@ export async function fetchGradeDistributionWithIntelligence(): Promise<
  */
 export async function fetchRecentOrchestrationsWithIntelligence(limit: number = 20): Promise<any[] | null> {
   try {
-    console.log(`[AnalyticsService] Fetching recent orchestrations (limit: ${limit})...`);
+    log(`[AnalyticsService] Fetching recent orchestrations (limit: ${limit})...`);
 
     const { data, error } = await supabase
       .from('recent_orchestrations_with_intelligence')
@@ -293,7 +294,7 @@ export async function fetchRecentOrchestrationsWithIntelligence(limit: number = 
  */
 export async function fetchCockpitMetrics(): Promise<Partial<AnalyticsMetrics> | null> {
   try {
-    console.log('[AnalyticsService] Fetching complete cockpit metrics...');
+    log('[AnalyticsService] Fetching complete cockpit metrics...');
 
     const [overview, intelligence] = await Promise.all([
       fetchAnalyticsOverview(),

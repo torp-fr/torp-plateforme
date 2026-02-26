@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { Loader2, Upload, Copy, Brain, Database } from 'lucide-react';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 interface TimelineItem {
   id: string;
@@ -41,7 +42,7 @@ export function RAGIngestionTimeline() {
       indexed: hasItems && edgeOnline,
     });
 
-    console.log('[RAG Timeline] Pipeline state updated:', {
+    log('[RAG Timeline] Pipeline state updated:', {
       upload: hasItems,
       chunking: hasItems && queueSubscribed,
       embedding: hasItems && edgeOnline,
@@ -60,13 +61,13 @@ export function RAGIngestionTimeline() {
         .limit(10);
 
       if (error) {
-        console.log('[RAG Timeline] Query error:', error.message);
+        log('[RAG Timeline] Query error:', error.message);
         setItems([]);
         return;
       }
 
       setItems(data || []);
-      console.log('[RAG Timeline] Loaded:', data?.length || 0);
+      log('[RAG Timeline] Loaded:', data?.length || 0);
     } catch (err) {
       console.error('[RAG Timeline] Error:', err);
       setItems([]);

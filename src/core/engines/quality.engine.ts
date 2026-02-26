@@ -5,6 +5,7 @@
  */
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Quality breakdown scores
@@ -58,7 +59,7 @@ function calculateDescriptionScore(context: EngineExecutionContext): number {
 
     return 0;
   } catch (error) {
-    console.warn('[QualityEngine] Error calculating description score', error);
+    warn('[QualityEngine] Error calculating description score', error);
     return 0;
   }
 }
@@ -82,7 +83,7 @@ function calculateMaterialsScore(context: EngineExecutionContext): number {
 
     return 0;
   } catch (error) {
-    console.warn('[QualityEngine] Error calculating materials score', error);
+    warn('[QualityEngine] Error calculating materials score', error);
     return 0;
   }
 }
@@ -131,7 +132,7 @@ function calculateLegalMentionsScore(context: EngineExecutionContext): number {
 
     return 0;
   } catch (error) {
-    console.warn('[QualityEngine] Error calculating legal mentions score', error);
+    warn('[QualityEngine] Error calculating legal mentions score', error);
     return 0;
   }
 }
@@ -168,7 +169,7 @@ function calculateClarityScore(context: EngineExecutionContext): number {
 
     return Math.min(clarityScore, 5);
   } catch (error) {
-    console.warn('[QualityEngine] Error calculating clarity score', error);
+    warn('[QualityEngine] Error calculating clarity score', error);
     return 0;
   }
 }
@@ -182,7 +183,7 @@ export async function runQualityEngine(
   const startTime = Date.now();
 
   try {
-    console.log('[QualityEngine] Starting quality evaluation');
+    log('[QualityEngine] Starting quality evaluation');
 
     // Calculate individual scores
     const descriptionScore = calculateDescriptionScore(executionContext);
@@ -211,7 +212,7 @@ export async function runQualityEngine(
       },
     };
 
-    console.log('[QualityEngine] Evaluation complete', {
+    log('[QualityEngine] Evaluation complete', {
       qualityScore: result.qualityScore,
       normalizedScore: result.normalizedScore,
       processingTime: Date.now() - startTime,

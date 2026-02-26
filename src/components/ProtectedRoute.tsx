@@ -8,6 +8,7 @@ import { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useUserRole, type UserRole } from '@/hooks/useUserRole';
 import { Loader2 } from 'lucide-react';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 interface ProtectedRouteProps {
   component: React.ComponentType;
@@ -36,7 +37,7 @@ export function ProtectedRoute({
   const hasRequiredRole = !requiredRole || role === requiredRole;
 
   if (!hasRequiredRole) {
-    console.warn(
+    warn(
       `[ProtectedRoute] Access denied: required role=${requiredRole}, user role=${role}`
     );
     return <Navigate to="/dashboard" state={{ from: location }} />;
