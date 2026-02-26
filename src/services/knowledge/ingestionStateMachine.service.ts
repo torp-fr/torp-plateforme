@@ -11,6 +11,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 import {
   DocumentIngestionState,
   IngestionFailureReason,
@@ -86,7 +87,7 @@ export class IngestionStateMachineService {
     stepName: string
   ): Promise<boolean> {
     try {
-      console.log(`[STATE MACHINE] 🔄 Transitioning document ${documentId} to ${toState}`);
+      log(`[STATE MACHINE] 🔄 Transitioning document ${documentId} to ${toState}`);
 
       // Get current state first
       const { data: doc, error: fetchError } = await supabase
@@ -104,7 +105,7 @@ export class IngestionStateMachineService {
 
       // PATCH 1-2: FAILED state lock - prevent any transitions FROM FAILED
       if (currentState === DocumentIngestionState.FAILED) {
-        console.warn(`[STATE LOCK] ⚠️ Ignoring transition from FAILED state (immutable)`);
+        warn(`[STATE LOCK] ⚠️ Ignoring transition from FAILED state (immutable)`);
         return false;
       }
 
@@ -126,13 +127,13 @@ export class IngestionStateMachineService {
       // Set ingestion_started_at when transitioning to EXTRACTING
       if (toState === DocumentIngestionState.EXTRACTING) {
         updateData.ingestion_started_at = new Date().toISOString();
-        console.log(`[STATE MACHINE] ⏱️ Ingestion started at ${updateData.ingestion_started_at}`);
+        log(`[STATE MACHINE] ⏱️ Ingestion started at ${updateData.ingestion_started_at}`);
       }
 
       // Set ingestion_completed_at when transitioning to COMPLETED
       if (toState === DocumentIngestionState.COMPLETED) {
         updateData.ingestion_completed_at = new Date().toISOString();
-        console.log(`[STATE MACHINE] ⏱️ Ingestion completed at ${updateData.ingestion_completed_at}`);
+        log(`[STATE MACHINE] ⏱️ Ingestion completed at ${updateData.ingestion_completed_at}`);
 
         // PHASE 9: Clear big doc mode when document completes
         (window as any).__RAG_BIG_DOC_MODE__ = false;
@@ -161,7 +162,7 @@ export class IngestionStateMachineService {
         ...(updateData.ingestion_completed_at && { ingestion_completed_at: updateData.ingestion_completed_at }),
       };
 
-      console.log('[STATE MACHINE] 🔄 Attempting state transition:', {
+      log('[STATE MACHINE] 🔄 Attempting state transition:', {
         documentId,
         fromState: currentState,
         toState: toState,
@@ -185,7 +186,7 @@ export class IngestionStateMachineService {
         return false;
       }
 
-      console.log(`[STATE MACHINE] ✅ Transitioned: ${currentState} → ${toState}`);
+      log(`[STATE MACHINE] ✅ Transitioned: ${currentState} → ${toState}`);
       return true;
     } catch (error) {
       console.error(`[STATE MACHINE] 💥 Transition error:`, error);
@@ -212,17 +213,17 @@ export class IngestionStateMachineService {
     errorStack?: string
   ): Promise<boolean> {
     try {
-      console.log(
+      log(
         `[STATE MACHINE] 🔴 Marking document ${documentId} as FAILED`
       );
-      console.log(`[STATE MACHINE] Reason: ${reason}`);
-      console.log(`[STATE MACHINE] Error: ${errorMessage}`);
+      log(`[STATE MACHINE] Reason: ${reason}`);
+      log(`[STATE MACHINE] Error: ${errorMessage}`);
 
       // PHASE 8: If EMBEDDING failed → trigger global pause
       if (reason === IngestionFailureReason.EMBEDDING_API_ERROR ||
           reason === IngestionFailureReason.EMBEDDING_TIMEOUT ||
           reason === IngestionFailureReason.EMBEDDING_PARTIAL_FAILURE) {
-        console.warn(`[STATE MACHINE] 🔴 CRITICAL: Embedding failure detected - pausing pipeline`);
+        warn(`[STATE MACHINE] 🔴 CRITICAL: Embedding failure detected - pausing pipeline`);
         (window as any).__RAG_EMBEDDING_PAUSED__ = true;
         window.dispatchEvent(new Event('RAG_EMBEDDING_PAUSED'));
       }
@@ -232,10 +233,10 @@ export class IngestionStateMachineService {
           reason === IngestionFailureReason.EMBEDDING_TIMEOUT ||
           reason === IngestionFailureReason.EMBEDDING_PARTIAL_FAILURE ||
           reason === IngestionFailureReason.CHUNKING_ERROR) {
-        console.warn(`[STATE MACHINE] 🔒 DOCUMENT LOCK: Isolating failed document to prevent retry storm`);
+        warn(`[STATE MACHINE] 🔒 DOCUMENT LOCK: Isolating failed document to prevent retry storm`);
         (window as any).__RAG_DOC_LOCKS__ ??= {};
         (window as any).__RAG_DOC_LOCKS__[documentId] = true;
-        console.warn(`[DOC LOCK] 🔒 Locked document ${documentId}`);
+        warn(`[DOC LOCK] 🔒 Locked document ${documentId}`);
         window.dispatchEvent(
           new CustomEvent('RAG_DOC_LOCKED', { detail: { documentId } })
         );
@@ -265,7 +266,7 @@ export class IngestionStateMachineService {
         return false;
       }
 
-      console.log(`[STATE MACHINE] ✅ Document marked as FAILED`);
+      log(`[STATE MACHINE] ✅ Document marked as FAILED`);
       return true;
     } catch (error) {
       console.error(`[STATE MACHINE] 💥 Error marking as failed:`, error);

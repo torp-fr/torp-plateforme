@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
 import { TrendingUp, Calendar, Clock } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 interface Metrics {
   totalDocuments: number;
@@ -59,7 +60,7 @@ export function IngestionMetricsPanel() {
           last7dCount: count7d || 0,
         });
 
-        console.log('[Ingestion Metrics] Total:', totalCount, '| 24h:', count24h, '| 7d:', count7d);
+        log('[Ingestion Metrics] Total:', totalCount, '| 24h:', count24h, '| 7d:', count7d);
       } catch (err) {
         console.error('[Ingestion Metrics] Error:', err);
         // Fail silently

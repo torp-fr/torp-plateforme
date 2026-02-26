@@ -20,6 +20,7 @@ import {
 import { KNOWLEDGE_CATEGORY_LABELS, getAllCategories } from '@/constants/knowledge-categories';
 import { knowledgeBrainService } from '@/services/ai/knowledge-brain.service';
 import { env } from '@/config/env';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 // Map of sources with French labels
 const SOURCES = {
@@ -86,7 +87,7 @@ export function KnowledgeBaseUpload() {
   }
 
   async function handleUpload() {
-    console.log('🧠 [UPLOAD] Handler called - START');
+    log('🧠 [UPLOAD] Handler called - START');
 
     if (!state.file || !state.category) {
       console.error('🧠 [UPLOAD] Missing required fields', { file: !!state.file, category: state.category });
@@ -98,13 +99,13 @@ export function KnowledgeBaseUpload() {
     }
 
     try {
-      console.log('🧠 [UPLOAD] Setting loading state...');
+      log('🧠 [UPLOAD] Setting loading state...');
       setState(prev => ({ ...prev, loading: true, error: null }));
 
       // PHASE 36.11: Extract document text (PDF or plain text)
-      console.log('🧠 [UPLOAD] Extracting document text...');
+      log('🧠 [UPLOAD] Extracting document text...');
       const content = await knowledgeBrainService.extractDocumentTextFromFile(state.file);
-      console.log('🧠 [UPLOAD] Document text extracted:', { size: content.length });
+      log('🧠 [UPLOAD] Document text extracted:', { size: content.length });
 
       if (!content || content.trim().length === 0) {
         throw new Error('Impossible d\'extraire le texte du document');
@@ -112,10 +113,10 @@ export function KnowledgeBaseUpload() {
 
       // PHASE 36.3: Generate safe title from filename or category
       const finalTitle = state.file.name.replace(/\.[^/.]+$/, '') || `Document ${state.category}`;
-      console.log('🧠 [UPLOAD] Generated title:', finalTitle);
+      log('🧠 [UPLOAD] Generated title:', finalTitle);
 
       // PHASE 36.5: Use knowledgeBrainService with minimal schema-compliant payload
-      console.log('🧠 [UPLOAD] Calling knowledgeBrainService.addKnowledgeDocumentWithTimeout...');
+      log('🧠 [UPLOAD] Calling knowledgeBrainService.addKnowledgeDocumentWithTimeout...');
       const result = await knowledgeBrainService.addKnowledgeDocumentWithTimeout(
         state.source, // source: 'internal', 'external', or 'official'
         state.category, // category: matches KNOWLEDGE_CATEGORY_LABELS keys
@@ -130,7 +131,7 @@ export function KnowledgeBaseUpload() {
         throw new Error('Document insertion failed');
       }
 
-      console.log('🧠 [UPLOAD] Document uploaded successfully:', { id: result.id });
+      log('🧠 [UPLOAD] Document uploaded successfully:', { id: result.id });
 
       // Success - reset form
       setState(prev => ({
@@ -153,7 +154,7 @@ export function KnowledgeBaseUpload() {
         setState(prev => ({ ...prev, success: false }));
       }, 3000);
 
-      console.log('🧠 [UPLOAD] Handler completed successfully');
+      log('🧠 [UPLOAD] Handler completed successfully');
     } catch (err) {
       console.error('❌ [UPLOAD] Handler error:', err);
       setState(prev => ({

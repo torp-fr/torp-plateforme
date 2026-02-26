@@ -16,6 +16,7 @@ import { hybridAIService, AIGenerationOptions } from './hybrid-ai.service';
 import { secureAI } from './secure-ai.service';
 import { structuredLogger } from '@/services/observability/structured-logger';
 import { aiTelemetry } from './aiTelemetry.service';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -339,7 +340,7 @@ class AIOrchestrator {
 
       // PHASE 17.5: Skip if edge is offline
       if ((window as any).__RAG_EDGE_OFFLINE__) {
-        console.warn('[EMBEDDING] Edge offline — skip embedding attempt');
+        warn('[EMBEDDING] Edge offline — skip embedding attempt');
         throw new AIOrchestrationError(
           'Edge function offline - embedding skipped',
           'EDGE_OFFLINE',
@@ -386,7 +387,7 @@ class AIOrchestrator {
       // PHASE 17.5: No fallback embedding - fail fast
       retriesUsed += primaryResult.retriesUsed;
 
-      console.warn('[ORCHESTRATOR] 🚫 Fallback embedding disabled (PHASE 17.5)');
+      warn('[ORCHESTRATOR] 🚫 Fallback embedding disabled (PHASE 17.5)');
       throw new AIOrchestrationError(
         'Primary embedding failed - fallback disabled to prevent loops',
         'PRIMARY_EMBEDDING_FAILED',
@@ -582,7 +583,7 @@ class AIOrchestrator {
    * Claude/LLM-based embedding generation causes cascading failures
    */
   private async tryFallbackEmbedding(request: EmbeddingRequest): Promise<number[]> {
-    console.warn('[ORCHESTRATOR] 🚫 Fallback embedding disabled (PHASE 17.5)');
+    warn('[ORCHESTRATOR] 🚫 Fallback embedding disabled (PHASE 17.5)');
     throw new Error('Fallback embedding disabled - primary edge function required');
   }
 

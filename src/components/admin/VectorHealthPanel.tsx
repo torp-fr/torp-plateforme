@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { Database, Zap, List, AlertCircle } from 'lucide-react';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 interface VectorHealth {
   totalDocuments: number;
@@ -28,7 +29,7 @@ export function VectorHealthPanel() {
         .eq('is_active', true);
 
       if (error) {
-        console.log('[VectorHealth] Query error:', error.message);
+        log('[VectorHealth] Query error:', error.message);
         setHealth((prev) => ({ ...prev, totalDocuments: 0 }));
         return;
       }
@@ -45,7 +46,7 @@ export function VectorHealthPanel() {
       // Dispatch command center update
       window.dispatchEvent(new Event('RAG_COMMAND_CENTER_UPDATE'));
 
-      console.log('[VectorHealth] Updated:', { count, edgeOnline, fallbackActive });
+      log('[VectorHealth] Updated:', { count, edgeOnline, fallbackActive });
     } catch (err) {
       console.error('[VectorHealth] Error:', err);
     } finally {

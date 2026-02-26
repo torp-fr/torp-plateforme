@@ -12,6 +12,7 @@ import { ChevronLeft } from 'lucide-react';
 import type { CCFData } from '@/components/guided-ccf/GuidedCCF';
 import type { EnrichedClientData } from '@/types/enrichment';
 import { createCCF, storeEnrichedData, logAction } from '@/services/supabaseService';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export function QuotePage() {
   const navigate = useNavigate();
@@ -30,7 +31,7 @@ export function QuotePage() {
         // Stocker enriched data si disponible
         if (data.enrichedData) {
           await storeEnrichedData(createdCCF.id, data.enrichedData);
-          console.log('✅ CCF + Enriched Data Created in Supabase:', createdCCF.id);
+          log('✅ CCF + Enriched Data Created in Supabase:', createdCCF.id);
         }
 
         // Log l'action
@@ -41,7 +42,7 @@ export function QuotePage() {
         // Stocker le CCF ID pour utilisation dans les pages suivantes
         localStorage.setItem('currentCCFId', createdCCF.id);
       } else {
-        console.warn('⚠️ Failed to create CCF in Supabase, using localStorage fallback');
+        warn('⚠️ Failed to create CCF in Supabase, using localStorage fallback');
       }
 
       // Redirection vers la page de succès

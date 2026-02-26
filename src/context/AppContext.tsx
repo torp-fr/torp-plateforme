@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { authService } from '@/services/api/supabase/auth.service';
 import { devisService } from '@/services/api/supabase/devis.service';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 // User types - Particulier (B2C), Professionnel (B2B), Admin
 export type UserType = 'B2C' | 'B2B' | 'admin' | 'super_admin';
@@ -138,12 +139,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!isMounted) return;
 
         if (currentUser) {
-          console.log('✓ Session restaurée:', currentUser.email);
+          log('✓ Session restaurée:', currentUser.email);
           setIsAuthenticated(true);
           setUser(currentUser);
           setUserType(currentUser.type);
         } else {
-          console.log('ℹ️ Aucune session active');
+          log('ℹ️ Aucune session active');
           setIsAuthenticated(false);
         }
       } catch (error) {
@@ -164,13 +165,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (!isMounted) return;
 
           if (sessionUser) {
-            console.log('✓ SIGNED_IN event:', sessionUser.email);
+            log('✓ SIGNED_IN event:', sessionUser.email);
             // Session exists - user is authenticated
             setIsAuthenticated(true);
             setUser(sessionUser);
             setUserType(sessionUser.type);
           } else {
-            console.log('ℹ️ SIGNED_OUT event');
+            log('ℹ️ SIGNED_OUT event');
             // Session cleared - user is not authenticated
             setIsAuthenticated(false);
             setUser(null);
@@ -210,7 +211,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       try {
-        console.log('[AppContext] Loading analyzed devis for user:', user.id);
+        log('[AppContext] Loading analyzed devis for user:', user.id);
         const analyzedDevis = await devisService.getUserAnalyzedDevis(user.id, 50);
 
         // Transform devis to Project format for compatibility
@@ -246,7 +247,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           },
         }));
 
-        console.log(`[AppContext] Loaded ${devisProjects.length} analyzed devis`);
+        log(`[AppContext] Loaded ${devisProjects.length} analyzed devis`);
         setProjects(devisProjects);
       } catch (error) {
         console.error('[AppContext] Error loading user devis:', error);
@@ -280,7 +281,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       // Ensuite appeler le service de déconnexion
       await authService.logout();
-      console.log('✓ Déconnexion réussie');
+      log('✓ Déconnexion réussie');
     } catch (error) {
       console.error('⚠️ Erreur lors de la déconnexion:', error);
       // Même en cas d'erreur, l'état est déjà nettoyé

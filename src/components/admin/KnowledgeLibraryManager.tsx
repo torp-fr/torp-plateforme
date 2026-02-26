@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Loader2, Eye, Trash2, RotateCw } from 'lucide-react';
 import { KnowledgeInspectDrawer } from './KnowledgeInspectDrawer';
 import { useToast } from '@/hooks/use-toast';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 import {
   Table,
   TableBody,
@@ -64,7 +65,7 @@ export function KnowledgeLibraryManager() {
       }
 
       setDocuments(data || []);
-      console.log('[KLM] Documents fetched:', data?.length || 0);
+      log('[KLM] Documents fetched:', data?.length || 0);
       setLoading(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load documents';
@@ -90,7 +91,7 @@ export function KnowledgeLibraryManager() {
 
   const handleRetryEmbedding = (doc: KnowledgeDocument) => {
     const safeTitle = doc.title ?? 'Document';
-    console.log('[KLM OPS] Retry requested:', doc.id, safeTitle);
+    log('[KLM OPS] Retry requested:', doc.id, safeTitle);
 
     // Dispatch OPS event for orchestrator
     window.dispatchEvent(
@@ -113,7 +114,7 @@ export function KnowledgeLibraryManager() {
   const handleDelete = async (docId: string, docTitle: string) => {
     try {
       setDeleting(docId);
-      console.log('[KLM] Deleting:', docId);
+      log('[KLM] Deleting:', docId);
 
       const { error: updateError } = await supabase
         .from('knowledge_documents')
@@ -129,7 +130,7 @@ export function KnowledgeLibraryManager() {
         throw updateError;
       }
 
-      console.log('[KLM] Document disabled:', docId);
+      log('[KLM] Document disabled:', docId);
       await fetchDocuments();
 
       // Dispatch refresh event

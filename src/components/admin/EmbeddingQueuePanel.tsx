@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { Loader2 } from 'lucide-react';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 interface QueueItem {
   id: string;
@@ -30,13 +31,13 @@ export function EmbeddingQueuePanel() {
         .limit(5);
 
       if (dbError) {
-        console.log('[EmbeddingQueue] Status column unavailable');
+
         setQueue([]);
         return;
       }
 
       setQueue(data || []);
-      console.log('[EmbeddingQueue] Pending:', data?.length || 0);
+
 
       // Dispatch OPS event for other components
       window.dispatchEvent(new Event('RAG_OPS_EVENT'));
@@ -52,7 +53,7 @@ export function EmbeddingQueuePanel() {
   useEffect(() => {
     // Prevent duplicate subscription
     if (window.__RAG_QUEUE_SUBSCRIBED__) {
-      console.log('[EmbeddingQueue] Subscription already active');
+
       return;
     }
     window.__RAG_QUEUE_SUBSCRIBED__ = true;
@@ -67,11 +68,11 @@ export function EmbeddingQueuePanel() {
 
     // PHASE 8: Listen for embedding pause/resume
     const handlePause = () => {
-      console.log('[EmbeddingQueue] Embedding paused');
+
       setEmbeddingPaused(true);
     };
     const handleResume = () => {
-      console.log('[EmbeddingQueue] Embedding resumed');
+
       setEmbeddingPaused(false);
       fetchQueue();
     };

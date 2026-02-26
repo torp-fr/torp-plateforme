@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Service d'enrichissement des données client
  * Intégration APIs: Google Maps, DPE, Cadastre (APICARTO), Pappers
@@ -34,7 +36,7 @@ const DPE_URL = 'https://data.ademe.fr/api/3';
 
 export async function geocodeAddress(address: string): Promise<GeocodeResult | null> {
   if (!GOOGLE_MAPS_API_KEY) {
-    console.warn('⚠️ Google Maps API key not configured');
+    warn('⚠️ Google Maps API key not configured');
     return null;
   }
 
@@ -86,7 +88,7 @@ export async function fetchDPEData(lat: number, lon: number): Promise<DPEData> {
     const response = await fetch(`${DPE_URL}/dpe/batiments?${params.toString()}`);
 
     if (!response.ok) {
-      console.warn('⚠️ DPE API unavailable, returning empty data');
+      warn('⚠️ DPE API unavailable, returning empty data');
       return { available: false };
     }
 
@@ -127,7 +129,7 @@ export async function fetchCadastreData(
     );
 
     if (!response.ok) {
-      console.warn('⚠️ APICARTO unavailable');
+      warn('⚠️ APICARTO unavailable');
       return {};
     }
 
@@ -250,7 +252,7 @@ export async function fetchCompanyData(siret: string): Promise<CompanyData | und
     });
 
     if (!response.ok) {
-      console.warn('⚠️ Pappers API error');
+      warn('⚠️ Pappers API error');
       return undefined;
     }
 
@@ -294,7 +296,7 @@ export async function vectorizeEnrichedData(
   try {
     const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
     if (!apiKey) {
-      console.warn('⚠️ OpenAI API key not configured for vectorization');
+      warn('⚠️ OpenAI API key not configured for vectorization');
       return undefined;
     }
 
@@ -321,7 +323,7 @@ export async function vectorizeEnrichedData(
     });
 
     if (!response.ok) {
-      console.warn('⚠️ Embedding API error');
+      warn('⚠️ Embedding API error');
       return undefined;
     }
 
@@ -343,7 +345,7 @@ export async function enrichClientData(
 ): Promise<EnrichmentServiceResponse> {
   try {
     const addressText = formatAddress(client.address);
-    console.log('🔍 Starting enrichment for:', addressText);
+    log('🔍 Starting enrichment for:', addressText);
 
     // Étape 1: Géocodage
     const geocode = await geocodeAddress(addressText);
@@ -354,7 +356,7 @@ export async function enrichClientData(
       };
     }
 
-    console.log('📍 Geocoded:', geocode);
+    log('📍 Geocoded:', geocode);
 
     const { latitude, longitude } = geocode;
 
@@ -389,7 +391,7 @@ export async function enrichClientData(
       enrichedData.embedding = embedding;
     }
 
-    console.log('✅ Enrichment completed');
+    log('✅ Enrichment completed');
 
     return {
       success: true,

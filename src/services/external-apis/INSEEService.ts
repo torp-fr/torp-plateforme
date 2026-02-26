@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * INSEE Service (P1)
  * Accès aux API INSEE pour données d'entreprises et zones géographiques
@@ -33,7 +35,7 @@ export class INSEEService {
    */
   async getCompanyBySIRET(siret: string): Promise<INSEECompanyData | null> {
     try {
-      console.log(`📊 [P1] Getting INSEE data for SIRET: ${siret}`);
+      log(`📊 [P1] Getting INSEE data for SIRET: ${siret}`);
 
       // TODO: P1 Implementation
       // const response = await fetch(`https://api.insee.fr/v3/sirene/siret/${siret}`, {
@@ -56,7 +58,7 @@ export class INSEEService {
    */
   async getGeoData(postalCode: string): Promise<INSEEGeoData | null> {
     try {
-      console.log(`📍 [P1] Getting geo data for postal code: ${postalCode}`);
+      log(`📍 [P1] Getting geo data for postal code: ${postalCode}`);
 
       // TODO: P1 Implementation
       // Stub pour MVP
@@ -73,7 +75,7 @@ export class INSEEService {
    */
   async getClimateZone(postalCode: string): Promise<string | null> {
     try {
-      console.log(`❄️ [P1] Getting climate zone for: ${postalCode}`);
+      log(`❄️ [P1] Getting climate zone for: ${postalCode}`);
 
       // TODO: P1 Implementation
       // Stub pour MVP

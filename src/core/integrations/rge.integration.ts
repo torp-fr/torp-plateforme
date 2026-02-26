@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * RGE Integration (Phase 30)
  * Verifies RGE (Reconnu Garant de l'Environnement) certification
@@ -41,7 +43,7 @@ async function queryRGEDatabase(siret: string): Promise<RGECertification | null>
     const apiKey = process.env.ADEME_RGE_API_KEY;
 
     if (!apiKey) {
-      console.warn('[RGE] API key not configured');
+      warn('[RGE] API key not configured');
       return null;
     }
 
@@ -56,7 +58,7 @@ async function queryRGEDatabase(siret: string): Promise<RGECertification | null>
     });
 
     if (!response.ok) {
-      console.warn(`[RGE] API error: ${response.statusText}`);
+      warn(`[RGE] API error: ${response.statusText}`);
       return null;
     }
 
@@ -132,7 +134,7 @@ function checkCertificationActive(establishment: any): boolean {
  */
 export async function verifyRGE(siret: string): Promise<RGEVerificationResult> {
   try {
-    console.log(`[RGE] Verifying certification for: ${siret}`);
+    log(`[RGE] Verifying certification for: ${siret}`);
 
     // Validate SIRET format
     if (!/^\d{14}$/.test(siret.replace(/\s+/g, ''))) {
@@ -147,7 +149,7 @@ export async function verifyRGE(siret: string): Promise<RGEVerificationResult> {
     const certification = await queryRGEDatabase(siret);
 
     if (!certification) {
-      console.log(`[RGE] No certification found for SIRET: ${siret}`);
+      log(`[RGE] No certification found for SIRET: ${siret}`);
       return {
         valid: false,
         errors: ['No RGE certification found'],

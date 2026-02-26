@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
 import { supabase } from '@/lib/supabase';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export type UserRole = 'user' | 'admin' | 'super_admin';
 
@@ -24,7 +25,7 @@ interface UseUserRoleReturn {
  */
 async function fetchUserRoleFromProfiles(userId: string): Promise<UserRole | null> {
   try {
-    console.log('[useUserRole] Fetching role for user:', userId);
+    log('[useUserRole] Fetching role for user:', userId);
 
 
     const { data, error } = await supabase
@@ -34,12 +35,12 @@ async function fetchUserRoleFromProfiles(userId: string): Promise<UserRole | nul
       .single();
 
     if (error) {
-      console.warn('[useUserRole] Failed to fetch profile:', error);
+      warn('[useUserRole] Failed to fetch profile:', error);
       return null;
     }
 
     const role = (data?.role || 'user') as UserRole;
-    console.log('[useUserRole] Role fetched:', role);
+    log('[useUserRole] Role fetched:', role);
 
     return role;
   } catch (error) {
@@ -53,7 +54,7 @@ async function fetchUserRoleFromProfiles(userId: string): Promise<UserRole | nul
  */
 async function fetchUserRoleFromAuthMetadata(userId: string): Promise<UserRole | null> {
   try {
-    console.log('[useUserRole] Checking auth metadata for:', userId);
+    log('[useUserRole] Checking auth metadata for:', userId);
 
 
     // Get auth metadata
@@ -67,7 +68,7 @@ async function fetchUserRoleFromAuthMetadata(userId: string): Promise<UserRole |
 
     // Check custom claims in user metadata
     const role = (user.user_metadata?.role || 'user') as UserRole;
-    console.log('[useUserRole] Role from auth metadata:', role);
+    log('[useUserRole] Role from auth metadata:', role);
 
     return role;
   } catch (error) {
@@ -84,7 +85,7 @@ function getRoleFromEmail(email: string): UserRole | null {
   const adminEmails = ['admin@admin.com', 'admin@torp.fr', 'super@torp.fr'];
 
   if (adminEmails.includes(email)) {
-    console.warn('[useUserRole] Using deprecated email-based role detection');
+    warn('[useUserRole] Using deprecated email-based role detection');
     return 'admin';
   }
 
@@ -133,7 +134,7 @@ export function useUserRole(): UseUserRoleReturn {
 
         // Default to user role
         setRole(fetchedRole || 'user');
-        console.log('[useUserRole] Final role:', fetchedRole || 'user');
+        log('[useUserRole] Final role:', fetchedRole || 'user');
       } catch (err) {
         console.error('[useUserRole] Error determining role:', err);
         setError(err instanceof Error ? err.message : 'Failed to determine role');

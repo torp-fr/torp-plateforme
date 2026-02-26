@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Doctrine Normalization Service (Phase 30)
  * Extracts structured information from doctrine documents
@@ -299,7 +301,7 @@ export function normalizeDoctrineDocument(
   text: string
 ): NormalizedDocument {
   try {
-    console.log(`[DoctrineNormalization] Normalizing document: ${sourceId}`);
+    log(`[DoctrineNormalization] Normalizing document: ${sourceId}`);
 
     const obligations = extractObligations(text);
     const thresholds = extractNumericalThresholds(text);
@@ -328,7 +330,7 @@ export function normalizeDoctrineDocument(
       extractionConfidence,
     };
 
-    console.log(
+    log(
       `[DoctrineNormalization] Extracted: ${obligations.length} obligations, ${thresholds.length} thresholds, ${sanctions.length} sanctions`
     );
 

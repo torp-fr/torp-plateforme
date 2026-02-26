@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase';
 import type { ExtractedQuote, ContextualScoreResult } from '@/services/scoring/contextual-scoring.service';
 import type { WorkType } from '@/types/ProjectContext';
 import type { KBChunk } from '@/services/knowledge-base/types';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface AnalysisResult {
   id: string;
@@ -36,7 +37,7 @@ export class AnalysisCommands {
     quote: ExtractedQuote
   ): Promise<AnalysisResult> {
     try {
-      console.log(`🔍 Starting analysis for project: ${projectContextId}`);
+      log(`🔍 Starting analysis for project: ${projectContextId}`);
 
       // 1. Vérifier que le contexte existe
       const projectContext = await projectContextService.getProjectContext(
@@ -59,7 +60,7 @@ export class AnalysisCommands {
         score,
       });
 
-      console.log(`✅ Analysis complete: ${analysis.id}`);
+      log(`✅ Analysis complete: ${analysis.id}`);
       return analysis;
     } catch (error) {
       console.error('❌ Analyze quote error:', error);
@@ -72,10 +73,10 @@ export class AnalysisCommands {
    */
   async searchByWorkTypeCommand(workType: WorkType): Promise<KBChunk[]> {
     try {
-      console.log(`🔍 Searching for work type: ${workType}`);
+      log(`🔍 Searching for work type: ${workType}`);
 
       const results = await ragService.searchByWorkType(workType, 10);
-      console.log(`✅ Found ${results.length} documents`);
+      log(`✅ Found ${results.length} documents`);
 
       return results;
     } catch (error) {
@@ -92,10 +93,10 @@ export class AnalysisCommands {
     workType?: WorkType
   ): Promise<KBChunk[]> {
     try {
-      console.log(`💰 Getting pricing for region: ${region}${workType ? ` / ${workType}` : ''}`);
+      log(`💰 Getting pricing for region: ${region}${workType ? ` / ${workType}` : ''}`);
 
       const results = await ragService.searchByRegion(region, workType, 10);
-      console.log(`✅ Found ${results.length} pricing references`);
+      log(`✅ Found ${results.length} pricing references`);
 
       return results;
     } catch (error) {
@@ -117,14 +118,14 @@ export class AnalysisCommands {
     recommendations: string[];
   }> {
     try {
-      console.log(`✓ Validating quote against norms for: ${workType}`);
+      log(`✓ Validating quote against norms for: ${workType}`);
 
       // Récupérer les normes
       const norms = await ragService.searchByWorkType(workType, 5);
 
       // Analyser avec Claude pour validation
       const validation = await this.validateWithNorms(quote, norms);
-      console.log(`✅ Validation complete`);
+      log(`✅ Validation complete`);
 
       return validation;
     } catch (error) {
@@ -146,7 +147,7 @@ export class AnalysisCommands {
     projectContextId: string
   ): Promise<string[]> {
     try {
-      console.log(`💡 Generating recommendations for project: ${projectContextId}`);
+      log(`💡 Generating recommendations for project: ${projectContextId}`);
 
       // Récupérer le contexte
       const context = await projectContextService.getProjectContext(projectContextId);
@@ -156,7 +157,7 @@ export class AnalysisCommands {
 
       // Générer les recommandations
       const recommendations = await this.generateFromContext(score, context);
-      console.log(`✅ Generated ${recommendations.length} recommendations`);
+      log(`✅ Generated ${recommendations.length} recommendations`);
 
       return recommendations;
     } catch (error) {
@@ -170,11 +171,11 @@ export class AnalysisCommands {
    */
   async getAnalysisHistoryCommand(projectContextId: string): Promise<StoredAnalysis[]> {
     try {
-      console.log(`📋 Getting analysis history for project: ${projectContextId}`);
+      log(`📋 Getting analysis history for project: ${projectContextId}`);
 
       // Récupérer depuis la DB
       const analyses = await this.getStoredAnalyses(projectContextId);
-      console.log(`✅ Retrieved ${analyses.length} analyses`);
+      log(`✅ Retrieved ${analyses.length} analyses`);
 
       return analyses;
     } catch (error) {
@@ -191,7 +192,7 @@ export class AnalysisCommands {
     projectContextId?: string
   ): Promise<KBChunk[]> {
     try {
-      console.log(`🔎 Complex search: ${query}`);
+      log(`🔎 Complex search: ${query}`);
 
       let projectContext;
       if (projectContextId) {
@@ -204,7 +205,7 @@ export class AnalysisCommands {
         projectType: projectContext?.projectType,
       });
 
-      console.log(`✅ Found ${results.length} relevant documents`);
+      log(`✅ Found ${results.length} relevant documents`);
       return results;
     } catch (error) {
       console.error('❌ Complex search error:', error);

@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { knowledgeBrainService } from '../knowledge-brain.service';
 import { supabase } from '@/lib/supabase';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 describe('PHASE 36.10.2 - RETRIEVAL HARD LOCK', () => {
   beforeEach(() => {
@@ -16,7 +17,7 @@ describe('PHASE 36.10.2 - RETRIEVAL HARD LOCK', () => {
 
   describe('🔐 Test 1: Secure Views - No FAILED documents in retrieval', () => {
     it('should NOT return documents with ingestion_status=failed', async () => {
-      console.log('[TEST 1] Verifying FAILED documents are never retrieved...');
+      log('[TEST 1] Verifying FAILED documents are never retrieved...');
 
       // Create and retrieve a document
       const testContent = 'Test document for failed state check.';
@@ -40,7 +41,7 @@ describe('PHASE 36.10.2 - RETRIEVAL HARD LOCK', () => {
         })
         .eq('id', doc.id);
 
-      console.log('[TEST 1] Document marked as FAILED. Attempting search...');
+      log('[TEST 1] Document marked as FAILED. Attempting search...');
 
       // Try to search for it
       const results = await knowledgeBrainService.searchRelevantKnowledge('failed', {
@@ -51,13 +52,13 @@ describe('PHASE 36.10.2 - RETRIEVAL HARD LOCK', () => {
       const foundFailed = results.some((r) => r.id === doc.id);
       expect(foundFailed).toBe(false);
 
-      console.log('✅ Test 1 PASSED: FAILED documents are NOT retrieved');
+      log('✅ Test 1 PASSED: FAILED documents are NOT retrieved');
     });
   });
 
   describe('🔐 Test 2: Secure Views - No PENDING documents in retrieval', () => {
     it('should NOT return documents with ingestion_status=pending', async () => {
-      console.log('[TEST 2] Verifying PENDING documents are never retrieved...');
+      log('[TEST 2] Verifying PENDING documents are never retrieved...');
 
       // Create a document (starts in pending state)
       const testContent = 'Test document for pending state check.';
@@ -82,13 +83,13 @@ describe('PHASE 36.10.2 - RETRIEVAL HARD LOCK', () => {
       const foundPending = results.some((r) => r.id === doc.id);
       expect(foundPending).toBe(false);
 
-      console.log('✅ Test 2 PASSED: PENDING documents are NOT retrieved');
+      log('✅ Test 2 PASSED: PENDING documents are NOT retrieved');
     });
   });
 
   describe('🔐 Test 3: Secure Views - No PROCESSING documents in retrieval', () => {
     it('should NOT return documents with ingestion_status=processing', async () => {
-      console.log('[TEST 3] Verifying PROCESSING documents are never retrieved...');
+      log('[TEST 3] Verifying PROCESSING documents are never retrieved...');
 
       // Create a document
       const testContent = 'Test document for processing state check.';
@@ -120,13 +121,13 @@ describe('PHASE 36.10.2 - RETRIEVAL HARD LOCK', () => {
       const foundProcessing = results.some((r) => r.id === doc.id);
       expect(foundProcessing).toBe(false);
 
-      console.log('✅ Test 3 PASSED: PROCESSING documents are NOT retrieved');
+      log('✅ Test 3 PASSED: PROCESSING documents are NOT retrieved');
     });
   });
 
   describe('🔐 Test 4: Secure Views - No documents with integrity_checked=FALSE', () => {
     it('should NOT return documents with embedding_integrity_checked=false', async () => {
-      console.log('[TEST 4] Verifying documents without integrity check are never retrieved...');
+      log('[TEST 4] Verifying documents without integrity check are never retrieved...');
 
       // Create a document
       const testContent = 'Test document for integrity flag check.';
@@ -154,7 +155,7 @@ describe('PHASE 36.10.2 - RETRIEVAL HARD LOCK', () => {
           .eq('id', doc.id);
       } catch (e) {
         // Expected - constraint prevents this
-        console.log('[TEST 4] DB constraint prevented invalid state (expected)');
+        log('[TEST 4] DB constraint prevented invalid state (expected)');
       }
 
       // Try to search for it anyway
@@ -166,13 +167,13 @@ describe('PHASE 36.10.2 - RETRIEVAL HARD LOCK', () => {
       const foundInvalid = results.some((r) => r.id === doc.id);
       expect(foundInvalid).toBe(false);
 
-      console.log('✅ Test 4 PASSED: Documents with integrity_checked=false are NOT retrieved');
+      log('✅ Test 4 PASSED: Documents with integrity_checked=false are NOT retrieved');
     });
   });
 
   describe('✅ Test 5: Only COMPLETE + integrity=TRUE documents are retrieved', () => {
     it('should return ONLY documents with status=complete and integrity=true', async () => {
-      console.log('[TEST 5] Verifying ONLY valid documents are retrieved...');
+      log('[TEST 5] Verifying ONLY valid documents are retrieved...');
 
       // Create a document with specific content
       const validContent = 'UNIQUE_VALID_DOCUMENT_CONTENT_FOR_RETRIEVAL_TEST';
@@ -209,13 +210,13 @@ describe('PHASE 36.10.2 - RETRIEVAL HARD LOCK', () => {
       const foundValid = results.some((r) => r.source === 'test_source');
       expect(foundValid).toBe(true);
 
-      console.log('✅ Test 5 PASSED: Valid documents ARE retrieved');
+      log('✅ Test 5 PASSED: Valid documents ARE retrieved');
     });
   });
 
   describe('🔐 Test 6: Vector search uses ONLY secure RPC', () => {
     it('should use search_knowledge_by_embedding RPC (not direct table access)', async () => {
-      console.log('[TEST 6] Verifying vector search uses secure RPC...');
+      log('[TEST 6] Verifying vector search uses secure RPC...');
 
       const testContent = 'Vector search security test document.';
 
@@ -236,7 +237,7 @@ describe('PHASE 36.10.2 - RETRIEVAL HARD LOCK', () => {
 
       expect(rpcCalls.length).toBeGreaterThan(0);
 
-      console.log('✅ Test 6 PASSED: Vector search uses secure RPC functions');
+      log('✅ Test 6 PASSED: Vector search uses secure RPC functions');
 
       rpcSpy.mockRestore();
     });
@@ -244,7 +245,7 @@ describe('PHASE 36.10.2 - RETRIEVAL HARD LOCK', () => {
 
   describe('🔐 Test 7: Keyword search uses ONLY secure RPC', () => {
     it('should use search_knowledge_by_keyword RPC (not direct table access)', async () => {
-      console.log('[TEST 7] Verifying keyword search uses secure RPC...');
+      log('[TEST 7] Verifying keyword search uses secure RPC...');
 
       const rpcSpy = vi.spyOn(supabase, 'rpc');
 
@@ -263,7 +264,7 @@ describe('PHASE 36.10.2 - RETRIEVAL HARD LOCK', () => {
 
       expect(rpcCalls.length).toBeGreaterThan(0);
 
-      console.log('✅ Test 7 PASSED: Keyword search uses secure RPC functions');
+      log('✅ Test 7 PASSED: Keyword search uses secure RPC functions');
 
       rpcSpy.mockRestore();
     });
@@ -271,7 +272,7 @@ describe('PHASE 36.10.2 - RETRIEVAL HARD LOCK', () => {
 
   describe('🔐 Test 8: Runtime defense - Security check validation', () => {
     it('should validate document state at runtime for extra safety', async () => {
-      console.log('[TEST 8] Verifying runtime security checks...');
+      log('[TEST 8] Verifying runtime security checks...');
 
       // This test ensures that even if the secure view had a bug,
       // the runtime checks would catch it
@@ -299,13 +300,13 @@ describe('PHASE 36.10.2 - RETRIEVAL HARD LOCK', () => {
       expect(initialState.data?.ingestion_status).toBe('pending');
       expect(initialState.data?.embedding_integrity_checked).toBe(false);
 
-      console.log('✅ Test 8 PASSED: Document starts in safe pending state');
+      log('✅ Test 8 PASSED: Document starts in safe pending state');
     });
   });
 
   describe('🎯 Integration: End-to-End Retrieval Safety', () => {
     it('should maintain retrieval security throughout document lifecycle', async () => {
-      console.log('[INTEGRATION TEST] Full lifecycle retrieval security check...');
+      log('[INTEGRATION TEST] Full lifecycle retrieval security check...');
 
       // Create multiple test documents
       const docs = await Promise.all([
@@ -372,13 +373,13 @@ describe('PHASE 36.10.2 - RETRIEVAL HARD LOCK', () => {
 
       expect(allAreValid).toBe(true);
 
-      console.log('✅ Integration Test PASSED: Retrieval security maintained throughout lifecycle');
+      log('✅ Integration Test PASSED: Retrieval security maintained throughout lifecycle');
     });
   });
 
   describe('📊 Compliance: Audit logging', () => {
     it('should log retrieval attempts on invalid documents', async () => {
-      console.log('[COMPLIANCE TEST] Audit logging verification...');
+      log('[COMPLIANCE TEST] Audit logging verification...');
 
       // The system should log attempts to retrieve invalid documents
       // This is for security auditing and compliance
@@ -413,7 +414,7 @@ describe('PHASE 36.10.2 - RETRIEVAL HARD LOCK', () => {
       const foundFailed = results.some((r) => r.id === doc.id);
       expect(foundFailed).toBe(false);
 
-      console.log('✅ Compliance Test PASSED: Invalid documents blocked, audit trail ready');
+      log('✅ Compliance Test PASSED: Invalid documents blocked, audit trail ready');
     });
   });
 });

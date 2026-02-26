@@ -5,6 +5,7 @@
  */
 
 import { ragOrchestratorService } from './rag-orchestrator.service';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 import type {
   DomainAnalysisRequest,
   DomainAnalysisResult,
@@ -23,7 +24,7 @@ export class DomainAnalysisService {
   async analyzeProposal(request: DomainAnalysisRequest): Promise<DomainAnalysisResult> {
     const startTime = Date.now();
 
-    console.log(`[Domain Analysis] Starting analysis for: ${request.proposalData.type}`);
+    log(`[Domain Analysis] Starting analysis for: ${request.proposalData.type}`);
 
     // Phase 1: Query knowledge base for relevant information
     const knowledgeSources = await this.queryKnowledgeBase(request);
@@ -56,8 +57,8 @@ export class DomainAnalysisService {
     const analysisDate = new Date();
     const analysisDurationMs = Date.now() - startTime;
 
-    console.log(`[Domain Analysis] Completed in ${analysisDurationMs}ms`);
-    console.log(`[Domain Analysis] Found ${issues.length} issues, ${recommendations.length} recommendations`);
+    log(`[Domain Analysis] Completed in ${analysisDurationMs}ms`);
+    log(`[Domain Analysis] Found ${issues.length} issues, ${recommendations.length} recommendations`);
 
     return {
       issues,

@@ -32,6 +32,7 @@ import { getOrchestrationStatus, getOrchestrationStats, getLastOrchestration } f
 import { analyticsService } from '@/services/api/analytics.service';
 import { supabase } from '@/lib/supabase';
 import type { ContextEngineResult } from '@/core/engines/context.engine';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 type TabType = 'overview' | 'orchestration' | 'kb' | 'doctrine' | 'fraud' | 'adaptive' | 'apis' | 'logs' | 'upload-kb' | 'users' | 'config';
 
@@ -55,7 +56,7 @@ function PricingStatisticsCard() {
         setError(null);
         const { pricingExtractionService } = await import('@/services/ai/pricing-extraction.service');
         const stats = await pricingExtractionService.getPricingStats();
-        console.log('[Analytics] Pricing stats:', stats);
+        log('[Analytics] Pricing stats:', stats);
         setPricingStats(stats);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to load pricing statistics';
@@ -159,7 +160,7 @@ function KnowledgeBaseStatsCard() {
           .eq('is_active', true);
 
         if (dbError) throw dbError;
-        console.log('[Analytics] Knowledge base docs:', count);
+        log('[Analytics] Knowledge base docs:', count);
         setDocCount(count || 0);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to load document count';
@@ -224,7 +225,7 @@ function AnalyticsStatsCards() {
         setLoading(true);
         setError(null);
         const data = await analyticsService.getGlobalStats();
-        console.log('[Analytics] Global stats loaded:', data);
+        log('[Analytics] Global stats loaded:', data);
         setStats(data);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to load analytics';
@@ -511,7 +512,7 @@ function EngineStatusLiveCard() {
   const flushTimerRef = useRef<any>(null);
 
   useEffect(() => {
-    console.log('[ANALYTICS REALTIME] Setting up score_snapshots listener...');
+    log('[ANALYTICS REALTIME] Setting up score_snapshots listener...');
 
     // ✅ PHASE 36.10: Subscribe to real-time engine snapshots (filtered for performance)
     // Filter at DB level to avoid massive re-renders from non-engine snapshots
@@ -529,11 +530,11 @@ function EngineStatusLiveCard() {
           // ✅ PHASE 36.10: Security check - validate snapshot_type at application level
           const newSnapshot = payload.new as any;
           if (newSnapshot.snapshot_type !== 'engine') {
-            console.warn('[ANALYTICS REALTIME] ⚠️ Received non-engine snapshot (should be filtered):', newSnapshot.snapshot_type);
+            warn('[ANALYTICS REALTIME] ⚠️ Received non-engine snapshot (should be filtered):', newSnapshot.snapshot_type);
             return;
           }
 
-          console.log('[ANALYTICS REALTIME] New engine snapshot received:', {
+          log('[ANALYTICS REALTIME] New engine snapshot received:', {
             engine: newSnapshot.engine_name,
             score: newSnapshot.score,
             duration: newSnapshot.duration_ms,
@@ -549,7 +550,7 @@ function EngineStatusLiveCard() {
               bufferRef.current = [];
               flushTimerRef.current = null;
 
-              console.log('[ANALYTICS REALTIME] Flushing batch:', {
+              log('[ANALYTICS REALTIME] Flushing batch:', {
                 count: updates.length,
                 engines: updates.map((u) => u.engine_name),
               });
@@ -571,6 +572,7 @@ function EngineStatusLiveCard() {
               // Timeline updated in same batch
               setTimeline((prev) => [
                 ...updates.map((snap) => ({
+                  id: `${snap.engine_name}-${snap.created_at}-${Math.random()}`,
                   engine: snap.engine_name,
                   score: snap.score,
                   duration: snap.duration_ms,
@@ -583,11 +585,11 @@ function EngineStatusLiveCard() {
         }
       )
       .subscribe((status) => {
-        console.log('[ANALYTICS REALTIME] Subscription status:', status);
+        log('[ANALYTICS REALTIME] Subscription status:', status);
       });
 
     return () => {
-      console.log('[ANALYTICS REALTIME] Cleaning up subscription');
+      log('[ANALYTICS REALTIME] Cleaning up subscription');
       supabase.removeChannel(channel);
 
       // ✅ PHASE 36.10: Clear pending batch timer on unmount
@@ -709,8 +711,8 @@ function EngineStatusLiveCard() {
           <div className="mt-6 pt-4 border-t border-muted">
             <h4 className="text-sm font-semibold text-foreground mb-3">📊 Engine Activity (Last 20)</h4>
             <div className="space-y-1 max-h-48 overflow-y-auto">
-              {timeline.map((item, idx) => (
-                <div key={idx} className="text-xs p-2 rounded bg-muted/30 text-muted-foreground hover:bg-muted/50 transition-colors">
+              {timeline.map((item) => (
+                <div key={item.id} className="text-xs p-2 rounded bg-muted/30 text-muted-foreground hover:bg-muted/50 transition-colors">
                   <span className="font-medium">[{item.engine}]</span>
                   {' '}
                   <span className="text-blue-600">

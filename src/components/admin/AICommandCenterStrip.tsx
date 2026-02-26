@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { AlertCircle, Zap, Activity } from 'lucide-react';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 interface CommandState {
   orchestratorState: 'ACTIVE' | 'DEGRADED' | 'FALLBACK';
@@ -49,7 +50,7 @@ export function AICommandCenterStrip() {
       const lockedDocCount = Object.keys(docLocks).length;
 
       if (!edgeOffline && wasEmbeddingPaused) {
-        console.log('[RAG COMMAND CENTER] 🟢 EDGE RECOVERED: Clearing embedding pause');
+
         (window as any).__RAG_EMBEDDING_PAUSED__ = false;
         window.dispatchEvent(new Event('RAG_EMBEDDING_RESUMED'));
         // Dispatch OPS event to trigger retry
@@ -68,7 +69,7 @@ export function AICommandCenterStrip() {
         lastEventTime: Date.now(),
       }));
 
-      console.log('[RAG COMMAND CENTER] Heartbeat updated:', orchestratorState);
+
     };
 
     // Listen for OPS events
@@ -87,11 +88,11 @@ export function AICommandCenterStrip() {
 
     // PHASE 9: Listen for big document mode events
     const handleBigDocMode = () => {
-      console.log('[RAG COMMAND CENTER] 📚 Big document mode activated');
+
       setState(prev => ({ ...prev, bigDocMode: true }));
     };
     const handleBigDocClear = () => {
-      console.log('[RAG COMMAND CENTER] 📚 Big document mode cleared');
+
       setState(prev => ({ ...prev, bigDocMode: false }));
     };
     window.addEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocMode);
@@ -101,13 +102,13 @@ export function AICommandCenterStrip() {
     const handleDocLocked = () => {
       const docLocks = (window as any).__RAG_DOC_LOCKS__ || {};
       const lockedDocCount = Object.keys(docLocks).length;
-      console.log(`[RAG COMMAND CENTER] 🔒 Document locked - ${lockedDocCount} total locked`);
+      log(`[RAG COMMAND CENTER] 🔒 Document locked - ${lockedDocCount} total locked`);
       setState(prev => ({ ...prev, lockedDocCount, orchestratorState: 'DEGRADED' }));
     };
     const handleDocUnlocked = () => {
       const docLocks = (window as any).__RAG_DOC_LOCKS__ || {};
       const lockedDocCount = Object.keys(docLocks).length;
-      console.log(`[RAG COMMAND CENTER] 🔓 Document unlocked - ${lockedDocCount} remaining locked`);
+      log(`[RAG COMMAND CENTER] 🔓 Document unlocked - ${lockedDocCount} remaining locked`);
       setState(prev => ({ ...prev, lockedDocCount }));
     };
     window.addEventListener('RAG_DOC_LOCKED', handleDocLocked);
@@ -115,11 +116,11 @@ export function AICommandCenterStrip() {
 
     // PHASE 11: Listen for stream mode events
     const handleStreamModeActivated = () => {
-      console.log('[RAG COMMAND CENTER] 🌊 Stream mode activated');
+
       setState(prev => ({ ...prev, streamMode: true }));
     };
     const handleStreamModeCleared = () => {
-      console.log('[RAG COMMAND CENTER] 🌊 Stream mode cleared');
+
       setState(prev => ({ ...prev, streamMode: false }));
     };
     window.addEventListener('RAG_STREAM_MODE_ACTIVATED', handleStreamModeActivated);
@@ -142,7 +143,7 @@ export function AICommandCenterStrip() {
     // If edge is offline (FALLBACK), use 15s interval to reduce load
     // Otherwise use 5s for responsiveness
     const heartbeatInterval = Boolean((window as any).RAG_EDGE_OFFLINE) ? 15000 : 5000;
-    console.log(`[RAG COMMAND CENTER] Heartbeat interval: ${heartbeatInterval}ms (Edge: ${(window as any).RAG_EDGE_OFFLINE ? 'OFFLINE' : 'ONLINE'})`);
+    log(`[RAG COMMAND CENTER] Heartbeat interval: ${heartbeatInterval}ms (Edge: ${(window as any).RAG_EDGE_OFFLINE ? 'OFFLINE' : 'ONLINE'})`);
 
     heartbeatIntervalRef.current = setInterval(() => {
       // PHASE 15 FIX: Stop heartbeat loop when pipeline locked
@@ -158,7 +159,7 @@ export function AICommandCenterStrip() {
         const heartbeat = elapsed > 20000 ? 'stale' : 'beating';
 
         if (heartbeat !== prev.heartbeat) {
-          console.log('[RAG COMMAND CENTER] Heartbeat status:', heartbeat);
+
         }
 
         return { ...prev, heartbeat };

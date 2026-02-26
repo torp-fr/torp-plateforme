@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * GeoRisk Integration (Phase 30)
  * Geographic risk assessment - Flood zones, protected areas, etc.
@@ -48,7 +50,7 @@ async function queryGeoriquesAPI(latitude: number, longitude: number): Promise<G
     });
 
     if (!response.ok) {
-      console.warn(`[GeoRisk] API error: ${response.statusText}`);
+      warn(`[GeoRisk] API error: ${response.statusText}`);
       return null;
     }
 
@@ -172,7 +174,7 @@ export async function assessGeoRisk(
   longitude: number
 ): Promise<GeoRiskResult> {
   try {
-    console.log(`[GeoRisk] Assessing risk at ${latitude}, ${longitude}`);
+    log(`[GeoRisk] Assessing risk at ${latitude}, ${longitude}`);
 
     // Validate coordinates
     if (latitude < 41 || latitude > 51 || longitude < -6 || longitude > 8) {
@@ -186,7 +188,7 @@ export async function assessGeoRisk(
     const assessment = await queryGeoriquesAPI(latitude, longitude);
 
     if (!assessment) {
-      console.warn('[GeoRisk] No assessment available');
+      warn('[GeoRisk] No assessment available');
       return {
         valid: false,
         errors: ['GeoRisk assessment not available'],

@@ -8,6 +8,7 @@
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 import { CertificationRecord, verifyCertification } from '@/core/platform/certification.manager';
 import { runNarrativeEngine } from '@/core/platform/narrative.engine';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Public badge for UI display
@@ -119,7 +120,7 @@ export function verifyAndBuildPublicView(
   try {
     // Validate inputs
     if (!publicToken) {
-      console.warn('[PublicVerificationService] Missing public token');
+      warn('[PublicVerificationService] Missing public token');
       return {
         valid: false,
         message: 'Invalid or missing verification token',
@@ -128,7 +129,7 @@ export function verifyAndBuildPublicView(
     }
 
     if (!enterpriseProfile || !enterpriseProfile.name || !enterpriseProfile.siret) {
-      console.warn('[PublicVerificationService] Invalid enterprise profile');
+      warn('[PublicVerificationService] Invalid enterprise profile');
       return {
         valid: false,
         message: 'Invalid enterprise profile provided',
@@ -137,7 +138,7 @@ export function verifyAndBuildPublicView(
     }
 
     // Step 1: Verify certification by token
-    console.log('[PublicVerificationService] Verifying certification token', {
+    log('[PublicVerificationService] Verifying certification token', {
       token: publicToken.substring(0, 20) + '...',
       enterprise: enterpriseProfile.name,
     });
@@ -146,7 +147,7 @@ export function verifyAndBuildPublicView(
 
     // Step 2: Check verification result
     if (!verificationResult.valid) {
-      console.warn('[PublicVerificationService] Verification failed', {
+      warn('[PublicVerificationService] Verification failed', {
         reason: verificationResult.message,
         enterprise: enterpriseProfile.name,
       });
@@ -161,7 +162,7 @@ export function verifyAndBuildPublicView(
     const certification = verificationResult.certification;
 
     if (!certification) {
-      console.warn('[PublicVerificationService] Certification not found after verification');
+      warn('[PublicVerificationService] Certification not found after verification');
       return {
         valid: false,
         message: 'Certification data could not be retrieved',
@@ -174,7 +175,7 @@ export function verifyAndBuildPublicView(
     const validityStatus = isExpired ? 'expired' : 'active';
 
     if (isExpired) {
-      console.log('[PublicVerificationService] Certification expired', {
+      log('[PublicVerificationService] Certification expired', {
         certificationId: certification.id,
         expiresAt: certification.expiresAt,
       });
@@ -187,7 +188,7 @@ export function verifyAndBuildPublicView(
     }
 
     // Step 4: Generate narrative for the certification
-    console.log('[PublicVerificationService] Generating narrative');
+    log('[PublicVerificationService] Generating narrative');
 
     let narrative = null;
 
@@ -195,7 +196,7 @@ export function verifyAndBuildPublicView(
       const narrativeResult = runNarrativeEngine(executionContext, certification);
       narrative = narrativeResult.narrative;
     } catch (narrativeError) {
-      console.warn('[PublicVerificationService] Narrative generation failed', narrativeError);
+      warn('[PublicVerificationService] Narrative generation failed', narrativeError);
 
       // Fallback narrative
       narrative = {
@@ -227,7 +228,7 @@ export function verifyAndBuildPublicView(
       validityStatus,
     };
 
-    console.log('[PublicVerificationService] Public view model built successfully', {
+    log('[PublicVerificationService] Public view model built successfully', {
       certificationId: certification.id,
       grade: certification.grade,
       enterprise: enterpriseProfile.name,

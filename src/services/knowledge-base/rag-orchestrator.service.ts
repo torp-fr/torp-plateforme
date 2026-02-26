@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * RAG Orchestrator Service
  * Manages multiple knowledge sources (local, cloud, web, APIs)
@@ -35,7 +37,7 @@ export class RAGOrchestratorService {
         });
       }
 
-      console.log(`[RAG] Initialized source: ${source.name} (priority: ${source.priority})`);
+      log(`[RAG] Initialized source: ${source.name} (priority: ${source.priority})`);
     });
   }
 
@@ -48,11 +50,11 @@ export class RAGOrchestratorService {
 
     // Check cache
     if (this.queryCache.has(cacheKey)) {
-      console.log(`[RAG] Cache hit for query: "${query.query.substring(0, 50)}..."`);
+      log(`[RAG] Cache hit for query: "${query.query.substring(0, 50)}..."`);
       return this.queryCache.get(cacheKey)!;
     }
 
-    console.log(`[RAG] Executing query: "${query.query}"`);
+    log(`[RAG] Executing query: "${query.query}"`);
 
     const allResults: KnowledgeResultDocument[] = [];
     const sourceStats: { [key: string]: number } = {};
@@ -64,11 +66,11 @@ export class RAGOrchestratorService {
       try {
         const budget = this.tokenBudgets.get(sourceName);
         if (budget && budget.used >= budget.limit) {
-          console.warn(`[RAG] Budget exceeded for source: ${sourceName}`);
+          warn(`[RAG] Budget exceeded for source: ${sourceName}`);
           continue;
         }
 
-        console.log(`[RAG] Querying source: ${sourceName}`);
+        log(`[RAG] Querying source: ${sourceName}`);
 
         let sourceResults: KnowledgeResultDocument[] = [];
 
@@ -140,7 +142,7 @@ export class RAGOrchestratorService {
   ): Promise<KnowledgeResultDocument[]> {
     // TODO: Implement local vector DB query
     // This would use your local vector database (e.g., Supabase pgvector, Pinecone, etc.)
-    console.log(`[RAG] Local vector DB query (not yet implemented)`);
+    log(`[RAG] Local vector DB query (not yet implemented)`);
     return [];
   }
 
@@ -153,7 +155,7 @@ export class RAGOrchestratorService {
   ): Promise<KnowledgeResultDocument[]> {
     // TODO: Implement cloud vector DB query
     // This would use cloud services like Pinecone, Weaviate, etc.
-    console.log(`[RAG] Cloud vector DB query (not yet implemented)`);
+    log(`[RAG] Cloud vector DB query (not yet implemented)`);
     return [];
   }
 
@@ -167,7 +169,7 @@ export class RAGOrchestratorService {
     // TODO: Implement web search
     // This would use your API keys to search web for domain knowledge
     // Example: search for DTU specifications, regulatory guidelines, etc.
-    console.log(`[RAG] Web search for: "${query.query}"`);
+    log(`[RAG] Web search for: "${query.query}"`);
     return [];
   }
 
@@ -180,7 +182,7 @@ export class RAGOrchestratorService {
   ): Promise<KnowledgeResultDocument[]> {
     // TODO: Implement API integration
     // This would query external APIs (building codes, standards, regulations)
-    console.log(`[RAG] API query (not yet implemented)`);
+    log(`[RAG] API query (not yet implemented)`);
     return [];
   }
 
@@ -272,7 +274,7 @@ export class RAGOrchestratorService {
    */
   clearCache(): void {
     this.queryCache.clear();
-    console.log('[RAG] Query cache cleared');
+    log('[RAG] Query cache cleared');
   }
 
   /**
@@ -282,7 +284,7 @@ export class RAGOrchestratorService {
     this.tokenBudgets.forEach(budget => {
       budget.used = 0;
     });
-    console.log('[RAG] Monthly budgets reset');
+    log('[RAG] Monthly budgets reset');
   }
 }
 

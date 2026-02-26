@@ -17,6 +17,7 @@ import { knowledgeBrainService } from '@/services/ai/knowledge-brain.service';
 import { ingestionStateMachineService } from './ingestionStateMachine.service';
 import { DocumentIngestionState, IngestionFailureReason } from './ingestionStates';
 import { supabase } from '@/lib/supabase';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface StepResult {
   success: boolean;
@@ -82,7 +83,7 @@ export class KnowledgeStepRunnerService {
       predictor.predictedRisk = 'LOW';
     }
 
-    console.log(`[LATENCY PREDICTOR] trend: ${predictor.trend} → risk: ${predictor.predictedRisk}`);
+    log(`[LATENCY PREDICTOR] trend: ${predictor.trend} → risk: ${predictor.predictedRisk}`);
   }
 
   private static updateAdaptiveMetrics(latency: number, error: boolean = false) {
@@ -134,13 +135,13 @@ export class KnowledgeStepRunnerService {
       newLevel = 'SAFE';
       newBatchSize = Math.max(newBatchSize - 5, 30);
       newThrottleMs = newThrottleMs + 20;
-      console.log(`[LATENCY PREDICTOR] 🔮 High risk detected → pre-slowdown (${predictor.trend})`);
+      log(`[LATENCY PREDICTOR] 🔮 High risk detected → pre-slowdown (${predictor.trend})`);
     }
     // CRITICAL: 3 consecutive errors
     else if (controller.consecutiveErrors >= 3) {
       newLevel = 'CRITICAL';
       if (!(window as any).__RAG_EMBEDDING_PAUSED__) {
-        console.warn('[STREAM CTRL] 🔴 CRITICAL: 3 consecutive errors → pausing embedding');
+        warn('[STREAM CTRL] 🔴 CRITICAL: 3 consecutive errors → pausing embedding');
         (window as any).__RAG_EMBEDDING_PAUSED__ = true;
         window.dispatchEvent(new Event('RAG_EMBEDDING_PAUSED'));
       }
@@ -150,21 +151,21 @@ export class KnowledgeStepRunnerService {
       newLevel = 'SAFE';
       newBatchSize = Math.max((controller.batchSize || 50) - 10, 20);
       newThrottleMs = Math.min((controller.throttleMs || 80) + 30, 200);
-      console.log(`[STREAM CTRL] 🟠 SAFE: latencyAvg ${controller.latencyAvg.toFixed(0)}ms (${controller.errorRate.toFixed(1)}% errors) → batch ${newBatchSize}, throttle ${newThrottleMs}ms`);
+      log(`[STREAM CTRL] 🟠 SAFE: latencyAvg ${controller.latencyAvg.toFixed(0)}ms (${controller.errorRate.toFixed(1)}% errors) → batch ${newBatchSize}, throttle ${newThrottleMs}ms`);
     }
     // FAST: latency < 900ms AND errorRate < 5%
     else if (controller.latencyAvg < 900 && controller.errorRate < 5) {
       newLevel = 'FAST';
       newBatchSize = Math.min((controller.batchSize || 50) + 10, 80);
       newThrottleMs = Math.max((controller.throttleMs || 80) - 10, 20);
-      console.log(`[STREAM CTRL] 🟢 FAST: latencyAvg ${controller.latencyAvg.toFixed(0)}ms (${controller.errorRate.toFixed(1)}% errors) → batch ${newBatchSize}, throttle ${newThrottleMs}ms`);
+      log(`[STREAM CTRL] 🟢 FAST: latencyAvg ${controller.latencyAvg.toFixed(0)}ms (${controller.errorRate.toFixed(1)}% errors) → batch ${newBatchSize}, throttle ${newThrottleMs}ms`);
     }
     // NORMAL: default
     else {
       newLevel = 'NORMAL';
       newBatchSize = 50;
       newThrottleMs = 80;
-      console.log(`[STREAM CTRL] 🟡 NORMAL: latencyAvg ${controller.latencyAvg.toFixed(0)}ms (${controller.errorRate.toFixed(1)}% errors)`);
+      log(`[STREAM CTRL] 🟡 NORMAL: latencyAvg ${controller.latencyAvg.toFixed(0)}ms (${controller.errorRate.toFixed(1)}% errors)`);
     }
 
     controller.batchSize = newBatchSize;
@@ -196,7 +197,7 @@ export class KnowledgeStepRunnerService {
     // PHASE 19: Initialize active pipeline counter (safe global tracking)
     if ((window as any).__RAG_ACTIVE_PIPELINES__ === undefined) {
       (window as any).__RAG_ACTIVE_PIPELINES__ = 0;
-      console.log('[LOAD SAFETY] 📊 Active pipeline counter initialized');
+      log('[LOAD SAFETY] 📊 Active pipeline counter initialized');
     }
 
     // PHASE 18.1: Generate unique runtime instance ID (once per browser tab/window)
@@ -204,7 +205,7 @@ export class KnowledgeStepRunnerService {
       const timestamp = Date.now().toString(36);
       const randomPart = Math.random().toString(36).substring(2, 9);
       (window as any).__RAG_RUNNER_INSTANCE_ID__ = `steprunner_${timestamp}_${randomPart}`;
-      console.log(`[STEP RUNNER] 🆔 Phase 18.1 - Instance ID assigned: ${(window as any).__RAG_RUNNER_INSTANCE_ID__}`);
+      log(`[STEP RUNNER] 🆔 Phase 18.1 - Instance ID assigned: ${(window as any).__RAG_RUNNER_INSTANCE_ID__}`);
     }
 
     const currentInstanceId = (window as any).__RAG_RUNNER_INSTANCE_ID__;
@@ -213,7 +214,7 @@ export class KnowledgeStepRunnerService {
     const ownerInstanceId = (window as any).__RAG_RUNNER_OWNER_ID__;
 
     if (ownerInstanceId && ownerInstanceId !== currentInstanceId) {
-      console.warn(`[STEP RUNNER] 🚫 Ownership conflict: pipeline owned by different instance (${ownerInstanceId})`);
+      warn(`[STEP RUNNER] 🚫 Ownership conflict: pipeline owned by different instance (${ownerInstanceId})`);
       return {
         success: false,
         error: `Pipeline already owned by different instance: ${ownerInstanceId}`,
@@ -229,14 +230,14 @@ export class KnowledgeStepRunnerService {
       if (!(window as any).__RAG_RUNNER_OWNER__) {
         (window as any).__RAG_RUNNER_OWNER__ = true;
         (window as any).__RAG_RUNNER_OWNER_ID__ = currentInstanceId;
-        console.log('[STEP RUNNER] 🏆 Ownership claimed - runner is authoritative ingestion engine');
-        console.log(`[STEP RUNNER] 📋 Instance: ${currentInstanceId}`);
-        console.log('[STEP RUNNER] 📋 All ingestion pipelines now delegated to StepRunner');
+        log('[STEP RUNNER] 🏆 Ownership claimed - runner is authoritative ingestion engine');
+        log(`[STEP RUNNER] 📋 Instance: ${currentInstanceId}`);
+        log('[STEP RUNNER] 📋 All ingestion pipelines now delegated to StepRunner');
       }
 
       // PHASE 17: Check for document-level lock
       if ((window as any).__RAG_DOC_LOCKS__?.[documentId]) {
-        console.warn(`[UNIFIED KERNEL] 🔒 Document locked — skipping ${documentId}`);
+        warn(`[UNIFIED KERNEL] 🔒 Document locked — skipping ${documentId}`);
         result = {
           success: false,
           error: 'Document is locked - worker skipping this doc',
@@ -254,7 +255,7 @@ export class KnowledgeStepRunnerService {
           owner: currentInstanceId,
           acquiredAt: Date.now(),
         };
-        console.log(`[STEP RUNNER] 🚀 Running next step for document ${documentId}`);
+        log(`[STEP RUNNER] 🚀 Running next step for document ${documentId}`);
 
         // Get current state
         const context = await ingestionStateMachineService.getStateContext(documentId);
@@ -270,17 +271,17 @@ export class KnowledgeStepRunnerService {
           // Prevents counter drift from failed validation attempts
           (window as any).__RAG_ACTIVE_PIPELINES__++;
           const activeCount = (window as any).__RAG_ACTIVE_PIPELINES__;
-          console.log(`[LOAD SAFETY] 📈 Pipeline active: ${activeCount} total (document: ${documentId})`);
+          log(`[LOAD SAFETY] 📈 Pipeline active: ${activeCount} total (document: ${documentId})`);
 
           const currentState = context.current_state;
-          console.log(`[STEP RUNNER] Current state: ${currentState}`);
+          log(`[STEP RUNNER] Current state: ${currentState}`);
 
           // PHASE 19: Adaptive concurrency limit (load safety)
           const isBigDocMode = Boolean((window as any).__RAG_BIG_DOC_MODE__);
           const CONCURRENCY_LIMIT = 3;
 
           if (activeCount > CONCURRENCY_LIMIT && !isBigDocMode) {
-            console.warn(`[LOAD SAFETY] 🛑 Throttling: ${activeCount} active pipelines (limit: ${CONCURRENCY_LIMIT})`);
+            warn(`[LOAD SAFETY] 🛑 Throttling: ${activeCount} active pipelines (limit: ${CONCURRENCY_LIMIT})`);
             result = {
               success: false,
               error: 'Load safety throttle: concurrency limit exceeded',
@@ -292,7 +293,7 @@ export class KnowledgeStepRunnerService {
             const predictor = (window as any).__RAG_LATENCY_PREDICTOR__;
             if (predictor && predictor.predictedRisk === 'HIGH') {
               const backoffDelay = 500 + Math.random() * 500;
-              console.warn(`[LOAD SAFETY] ⏳ Latency backoff applied: ${backoffDelay.toFixed(0)}ms (predicted risk: ${predictor.predictedRisk})`);
+              warn(`[LOAD SAFETY] ⏳ Latency backoff applied: ${backoffDelay.toFixed(0)}ms (predicted risk: ${predictor.predictedRisk})`);
               await new Promise(resolve => setTimeout(resolve, backoffDelay));
             }
 
@@ -301,7 +302,7 @@ export class KnowledgeStepRunnerService {
               case DocumentIngestionState.PENDING:
                 // PHASE 19.6: Document in PENDING state (inserted by passive Brain)
                 // Transition to EXTRACTING to start pipeline
-                console.log(`[STEP RUNNER] 🔄 Document PENDING - claiming and starting extraction`);
+                log(`[STEP RUNNER] 🔄 Document PENDING - claiming and starting extraction`);
                 await ingestionStateMachineService.transitionTo(
                   documentId,
                   DocumentIngestionState.EXTRACTING,
@@ -315,7 +316,7 @@ export class KnowledgeStepRunnerService {
                 break;
 
               case DocumentIngestionState.UPLOADED:
-                console.log(`[STEP RUNNER] ℹ️ Document UPLOADED - waiting for extraction trigger`);
+                log(`[STEP RUNNER] ℹ️ Document UPLOADED - waiting for extraction trigger`);
                 result = {
                   success: true,
                   nextState: DocumentIngestionState.UPLOADED,
@@ -327,7 +328,7 @@ export class KnowledgeStepRunnerService {
                 // PHASE 19.6: Extraction step bypass (text-first architecture)
                 // Brain already extracted text during document insert
                 // StepRunner bypasses extraction and proceeds to chunking
-                console.log('[STEP RUNNER] ⏩ Extraction bypassed (PHASE 19.6 - text already available)');
+                log('[STEP RUNNER] ⏩ Extraction bypassed (PHASE 19.6 - text already available)');
 
                 await ingestionStateMachineService.transitionTo(
                   documentId,
@@ -356,7 +357,7 @@ export class KnowledgeStepRunnerService {
                 break;
 
               case DocumentIngestionState.COMPLETED:
-                console.log(`[STEP RUNNER] ✅ Document already COMPLETED`);
+                log(`[STEP RUNNER] ✅ Document already COMPLETED`);
                 result = {
                   success: true,
                   // No nextState - COMPLETED is terminal
@@ -365,7 +366,7 @@ export class KnowledgeStepRunnerService {
                 break;
 
               case DocumentIngestionState.FAILED:
-                console.log(`[STEP RUNNER] ❌ Document in FAILED state`);
+                log(`[STEP RUNNER] ❌ Document in FAILED state`);
                 result = {
                   success: false,
                   error: context.error_message || 'Document processing failed',
@@ -401,17 +402,17 @@ export class KnowledgeStepRunnerService {
 
       // PHASE 19: Decrement active pipeline count
       (window as any).__RAG_ACTIVE_PIPELINES__--;
-      console.log(`[LOAD SAFETY] 📉 Pipeline inactive: ${(window as any).__RAG_ACTIVE_PIPELINES__} remaining`);
+      log(`[LOAD SAFETY] 📉 Pipeline inactive: ${(window as any).__RAG_ACTIVE_PIPELINES__} remaining`);
     }
 
     // PHASE 19.9: CRITICAL FIX - Auto-chain AFTER finally (lock is released)
     // This code executes AFTER the finally block completes
     // Ensures document lock is released before scheduling next step
     if (result?.success && result?.nextState) {
-      console.log('[STEP RUNNER] 🔁 Auto-chain next step:', result.nextState);
+      log('[STEP RUNNER] 🔁 Auto-chain next step:', result.nextState);
       setTimeout(() => {
         KnowledgeStepRunnerService.runNextStep(documentId).catch((err) =>
-          console.warn('[STEP RUNNER] ⚠️ Auto-chain error:', err)
+          warn('[STEP RUNNER] ⚠️ Auto-chain error:', err)
         );
       }, 0);
     }
@@ -431,7 +432,7 @@ export class KnowledgeStepRunnerService {
     const startTime = Date.now();
 
     try {
-      console.log(`[STEP RUNNER] 📄 EXTRACTION STEP: Extracting text from PDF...`);
+      log(`[STEP RUNNER] 📄 EXTRACTION STEP: Extracting text from PDF...`);
 
       // Fetch document to get file path
       const { data: doc, error: fetchError } = await supabase
@@ -451,7 +452,7 @@ export class KnowledgeStepRunnerService {
       }
 
       const content = doc.original_content;
-      console.log(`[STEP RUNNER] ✅ Text extracted (${content.length} chars)`);
+      log(`[STEP RUNNER] ✅ Text extracted (${content.length} chars)`);
 
       // Validate extraction
       if (!content || content.trim().length === 0) {
@@ -480,7 +481,7 @@ export class KnowledgeStepRunnerService {
         throw new Error('Failed to transition to CHUNKING state');
       }
 
-      console.log(`[STEP RUNNER] 🎉 EXTRACTION complete → CHUNKING`);
+      log(`[STEP RUNNER] 🎉 EXTRACTION complete → CHUNKING`);
       return {
         success: true,
         nextState: DocumentIngestionState.CHUNKING,
@@ -523,7 +524,7 @@ export class KnowledgeStepRunnerService {
     const startTime = Date.now();
 
     try {
-      console.log(`[STEP RUNNER] ✂️ CHUNKING STEP: Splitting text into chunks...`);
+      log(`[STEP RUNNER] ✂️ CHUNKING STEP: Splitting text into chunks...`);
 
       // PHASE 9: Check if chunks already exist (prevent double-chunking)
       const { data: existingChunks } = await supabase
@@ -532,7 +533,7 @@ export class KnowledgeStepRunnerService {
         .eq('document_id', documentId);
 
       if (existingChunks && existingChunks.length > 0) {
-        console.log(`[STEP RUNNER] ℹ️ Chunks already exist (${existingChunks.length}) - skipping rechunking`);
+        log(`[STEP RUNNER] ℹ️ Chunks already exist (${existingChunks.length}) - skipping rechunking`);
         // Transition directly to EMBEDDING
         const transitioned = await ingestionStateMachineService.transitionTo(
           documentId,
@@ -551,7 +552,7 @@ export class KnowledgeStepRunnerService {
 
       // PHASE 19.8: TEXT-FIRST ARCHITECTURE
       // Fetch content directly from database (inserted by Brain)
-      console.log(`[STEP RUNNER] 📚 Chunking: Fetching document ${documentId} from database`);
+      log(`[STEP RUNNER] 📚 Chunking: Fetching document ${documentId} from database`);
 
       const { data: doc, error: fetchError } = await supabase
         .from('knowledge_documents')
@@ -573,7 +574,7 @@ export class KnowledgeStepRunnerService {
         throw new Error('Document not found in database');
       }
 
-      console.log(`[STEP RUNNER] ✅ Document fetched. Available columns:`, {
+      log(`[STEP RUNNER] ✅ Document fetched. Available columns:`, {
         has_content: !!doc.content,
         has_sanitized_content: !!doc.sanitized_content,
         has_preview_content: !!doc.preview_content,
@@ -596,7 +597,7 @@ export class KnowledgeStepRunnerService {
         throw new Error('Missing text content for chunking');
       }
 
-      console.log(`[STEP RUNNER] 📝 Using text content (${sourceContent.length} chars) for chunking`);
+      log(`[STEP RUNNER] 📝 Using text content (${sourceContent.length} chars) for chunking`);
 
       const contentLength = sourceContent.length;
       const isBigDoc = contentLength > 1_000_000; // 1MB threshold
@@ -630,7 +631,7 @@ export class KnowledgeStepRunnerService {
 
       // PHASE 9: Detect big document mode
       if (isBigDoc) {
-        console.warn(`[STEP RUNNER] 📚 BIG DOCUMENT DETECTED: ${contentLength} chars - activating throttled mode`);
+        warn(`[STEP RUNNER] 📚 BIG DOCUMENT DETECTED: ${contentLength} chars - activating throttled mode`);
         (window as any).__RAG_BIG_DOC_MODE__ = true;
         window.dispatchEvent(new Event('RAG_BIG_DOC_MODE_ACTIVATED'));
       }
@@ -642,14 +643,14 @@ export class KnowledgeStepRunnerService {
       let chunks: any[] = [];
       let globalChunkIndex = 0; // PHASE 12: Global chunk index for entire document
       if (isStreamMode) {
-        console.log(`[STEP RUNNER] 🌊 STREAM MODE: Chunking ${(contentLength / 1024 / 1024).toFixed(2)}MB with micro-batching`);
+        log(`[STEP RUNNER] 🌊 STREAM MODE: Chunking ${(contentLength / 1024 / 1024).toFixed(2)}MB with micro-batching`);
         const STREAM_SLICE_SIZE = 60000; // 60KB slices
         const STREAM_BATCH_SIZE = 40;
 
         for (let offset = 0; offset < sourceContent.length; offset += STREAM_SLICE_SIZE) {
           // PHASE 17: Check document-level lock during streaming
           if ((window as any).__RAG_DOC_LOCKS__?.[documentId]) {
-            console.warn(`[STREAM CHUNKING] 🔒 Document locked mid-stream`);
+            warn(`[STREAM CHUNKING] 🔒 Document locked mid-stream`);
             throw new Error('Document locked during streaming ingestion');
           }
 
@@ -661,7 +662,7 @@ export class KnowledgeStepRunnerService {
 
             // Insert batch every STREAM_BATCH_SIZE chunks
             if (chunks.length >= STREAM_BATCH_SIZE) {
-              console.log(`[STEP RUNNER] 💾 Stream batch: inserting ${chunks.length} chunks...`);
+              log(`[STEP RUNNER] 💾 Stream batch: inserting ${chunks.length} chunks...`);
               const { error: insertError } = await supabase
                 .from('knowledge_chunks')
                 .insert(
@@ -673,7 +674,7 @@ export class KnowledgeStepRunnerService {
                 );
 
               if (insertError) {
-                console.warn(`[STEP RUNNER] ⚠️ Batch insert warning:`, insertError.message);
+                warn(`[STEP RUNNER] ⚠️ Batch insert warning:`, insertError.message);
               }
 
               chunks = []; // Reset for next batch
@@ -690,7 +691,7 @@ export class KnowledgeStepRunnerService {
 
       // Insert remaining chunks from stream
       if (isStreamMode && chunks.length > 0) {
-        console.log(`[STEP RUNNER] 💾 Stream final batch: inserting ${chunks.length} chunks...`);
+        log(`[STEP RUNNER] 💾 Stream final batch: inserting ${chunks.length} chunks...`);
         const { error: insertError } = await supabase
           .from('knowledge_chunks')
           .insert(
@@ -702,7 +703,7 @@ export class KnowledgeStepRunnerService {
           );
 
         if (insertError) {
-          console.warn(`[STEP RUNNER] ⚠️ Final batch insert warning:`, insertError.message);
+          warn(`[STEP RUNNER] ⚠️ Final batch insert warning:`, insertError.message);
         }
       }
 
@@ -714,7 +715,7 @@ export class KnowledgeStepRunnerService {
           .map((chunk, index) => {
             const text = chunk?.text ?? chunk?.content ?? null;
             if (!text) {
-              console.warn('[STEP RUNNER] ⚠️ Skipping empty chunk at index', index);
+              warn('[STEP RUNNER] ⚠️ Skipping empty chunk at index', index);
               return null;
             }
             return {
@@ -726,8 +727,8 @@ export class KnowledgeStepRunnerService {
           })
           .filter(Boolean);
 
-        console.log('[STEP RUNNER] 🧩 Normalized chunks:', rows.length);
-        console.log('[STEP RUNNER] 💾 Persisting chunks:', rows.length);
+        log('[STEP RUNNER] 🧩 Normalized chunks:', rows.length);
+        log('[STEP RUNNER] 💾 Persisting chunks:', rows.length);
         const { error } = await supabase
           .from('knowledge_chunks')
           .insert(rows);
@@ -735,7 +736,7 @@ export class KnowledgeStepRunnerService {
           console.error('[STEP RUNNER] 🔴 Chunk insert error:', error);
           throw new Error(`Chunk persistence failed: ${error.message}`);
         }
-        console.log('[STEP RUNNER] ✅ Chunks persisted successfully');
+        log('[STEP RUNNER] ✅ Chunks persisted successfully');
       }
 
       // PATCH 3: HARD STOP if chunking returns empty
@@ -757,10 +758,10 @@ export class KnowledgeStepRunnerService {
 
       // PHASE STABILIZATION: Chunk limit check moved BEFORE persistence (line 605-632)
       // This line is no longer needed - limit is enforced pre-emptively
-      console.log(`[STEP RUNNER] ✅ Created ${chunks.length} chunks`);
+      log(`[STEP RUNNER] ✅ Created ${chunks.length} chunks`);
 
       // PHASE STABILIZATION: Store chunks count comment (removed unsafe DB update)
-      console.log(`[STEP RUNNER] 💾 Chunk count metadata: ${chunks.length} chunks created`);
+      log(`[STEP RUNNER] 💾 Chunk count metadata: ${chunks.length} chunks created`);
 
       // Transition to EMBEDDING
       const transitioned = await ingestionStateMachineService.transitionTo(
@@ -773,7 +774,7 @@ export class KnowledgeStepRunnerService {
         throw new Error('Failed to transition to EMBEDDING state');
       }
 
-      console.log(`[STEP RUNNER] 🎉 CHUNKING complete → EMBEDDING`);
+      log(`[STEP RUNNER] 🎉 CHUNKING complete → EMBEDDING`);
       return {
         success: true,
         nextState: DocumentIngestionState.EMBEDDING,
@@ -815,7 +816,7 @@ export class KnowledgeStepRunnerService {
     try {
       // PHASE 8: EMBEDDING PAUSE GUARD - stop if global pause active
       if ((window as any).__RAG_EMBEDDING_PAUSED__) {
-        console.warn(`[STEP RUNNER] 🔴 EMBEDDING PAUSED: Stopping embedding for document ${documentId}`);
+        warn(`[STEP RUNNER] 🔴 EMBEDDING PAUSED: Stopping embedding for document ${documentId}`);
         return {
           success: false,
           error: 'Embedding pipeline paused globally',
@@ -829,7 +830,7 @@ export class KnowledgeStepRunnerService {
       const currentInstanceId = (window as any).__RAG_RUNNER_INSTANCE_ID__;
 
       if (lockInfo && lockInfo.owner && lockInfo.owner !== currentInstanceId) {
-        console.warn(`[STEP RUNNER] 🔒 Document locked by another runner - abort embedding`);
+        warn(`[STEP RUNNER] 🔒 Document locked by another runner - abort embedding`);
         return {
           success: false,
           error: 'Document is locked by another runner',
@@ -838,10 +839,10 @@ export class KnowledgeStepRunnerService {
       }
 
       if (lockInfo && lockInfo.owner === currentInstanceId) {
-        console.log(`[STEP RUNNER] 🔓 Lock owned by this runner — continuing`);
+        log(`[STEP RUNNER] 🔓 Lock owned by this runner — continuing`);
       }
 
-      console.log(`[STEP RUNNER] 🔢 EMBEDDING STEP: Generating embeddings for chunks...`);
+      log(`[STEP RUNNER] 🔢 EMBEDDING STEP: Generating embeddings for chunks...`);
 
       // PHASE 9: Check if document is in FAILED state before embedding
       const context = await ingestionStateMachineService.getStateContext(documentId);
@@ -860,7 +861,7 @@ export class KnowledgeStepRunnerService {
       const throttleDelay = isBigDocMode ? 80 : 0; // 80ms throttle for big docs
 
       if (isBigDocMode) {
-        console.warn(`[STEP RUNNER] ⚡ BIG DOC MODE: Throttling embeddings (${throttleDelay}ms between chunks)`);
+        warn(`[STEP RUNNER] ⚡ BIG DOC MODE: Throttling embeddings (${throttleDelay}ms between chunks)`);
       }
 
       let successCount = 0;
@@ -870,7 +871,7 @@ export class KnowledgeStepRunnerService {
 
       // PHASE 11: STREAMING EMBEDDING ENGINE with PHASE 12 adaptive control
       if (isStreamMode) {
-        console.log(`[STEP RUNNER] 🌊 STREAM MODE: Embedding chunks with adaptive batching...`);
+        log(`[STEP RUNNER] 🌊 STREAM MODE: Embedding chunks with adaptive batching...`);
         let cursor = 0;
         let preloadBuffer: any[] = []; // PHASE 13: Smart queue preload buffer
         let preloadPromise: Promise<any> | null = null; // PHASE 13: Preload promise
@@ -882,7 +883,7 @@ export class KnowledgeStepRunnerService {
           .eq('document_id', documentId);
 
         if (!totalChunkCount || totalChunkCount === 0) {
-          console.warn('[STEP RUNNER] ⚠️ No chunks to embed');
+          warn('[STEP RUNNER] ⚠️ No chunks to embed');
           return { success: false };
         }
 
@@ -905,7 +906,7 @@ export class KnowledgeStepRunnerService {
         while (true) {
           // PHASE 17: Check document-level lock during streaming embedding
           if ((window as any).__RAG_DOC_LOCKS__?.[documentId]) {
-            console.warn('[STREAM CTRL] 🔒 Document locked mid-stream');
+            warn('[STREAM CTRL] 🔒 Document locked mid-stream');
             break;
           }
 
@@ -920,7 +921,7 @@ export class KnowledgeStepRunnerService {
             const originalBatchSize = batchSize;
             batchSize = Math.max(Math.floor(batchSize * 0.75), 20);
             if (batchSize < originalBatchSize) {
-              console.log(`[LOAD SAFETY] 📉 Embedding batch reduced: ${originalBatchSize} → ${batchSize} (${activeCount} active pipelines)`);
+              log(`[LOAD SAFETY] 📉 Embedding batch reduced: ${originalBatchSize} → ${batchSize} (${activeCount} active pipelines)`);
             }
           }
 
@@ -949,7 +950,7 @@ export class KnowledgeStepRunnerService {
           }
 
           if (!batch || batch.length === 0) {
-            console.log(`[STEP RUNNER] 🌊 Stream embedding complete (${cursor} chunks processed) - Adaptive Level: ${config.adaptiveLevel}`);
+            log(`[STEP RUNNER] 🌊 Stream embedding complete (${cursor} chunks processed) - Adaptive Level: ${config.adaptiveLevel}`);
             break;
           }
 
@@ -963,7 +964,7 @@ export class KnowledgeStepRunnerService {
               .range(cursor + batchSize, cursor + batchSize * 2 - 1)
               .then(response => response.data || [])
               .catch(err => {
-                console.warn('[STREAM PRELOAD] Preload error:', err);
+                warn('[STREAM PRELOAD] Preload error:', err);
                 return [];
               });
           }
@@ -980,7 +981,7 @@ export class KnowledgeStepRunnerService {
               const latency = performance.now() - latencyStart;
 
               if (!embedding) {
-                console.warn(`[STEP RUNNER] ⚠️ Chunk ${chunkNum} embedding returned null`);
+                warn(`[STEP RUNNER] ⚠️ Chunk ${chunkNum} embedding returned null`);
                 failureCount++;
                 KnowledgeStepRunnerService.updateAdaptiveMetrics(latency, true);
               } else {
@@ -1039,10 +1040,10 @@ export class KnowledgeStepRunnerService {
         chunks = fetchedChunks ?? [];
         totalChunksForLogging = chunks.length;
 
-        console.log('[STEP RUNNER] 📦 EMBEDDING fetched chunks:', chunks.length);
+        log('[STEP RUNNER] 📦 EMBEDDING fetched chunks:', chunks.length);
 
         if (!chunks.length) {
-          console.warn('[STEP RUNNER] ⚠️ No chunks to embed');
+          warn('[STEP RUNNER] ⚠️ No chunks to embed');
           return { success: false };
         }
 
@@ -1050,19 +1051,19 @@ export class KnowledgeStepRunnerService {
           throw new Error('Chunk fetch error: ' + fetchError.message);
         }
 
-        console.log(`[STEP RUNNER] Processing ${chunks.length} chunks...`);
+        log(`[STEP RUNNER] Processing ${chunks.length} chunks...`);
 
         // Generate embeddings for each chunk sequentially
         for (let i = 0; i < chunks.length; i++) {
           try {
             const chunk = chunks[i];
-            console.log(`[STEP RUNNER] Embedding chunk ${i + 1}/${chunks.length}...`);
+            log(`[STEP RUNNER] Embedding chunk ${i + 1}/${chunks.length}...`);
 
             // Call knowledge-brain service embedding function
             const embedding = await knowledgeBrainService.generateEmbedding(chunk.content);
 
             if (!embedding) {
-              console.warn(`[STEP RUNNER] ⚠️ Chunk ${i} embedding returned null`);
+              warn(`[STEP RUNNER] ⚠️ Chunk ${i} embedding returned null`);
               failureCount++;
               // PHASE 9: Still throttle even on failure
               if (throttleDelay > 0) {
@@ -1098,7 +1099,7 @@ export class KnowledgeStepRunnerService {
         }
       }
 
-      console.log(
+      log(
         `[STEP RUNNER] ✅ Embedding complete: ${successCount}/${totalChunksForLogging} successful`
       );
 
@@ -1118,7 +1119,7 @@ export class KnowledgeStepRunnerService {
         throw new Error('Failed to transition to FINALIZING state');
       }
 
-      console.log(`[STEP RUNNER] 🎉 EMBEDDING complete → FINALIZING`);
+      log(`[STEP RUNNER] 🎉 EMBEDDING complete → FINALIZING`);
       return {
         success: true,
         nextState: DocumentIngestionState.FINALIZING,
@@ -1156,7 +1157,7 @@ export class KnowledgeStepRunnerService {
     const startTime = Date.now();
 
     try {
-      console.log(`[STEP RUNNER] 🔍 FINALIZING STEP: Verifying integrity...`);
+      log(`[STEP RUNNER] 🔍 FINALIZING STEP: Verifying integrity...`);
 
       // Check chunk count
       const { data: chunks, error: fetchError } = await supabase
@@ -1172,7 +1173,7 @@ export class KnowledgeStepRunnerService {
       const embeddedChunks = chunks.filter((c) => c.embedding).length;
       const missingEmbeddings = totalChunks - embeddedChunks;
 
-      console.log(
+      log(
         `[STEP RUNNER] 📊 Integrity check: ${embeddedChunks}/${totalChunks} chunks have embeddings`
       );
 
@@ -1183,7 +1184,7 @@ export class KnowledgeStepRunnerService {
       }
 
       // PHASE STABILIZATION: Document metadata comment (removed unsafe DB update)
-      console.log(`[STEP RUNNER] 📊 Embedding integrity check: ${embeddedChunks} chunks embedded successfully`);
+      log(`[STEP RUNNER] 📊 Embedding integrity check: ${embeddedChunks} chunks embedded successfully`);
 
       // Transition to COMPLETED
       const transitioned = await ingestionStateMachineService.transitionTo(
@@ -1196,7 +1197,7 @@ export class KnowledgeStepRunnerService {
         throw new Error('Failed to transition to COMPLETED state');
       }
 
-      console.log(`[STEP RUNNER] 🎉 FINALIZING complete → COMPLETED ✅`);
+      log(`[STEP RUNNER] 🎉 FINALIZING complete → COMPLETED ✅`);
       return {
         success: true,
         nextState: DocumentIngestionState.COMPLETED,

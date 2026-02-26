@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Document Ingestion Service
  * Handles document uploads, auto-classification, and storage
@@ -57,7 +59,7 @@ export class DocumentIngestionService {
       doc.confidenceScore = await this.assessQuality(doc);
 
       if (doc.confidenceScore < config.approvalThreshold) {
-        console.warn(
+        warn(
           `[Ingestion] Document "${doc.title}" below approval threshold: ${doc.confidenceScore}/${config.approvalThreshold}`
         );
         // Document would require manual approval
@@ -71,7 +73,7 @@ export class DocumentIngestionService {
       doc.embeddingId = await this.generateEmbedding(doc);
     }
 
-    console.log(`[Ingestion] Document ingested: "${doc.title}" (confidence: ${doc.confidenceScore})`);
+    log(`[Ingestion] Document ingested: "${doc.title}" (confidence: ${doc.confidenceScore})`);
 
     return doc;
   }

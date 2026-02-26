@@ -10,6 +10,7 @@ import { verifyRGE, type RGECertification } from '@/core/integrations/rge.integr
 import { validateAddress, type ValidatedAddress } from '@/core/integrations/ban.integration';
 import { getParcelInfo, type ParcelInfo } from '@/core/integrations/cadastre.integration';
 import { assessGeoRisk, type GeoRiskAssessment } from '@/core/integrations/geoRisk.integration';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface EnterpriseVerification {
   siret: string;
@@ -50,7 +51,7 @@ export interface LiveIntelligence {
  */
 async function verifyEnterprise(siret: string): Promise<EnterpriseVerification> {
   try {
-    console.log(`[LiveDoctrineActivation] Verifying enterprise: ${siret}`);
+    log(`[LiveDoctrineActivation] Verifying enterprise: ${siret}`);
 
     const result = await verifySIRET(siret);
 
@@ -105,7 +106,7 @@ async function verifyEnterprise(siret: string): Promise<EnterpriseVerification> 
  */
 async function checkRGECertification(siret: string): Promise<RGEStatus> {
   try {
-    console.log(`[LiveDoctrineActivation] Checking RGE: ${siret}`);
+    log(`[LiveDoctrineActivation] Checking RGE: ${siret}`);
 
     const result = await verifyRGE(siret);
 
@@ -151,7 +152,7 @@ async function enrichGeoContext(
   try {
     // Validate address if provided
     if (addressStr) {
-      console.log(`[LiveDoctrineActivation] Validating address: ${addressStr}`);
+      log(`[LiveDoctrineActivation] Validating address: ${addressStr}`);
       const addressResult = await validateAddress(addressStr);
 
       if (addressResult.valid && addressResult.address) {
@@ -164,7 +165,7 @@ async function enrichGeoContext(
 
     // Get parcel and geo risk if coordinates available
     if (latitude !== undefined && longitude !== undefined) {
-      console.log(`[LiveDoctrineActivation] Getting parcel info: ${latitude}, ${longitude}`);
+      log(`[LiveDoctrineActivation] Getting parcel info: ${latitude}, ${longitude}`);
 
       const parcelResult = await getParcelInfo(latitude, longitude);
       if (parcelResult.valid && parcelResult.parcel) {
@@ -195,7 +196,7 @@ export async function runLiveDoctrineActivationEngine(
   executionContext: EngineExecutionContext
 ): Promise<LiveIntelligence> {
   try {
-    console.log('[LiveDoctrineActivation] Starting engine');
+    log('[LiveDoctrineActivation] Starting engine');
 
     const startTime = performance.now();
 
@@ -253,7 +254,7 @@ export async function runLiveDoctrineActivationEngine(
     intelligence.enrichmentStatus = hasAll ? 'complete' : hasPartial ? 'partial' : 'degraded';
 
     const duration = performance.now() - startTime;
-    console.log(
+    log(
       `[LiveDoctrineActivation] Engine complete (${duration.toFixed(0)}ms): ${intelligence.enrichmentStatus}`
     );
 

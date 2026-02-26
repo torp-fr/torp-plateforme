@@ -5,6 +5,7 @@
  */
 
 import type { KnowledgeChunk } from './knowledgeChunker.service';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Embedding result
@@ -50,7 +51,7 @@ export async function generateEmbedding(
   model: string = 'placeholder'
 ): Promise<EmbeddingResult | null> {
   try {
-    console.log('[KnowledgeEmbedding] Generating embedding for:', chunkId);
+    log('[KnowledgeEmbedding] Generating embedding for:', chunkId);
 
     let embedding: number[] = [];
 
@@ -86,7 +87,7 @@ export async function generateEmbeddingsForChunks(
   chunks: KnowledgeChunk[]
 ): Promise<EmbeddingResult[]> {
   try {
-    console.log('[KnowledgeEmbedding] Generating embeddings for', chunks.length, 'chunks');
+    log('[KnowledgeEmbedding] Generating embeddings for', chunks.length, 'chunks');
 
     const results: EmbeddingResult[] = [];
 
@@ -97,7 +98,7 @@ export async function generateEmbeddingsForChunks(
       }
     }
 
-    console.log('[KnowledgeEmbedding] Generated', results.length, 'embeddings');
+    log('[KnowledgeEmbedding] Generated', results.length, 'embeddings');
     return results;
   } catch (error) {
     console.error('[KnowledgeEmbedding] Batch embedding failed:', error);

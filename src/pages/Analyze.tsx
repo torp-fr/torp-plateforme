@@ -12,6 +12,7 @@ import { Upload, FileText, Clock, Shield, CheckCircle, Home, Zap, Droplet, Paint
 import { devisService } from '@/services/api/supabase/devis.service';
 import type { DevisMetadata } from '@/services/api/supabase/devis.service';
 import { env } from '@/config/env';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 const projectTypes = [
   { id: 'plomberie', label: 'Plomberie', icon: Droplet },
@@ -99,7 +100,7 @@ export default function Analyze() {
 
   // PHASE 34.4: Upload file and move to Step 2 (new clean architecture)
   const handleContinueToStep2 = async () => {
-    console.log('[PHASE 34.4] handleContinueToStep2 called');
+    log('[PHASE 34.4] handleContinueToStep2 called');
 
     if (!uploadedFile || !user) {
       console.error('[PHASE 34.4] Missing file or user');
@@ -115,7 +116,7 @@ export default function Analyze() {
       setIsAnalyzing(true);
       setAnalysisProgress(['Upload du devis en cours...']);
 
-      console.log('[PHASE 34.4] Uploading file:', uploadedFile.name);
+      log('[PHASE 34.4] Uploading file:', uploadedFile.name);
 
       // Upload and get devisId
       const uploadResult = await devisService.uploadDevis(
@@ -124,7 +125,7 @@ export default function Analyze() {
         projectData.name || 'Sans titre'
       );
 
-      console.log('[PHASE 34.4] Upload complete, devisId:', uploadResult.id);
+      log('[PHASE 34.4] Upload complete, devisId:', uploadResult.id);
 
       // Store devisId and move to Step 2
       setCurrentDevisId(uploadResult.id);
@@ -147,8 +148,8 @@ export default function Analyze() {
   };
 
   const handleAnalyze = async () => {
-    console.log('[PHASE 34.4] handleAnalyze called - CLEAN ARCHITECTURE');
-    console.log('[PHASE 34.4] Current state:', {
+    log('[PHASE 34.4] handleAnalyze called - CLEAN ARCHITECTURE');
+    log('[PHASE 34.4] Current state:', {
       devisId: currentDevisId,
       projectName: projectData.name,
       projectType: projectData.type,
@@ -158,8 +159,8 @@ export default function Analyze() {
 
     // PHASE 34.4: Validation - NO LONGER check uploadedFile (it's lost after navigation)
     if (!projectData.name || !projectData.type) {
-      console.warn('[PHASE 34.4] Validation failed - missing required fields');
-      console.log('[PHASE 34.4] Validation details:', {
+      warn('[PHASE 34.4] Validation failed - missing required fields');
+      log('[PHASE 34.4] Validation details:', {
         projectName: !!projectData.name,
         projectType: !!projectData.type,
       });
@@ -184,13 +185,13 @@ export default function Analyze() {
     }
 
     try {
-      console.log('[PHASE 34.4] Validation passed - proceeding with analysis');
+      log('[PHASE 34.4] Validation passed - proceeding with analysis');
       setIsAnalyzing(true);
       setAnalysisProgress(['Préparation de l\'analyse...']);
 
       // Check if user is authenticated
       if (!user) {
-        console.log('[PHASE 34.4] User not authenticated - redirecting to login');
+        log('[PHASE 34.4] User not authenticated - redirecting to login');
         toast({
           title: 'Non authentifié',
           description: 'Veuillez vous connecter pour analyser un devis.',
@@ -200,8 +201,8 @@ export default function Analyze() {
         return;
       }
 
-      console.log('[PHASE 34.4] User authenticated:', user.id);
-      console.log('[PHASE 34.4] Using devisId:', currentDevisId);
+      log('[PHASE 34.4] User authenticated:', user.id);
+      log('[PHASE 34.4] Using devisId:', currentDevisId);
 
       // Build metadata from form data
       const metadata: DevisMetadata = {
@@ -216,7 +217,7 @@ export default function Analyze() {
         userType: userType as 'B2C' | 'B2B' | 'admin',
       };
 
-      console.log('[PHASE 34.4] Calling devisService.analyzeDevisById()');
+      log('[PHASE 34.4] Calling devisService.analyzeDevisById()');
       setAnalysisProgress(prev => [...prev, 'Analyse du devis en cours...']);
 
       // PHASE 34.4: Call analyzeDevisById with devisId (no file re-upload)
@@ -226,7 +227,7 @@ export default function Analyze() {
         metadata
       );
 
-      console.log('[PHASE 34.4] Analysis complete for devisId:', currentDevisId);
+      log('[PHASE 34.4] Analysis complete for devisId:', currentDevisId);
       setAnalysisProgress(prev => [...prev, 'Analyse terminée avec succès', 'Redirection vers le résultat...']);
 
       // Small delay for UX feedback
@@ -237,7 +238,7 @@ export default function Analyze() {
 
       // PHASE 34.4: Navigate to devis details page (analysis result)
       setTimeout(() => {
-        console.log('[PHASE 34.4] Navigating to devis page:', currentDevisId);
+        log('[PHASE 34.4] Navigating to devis page:', currentDevisId);
         navigate(`/devis/${currentDevisId}`);
       }, 500);
 

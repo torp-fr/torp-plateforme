@@ -5,6 +5,7 @@
  */
 
 import type { NormalizedDocument } from './doctrineNormalization.service';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface ClassificationResult {
   documentId: string;
@@ -55,7 +56,7 @@ export function classifyDoctrineDocument(
   enforceable: boolean
 ): ClassificationResult {
   try {
-    console.log(`[DoctrineClassification] Classifying document: ${documentId}`);
+    log(`[DoctrineClassification] Classifying document: ${documentId}`);
 
     // Determine applicability from obligations and thresholds
     const applicableSectors = normalized.applicableSectors;
@@ -112,7 +113,7 @@ export function classifyDoctrineDocument(
       applicableToAllProjects,
     };
 
-    console.log(
+    log(
       `[DoctrineClassification] Classified: ${applicableLotTypes.length} lot types, relevance: ${classification.relevanceScore}`
     );
 
