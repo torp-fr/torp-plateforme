@@ -996,11 +996,14 @@ export class KnowledgeStepRunnerService {
         }
       } else {
         // Standard embedding for normal documents
+        // PHASE 19.12: Simplified query to fetch ALL chunks (no additional filters)
         const { data: chunks, error: fetchError } = await supabase
           .from('knowledge_chunks')
-          .select('id, content')
+          .select('*')
           .eq('document_id', documentId)
           .order('chunk_index', { ascending: true });
+
+        console.log('[STEP RUNNER] 📦 EMBEDDING fetched chunks:', chunks?.length);
 
         if (fetchError || !chunks || chunks.length === 0) {
           throw new Error('No chunks found to embed');
