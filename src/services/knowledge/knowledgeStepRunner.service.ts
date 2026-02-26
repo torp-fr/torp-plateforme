@@ -221,6 +221,9 @@ export class KnowledgeStepRunnerService {
       };
     }
 
+    // PHASE 19.9: Declare result variable for unified return handling
+    let result: StepResult;
+
     try {
       // PHASE 15 FIX: Set ownership flag (lazy initialization)
       if (!(window as any).__RAG_RUNNER_OWNER__) {
@@ -234,170 +237,154 @@ export class KnowledgeStepRunnerService {
       // PHASE 17: Check for document-level lock
       if ((window as any).__RAG_DOC_LOCKS__?.[documentId]) {
         console.warn(`[UNIFIED KERNEL] 🔒 Document locked — skipping ${documentId}`);
-        return {
+        result = {
           success: false,
           error: 'Document is locked - worker skipping this doc',
           duration: Date.now() - startTime,
         };
-      }
+      } else {
+        // PHASE 18.2: REMOVED __RAG_PIPELINE_RUNNING__ global lock
+        // Keep ONLY document-level locking (PHASE 17)
+        // Allows multiple documents to be processed in parallel
 
-      // PHASE 18.2: REMOVED __RAG_PIPELINE_RUNNING__ global lock
-      // Keep ONLY document-level locking (PHASE 17)
-      // Allows multiple documents to be processed in parallel
+        // Set flag to prevent concurrent pipelines ON THIS DOCUMENT
+        (window as any).__RAG_DOC_LOCKS__ = (window as any).__RAG_DOC_LOCKS__ || {};
+        (window as any).__RAG_DOC_LOCKS__[documentId] = true;
+        console.log(`[STEP RUNNER] 🚀 Running next step for document ${documentId}`);
 
-      // Set flag to prevent concurrent pipelines ON THIS DOCUMENT
-      (window as any).__RAG_DOC_LOCKS__ = (window as any).__RAG_DOC_LOCKS__ || {};
-      (window as any).__RAG_DOC_LOCKS__[documentId] = true;
-      console.log(`[STEP RUNNER] 🚀 Running next step for document ${documentId}`);
-
-      // Get current state
-      const context = await ingestionStateMachineService.getStateContext(documentId);
-      if (!context) {
-        delete (window as any).__RAG_DOC_LOCKS__[documentId];
-        return {
-          success: false,
-          error: 'Failed to fetch document state',
-          duration: Date.now() - startTime,
-        };
-      }
-
-      // PHASE 19.1: MOVED INCREMENT HERE - only after all guards pass
-      // Prevents counter drift from failed validation attempts
-      (window as any).__RAG_ACTIVE_PIPELINES__++;
-      const activeCount = (window as any).__RAG_ACTIVE_PIPELINES__;
-      console.log(`[LOAD SAFETY] 📈 Pipeline active: ${activeCount} total (document: ${documentId})`);
-
-      const currentState = context.current_state;
-      console.log(`[STEP RUNNER] Current state: ${currentState}`);
-
-      // PHASE 19: Adaptive concurrency limit (load safety)
-      const isBigDocMode = Boolean((window as any).__RAG_BIG_DOC_MODE__);
-      const CONCURRENCY_LIMIT = 3;
-
-      if (activeCount > CONCURRENCY_LIMIT && !isBigDocMode) {
-        console.warn(`[LOAD SAFETY] 🛑 Throttling: ${activeCount} active pipelines (limit: ${CONCURRENCY_LIMIT})`);
-        return {
-          success: false,
-          error: 'Load safety throttle: concurrency limit exceeded',
-          throttled: true,
-          duration: Date.now() - startTime,
-        };
-      }
-
-      // PHASE 19: Latency-aware backoff
-      const predictor = (window as any).__RAG_LATENCY_PREDICTOR__;
-      if (predictor && predictor.predictedRisk === 'HIGH') {
-        const backoffDelay = 500 + Math.random() * 500;
-        console.warn(`[LOAD SAFETY] ⏳ Latency backoff applied: ${backoffDelay.toFixed(0)}ms (predicted risk: ${predictor.predictedRisk})`);
-        await new Promise(resolve => setTimeout(resolve, backoffDelay));
-      }
-
-      // Determine next step and run it
-      let result: StepResult;
-
-      switch (currentState) {
-        case DocumentIngestionState.PENDING:
-          // PHASE 19.6: Document in PENDING state (inserted by passive Brain)
-          // Transition to EXTRACTING to start pipeline
-          console.log(`[STEP RUNNER] 🔄 Document PENDING - claiming and starting extraction`);
-          await ingestionStateMachineService.transitionTo(
-            documentId,
-            DocumentIngestionState.EXTRACTING,
-            'extraction_starting'
-          );
-          result = {
-            success: true,
-            nextState: DocumentIngestionState.EXTRACTING,
-            duration: Date.now() - startTime,
-          };
-          break;
-
-        case DocumentIngestionState.UPLOADED:
-          console.log(`[STEP RUNNER] ℹ️ Document UPLOADED - waiting for extraction trigger`);
-          result = {
-            success: true,
-            nextState: DocumentIngestionState.UPLOADED,
-            duration: Date.now() - startTime,
-          };
-          break;
-
-        case DocumentIngestionState.EXTRACTING:
-          // PHASE 19.6: Extraction step bypass (text-first architecture)
-          // Brain already extracted text during document insert
-          // StepRunner bypasses extraction and proceeds to chunking
-          console.log('[STEP RUNNER] ⏩ Extraction bypassed (PHASE 19.6 - text already available)');
-
-          await ingestionStateMachineService.transitionTo(
-            documentId,
-            DocumentIngestionState.CHUNKING,
-            'extraction_bypassed'
-          );
-
-          result = {
-            success: true,
-            nextState: DocumentIngestionState.CHUNKING,
-            bypassed: true,
-            duration: Date.now() - startTime,
-          };
-          break;
-
-        case DocumentIngestionState.CHUNKING:
-          result = await this.runChunkingStep(documentId);
-          break;
-
-        case DocumentIngestionState.EMBEDDING:
-          result = await this.runEmbeddingStep(documentId);
-          break;
-
-        case DocumentIngestionState.FINALIZING:
-          result = await this.runFinalizingStep(documentId);
-          break;
-
-        case DocumentIngestionState.COMPLETED:
-          console.log(`[STEP RUNNER] ✅ Document already COMPLETED`);
-          result = {
-            success: true,
-            // No nextState - COMPLETED is terminal
-            duration: Date.now() - startTime,
-          };
-          break;
-
-        case DocumentIngestionState.FAILED:
-          console.log(`[STEP RUNNER] ❌ Document in FAILED state`);
+        // Get current state
+        const context = await ingestionStateMachineService.getStateContext(documentId);
+        if (!context) {
+          delete (window as any).__RAG_DOC_LOCKS__[documentId];
           result = {
             success: false,
-            error: context.error_message || 'Document processing failed',
-            // No nextState - FAILED is terminal
+            error: 'Failed to fetch document state',
             duration: Date.now() - startTime,
           };
-          break;
+        } else {
+          // PHASE 19.1: MOVED INCREMENT HERE - only after all guards pass
+          // Prevents counter drift from failed validation attempts
+          (window as any).__RAG_ACTIVE_PIPELINES__++;
+          const activeCount = (window as any).__RAG_ACTIVE_PIPELINES__;
+          console.log(`[LOAD SAFETY] 📈 Pipeline active: ${activeCount} total (document: ${documentId})`);
 
-        default:
-          result = {
-            success: false,
-            error: `Unknown state: ${currentState}`,
-            duration: Date.now() - startTime,
-          };
-          break;
+          const currentState = context.current_state;
+          console.log(`[STEP RUNNER] Current state: ${currentState}`);
+
+          // PHASE 19: Adaptive concurrency limit (load safety)
+          const isBigDocMode = Boolean((window as any).__RAG_BIG_DOC_MODE__);
+          const CONCURRENCY_LIMIT = 3;
+
+          if (activeCount > CONCURRENCY_LIMIT && !isBigDocMode) {
+            console.warn(`[LOAD SAFETY] 🛑 Throttling: ${activeCount} active pipelines (limit: ${CONCURRENCY_LIMIT})`);
+            result = {
+              success: false,
+              error: 'Load safety throttle: concurrency limit exceeded',
+              throttled: true,
+              duration: Date.now() - startTime,
+            };
+          } else {
+            // PHASE 19: Latency-aware backoff
+            const predictor = (window as any).__RAG_LATENCY_PREDICTOR__;
+            if (predictor && predictor.predictedRisk === 'HIGH') {
+              const backoffDelay = 500 + Math.random() * 500;
+              console.warn(`[LOAD SAFETY] ⏳ Latency backoff applied: ${backoffDelay.toFixed(0)}ms (predicted risk: ${predictor.predictedRisk})`);
+              await new Promise(resolve => setTimeout(resolve, backoffDelay));
+            }
+
+            // Determine next step and run it
+            switch (currentState) {
+              case DocumentIngestionState.PENDING:
+                // PHASE 19.6: Document in PENDING state (inserted by passive Brain)
+                // Transition to EXTRACTING to start pipeline
+                console.log(`[STEP RUNNER] 🔄 Document PENDING - claiming and starting extraction`);
+                await ingestionStateMachineService.transitionTo(
+                  documentId,
+                  DocumentIngestionState.EXTRACTING,
+                  'extraction_starting'
+                );
+                result = {
+                  success: true,
+                  nextState: DocumentIngestionState.EXTRACTING,
+                  duration: Date.now() - startTime,
+                };
+                break;
+
+              case DocumentIngestionState.UPLOADED:
+                console.log(`[STEP RUNNER] ℹ️ Document UPLOADED - waiting for extraction trigger`);
+                result = {
+                  success: true,
+                  nextState: DocumentIngestionState.UPLOADED,
+                  duration: Date.now() - startTime,
+                };
+                break;
+
+              case DocumentIngestionState.EXTRACTING:
+                // PHASE 19.6: Extraction step bypass (text-first architecture)
+                // Brain already extracted text during document insert
+                // StepRunner bypasses extraction and proceeds to chunking
+                console.log('[STEP RUNNER] ⏩ Extraction bypassed (PHASE 19.6 - text already available)');
+
+                await ingestionStateMachineService.transitionTo(
+                  documentId,
+                  DocumentIngestionState.CHUNKING,
+                  'extraction_bypassed'
+                );
+
+                result = {
+                  success: true,
+                  nextState: DocumentIngestionState.CHUNKING,
+                  bypassed: true,
+                  duration: Date.now() - startTime,
+                };
+                break;
+
+              case DocumentIngestionState.CHUNKING:
+                result = await this.runChunkingStep(documentId);
+                break;
+
+              case DocumentIngestionState.EMBEDDING:
+                result = await this.runEmbeddingStep(documentId);
+                break;
+
+              case DocumentIngestionState.FINALIZING:
+                result = await this.runFinalizingStep(documentId);
+                break;
+
+              case DocumentIngestionState.COMPLETED:
+                console.log(`[STEP RUNNER] ✅ Document already COMPLETED`);
+                result = {
+                  success: true,
+                  // No nextState - COMPLETED is terminal
+                  duration: Date.now() - startTime,
+                };
+                break;
+
+              case DocumentIngestionState.FAILED:
+                console.log(`[STEP RUNNER] ❌ Document in FAILED state`);
+                result = {
+                  success: false,
+                  error: context.error_message || 'Document processing failed',
+                  // No nextState - FAILED is terminal
+                  duration: Date.now() - startTime,
+                };
+                break;
+
+              default:
+                result = {
+                  success: false,
+                  error: `Unknown state: ${currentState}`,
+                  duration: Date.now() - startTime,
+                };
+                break;
+            }
+          }
+        }
       }
-
-      // PHASE 19.7: Auto-chain execution
-      // After successful transition, automatically continue to next step
-      // Uses setTimeout(..., 0) to avoid stack recursion and maintain event loop
-      if (result?.success && result?.nextState) {
-        console.log('[STEP RUNNER] 🔁 Auto-chain next step:', result.nextState);
-        setTimeout(() => {
-          KnowledgeStepRunnerService.runNextStep(documentId).catch((err) =>
-            console.warn('[STEP RUNNER] ⚠️ Auto-chain error:', err)
-          );
-        }, 0);
-      }
-
-      return result;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[STEP RUNNER] 💥 Step runner error:`, errorMsg);
-      return {
+      result = {
         success: false,
         error: errorMsg,
         duration: Date.now() - startTime,
@@ -412,6 +399,20 @@ export class KnowledgeStepRunnerService {
       (window as any).__RAG_ACTIVE_PIPELINES__--;
       console.log(`[LOAD SAFETY] 📉 Pipeline inactive: ${(window as any).__RAG_ACTIVE_PIPELINES__} remaining`);
     }
+
+    // PHASE 19.9: CRITICAL FIX - Auto-chain AFTER finally (lock is released)
+    // This code executes AFTER the finally block completes
+    // Ensures document lock is released before scheduling next step
+    if (result?.success && result?.nextState) {
+      console.log('[STEP RUNNER] 🔁 Auto-chain next step:', result.nextState);
+      setTimeout(() => {
+        KnowledgeStepRunnerService.runNextStep(documentId).catch((err) =>
+          console.warn('[STEP RUNNER] ⚠️ Auto-chain error:', err)
+        );
+      }, 0);
+    }
+
+    return result;
   }
 
   /**
