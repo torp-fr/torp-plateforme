@@ -489,16 +489,14 @@ class KnowledgeBrainService {
         });
 
       // ✅ PHASE 36.9 STEP 5: RETURN IMMEDIATELY TO UI
-      // All heavy lifting happens in background via setTimeout(..., 0)
-      console.log('[KNOWLEDGE BRAIN] 🚀 Document returned to UI - background processing started');
+      console.log('[KNOWLEDGE BRAIN] 🚀 Document returned to UI');
 
-      // ✅ PHASE 36.9 STEP 6: Schedule background processing (non-blocking)
-      // This yields control back to browser immediately
-      setTimeout(() => {
-        this.processChunksAsync(doc.id, sanitized, category, options?.region, content).catch((err) =>
-          console.warn('[KNOWLEDGE BRAIN] ⚠️ Background processing error:', err)
-        );
-      }, 0);
+      // PHASE 19.2: Brain is now PURE PASSIVE BOOTSTRAPPER
+      // No background async pipeline
+      // No document chunking
+      // No embedding generation
+      // StepRunner owns all ingestion responsibility
+      console.log('[KNOWLEDGE BRAIN] 🔒 Passive mode active - StepRunner owns ingestion (PHASE 19.2)');
 
       return doc;
     } catch (error) {
