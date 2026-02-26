@@ -7,7 +7,7 @@ import { Loader2 } from 'lucide-react';
 interface QueueItem {
   id: string;
   title: string;
-  embedding_status?: string;
+  ingestion_status?: string;
   created_at: string;
 }
 
@@ -24,8 +24,8 @@ export function EmbeddingQueuePanel() {
 
       const { data, error: dbError } = await supabase
         .from('knowledge_documents')
-        .select('id, title, embedding_status, created_at')
-        .neq('embedding_status', 'completed')
+        .select('id, title, ingestion_status, created_at')
+        .neq('ingestion_status', 'completed')
         .order('created_at', { ascending: false })
         .limit(5);
 
@@ -156,8 +156,8 @@ export function EmbeddingQueuePanel() {
                     {new Date(item.created_at).toLocaleString('fr-FR')}
                   </p>
                 </div>
-                <Badge variant="outline" className={getStatusColor(item.embedding_status)}>
-                  {getStatusLabel(item.embedding_status)}
+                <Badge variant="outline" className={getStatusColor(item.ingestion_status)}>
+                  {getStatusLabel(item.ingestion_status)}
                 </Badge>
               </div>
             ))}
