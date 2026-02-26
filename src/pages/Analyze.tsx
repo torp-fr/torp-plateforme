@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Upload, FileText, Clock, Shield, CheckCircle, Home, Zap, Droplet, Paintbrush, Download, Loader2 } from 'lucide-react';
 import { devisService } from '@/services/api/supabase/devis.service';
 import type { DevisMetadata } from '@/services/api/supabase/devis.service';
+import { env } from '@/config/env';
 
 const projectTypes = [
   { id: 'plomberie', label: 'Plomberie', icon: Droplet },
@@ -60,13 +61,14 @@ export default function Analyze() {
     const file = event.target.files?.[0];
     if (file) {
       // Validation du fichier
-      const maxSize = 10 * 1024 * 1024; // 10MB
+      const maxSize = env.upload.maxFileSize; // Use configured max size
       const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
-      
+      const maxSizeMB = (maxSize / (1024 * 1024)).toFixed(0);
+
       if (file.size > maxSize) {
         toast({
           title: 'Fichier trop volumineux',
-          description: 'Le fichier ne doit pas dépasser 10MB.',
+          description: `Le fichier ne doit pas dépasser ${maxSizeMB}MB.`,
           variant: 'destructive'
         });
         return;
@@ -343,7 +345,7 @@ export default function Analyze() {
                         ou cliquez pour sélectionner un fichier
                       </p>
                       <p className="text-sm text-muted-foreground mb-4">
-                        Formats acceptés : PDF, JPG, PNG (max 10MB)
+                        Formats acceptés : PDF, JPG, PNG (max {(env.upload.maxFileSize / (1024 * 1024)).toFixed(0)}MB)
                       </p>
                     </div>
                   </div>

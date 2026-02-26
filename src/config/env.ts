@@ -130,7 +130,7 @@ export const env: EnvConfig = {
   },
 
   upload: {
-    maxFileSize: getNumEnv('VITE_MAX_FILE_SIZE', 10485760), // 10MB default
+    maxFileSize: getNumEnv('VITE_MAX_FILE_SIZE', 100 * 1024 * 1024), // 100MB default (was 10MB)
     allowedTypes: getEnv('VITE_ALLOWED_FILE_TYPES', '.pdf,.jpg,.jpeg,.png,.doc,.docx').split(','),
   },
 
