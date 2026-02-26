@@ -449,16 +449,17 @@ class KnowledgeBrainService {
         window.dispatchEvent(new Event('RAG_STREAM_MODE_ACTIVATED'));
       }
 
-      // ✅ PHASE 36.9 STEP 4: INSERT DOCUMENT IMMEDIATELY (NON-BLOCKING)
-      // PHASE 36.10.1: Initialize with ingestion_status = 'pending'
-      console.log('[KNOWLEDGE BRAIN] 📝 Inserting document FIRST...');
+      // ✅ PHASE 36.9 STEP 4: TWO-STEP INSERT FOR LARGE DOCUMENTS
+      // PHASE INSERT STABILIZATION: Split insert into metadata + content
+      console.log('[KNOWLEDGE BRAIN] 📝 Inserting document FIRST (minimal metadata)...');
+
+      // STEP A: Insert minimal record with metadata only
       const { data: doc, error: docError } = await supabase
         .from('knowledge_documents')
         .insert({
           title: safeTitle,
           category,
           source,
-          content: preview, // ✅ Only 10KB preview
           is_active: true,
           ingestion_status: 'pending',
           ingestion_progress: 0,
@@ -473,6 +474,34 @@ class KnowledgeBrainService {
       }
 
       console.log('[KNOWLEDGE BRAIN] ✅ Document inserted:', doc.id);
+
+      // STEP B: Update with large content fields separately
+      // This prevents JSON payload size issues for large documents
+      const sanitizedBytes = new TextEncoder().encode(sanitized).length;
+      const previewBytes = new TextEncoder().encode(preview).length;
+
+      console.log('[KNOWLEDGE BRAIN] 📦 Updating content fields', {
+        documentId: doc.id,
+        sanitized_content_bytes: `${(sanitizedBytes / 1024).toFixed(2)}KB`,
+        preview_content_bytes: `${(previewBytes / 1024).toFixed(2)}KB`,
+      });
+
+      const { error: updateError } = await supabase
+        .from('knowledge_documents')
+        .update({
+          content: sanitized,
+          sanitized_content: sanitized,
+          preview_content: preview,
+        })
+        .eq('id', doc.id);
+
+      if (updateError) {
+        const errorMsg = updateError.message;
+        console.error('[KNOWLEDGE BRAIN] ❌ Content update failed:', errorMsg);
+        throw new Error(`Content update failed: ${errorMsg}`);
+      }
+
+      console.log('[KNOWLEDGE BRAIN] ✅ Content updated:', doc.id);
 
       // PHASE 39: Trigger Step Runner for progressive integration
       console.log('[STEP TRIGGER] launching for', doc.id);
