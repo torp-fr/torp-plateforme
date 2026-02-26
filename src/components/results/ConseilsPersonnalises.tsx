@@ -172,7 +172,7 @@ export function ConseilsPersonnalises({
         </CardHeader>
         <CardContent className="space-y-4">
           {conseils.map((conseil, index) => (
-            <div key={index} className="space-y-2">
+            <div key={`conseil-${index}`} className="space-y-2">
               <div className="flex items-start gap-3">
                 <conseil.icon className={`w-5 h-5 ${conseil.color} mt-0.5 flex-shrink-0`} />
                 <div className="flex-1">
@@ -202,7 +202,7 @@ export function ConseilsPersonnalises({
           </CardHeader>
           <CardContent className="space-y-3">
             {actionsUrgentes.map((action, index) => (
-              <div key={index} className="p-4 bg-destructive/5 rounded-lg border border-destructive/20">
+              <div key={`warning-${index}`} className="p-4 bg-destructive/5 rounded-lg border border-destructive/20">
                 <div className="flex items-start justify-between mb-2">
                   <h5 className="font-semibold text-foreground">{action.titre}</h5>
                   {action.delaiAction && (

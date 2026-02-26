@@ -178,7 +178,7 @@ export default function PaymentTrackingComponent({ userType, projects = [] }: Pa
                     Échéancier de paiement :
                   </h5>
                   {project.stages.map((stage, index) => (
-                    <div key={index} className={`p-3 rounded border-l-4 ${
+                    <div key={`stage-${index}`} className={`p-3 rounded border-l-4 ${
                       stage.status === 'completed' ? 'border-l-success bg-success/5' :
                       stage.status === 'pending' ? 'border-l-warning bg-warning/5' :
                       'border-l-muted bg-muted/5'

@@ -232,7 +232,7 @@ export function CarteEntreprise({ entreprise, scoreEntreprise }: CarteEntreprise
 
             <div className="flex flex-wrap gap-2">
               {entreprise.certifications.map((cert, index) => (
-                <Badge key={index} variant="secondary" className="bg-primary/10 text-primary">
+                <Badge key={`cert-${index}`} variant="secondary" className="bg-primary/10 text-primary">
                   {cert}
                 </Badge>
               ))}
@@ -249,7 +249,7 @@ export function CarteEntreprise({ entreprise, scoreEntreprise }: CarteEntreprise
             </h4>
             <ul className="space-y-1">
               {scoreEntreprise.benefices.map((benefice, index) => (
-                <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
+                <li key={`strength-${index}`} className="text-sm text-muted-foreground flex items-start gap-2">
                   <div className="w-1.5 h-1.5 bg-success rounded-full mt-1.5 flex-shrink-0"></div>
                   <span>{benefice}</span>
                 </li>
@@ -267,7 +267,7 @@ export function CarteEntreprise({ entreprise, scoreEntreprise }: CarteEntreprise
             </h4>
             <ul className="space-y-1">
               {scoreEntreprise.risques.map((risque, index) => (
-                <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
+                <li key={`weakness-${index}`} className="text-sm text-muted-foreground flex items-start gap-2">
                   <div className="w-1.5 h-1.5 bg-warning rounded-full mt-1.5 flex-shrink-0"></div>
                   <span>{risque}</span>
                 </li>

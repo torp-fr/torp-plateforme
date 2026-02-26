@@ -120,7 +120,7 @@ export default function B2CPricing() {
       {/* Grille des plans B2C */}
       <div className="grid lg:grid-cols-2 xl:grid-cols-4 gap-6">
         {b2cPlans.map((plan, index) => (
-          <Card key={index} className={`relative ${plan.popular ? 'border-primary shadow-strong' : 'border-border'}`}>
+          <Card key={`plan-${index}`} className={`relative ${plan.popular ? 'border-primary shadow-strong' : 'border-border'}`}>
             {plan.popular && (
               <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
                 <Badge className="bg-primary text-primary-foreground px-4 py-1">

@@ -63,7 +63,7 @@ export const Testimonials = () => {
         {/* Testimonials Grid */}
         <div className="grid md:grid-cols-2 gap-6 max-w-6xl mx-auto">
           {testimonials.map((testimonial, index) => (
-            <Card key={index} className="relative border-2 hover:border-primary/50 transition-colors">
+            <Card key={`testimonial-${index}`} className="relative border-2 hover:border-primary/50 transition-colors">
               <CardContent className="pt-6">
                 {/* Quote icon */}
                 <Quote className="h-8 w-8 text-primary/20 mb-4" />
@@ -71,7 +71,7 @@ export const Testimonials = () => {
                 {/* Rating */}
                 <div className="flex gap-1 mb-4">
                   {[...Array(testimonial.rating)].map((_, i) => (
-                    <span key={i} className="text-yellow-500 text-lg">★</span>
+                    <span key={`star-${i}`} className="text-yellow-500 text-lg">★</span>
                   ))}
                 </div>
 
