@@ -138,6 +138,11 @@ export function AICommandCenterStrip() {
     console.log(`[RAG COMMAND CENTER] Heartbeat interval: ${heartbeatInterval}ms (Edge: ${(window as any).RAG_EDGE_OFFLINE ? 'OFFLINE' : 'ONLINE'})`);
 
     heartbeatIntervalRef.current = setInterval(() => {
+      // PHASE 15 FIX: Stop heartbeat loop when pipeline locked
+      if ((window as any).__RAG_PIPELINE_LOCKED__) {
+        return;
+      }
+
       setState((prev) => {
         const now = Date.now();
         const lastEvent = prev.lastEventTime || Date.now();

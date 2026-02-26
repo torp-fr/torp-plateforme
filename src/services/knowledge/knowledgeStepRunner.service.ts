@@ -183,6 +183,12 @@ export class KnowledgeStepRunnerService {
   static async runNextStep(documentId: string): Promise<StepResult> {
     const startTime = Date.now();
 
+    // PHASE 15 FIX: Set ownership flag (lazy initialization)
+    if (!(window as any).__RAG_RUNNER_OWNER__) {
+      (window as any).__RAG_RUNNER_OWNER__ = true;
+      console.log('[STEP RUNNER] 🏆 Ownership claimed - runner is authoritative ingestion engine');
+    }
+
     try {
       // PHASE 14: Check for pipeline lock - hard guard against all step execution
       if ((window as any).__RAG_PIPELINE_LOCKED__) {
@@ -419,18 +425,27 @@ export class KnowledgeStepRunnerService {
         };
       }
 
-      // Fetch content to chunk
+      // PHASE 15 FIX: Fetch content with fallback to preview_content
       const { data: doc, error: fetchError } = await supabase
         .from('knowledge_documents')
-        .select('original_content')
+        .select('id, original_content, preview_content')
         .eq('id', documentId)
         .single();
 
-      if (fetchError || !doc || !doc.original_content) {
+      if (fetchError || !doc) {
+        throw new Error('Failed to fetch document');
+      }
+
+      const sourceContent =
+        doc?.original_content ??
+        doc?.preview_content ??
+        '';
+
+      if (!sourceContent) {
         throw new Error('No content available for chunking');
       }
 
-      const contentLength = doc.original_content.length;
+      const contentLength = sourceContent.length;
       const isBigDoc = contentLength > 1_000_000; // 1MB threshold
       const isStreamMode = Boolean((window as any).__RAG_STREAM_MODE__);
 
@@ -452,14 +467,14 @@ export class KnowledgeStepRunnerService {
         const STREAM_SLICE_SIZE = 60000; // 60KB slices
         const STREAM_BATCH_SIZE = 40;
 
-        for (let offset = 0; offset < doc.original_content.length; offset += STREAM_SLICE_SIZE) {
+        for (let offset = 0; offset < sourceContent.length; offset += STREAM_SLICE_SIZE) {
           // Check pipeline lock
           if ((window as any).__RAG_PIPELINE_LOCKED__) {
             console.warn(`[STEP RUNNER] 🔒 Pipeline locked during streaming - aborting`);
             throw new Error('Pipeline locked during streaming ingestion');
           }
 
-          const slice = doc.original_content.slice(offset, offset + STREAM_SLICE_SIZE);
+          const slice = sourceContent.slice(offset, offset + STREAM_SLICE_SIZE);
           const partialChunks = chunkText(slice, 1000);
 
           if (partialChunks && partialChunks.length > 0) {
@@ -491,7 +506,7 @@ export class KnowledgeStepRunnerService {
         }
       } else {
         // Standard chunking for normal documents
-        chunks = chunkText(doc.original_content, 1000);
+        chunks = chunkText(sourceContent, 1000);
       }
 
       // Insert remaining chunks from stream

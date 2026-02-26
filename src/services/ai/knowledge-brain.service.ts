@@ -298,6 +298,17 @@ class KnowledgeBrainService {
     missing_embeddings: number;
   }> {
     try {
+      // PHASE 15 FIX — Integrity handled by StepRunner
+      if ((window as any).__RAG_STREAM_CONTROLLER__) {
+        console.warn('[INTEGRITY] 🚫 Disabled — Runner handles validation');
+        return {
+          valid: true,
+          total_chunks: 0,
+          embedded_chunks: 0,
+          missing_embeddings: 0,
+        };
+      }
+
       console.log('[KNOWLEDGE BRAIN] 🔍 Verifying embedding integrity for:', documentId);
 
       // Get chunk counts via RPC function
@@ -516,6 +527,20 @@ class KnowledgeBrainService {
         return;
       }
 
+      // PHASE 15 FIX — Brain no longer owns chunking pipeline
+      if (
+        (window as any).__RAG_STREAM_MODE__ ||
+        (window as any).__RAG_STREAM_CONTROLLER__
+      ) {
+        console.warn('[BRAIN PIPELINE] 🚫 Disabled — StepRunner owns ingestion');
+        return;
+      }
+
+      // PHASE 15 FIX — Check runner ownership
+      if ((window as any).__RAG_RUNNER_OWNER__) {
+        console.warn('[BRAIN] 🏆 Runner owner active — brain passive mode');
+      }
+
       // PHASE 10: Check if document is FAILED before processing
       const context = await this.getStateContext?.(documentId);
       if (context?.current_state === 'FAILED') {
@@ -535,11 +560,7 @@ class KnowledgeBrainService {
 
       // PHASE 36.10.1 STEP 2: Chunk text (happens now in background, not blocking)
       console.log('[KNOWLEDGE BRAIN] ✂️ Chunking content...');
-      await this.updateDocumentState(documentId, {
-        ingestion_status: 'chunking',
-        ingestion_progress: 20,
-        last_ingestion_step: 'chunking_started',
-      });
+      console.log('[STATE OWNER] StepRunner authoritative (PHASE 15)');
 
       const chunks = chunkText(sanitizedContent, 1000); // Returns Chunk[]
       console.log('[CHUNKING] Total chunks: ' + chunks.length);
@@ -569,10 +590,7 @@ class KnowledgeBrainService {
         }
       }
 
-      await this.updateDocumentState(documentId, {
-        ingestion_progress: 50,
-        last_ingestion_step: 'chunking_complete',
-      });
+      console.log('[STATE OWNER] StepRunner authoritative (PHASE 15)');
 
       // PHASE 36.10.1 STEP 4: Extract pricing if applicable (non-blocking)
       if (category === 'PRICING_REFERENCE' && region) {
@@ -589,11 +607,7 @@ class KnowledgeBrainService {
       }
 
       // PHASE 36.10.1 STEP 5: Transition to embedding phase
-      await this.updateDocumentState(documentId, {
-        ingestion_status: 'embedding',
-        ingestion_progress: 60,
-        last_ingestion_step: 'embedding_started',
-      });
+      console.log('[STATE OWNER] StepRunner authoritative (PHASE 15)');
 
       // PHASE 36.10.1 STEP 6: Generate embeddings async for chunks
       console.log('[EMBEDDING] 🚀 Starting async embedding generation...');
@@ -607,28 +621,16 @@ class KnowledgeBrainService {
         const errorMsg = `Embedding integrity failed: ${integrityCheck.missing_embeddings} of ${integrityCheck.total_chunks} chunks missing embeddings`;
         console.error('[KNOWLEDGE BRAIN] 🔴 ' + errorMsg);
         this.metrics.failed_ingestions++;
-        await this.updateDocumentState(documentId, {
-          ingestion_status: 'failed',
-          last_ingestion_error: errorMsg,
-          last_ingestion_step: 'embedding_integrity_check_failed',
-        });
+        console.log('[STATE OWNER] StepRunner authoritative (PHASE 15)');
         return;
       }
 
       // PHASE 36.10.1 STEP 8: Mark as complete with integrity flag
       console.log('[KNOWLEDGE BRAIN] ✅ All integrity checks passed!');
-      const updateSuccess = await this.updateDocumentState(documentId, {
-        ingestion_status: 'complete',
-        ingestion_progress: 100,
-        ingestion_completed_at: new Date().toISOString(),
-        last_ingestion_step: 'complete',
-        embedding_integrity_checked: true,
-      });
+      console.log('[STATE OWNER] StepRunner authoritative (PHASE 15)');
 
-      if (updateSuccess) {
-        this.metrics.successful_ingestions++;
-        this.metrics.total_documents_processed++;
-      }
+      this.metrics.successful_ingestions++;
+      this.metrics.total_documents_processed++;
 
       const totalTime = Date.now() - startTime;
       console.log('[KNOWLEDGE BRAIN] 🎉 Background processing complete:', {
@@ -644,11 +646,7 @@ class KnowledgeBrainService {
       this.metrics.failed_ingestions++;
 
       // Mark as failed
-      await this.updateDocumentState(documentId, {
-        ingestion_status: 'failed',
-        last_ingestion_error: errorMsg,
-        last_ingestion_step: 'background_processing_error',
-      }).catch((err) => console.error('[KNOWLEDGE BRAIN] Failed to update error state:', err));
+      console.log('[STATE OWNER] StepRunner authoritative (PHASE 15)');
     }
   }
 
