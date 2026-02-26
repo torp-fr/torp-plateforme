@@ -782,35 +782,6 @@ class KnowledgeBrainService {
   }
   async generateEmbedding(content: string): Promise<number[] | null> {
     try {
-      // PHASE 14 FIX: Real edge healthcheck - stop retry storm when edge unreachable
-      if (!(window as any).__RAG_EDGE_HEALTHCHECK__) {
-        (window as any).__RAG_EDGE_HEALTHCHECK__ = async () => {
-          try {
-            const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://your-project.supabase.co';
-            const res = await fetch(`${SUPABASE_URL}/functions/v1/generate-embedding`, {
-              method: 'OPTIONS',
-              headers: { 'Content-Length': '0' },
-            });
-            const online = res.ok;
-            (window as any).RAG_EDGE_OFFLINE = !online;
-            window.dispatchEvent(new Event('RAG_EDGE_STATUS_UPDATED'));
-            return online;
-          } catch {
-            (window as any).RAG_EDGE_OFFLINE = true;
-            window.dispatchEvent(new Event('RAG_EDGE_STATUS_UPDATED'));
-            return false;
-          }
-        };
-      }
-
-      const edgeOnline = await (window as any).__RAG_EDGE_HEALTHCHECK__?.();
-      if (!edgeOnline) {
-        console.warn('[EMBEDDING] 🚫 Edge unreachable — pausing embedding');
-        (window as any).__RAG_EMBEDDING_PAUSED__ = true;
-        window.dispatchEvent(new Event('RAG_EMBEDDING_PAUSED'));
-        return null;
-      }
-
       console.log('[KNOWLEDGE BRAIN] 🔄 Embedding generation (via orchestrator)');
 
       // PHASE 36.12: Use AI Orchestrator for centralized embedding with retry/fallback
