@@ -22,6 +22,7 @@ export default defineConfig(({ mode }) => ({
   build: {
     // Désactivation du code-splitting pour éviter les erreurs React sur Vercel
     // Un bundle unique est plus gros mais garantit le bon ordre de chargement
+    outDir: "dist",
     chunkSizeWarningLimit: 5000,
   },
   base: '/',
