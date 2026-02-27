@@ -7,6 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminService, type AdminUser } from '@/services/api/supabase/admin.service';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -18,6 +19,7 @@ import {
   Check,
   X,
   Edit2,
+  AlertCircle,
 } from 'lucide-react';
 
 export function AdminUsersPage() {
