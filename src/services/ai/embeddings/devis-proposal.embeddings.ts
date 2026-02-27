@@ -2,7 +2,20 @@
  * Devis Proposal Vectorization Service
  * Vectorizes the proposal (devis) content to match demand (CCF) format
  * Creates a common vector format for comparative analysis
+ *
+ * PHASE 36.12: Type safety - uses strict domain interfaces from devis-proposal.types.ts
  */
+
+import type {
+  ExtractedDevisData,
+  PosteData,
+  PricingData,
+  TimelineData,
+  EntrepriseData,
+  TravauxData,
+  isExtractedDevisData,
+  isPosteDataArray,
+} from '@/types/devis-proposal.types';
 
 export interface DevisProposalVector {
   // Work type vectorization (matches CCF typeEmbedding)
@@ -114,8 +127,14 @@ export interface ServiceVector {
 export class DevisProposalEmbeddingsService {
   /**
    * Vectorize devis extracted data
+   * @param extractedData - Validated devis extraction from OCR/parsing
+   * @throws Error if extractedData does not match expected structure
    */
-  static vectorizeDevisProposal(extractedData: Record<string, unknown>): DevisProposalVector {
+  static vectorizeDevisProposal(extractedData: ExtractedDevisData): DevisProposalVector {
+    if (!isExtractedDevisData(extractedData)) {
+      throw new Error('Invalid extractedData structure');
+    }
+
     return {
       typeVecteur: this.vectorizeWorkType(extractedData),
       prixVecteur: this.vectorizePrix(extractedData),
@@ -127,16 +146,19 @@ export class DevisProposalEmbeddingsService {
     };
   }
 
-  private static vectorizeWorkType(data: Record<string, unknown>): string[] {
+  private static vectorizeWorkType(data: ExtractedDevisData): string[] {
     const keywords: string[] = [];
 
-    if (data.travaux?.type) {
-      keywords.push(data.travaux.type.toLowerCase());
+    const travaux = data.travaux;
+    if (!travaux) return keywords;
+
+    if (travaux.type) {
+      keywords.push(travaux.type.toLowerCase());
     }
 
-    if (data.travaux?.description) {
+    if (travaux.description) {
       // Extract key terms from description
-      const desc = data.travaux.description.toLowerCase();
+      const desc = travaux.description.toLowerCase();
       const terms = [
         'plomberie', 'electricite', 'peinture', 'renovation',
         'cuisine', 'salle de bain', 'toiture', 'facade',
@@ -147,9 +169,9 @@ export class DevisProposalEmbeddingsService {
       });
     }
 
-    if (data.travaux?.postes && Array.isArray(data.travaux.postes)) {
-      data.travaux.postes.forEach((poste: Record<string, unknown>) => {
-        const designation = poste.designation?.toLowerCase() || '';
+    if (travaux.postes && isPosteDataArray(travaux.postes)) {
+      travaux.postes.forEach((poste: PosteData) => {
+        const designation = poste.designation.toLowerCase();
         if (designation.length > 0) keywords.push(designation);
       });
     }
@@ -157,9 +179,10 @@ export class DevisProposalEmbeddingsService {
     return [...new Set(keywords)]; // Remove duplicates
   }
 
-  private static vectorizePrix(data: Record<string, unknown>): PrixVector {
-    const montantTotal = data.devis?.montantTotal || 0;
-    const montantHT = data.devis?.montantHT || montantTotal;
+  private static vectorizePrix(data: ExtractedDevisData): PrixVector {
+    const devis = data.devis;
+    const montantTotal = devis?.montantTotal ?? 0;
+    const montantHT = devis?.montantHT ?? montantTotal;
     const tva = montantTotal - montantHT;
 
     const postes = this.vectorizePostes(data.travaux?.postes);
@@ -174,24 +197,24 @@ export class DevisProposalEmbeddingsService {
     };
   }
 
-  private static vectorizePostes(postes?: Array<Record<string, unknown>>): PosteVector[] {
-    if (!postes) return [];
+  private static vectorizePostes(postes?: PosteData[]): PosteVector[] {
+    if (!postes || !isPosteDataArray(postes)) return [];
 
     return postes.map(poste => ({
-      designation: poste.designation || 'Sans désignation',
+      designation: poste.designation,
       quantite: poste.quantite,
       unite: poste.unite,
       prixUnitaire: poste.prixUnitaire,
-      prixTotal: poste.prixTotal || 0,
+      prixTotal: poste.prixTotal ?? 0,
       detailLevel: this.analyzeDetailLevel(poste),
     }));
   }
 
-  private static analyzeDetailLevel(poste: Record<string, unknown>): 'tres-detaille' | 'detaille' | 'global' {
+  private static analyzeDetailLevel(poste: PosteData): 'tres-detaille' | 'detaille' | 'global' {
     const hasQuantity = poste.quantite !== null && poste.quantite !== undefined;
     const hasUnit = poste.unite && poste.unite.length > 0;
     const hasUnitPrice = poste.prixUnitaire !== null && poste.prixUnitaire !== undefined;
-    const descLength = (poste.designation || '').length;
+    const descLength = poste.designation.length;
 
     if (hasQuantity && hasUnit && hasUnitPrice && descLength > 30) {
       return 'tres-detaille';
@@ -243,9 +266,10 @@ export class DevisProposalEmbeddingsService {
     return 'flou';
   }
 
-  private static vectorizeDelais(data: Record<string, unknown>): DelaisVector {
-    const debut = data.delais?.debut;
-    const fin = data.delais?.fin;
+  private static vectorizeDelais(data: ExtractedDevisData): DelaisVector {
+    const delais = data.delais;
+    const debut = delais?.debut;
+    const fin = delais?.fin;
 
     let dureeEstimeeJours: number | undefined;
     if (debut && fin) {
@@ -258,34 +282,48 @@ export class DevisProposalEmbeddingsService {
       dateDebut: debut,
       dateFin: fin,
       dureeEstimeeJours,
-      planningDetaille: !!data.delais?.planning_detaille,
-      phases: data.delais?.phases || [],
-      jalons: data.delais?.jalons || [],
+      planningDetaille: delais?.planning_detaille ?? false,
+      phases: delais?.phases ?? [],
+      jalons: delais?.jalons ?? [],
     };
   }
 
-  private static vectorizeEntreprise(data: Record<string, unknown>): EntrepriseVector {
-    const entreprise = data.entreprise || {};
+  private static vectorizeEntreprise(data: ExtractedDevisData): EntrepriseVector {
+    const entreprise = data.entreprise;
+    if (!entreprise) {
+      return {
+        nom: 'Inconnue',
+        certifications: [],
+        rge: false,
+        assurances: {
+          decennale: false,
+          rcPro: false,
+        },
+        reputation: 'douteuse',
+        scoreConformite: 0,
+      };
+    }
 
+    const certifications = entreprise.certifications ?? [];
     return {
-      nom: entreprise.nom || 'Inconnue',
+      nom: entreprise.nom,
       siret: entreprise.siret,
-      certifications: entreprise.certifications || [],
-      rge: (entreprise.certifications || []).some((cert: string) =>
-        cert.toLowerCase().includes('rge')
-      ),
+      certifications,
+      rge: certifications.some(cert => cert.toLowerCase().includes('rge')),
       assurances: {
-        decennale: entreprise.assurances?.decennale || false,
-        rcPro: entreprise.assurances?.rcPro || false,
+        decennale: entreprise.assurances?.decennale ?? false,
+        rcPro: entreprise.assurances?.rcPro ?? false,
       },
       reputation: this.assessReputation(entreprise),
       scoreConformite: this.calculateConformiteScore(entreprise),
     };
   }
 
-  private static assessReputation(entreprise: Record<string, unknown>): 'verifiee' | 'probable' | 'inconnue' | 'douteuse' {
+  private static assessReputation(
+    entreprise: EntrepriseData
+  ): 'verifiee' | 'probable' | 'inconnue' | 'douteuse' {
     const hasCompleteInfo = entreprise.nom && entreprise.siret && entreprise.adresse;
-    const hasCertifications = (entreprise.certifications || []).length > 0;
+    const hasCertifications = (entreprise.certifications ?? []).length > 0;
     const hasAssurances = entreprise.assurances?.decennale || entreprise.assurances?.rcPro;
 
     if (hasCompleteInfo && hasCertifications && hasAssurances) return 'verifiee';
@@ -294,7 +332,7 @@ export class DevisProposalEmbeddingsService {
     return 'douteuse';
   }
 
-  private static calculateConformiteScore(entreprise: Record<string, unknown>): number {
+  private static calculateConformiteScore(entreprise: EntrepriseData): number {
     let score = 0;
 
     if (entreprise.nom) score += 15;
@@ -302,15 +340,15 @@ export class DevisProposalEmbeddingsService {
     if (entreprise.adresse) score += 15;
     if (entreprise.telephone) score += 10;
     if (entreprise.email) score += 10;
-    if (entreprise.certifications?.length) score += 20;
+    if ((entreprise.certifications ?? []).length > 0) score += 20;
     if (entreprise.assurances?.decennale) score += 20;
     if (entreprise.assurances?.rcPro) score += 15;
 
     return Math.min(score, 100);
   }
 
-  private static vectorizePerimeter(data: Record<string, unknown>): PerimeterVector {
-    const description = data.travaux?.description || '';
+  private static vectorizePerimeter(data: ExtractedDevisData): PerimeterVector {
+    const description = data.travaux?.description ?? '';
 
     return {
       description,
@@ -365,9 +403,8 @@ export class DevisProposalEmbeddingsService {
     return 'clair';
   }
 
-  private static vectorizeQualite(data: Record<string, unknown>): QualiteVector {
-    const description = (data.travaux?.description || '').toLowerCase();
-    const entreprise = data.entreprise || {};
+  private static vectorizeQualite(data: ExtractedDevisData): QualiteVector {
+    const description = (data.travaux?.description ?? '').toLowerCase();
 
     return {
       normes: this.extractNormes(description),
@@ -408,8 +445,8 @@ export class DevisProposalEmbeddingsService {
     return 'standard';
   }
 
-  private static extractGaranties(data: Record<string, unknown>): { duree?: string; couverture: string } {
-    const description = data.travaux?.description || '';
+  private static extractGaranties(data: ExtractedDevisData): { duree?: string; couverture: string } {
+    const description = data.travaux?.description ?? '';
 
     const dureeMatch = description.match(/(\d+)\s*(ans?|mois)/i);
     const duree = dureeMatch ? dureeMatch[0] : undefined;
@@ -439,36 +476,39 @@ export class DevisProposalEmbeddingsService {
     return count;
   }
 
-  private static hasDetailedSpecs(postes?: Array<Record<string, unknown>>): boolean {
-    if (!postes || postes.length === 0) return false;
+  private static hasDetailedSpecs(postes?: PosteData[]): boolean {
+    if (!postes || !isPosteDataArray(postes) || postes.length === 0) return false;
 
-    const detailedCount = postes.filter((p: Record<string, unknown>) =>
-      (p.designation && p.designation.length > 30) ||
+    const detailedCount = postes.filter((p: PosteData) =>
+      (p.designation.length > 30) ||
       (p.quantite !== null && p.quantite !== undefined)
     ).length;
 
     return detailedCount >= postes.length / 2;
   }
 
-  private static vectorizeService(data: Record<string, unknown>): ServiceVector {
-    const entreprise = data.entreprise || {};
-    const description = (data.travaux?.description || '').toLowerCase();
+  private static vectorizeService(data: ExtractedDevisData): ServiceVector {
+    const entreprise = data.entreprise;
+    const description = (data.travaux?.description ?? '').toLowerCase();
 
     return {
       responsivenessPredite: this.estimateResponsiveness(entreprise, description),
       serviceApresVente: description.includes('sav') || description.includes('service apres-vente'),
       contact: {
-        telephone: !!entreprise.telephone,
-        email: !!entreprise.email,
+        telephone: !!entreprise?.telephone,
+        email: !!entreprise?.email,
         representant: description.includes('representant') || description.includes('commercial'),
       },
       paiementFlexibilite: this.assessPaymentFlexibility(description),
     };
   }
 
-  private static estimateResponsiveness(entreprise: Record<string, unknown>, description: string): 'rapide' | 'normal' | 'variable' | 'lent' {
-    const hasMultipleContacts = (!!entreprise.telephone && !!entreprise.email) ||
-                                !!entreprise.representant;
+  private static estimateResponsiveness(
+    entreprise: EntrepriseData | undefined,
+    description: string
+  ): 'rapide' | 'normal' | 'variable' | 'lent' {
+    const hasMultipleContacts = entreprise && ((!!entreprise.telephone && !!entreprise.email) ||
+                                !!entreprise.representant);
     const hasUrgencyTerms = description.includes('urgent') || description.includes('express') ||
                            description.includes('rapide');
 
@@ -491,7 +531,7 @@ export class DevisProposalEmbeddingsService {
    * Compare demand (CCF) and proposal (devis) vectorization
    */
   static compareVectors(
-    demandVecteur: Record<string, unknown>, // ProjectContextEmbeddings
+    demandVecteur: ExtractedDevisData,
     proposalVecteur: DevisProposalVector
   ): ComparisonResult {
     return {
@@ -501,7 +541,7 @@ export class DevisProposalEmbeddingsService {
     };
   }
 
-  private static calculateAlignment(demand: Record<string, unknown>, proposal: DevisProposalVector): number {
+  private static calculateAlignment(demand: ExtractedDevisData, proposal: DevisProposalVector): number {
     let score = 100;
 
     // Type alignment
@@ -527,18 +567,18 @@ export class DevisProposalEmbeddingsService {
     return Math.max(0, Math.min(100, score));
   }
 
-  private static analyzeGaps(demand: Record<string, unknown>, proposal: DevisProposalVector): GapItem[] {
+  private static analyzeGaps(demand: ExtractedDevisData, proposal: DevisProposalVector): GapItem[] {
     const gaps: GapItem[] = [];
 
     // Budget gap
     if (demand.budgetRange) {
-      if (proposal.prixVecteur.montantTotal > (demand.budgetRange.max || Infinity)) {
+      if (proposal.prixVecteur.montantTotal > (demand.budgetRange.max ?? Infinity)) {
         gaps.push({
           category: 'prix',
           severity: 'high',
-          description: `Devis dépasse le budget de ${proposal.prixVecteur.montantTotal - (demand.budgetRange.max || 0)}€`,
+          description: `Devis dépasse le budget de ${proposal.prixVecteur.montantTotal - (demand.budgetRange.max ?? 0)}€`,
         });
-      } else if (proposal.prixVecteur.montantTotal < (demand.budgetRange.min || 0)) {
+      } else if (proposal.prixVecteur.montantTotal < (demand.budgetRange.min ?? 0)) {
         gaps.push({
           category: 'prix',
           severity: 'medium',
@@ -577,7 +617,7 @@ export class DevisProposalEmbeddingsService {
     return gaps;
   }
 
-  private static generateRecommendations(demand: Record<string, unknown>, proposal: DevisProposalVector): string[] {
+  private static generateRecommendations(demand: ExtractedDevisData, proposal: DevisProposalVector): string[] {
     const recommendations: string[] = [];
 
     // Price recommendations
