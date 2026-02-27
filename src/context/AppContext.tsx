@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { supabase } from '@/lib/supabase';
 import { authService } from '@/services/api/supabase/auth.service';
 import { devisService } from '@/services/api/supabase/devis.service';
-import { log, warn, error, time, timeEnd } from '@/lib/logger';
+import { log, error } from '@/lib/logger';
 
 // User types - Particulier (B2C), Professionnel (B2B), Admin
 export type UserType = 'B2C' | 'B2B' | 'admin' | 'super_admin';
@@ -102,7 +102,6 @@ interface AppContextType {
   projects: Project[]; // Analyses de devis
   currentProject: Project | null;
   isAnalyzing: boolean;
-  isLoading: boolean; // État de chargement de l'authentification
   isAuthenticated: boolean; // Session exists (auth token valid)
   setUser: (user: User | null) => void;
   setUserType: (type: UserType) => void;
@@ -122,107 +121,48 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [projects, setProjects] = useState<Project[]>([]); // Analyses de devis
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isLoading, setIsLoading] = useState(true); // ONLY represents session bootstrap timing
   const [isAuthenticated, setIsAuthenticated] = useState(false); // Session exists (auth token valid)
 
   // Compute isAdmin from user
   const isAdmin = user?.isAdmin === true;
 
   // ════════════════════════════════════════════════════════════════════════════
-  // CRITICAL BOOTSTRAP - TIMEOUT-PROTECTED SESSION ONLY
+  // AUTH STATE MANAGEMENT - SUPABASE LISTENER ONLY
   // ════════════════════════════════════════════════════════════════════════════
-  // GUARANTEE: UI ALWAYS unlocks after 300ms, even if Supabase hangs
-  // Pattern: Promise.race([getSession(), 300ms timeout])
-  // Rules:
-  // 1. No infinite spinner possible - timeout always wins
-  // 2. Profile loads in separate effect (non-blocking)
-  // 3. setIsLoading(false) ALWAYS executes in finally block
-  // 4. No other setIsLoading(true) in bootstrap
+  // App renders immediately. Supabase onAuthStateChange controls auth state.
+  // NO blocking bootstrap. NO getSession on mount. NO async initialization.
   // ════════════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    let cancelled = false;
-
-    async function bootstrap() {
-      try {
-        // CRITICAL: Timeout-protected session read (300ms max)
-        // Even if Supabase hangs, UI must unlock after 300ms
-        const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise(resolve =>
-          setTimeout(() => resolve({ data: { session: null } }), 300)
-        );
-
-        time('SESSION_BOOTSTRAP');
-        const result = await Promise.race([sessionPromise, timeoutPromise]);
-        timeEnd('SESSION_BOOTSTRAP');
-
-        if (cancelled) return;
-
-        const session = result?.data?.session ?? null;
-
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
         if (session) {
-          log('[Bootstrap] ✓ Session found:', session.user?.email);
+          log('[Auth] Session detected:', session.user?.email);
           setIsAuthenticated(true);
-          // Set minimal user - profile loads in background
           setUser({
             id: session.user.id,
             email: session.user.email || 'unknown',
-            name: '', // Will be set from profile
-            type: 'B2C', // Will be set from profile
+            name: '',
+            type: 'B2C',
+            // isAdmin undefined until profile loads
           });
         } else {
-          log('[Bootstrap] ℹ️ No active session');
+          log('[Auth] No session');
           setIsAuthenticated(false);
-        }
-      } catch (err) {
-        if (cancelled) return;
-        error('[Bootstrap] Session check failed:', err);
-        setIsAuthenticated(false);
-      } finally {
-        if (!cancelled) {
-          // CRITICAL: ALWAYS unlock UI, even on Supabase timeout/error
-          setIsLoading(false);
+          setUser(null);
         }
       }
-    }
+    );
 
-    bootstrap();
-
-    // Setup auth state change listener
-    // This triggers on login/logout/refresh (NOT during bootstrap)
-    const { data } = authService.onAuthStateChange((sessionUser) => {
-      if (cancelled) return;
-
-      if (sessionUser) {
-        log('[Auth Event] User signed in:', sessionUser.email);
-        setIsAuthenticated(true);
-        setUser(sessionUser);
-        setUserType(sessionUser.type);
-      } else {
-        log('[Auth Event] User signed out');
-        setIsAuthenticated(false);
-        setUser(null);
-        setUserType('B2C');
-        setProjects([]);
-        setCurrentProject(null);
-      }
-    });
-
-    // Cleanup
     return () => {
-      cancelled = true;
-      try {
-        data?.subscription?.unsubscribe();
-      } catch (err) {
-        console.error('[Bootstrap] Unsubscribe error:', err);
-      }
+      listener?.subscription?.unsubscribe();
     };
   }, []);
 
   // ════════════════════════════════════════════════════════════════════════════
-  // PHASE 2: BACKGROUND PROFILE LOADING (non-blocking, separate effect)
+  // BACKGROUND PROFILE LOADING - NON-BLOCKING
   // ════════════════════════════════════════════════════════════════════════════
-  // This effect runs AFTER bootstrap completes and UI renders.
-  // It fetches profile data asynchronously without touching isLoading.
+  // Profile loads after user is set. Does NOT modify global state.
+  // Does NOT block UI. Runs in background.
   // ════════════════════════════════════════════════════════════════════════════
   useEffect(() => {
     // Only fetch profile if authenticated
@@ -240,13 +180,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         if (userProfile) {
           log('[Profile] ✓ Loaded:', userProfile.email);
-          setUser(userProfile);
+          // Defensive logging for role comparison
+          console.log('[Profile] Role received:', userProfile.role);
+
+          // Merge profile data, determine admin role (case-insensitive)
+          const isAdmin = userProfile.role?.toLowerCase() === 'admin';
+          console.log('[Profile] isAdmin calculated:', isAdmin);
+
+          setUser(prev => ({
+            ...prev,
+            ...userProfile,
+            isAdmin: isAdmin, // Always set explicitly to override any userProfile.isAdmin
+          }));
           setUserType(userProfile.type);
         }
       } catch (err) {
         if (!isMounted) return;
-        log('[Profile] ⚠️ Load failed:', err instanceof Error ? err.message : String(err));
-        // Continue even if profile fails - user is still authenticated
+        log('[Profile] Load failed, continuing with minimal profile');
+        // Mark role as determined (false) even on error
+        setUser(prev => prev ? { ...prev, isAdmin: false } : null);
       }
     };
 
@@ -352,7 +304,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       projects,
       currentProject,
       isAnalyzing,
-      isLoading,
       isAuthenticated,
       setUser,
       setUserType,

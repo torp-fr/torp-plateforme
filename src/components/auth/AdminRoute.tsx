@@ -1,7 +1,7 @@
 /**
  * AdminRoute - Protects routes for admin users only
- * Uses user.isAdmin from AppContext (loaded during auth bootstrap)
- * NO separate role fetching - prevents infinite loading on tab navigation
+ * Relies on Supabase auth listener for session state
+ * Profile data (isAdmin) loads in background
  */
 
 import React from 'react';
@@ -14,16 +14,17 @@ interface AdminRouteProps {
 }
 
 export function AdminRoute({ children }: AdminRouteProps) {
-  const { user, isLoading } = useApp();
-
-  // During bootstrap, return null (loading spinner shown in App root)
-  if (isLoading) {
-    return null;
-  }
+  const { user } = useApp();
 
   // Not authenticated
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Wait silently until role is determined from profile
+  // isAdmin is undefined while profile loads, false if not admin, true if admin
+  if (user.isAdmin === undefined) {
+    return null;
   }
 
   // Not admin (role from Supabase profiles, loaded in background)
