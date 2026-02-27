@@ -9,7 +9,7 @@
  */
 
 import { ingestionStateMachineService } from '@/services/knowledge/ingestionStateMachine.service';
-import { KnowledgeStepRunnerService } from '@/services/knowledge/knowledgeStepRunner.service';
+import { runKnowledgeIngestion } from '@/services/knowledge/knowledgeStepRunner.service';
 import { DocumentIngestionState } from '@/services/knowledge/ingestionStates';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
@@ -39,43 +39,21 @@ export async function triggerStepRunner(
   try {
     log(`[STEP TRIGGER] 🚀 Triggering step runner for document ${documentId}`);
 
-    // ÉTAPE 2 - SAFETY GUARD: Check if document can proceed
-    const canProceed = await KnowledgeStepRunnerService.canProceed(documentId);
-    if (!canProceed) {
-      return {
-        success: false,
-        canProceed: false,
-        message: 'Document cannot proceed to next step',
-        error: 'Document is in terminal state or has issues',
-      };
-    }
-
-    log(`[STEP TRIGGER] ✅ canProceed=${canProceed} - proceeding to trigger`);
-
-    // Transition to EXTRACTING state
-    await ingestionStateMachineService.transitionTo(
-      documentId,
-      DocumentIngestionState.EXTRACTING,
-      'extraction_initiated_by_trigger'
-    );
-
-    log(`[STEP TRIGGER] 📝 State transitioned to EXTRACTING`);
-
-    // ÉTAPE 1 - FIRE-AND-SAFE: Launch runNextStep non-blocking
-    // This runs in the background without awaiting
-    // Existing pipeline continues immediately
-    KnowledgeStepRunnerService.runNextStep(documentId)
+    // PHASE 40: Use new DB-driven API
+    // Launch runKnowledgeIngestion non-blocking
+    // This automatically handles: claim, timeout check, state validation, all steps
+    runKnowledgeIngestion(documentId)
       .then(() => {
-        log(`[STEP TRIGGER] ✅ Step runner completed for ${documentId}`);
+        log(`[STEP TRIGGER] ✅ Knowledge ingestion completed for ${documentId}`);
       })
-      .catch((error) => {
-        console.error(`[STEP TRIGGER] ❌ Step runner failed for ${documentId}:`, error);
+      .catch((err: any) => {
+        console.error(`[STEP TRIGGER] ❌ Knowledge ingestion failed for ${documentId}:`, err);
       });
 
     return {
       success: true,
       canProceed: true,
-      message: 'Step runner triggered successfully',
+      message: 'Knowledge ingestion triggered successfully',
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
