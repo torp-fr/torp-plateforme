@@ -993,18 +993,6 @@ export function UploadKBTab() {
   return (
     <div className="space-y-6">
       <KnowledgeBaseUpload />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Documents Récemment Uploadés</CardTitle>
-          <CardDescription>Les derniers documents métier ingérés</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground text-sm">
-            Les documents apparaîtront ici après upload.
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }

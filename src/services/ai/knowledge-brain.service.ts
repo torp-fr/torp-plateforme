@@ -434,8 +434,7 @@ class KnowledgeBrainService {
       const isStreamMode = sanitized.length > STREAM_THRESHOLD;
       if (isStreamMode) {
         warn(`[STREAM MODE] 🚀 Activating streaming ingestion (${(sanitized.length / 1024 / 1024).toFixed(2)}MB)`);
-        (window as any).__RAG_STREAM_MODE__ = true;
-        window.dispatchEvent(new Event('RAG_STREAM_MODE_ACTIVATED'));
+        // PHASE 36.13: Remove global window flags - each document independent
       }
 
       // ✅ PHASE 36.9 STEP 4: TWO-STEP INSERT FOR LARGE DOCUMENTS
@@ -573,25 +572,9 @@ class KnowledgeBrainService {
     originalContent: string
   ): Promise<void> {
     try {
-      // PHASE 10: HARD LOCK GUARD - Stop immediately if pipeline locked
-      if ((window as any).__RAG_PIPELINE_LOCKED__) {
-        warn('[KNOWLEDGE BRAIN] 🔒 Pipeline locked - abort async processing');
-        return;
-      }
-
-      // PHASE 15 FIX — Brain no longer owns chunking pipeline
-      if (
-        (window as any).__RAG_STREAM_MODE__ ||
-        (window as any).__RAG_STREAM_CONTROLLER__
-      ) {
-        warn('[BRAIN PIPELINE] 🚫 Disabled — StepRunner owns ingestion');
-        return;
-      }
-
-      // PHASE 15 FIX — Check runner ownership
-      if ((window as any).__RAG_RUNNER_OWNER__) {
-        warn('[BRAIN] 🏆 Runner owner active — brain passive mode');
-      }
+      // PHASE 36.13: MULTI-UPLOAD FIX - Remove global locks
+      // Each document process independently, no global blocking
+      // Document-level claim prevents double-processing, not pipeline-wide lock
 
       // PHASE 10: Check if document is FAILED before processing
       const context = await this.getStateContext?.(documentId);
@@ -711,16 +694,7 @@ class KnowledgeBrainService {
    */
   private async generateChunkEmbeddingsAsync(document_id: string, chunks: any[]): Promise<void> {
     try {
-      // PHASE 14 FIX: Disable legacy embedding engine under new RAG OPS pipeline
-      if (
-        (window as any).__RAG_STREAM_MODE__ ||
-        (window as any).__RAG_PIPELINE_LOCKED__ ||
-        (window as any).__RAG_STREAM_CONTROLLER__
-      ) {
-        warn('[LEGACY EMBEDDING] 🚫 Disabled — streaming engine is authoritative');
-        return;
-      }
-
+      // PHASE 36.13: Remove global pipeline locks - each document processes independently
       log('[EMBEDDING] 🔢 Starting chunk embedding generation async...', {
         document_id,
         total_chunks: chunks.length,
@@ -838,11 +812,25 @@ class KnowledgeBrainService {
     try {
       log('[KNOWLEDGE BRAIN] 🔄 Embedding generation (via orchestrator)');
 
+      // PHASE 40: Guard check - verify aiOrchestrator has generateEmbedding function
+      if (typeof aiOrchestrator.generateEmbedding !== 'function') {
+        const errorMsg = '[SECURITY] aiOrchestrator.generateEmbedding is not a function - circular dependency or initialization issue';
+        console.error('[KNOWLEDGE BRAIN] 🔴 ' + errorMsg);
+        throw new Error(errorMsg);
+      }
+
       // PHASE 36.12: Use AI Orchestrator for centralized embedding with retry/fallback
       const result = await aiOrchestrator.generateEmbedding({
         text: content,
         model: 'text-embedding-3-small',
       });
+
+      // Validate result structure
+      if (!result || !result.embedding || !Array.isArray(result.embedding)) {
+        const errorMsg = '[SECURITY] Invalid embedding result - missing embedding array';
+        console.error('[KNOWLEDGE BRAIN] 🔴 ' + errorMsg);
+        throw new Error(errorMsg);
+      }
 
       const embedding = result.embedding;
       log('[KNOWLEDGE BRAIN] 📊 Embedding received:', {

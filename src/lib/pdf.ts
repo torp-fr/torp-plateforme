@@ -62,6 +62,41 @@ export function getPdfJs() {
 }
 
 /**
+ * PHASE 40: Verify PDF.js is properly initialized
+ * Runtime guard to catch configuration issues before extraction
+ * Returns detailed diagnostic information for production troubleshooting
+ */
+export function verifyPdfJsInitialization(): { isValid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  // Check 1: isInitialized flag
+  if (!isInitialized) {
+    errors.push('PDF.js initialization flag not set (initPdfJs not called)');
+  }
+
+  // Check 2: Worker source configured
+  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+    errors.push('PDF.js worker source not configured');
+  }
+
+  // Check 3: Standard font data URL configured (CRITICAL FOR PRODUCTION)
+  if (!pdfjsLib.GlobalWorkerOptions.standardFontDataUrl) {
+    errors.push('PDF.js standardFontDataUrl not configured - will fail to extract fonts in PDFs');
+  }
+
+  // Check 4: Verify font URL is accessible (log for debugging)
+  const fontUrl = pdfjsLib.GlobalWorkerOptions.standardFontDataUrl;
+  if (fontUrl && import.meta.env.DEV) {
+    console.log('[PDF.JS] Font URL configured:', fontUrl);
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+}
+
+/**
  * Reset initialization (testing only)
  */
 export function resetPdfJs() {

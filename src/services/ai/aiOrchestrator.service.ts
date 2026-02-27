@@ -573,8 +573,18 @@ class AIOrchestrator {
 
   /**
    * Try primary embedding via secureAI (Edge Function)
+   * PHASE 40: Added guard to prevent "s is not a function" error
    */
   private async tryPrimaryEmbedding(request: EmbeddingRequest): Promise<number[]> {
+    // Guard: Verify secureAI has generateEmbedding function
+    if (typeof secureAI?.generateEmbedding !== 'function') {
+      throw new AIOrchestrationError(
+        '[SECURITY] secureAI.generateEmbedding is not a function - initialization issue or circular dependency',
+        'ORCHESTRATOR_INIT_ERROR',
+        false
+      );
+    }
+
     return secureAI.generateEmbedding(request.text, request.model);
   }
 

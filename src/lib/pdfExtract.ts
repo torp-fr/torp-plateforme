@@ -7,6 +7,7 @@
  */
 
 import * as pdfjsLib from 'pdfjs-dist';
+import { verifyPdfJsInitialization } from './pdf';
 
 interface ExtractionOptions {
   maxPages?: number;
@@ -26,6 +27,16 @@ export async function extractPdfText(
   const { maxPages = Infinity, timeout = 30000 } = options;
 
   try {
+    // PHASE 40: Verify PDF.js is properly initialized BEFORE extraction
+    const validation = verifyPdfJsInitialization();
+    if (!validation.isValid) {
+      const errorDetails = validation.errors.join('; ');
+      console.error('❌ PDF.js initialization failed:', errorDetails);
+      throw new Error(
+        `PDF.js not properly initialized: ${errorDetails}. Initialize with initPdfJs() at app startup.`
+      );
+    }
+
     // Convert File to ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
 
@@ -48,6 +59,8 @@ export async function extractPdfText(
     ]);
 
     let text = '';
+    let totalTextItems = 0;
+    let totalPages = 0;
     const pageCount = Math.min(pdf.numPages, maxPages);
 
     // Extract text from each page
@@ -55,6 +68,10 @@ export async function extractPdfText(
       try {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
+
+        // PHASE 40: Track text items for image-only PDF detection
+        totalTextItems += content.items?.length ?? 0;
+        totalPages++;
 
         // Convert text items to string
         const pageText = content.items
@@ -85,8 +102,17 @@ export async function extractPdfText(
     // Cleanup document
     pdf.destroy();
 
-    // Validate extraction
+    // PHASE 40: Detect image-only PDFs (scanned documents with no extractable text)
     if (!text.trim()) {
+      // Provide specific error for image-only PDFs
+      if (totalTextItems === 0 && totalPages > 0) {
+        throw new Error(
+          `PDF appears to be a scanned image (no extractable text content). ` +
+          `This document requires OCR processing which is not available. ` +
+          `Please upload a text-based PDF or a document image for manual processing.`
+        );
+      }
+      // Generic error if we can't determine why
       throw new Error('No text content extracted from PDF');
     }
 

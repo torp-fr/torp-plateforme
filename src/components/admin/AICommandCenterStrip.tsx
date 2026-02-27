@@ -41,31 +41,10 @@ export function AICommandCenterStrip() {
       if (edgeOffline) orchestratorState = 'FALLBACK';
       else if (!queueSubscribed) orchestratorState = 'DEGRADED';
 
-      // PHASE 8: AUTO-HEAL LOGIC
-      // If edge comes back ONLINE and EMBEDDING_PAUSED, clear pause
-      const wasEmbeddingPaused = Boolean((window as any).__RAG_EMBEDDING_PAUSED__);
-
-      // PHASE 17: Count locked documents
-      const docLocks = (window as any).__RAG_DOC_LOCKS__ || {};
-      const lockedDocCount = Object.keys(docLocks).length;
-
-      if (!edgeOffline && wasEmbeddingPaused) {
-
-        (window as any).__RAG_EMBEDDING_PAUSED__ = false;
-        window.dispatchEvent(new Event('RAG_EMBEDDING_RESUMED'));
-        // Dispatch OPS event to trigger retry
-        window.dispatchEvent(new CustomEvent('RAG_OPS_EVENT', { detail: { event: 'edge_recovered' } }));
-      }
-
-      // PHASE 17: Check for locked documents
-      if (lockedDocCount > 0 && orchestratorState !== 'DEGRADED') {
-        orchestratorState = 'DEGRADED';
-      }
-
+      // PHASE 36.13: Remove global locks - monitoring only
       setState((prev) => ({
         ...prev,
         orchestratorState,
-        lockedDocCount,
         lastEventTime: Date.now(),
       }));
 
@@ -98,21 +77,7 @@ export function AICommandCenterStrip() {
     window.addEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocMode);
     window.addEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocClear);
 
-    // PHASE 17: Listen for document lock events
-    const handleDocLocked = () => {
-      const docLocks = (window as any).__RAG_DOC_LOCKS__ || {};
-      const lockedDocCount = Object.keys(docLocks).length;
-      log(`[RAG COMMAND CENTER] 🔒 Document locked - ${lockedDocCount} total locked`);
-      setState(prev => ({ ...prev, lockedDocCount, orchestratorState: 'DEGRADED' }));
-    };
-    const handleDocUnlocked = () => {
-      const docLocks = (window as any).__RAG_DOC_LOCKS__ || {};
-      const lockedDocCount = Object.keys(docLocks).length;
-      log(`[RAG COMMAND CENTER] 🔓 Document unlocked - ${lockedDocCount} remaining locked`);
-      setState(prev => ({ ...prev, lockedDocCount }));
-    };
-    window.addEventListener('RAG_DOC_LOCKED', handleDocLocked);
-    window.addEventListener('RAG_DOC_UNLOCKED', handleDocUnlocked);
+    // PHASE 36.13: Remove document lock monitoring - each document independent
 
     // PHASE 11: Listen for stream mode events
     const handleStreamModeActivated = () => {
@@ -126,18 +91,7 @@ export function AICommandCenterStrip() {
     window.addEventListener('RAG_STREAM_MODE_ACTIVATED', handleStreamModeActivated);
     window.addEventListener('RAG_STREAM_MODE_CLEARED', handleStreamModeCleared);
 
-    // PHASE 12: Listen for adaptive stream controller updates
-    const handleStreamControllerUpdated = () => {
-      const controller = (window as any).__RAG_STREAM_CONTROLLER__ || {};
-      const predictor = (window as any).__RAG_LATENCY_PREDICTOR__ || {};
-      setState(prev => ({
-        ...prev,
-        adaptiveLevel: controller.adaptiveLevel || 'NORMAL',
-        latencyTrend: predictor.trend || 'STABLE',
-        predictedRisk: predictor.predictedRisk || 'LOW',
-      }));
-    };
-    window.addEventListener('RAG_STREAM_CONTROLLER_UPDATED', handleStreamControllerUpdated);
+    // PHASE 36.13: Remove adaptive stream controller - simplified monitoring
 
     // PATCH 5: HEARTBEAT MONITOR - stabilized interval
     // If edge is offline (FALLBACK), use 15s interval to reduce load
@@ -146,11 +100,7 @@ export function AICommandCenterStrip() {
     log(`[RAG COMMAND CENTER] Heartbeat interval: ${heartbeatInterval}ms (Edge: ${(window as any).RAG_EDGE_OFFLINE ? 'OFFLINE' : 'ONLINE'})`);
 
     heartbeatIntervalRef.current = setInterval(() => {
-      // PHASE 15 FIX: Stop heartbeat loop when pipeline locked
-      if ((window as any).__RAG_PIPELINE_LOCKED__) {
-        return;
-      }
-
+      // PHASE 36.13: Remove pipeline lock - monitoring only, never block
       setState((prev) => {
         const now = Date.now();
         const lastEvent = prev.lastEventTime || Date.now();

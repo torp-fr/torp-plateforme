@@ -7,7 +7,6 @@ import React from 'react';
 import { UploadKBTab } from '../Analytics';
 import { AICommandCenterStrip } from '@/components/admin/AICommandCenterStrip';
 import { RAGStatusStrip } from '@/components/admin/RAGStatusStrip';
-import { EmbeddingQueuePanel } from '@/components/admin/EmbeddingQueuePanel';
 import { KnowledgeLibraryManager } from '@/components/admin/KnowledgeLibraryManager';
 import { IngestionMetricsPanel } from '@/components/admin/IngestionMetricsPanel';
 
@@ -29,13 +28,10 @@ export function KnowledgeBasePage() {
       {/* 2️⃣ INGESTION PIPELINE */}
       <UploadKBTab />
 
-      {/* 3️⃣ EMBEDDING QUEUE */}
-      <EmbeddingQueuePanel />
-
-      {/* 4️⃣ DOCUMENT MANAGEMENT */}
+      {/* 3️⃣ DOCUMENT MANAGEMENT */}
       <KnowledgeLibraryManager />
 
-      {/* 5️⃣ METRICS */}
+      {/* 4️⃣ METRICS */}
       <IngestionMetricsPanel />
     </div>
   );
