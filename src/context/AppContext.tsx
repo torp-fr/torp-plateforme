@@ -180,11 +180,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         if (userProfile) {
           log('[Profile] ✓ Loaded:', userProfile.email);
-          // Merge profile data, determine admin role
+          // Defensive logging for role comparison
+          console.log('[Profile] Role received:', userProfile.role);
+
+          // Merge profile data, determine admin role (case-insensitive)
+          const isAdmin = userProfile.role?.toLowerCase() === 'admin';
+          console.log('[Profile] isAdmin calculated:', isAdmin);
+
           setUser(prev => ({
             ...prev,
             ...userProfile,
-            isAdmin: userProfile.role === 'admin',
+            isAdmin: isAdmin, // Always set explicitly to override any userProfile.isAdmin
           }));
           setUserType(userProfile.type);
         }
