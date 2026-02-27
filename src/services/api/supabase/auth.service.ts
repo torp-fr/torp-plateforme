@@ -160,6 +160,55 @@ export class SupabaseAuthService {
   }
 
   /**
+   * Get current session (FAST - non-blocking bootstrap)
+   * Only checks auth status, does NOT fetch profile
+   */
+  async getSession() {
+    try {
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !authUser) {
+        log('[getSession] No active session');
+        return null;
+      }
+      log('[getSession] Session found for:', authUser.email);
+      return authUser;
+    } catch (error) {
+      log('[getSession] Error:', error instanceof Error ? error.message : 'Unknown error');
+      return null;
+    }
+  }
+
+  /**
+   * Get user profile from profiles table (ASYNC - background fetch)
+   */
+  async getUserProfile(userId: string): Promise<User | null> {
+    try {
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (profileError) {
+        log('[getUserProfile] Profile fetch error:', profileError.message);
+        return null;
+      }
+
+      if (!profileData) {
+        log('[getUserProfile] Profile data is empty');
+        return null;
+      }
+
+      const mappedUser = mapDbProfileToAppUser(profileData);
+      log('[getUserProfile] Profile loaded for:', mappedUser.email);
+      return mappedUser;
+    } catch (error) {
+      log('[getUserProfile] Exception:', error instanceof Error ? error.message : 'Unknown error');
+      return null;
+    }
+  }
+
+  /**
    * Get current user from profiles table
    */
   async getCurrentUser(): Promise<User | null> {
