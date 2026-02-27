@@ -901,7 +901,7 @@ export class TorpAnalyzerService {
    * GUARANTEES: Always returns valid result, never crashes, all variables safe
    */
   private async analyzeEntreprise(devisData: ExtractedDevisData): Promise<{
-    analysis: any;
+    analysis: Record<string, unknown>;
     rgeData: RGEVerificationData | null;
   }> {
     try {

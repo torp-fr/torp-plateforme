@@ -115,7 +115,7 @@ export class DevisProposalEmbeddingsService {
   /**
    * Vectorize devis extracted data
    */
-  static vectorizeDevisProposal(extractedData: any): DevisProposalVector {
+  static vectorizeDevisProposal(extractedData: Record<string, unknown>): DevisProposalVector {
     return {
       typeVecteur: this.vectorizeWorkType(extractedData),
       prixVecteur: this.vectorizePrix(extractedData),
@@ -127,7 +127,7 @@ export class DevisProposalEmbeddingsService {
     };
   }
 
-  private static vectorizeWorkType(data: any): string[] {
+  private static vectorizeWorkType(data: Record<string, unknown>): string[] {
     const keywords: string[] = [];
 
     if (data.travaux?.type) {
@@ -148,7 +148,7 @@ export class DevisProposalEmbeddingsService {
     }
 
     if (data.travaux?.postes && Array.isArray(data.travaux.postes)) {
-      data.travaux.postes.forEach((poste: any) => {
+      data.travaux.postes.forEach((poste: Record<string, unknown>) => {
         const designation = poste.designation?.toLowerCase() || '';
         if (designation.length > 0) keywords.push(designation);
       });
@@ -157,7 +157,7 @@ export class DevisProposalEmbeddingsService {
     return [...new Set(keywords)]; // Remove duplicates
   }
 
-  private static vectorizePrix(data: any): PrixVector {
+  private static vectorizePrix(data: Record<string, unknown>): PrixVector {
     const montantTotal = data.devis?.montantTotal || 0;
     const montantHT = data.devis?.montantHT || montantTotal;
     const tva = montantTotal - montantHT;
@@ -174,7 +174,7 @@ export class DevisProposalEmbeddingsService {
     };
   }
 
-  private static vectorizePostes(postes?: any[]): PosteVector[] {
+  private static vectorizePostes(postes?: Array<Record<string, unknown>>): PosteVector[] {
     if (!postes) return [];
 
     return postes.map(poste => ({
@@ -187,7 +187,7 @@ export class DevisProposalEmbeddingsService {
     }));
   }
 
-  private static analyzeDetailLevel(poste: any): 'tres-detaille' | 'detaille' | 'global' {
+  private static analyzeDetailLevel(poste: Record<string, unknown>): 'tres-detaille' | 'detaille' | 'global' {
     const hasQuantity = poste.quantite !== null && poste.quantite !== undefined;
     const hasUnit = poste.unite && poste.unite.length > 0;
     const hasUnitPrice = poste.prixUnitaire !== null && poste.prixUnitaire !== undefined;
@@ -243,7 +243,7 @@ export class DevisProposalEmbeddingsService {
     return 'flou';
   }
 
-  private static vectorizeDelais(data: any): DelaisVector {
+  private static vectorizeDelais(data: Record<string, unknown>): DelaisVector {
     const debut = data.delais?.debut;
     const fin = data.delais?.fin;
 
@@ -264,7 +264,7 @@ export class DevisProposalEmbeddingsService {
     };
   }
 
-  private static vectorizeEntreprise(data: any): EntrepriseVector {
+  private static vectorizeEntreprise(data: Record<string, unknown>): EntrepriseVector {
     const entreprise = data.entreprise || {};
 
     return {
@@ -283,7 +283,7 @@ export class DevisProposalEmbeddingsService {
     };
   }
 
-  private static assessReputation(entreprise: any): 'verifiee' | 'probable' | 'inconnue' | 'douteuse' {
+  private static assessReputation(entreprise: Record<string, unknown>): 'verifiee' | 'probable' | 'inconnue' | 'douteuse' {
     const hasCompleteInfo = entreprise.nom && entreprise.siret && entreprise.adresse;
     const hasCertifications = (entreprise.certifications || []).length > 0;
     const hasAssurances = entreprise.assurances?.decennale || entreprise.assurances?.rcPro;
@@ -294,7 +294,7 @@ export class DevisProposalEmbeddingsService {
     return 'douteuse';
   }
 
-  private static calculateConformiteScore(entreprise: any): number {
+  private static calculateConformiteScore(entreprise: Record<string, unknown>): number {
     let score = 0;
 
     if (entreprise.nom) score += 15;
@@ -309,7 +309,7 @@ export class DevisProposalEmbeddingsService {
     return Math.min(score, 100);
   }
 
-  private static vectorizePerimeter(data: any): PerimeterVector {
+  private static vectorizePerimeter(data: Record<string, unknown>): PerimeterVector {
     const description = data.travaux?.description || '';
 
     return {
@@ -365,7 +365,7 @@ export class DevisProposalEmbeddingsService {
     return 'clair';
   }
 
-  private static vectorizeQualite(data: any): QualiteVector {
+  private static vectorizeQualite(data: Record<string, unknown>): QualiteVector {
     const description = (data.travaux?.description || '').toLowerCase();
     const entreprise = data.entreprise || {};
 
@@ -408,7 +408,7 @@ export class DevisProposalEmbeddingsService {
     return 'standard';
   }
 
-  private static extractGaranties(data: any): { duree?: string; couverture: string } {
+  private static extractGaranties(data: Record<string, unknown>): { duree?: string; couverture: string } {
     const description = data.travaux?.description || '';
 
     const dureeMatch = description.match(/(\d+)\s*(ans?|mois)/i);
@@ -439,10 +439,10 @@ export class DevisProposalEmbeddingsService {
     return count;
   }
 
-  private static hasDetailedSpecs(postes?: any[]): boolean {
+  private static hasDetailedSpecs(postes?: Array<Record<string, unknown>>): boolean {
     if (!postes || postes.length === 0) return false;
 
-    const detailedCount = postes.filter((p: any) =>
+    const detailedCount = postes.filter((p: Record<string, unknown>) =>
       (p.designation && p.designation.length > 30) ||
       (p.quantite !== null && p.quantite !== undefined)
     ).length;
@@ -450,7 +450,7 @@ export class DevisProposalEmbeddingsService {
     return detailedCount >= postes.length / 2;
   }
 
-  private static vectorizeService(data: any): ServiceVector {
+  private static vectorizeService(data: Record<string, unknown>): ServiceVector {
     const entreprise = data.entreprise || {};
     const description = (data.travaux?.description || '').toLowerCase();
 
@@ -466,7 +466,7 @@ export class DevisProposalEmbeddingsService {
     };
   }
 
-  private static estimateResponsiveness(entreprise: any, description: string): 'rapide' | 'normal' | 'variable' | 'lent' {
+  private static estimateResponsiveness(entreprise: Record<string, unknown>, description: string): 'rapide' | 'normal' | 'variable' | 'lent' {
     const hasMultipleContacts = (!!entreprise.telephone && !!entreprise.email) ||
                                 !!entreprise.representant;
     const hasUrgencyTerms = description.includes('urgent') || description.includes('express') ||
@@ -491,7 +491,7 @@ export class DevisProposalEmbeddingsService {
    * Compare demand (CCF) and proposal (devis) vectorization
    */
   static compareVectors(
-    demandVecteur: any, // ProjectContextEmbeddings
+    demandVecteur: Record<string, unknown>, // ProjectContextEmbeddings
     proposalVecteur: DevisProposalVector
   ): ComparisonResult {
     return {
@@ -501,7 +501,7 @@ export class DevisProposalEmbeddingsService {
     };
   }
 
-  private static calculateAlignment(demand: any, proposal: DevisProposalVector): number {
+  private static calculateAlignment(demand: Record<string, unknown>, proposal: DevisProposalVector): number {
     let score = 100;
 
     // Type alignment
@@ -527,7 +527,7 @@ export class DevisProposalEmbeddingsService {
     return Math.max(0, Math.min(100, score));
   }
 
-  private static analyzeGaps(demand: any, proposal: DevisProposalVector): GapItem[] {
+  private static analyzeGaps(demand: Record<string, unknown>, proposal: DevisProposalVector): GapItem[] {
     const gaps: GapItem[] = [];
 
     // Budget gap
@@ -577,7 +577,7 @@ export class DevisProposalEmbeddingsService {
     return gaps;
   }
 
-  private static generateRecommendations(demand: any, proposal: DevisProposalVector): string[] {
+  private static generateRecommendations(demand: Record<string, unknown>, proposal: DevisProposalVector): string[] {
     const recommendations: string[] = [];
 
     // Price recommendations

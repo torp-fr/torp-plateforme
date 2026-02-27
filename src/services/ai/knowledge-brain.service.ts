@@ -761,7 +761,10 @@ class KnowledgeBrainService {
    * Uses Chunk objects with pre-calculated metadata
    * Updates document state on error
    */
-  private async generateChunkEmbeddingsAsync(document_id: string, chunks: any[]): Promise<void> {
+  private async generateChunkEmbeddingsAsync(
+    document_id: string,
+    chunks: Array<Record<string, unknown>>
+  ): Promise<void> {
     try {
       // PHASE 36.13: Remove global pipeline locks - each document processes independently
       log('[EMBEDDING] 🔢 Starting chunk embedding generation async...', {
@@ -1061,7 +1064,7 @@ class KnowledgeBrainService {
       log('[KNOWLEDGE BRAIN] ✅ Vector search found', data.length, 'verified chunks');
 
       // DEFENSE IN DEPTH: Validate each result at runtime
-      const validatedResults = data.map((item: any) => {
+      const validatedResults = data.map((item: Record<string, unknown>) => {
         // Double-check: ingestion_status must be 'complete'
         if (item.ingestion_status !== 'complete') {
           warn(
@@ -1152,7 +1155,7 @@ class KnowledgeBrainService {
       log('[KNOWLEDGE BRAIN] ✅ Keyword search found', data.length, 'verified chunks');
 
       // Map RPC results to SearchResult format
-      return data.map((item: any) => ({
+      return data.map((item: Record<string, unknown>) => ({
         id: item.id,
         source: item.doc_source,
         category: item.doc_category,
@@ -1269,7 +1272,7 @@ class KnowledgeBrainService {
     user_id: string,
     feedback_type: string,
     user_feedback: string,
-    correction_data?: any
+    correction_data?: Record<string, unknown>
   ): Promise<boolean> {
     try {
       log('[KNOWLEDGE BRAIN] Storing learning feedback:', feedback_type);

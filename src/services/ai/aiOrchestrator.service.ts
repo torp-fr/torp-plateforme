@@ -67,9 +67,9 @@ export interface AnalysisPipelineRequest {
 }
 
 export interface AnalysisPipelineResult {
-  extractedData: any;
-  aiAnalysis: any;
-  enrichmentData: any;
+  extractedData: Record<string, unknown>;
+  aiAnalysis: Record<string, unknown>;
+  enrichmentData: Record<string, unknown>;
   duration: number;
   success: boolean;
   errors?: string[];
@@ -593,7 +593,7 @@ class AIOrchestrator {
   /**
    * Normalize any error to AIOrchestrationError
    */
-  private normalizeError(error: any, defaultCode: string): AIOrchestrationError {
+  private normalizeError(error: Error | unknown, defaultCode: string): AIOrchestrationError {
     if (error instanceof AIOrchestrationError) {
       return error;
     }

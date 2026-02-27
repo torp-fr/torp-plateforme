@@ -52,7 +52,7 @@ class MarketIntelligenceService {
       min_price: number;
       avg_price: number;
       max_price: number;
-      metadata?: any;
+      metadata?: Record<string, unknown>;
     }>
   ): Promise<number> {
     try {
@@ -310,9 +310,17 @@ class MarketIntelligenceService {
         return null;
       }
 
-      const regions = new Set(data.map((d: any) => d.region));
-      const types = new Set(data.map((d: any) => d.type_travaux));
-      const avg_reliability = data.reduce((sum: number, d: any) => sum + d.reliability_score, 0) / data.length;
+      const regions = new Set(
+        data.map((d: Record<string, unknown>) => d.region as string)
+      );
+      const types = new Set(
+        data.map((d: Record<string, unknown>) => d.type_travaux as string)
+      );
+      const avg_reliability = data.reduce(
+        (sum: number, d: Record<string, unknown>) =>
+          sum + (typeof d.reliability_score === 'number' ? d.reliability_score : 0),
+        0
+      ) / data.length;
 
       return {
         total_references: count || 0,

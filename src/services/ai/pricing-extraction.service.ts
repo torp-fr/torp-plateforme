@@ -198,10 +198,12 @@ class PricingExtractionService {
       const price_sum: Record<string, number> = {};
       const price_count: Record<string, number> = {};
 
-      references.forEach((ref: any) => {
-        by_work_type[ref.type_travaux] = (by_work_type[ref.type_travaux] || 0) + 1;
-        price_sum[ref.type_travaux] = (price_sum[ref.type_travaux] || 0) + (ref.avg_price || 0);
-        price_count[ref.type_travaux] = (price_count[ref.type_travaux] || 0) + 1;
+      references.forEach((ref: Record<string, unknown>) => {
+        const type = ref.type_travaux as string;
+        const price = typeof ref.avg_price === 'number' ? ref.avg_price : 0;
+        by_work_type[type] = (by_work_type[type] || 0) + 1;
+        price_sum[type] = (price_sum[type] || 0) + price;
+        price_count[type] = (price_count[type] || 0) + 1;
       });
 
       // Calculate averages
