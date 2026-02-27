@@ -367,3 +367,89 @@ export interface AnalysisResult {
     budgetRealEstime: number;
   };
 }
+
+/**
+ * Edge Function response wrapper
+ */
+export interface EdgeFunctionResponse<T> {
+  data: T | null;
+  error: Error | null;
+}
+
+/**
+ * Generate Embedding Edge Function response
+ */
+export interface GenerateEmbeddingResponse {
+  embedding: EmbeddingVector;
+  model: string;
+  usage: {
+    prompt_tokens: number;
+    total_tokens: number;
+  };
+}
+
+/**
+ * LLM Completion Edge Function response
+ */
+export interface LLMCompletionResponse {
+  text: string;
+  model: string;
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+  finish_reason: string;
+}
+
+/**
+ * RAG Query Edge Function response
+ */
+export interface RAGQueryResponse {
+  context: {
+    company: EnterpriseInfo | null;
+    prices: PriceReference[];
+    eligibility: AidInfo[];
+    compliance: Record<string, unknown>;
+  };
+  prompt: string;
+  analysisType?: 'diagnostic' | 'construction';
+  analyzedAt?: string;
+  model?: string;
+  userId?: string;
+}
+
+/**
+ * Ingest Document Edge Function response
+ */
+export interface IngestDocumentEdgeFunctionResponse {
+  success: boolean;
+  documentsProcessed: number;
+  chunksCreated: number;
+  embeddingsGenerated: number;
+  processingTime: number;
+  errors: Array<{
+    documentId: string;
+    error: string;
+  }>;
+}
+
+/**
+ * Vision Analysis Edge Function response
+ */
+export interface VisionAnalysisResponse {
+  detectedObjects: string[];
+  description: string;
+  confidence: number;
+  analysisType: 'diagnostic' | 'construction';
+}
+
+/**
+ * Type guard for edge function error
+ */
+export function isEdgeFunctionResponseValid<T>(
+  response: unknown
+): response is EdgeFunctionResponse<T> {
+  const obj = response as Record<string, unknown>;
+  return obj && typeof obj === 'object' && ('data' in obj || 'error' in obj);
+}

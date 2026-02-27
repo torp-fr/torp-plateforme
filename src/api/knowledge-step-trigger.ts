@@ -46,8 +46,9 @@ export async function triggerStepRunner(
       .then(() => {
         log(`[STEP TRIGGER] ✅ Knowledge ingestion completed for ${documentId}`);
       })
-      .catch((err: any) => {
-        console.error(`[STEP TRIGGER] ❌ Knowledge ingestion failed for ${documentId}:`, err);
+      .catch((err: Error | unknown) => {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        console.error(`[STEP TRIGGER] ❌ Knowledge ingestion failed for ${documentId}:`, errorMessage);
       });
 
     return {

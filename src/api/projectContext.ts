@@ -207,10 +207,13 @@ export async function deleteWork(workId: string) {
 /**
  * Valider un contexte projet
  */
-export async function validateProjectContext(input: Partial<ProjectContextInput>) {
+export async function validateProjectContext(
+  input: Partial<ProjectContextInput>
+): Promise<{ valid: boolean; errors?: string[] }> {
   try {
-    const service = ProjectContextService as any;
-    return service.validateContext(input);
+    // ProjectContextService.validateContext returns validation result
+    const validationResult = ProjectContextService.validateContext(input);
+    return validationResult;
   } catch (error) {
     console.error('❌ Validation error:', error);
     throw error;
