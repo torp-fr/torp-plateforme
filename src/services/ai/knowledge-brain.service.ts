@@ -287,17 +287,7 @@ class KnowledgeBrainService {
     missing_embeddings: number;
   }> {
     try {
-      // PHASE 15 FIX — Integrity handled by StepRunner
-      if ((window as any).__RAG_STREAM_CONTROLLER__) {
-        warn('[INTEGRITY] 🚫 Disabled — Runner handles validation');
-        return {
-          valid: true,
-          total_chunks: 0,
-          embedded_chunks: 0,
-          missing_embeddings: 0,
-        };
-      }
-
+      // PHASE 40: Always verify integrity (DB-driven, no special modes)
       log('[KNOWLEDGE BRAIN] 🔍 Verifying embedding integrity for:', documentId);
 
       // Get chunk counts via RPC function

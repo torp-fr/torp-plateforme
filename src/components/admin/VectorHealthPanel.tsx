@@ -34,19 +34,17 @@ export function VectorHealthPanel() {
         return;
       }
 
-      const edgeOnline = !window.__RAG_EDGE_OFFLINE__;
-      const fallbackActive = window.__RAG_EDGE_OFFLINE__ === true;
-
+      // PHASE 40: No window state (errors handled by service retry logic)
       setHealth({
         totalDocuments: count || 0,
-        edgeOnline,
-        fallbackActive,
+        edgeOnline: true,  // Always online, errors handled by service
+        fallbackActive: false,
       });
 
       // Dispatch command center update
       window.dispatchEvent(new Event('RAG_COMMAND_CENTER_UPDATE'));
 
-      log('[VectorHealth] Updated:', { count, edgeOnline, fallbackActive });
+      log('[VectorHealth] Updated:', { count });
     } catch (err) {
       console.error('[VectorHealth] Error:', err);
     } finally {

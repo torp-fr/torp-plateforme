@@ -48,24 +48,20 @@ export function RAGStatusStrip() {
 
       if (totalError) throw totalError;
 
-      const isEdgeOnline = !window.__RAG_EDGE_OFFLINE__;
-      setEdgeOnline(isEdgeOnline);
-
-      // PHASE 8: Check if embedding is paused
-      const isEmbeddingPaused = Boolean((window as any).__RAG_EMBEDDING_PAUSED__);
-      const embeddingEngine = isEmbeddingPaused ? 'paused' : 'active';
+      // PHASE 40: No window state (DB-driven)
+      setEdgeOnline(true); // Always assume online, errors handled by service retry logic
 
       setStatus({
         totalDocuments: count || 0,
         lastIngestionTime: data?.[0]?.created_at || null,
         vectorStatus: count && count > 0 ? 'operational' : 'idle',
-        embeddingEngine,
+        embeddingEngine: 'active', // No pause states in DB-driven arch
       });
 
       // Dispatch command center update
       window.dispatchEvent(new Event('RAG_COMMAND_CENTER_UPDATE'));
 
-      log('[RAGStatus] Updated:', { count, edgeOnline: isEdgeOnline });
+      log('[RAGStatus] Updated:', { count });
     } catch (err) {
       console.error('[RAGStatus] Error:', err);
     } finally {
@@ -82,82 +78,10 @@ export function RAGStatusStrip() {
     window.addEventListener('RAG_OPS_EVENT', handleOpsEvent);
     window.addEventListener('RAG_LIBRARY_REFRESH', handleOpsEvent);
 
-    // PHASE 8: Listen for embedding pause/resume events
-    const handleEmbeddingPause = () => {
-      log('[RAGStatusStrip] Embedding paused');
-      fetchStatus();
-    };
-    const handleEmbeddingResume = () => {
-      log('[RAGStatusStrip] Embedding resumed');
-      fetchStatus();
-    };
-    window.addEventListener('RAG_EMBEDDING_PAUSED', handleEmbeddingPause);
-    window.addEventListener('RAG_EMBEDDING_RESUMED', handleEmbeddingResume);
-
-    // PHASE 9: Listen for big document mode events
-    const handleBigDocActivated = () => {
-      log('[RAGStatusStrip] Big doc mode activated');
-      setBigDocMode(true);
-    };
-    const handleBigDocCleared = () => {
-      log('[RAGStatusStrip] Big doc mode cleared');
-      setBigDocMode(false);
-    };
-    window.addEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocActivated);
-    window.addEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocCleared);
-
-    // PHASE 10: Listen for pipeline lock events
-    const handlePipelineLocked = () => {
-      log('[RAGStatusStrip] Pipeline locked');
-      setPipelineLocked(true);
-    };
-    const handlePipelineUnlocked = () => {
-      log('[RAGStatusStrip] Pipeline unlocked');
-      setPipelineLocked(false);
-    };
-    window.addEventListener('RAG_PIPELINE_LOCKED', handlePipelineLocked);
-    window.addEventListener('RAG_PIPELINE_UNLOCKED', handlePipelineUnlocked);
-
-    // PHASE 11: Listen for stream mode events
-    const handleStreamModeActivated = () => {
-      log('[RAGStatusStrip] Stream mode activated');
-      setStreamMode(true);
-    };
-    const handleStreamModeCleared = () => {
-      log('[RAGStatusStrip] Stream mode cleared');
-      setStreamMode(false);
-    };
-    window.addEventListener('RAG_STREAM_MODE_ACTIVATED', handleStreamModeActivated);
-    window.addEventListener('RAG_STREAM_MODE_CLEARED', handleStreamModeCleared);
-
-    // PHASE 12: Listen for adaptive stream controller updates
-    const handleStreamControllerUpdated = () => {
-      const controller = (window as any).__RAG_STREAM_CONTROLLER__ || {};
-      const predictor = (window as any).__RAG_LATENCY_PREDICTOR__ || {};
-      setAdaptiveLevel(controller.adaptiveLevel || 'NORMAL');
-      setPredictedRisk(predictor.predictedRisk || 'LOW');
-    };
-    window.addEventListener('RAG_STREAM_CONTROLLER_UPDATED', handleStreamControllerUpdated);
-
-    // PHASE 17: Listen for document lock events
-    window.addEventListener('RAG_DOC_LOCKED', fetchStatus);
-    window.addEventListener('RAG_DOC_UNLOCKED', fetchStatus);
-
     return () => {
       clearInterval(interval);
       window.removeEventListener('RAG_OPS_EVENT', handleOpsEvent);
       window.removeEventListener('RAG_LIBRARY_REFRESH', handleOpsEvent);
-      window.removeEventListener('RAG_EMBEDDING_PAUSED', handleEmbeddingPause);
-      window.removeEventListener('RAG_EMBEDDING_RESUMED', handleEmbeddingResume);
-      window.removeEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocActivated);
-      window.removeEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocCleared);
-      window.removeEventListener('RAG_PIPELINE_LOCKED', handlePipelineLocked);
-      window.removeEventListener('RAG_PIPELINE_UNLOCKED', handlePipelineUnlocked);
-      window.removeEventListener('RAG_STREAM_MODE_ACTIVATED', handleStreamModeActivated);
-      window.removeEventListener('RAG_STREAM_MODE_CLEARED', handleStreamModeCleared);
-      window.removeEventListener('RAG_STREAM_CONTROLLER_UPDATED', handleStreamControllerUpdated);
-      window.removeEventListener('RAG_DOC_LOCKED', fetchStatus);
-      window.removeEventListener('RAG_DOC_UNLOCKED', fetchStatus);
     };
   }, []);
 

@@ -16,7 +16,6 @@ export function EmbeddingQueuePanel() {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [embeddingPaused, setEmbeddingPaused] = useState(false);
 
   const fetchQueue = async () => {
     try {
@@ -51,13 +50,8 @@ export function EmbeddingQueuePanel() {
   };
 
   useEffect(() => {
-    // Prevent duplicate subscription
-    if (window.__RAG_QUEUE_SUBSCRIBED__) {
-
-      return;
-    }
-    window.__RAG_QUEUE_SUBSCRIBED__ = true;
-
+    // PHASE 40: No global state needed
+    // React's useEffect cleanup handles unsubscription
     fetchQueue();
     const interval = setInterval(fetchQueue, 10000);
 
@@ -66,26 +60,10 @@ export function EmbeddingQueuePanel() {
     window.addEventListener('RAG_LIBRARY_REFRESH', handleRefresh);
     window.addEventListener('RAG_RETRY_REQUESTED', handleRefresh);
 
-    // PHASE 8: Listen for embedding pause/resume
-    const handlePause = () => {
-
-      setEmbeddingPaused(true);
-    };
-    const handleResume = () => {
-
-      setEmbeddingPaused(false);
-      fetchQueue();
-    };
-    window.addEventListener('RAG_EMBEDDING_PAUSED', handlePause);
-    window.addEventListener('RAG_EMBEDDING_RESUMED', handleResume);
-
     return () => {
       clearInterval(interval);
       window.removeEventListener('RAG_LIBRARY_REFRESH', handleRefresh);
       window.removeEventListener('RAG_RETRY_REQUESTED', handleRefresh);
-      window.removeEventListener('RAG_EMBEDDING_PAUSED', handlePause);
-      window.removeEventListener('RAG_EMBEDDING_RESUMED', handleResume);
-      window.__RAG_QUEUE_SUBSCRIBED__ = false;
     };
   }, []);
 
@@ -124,19 +102,9 @@ export function EmbeddingQueuePanel() {
             <CardTitle className="text-lg">Queue d'embedding</CardTitle>
             <CardDescription>Documents en attente de vectorisation</CardDescription>
           </div>
-          {embeddingPaused && (
-            <Badge className="bg-amber-100 text-amber-700 border-amber-200">
-              ⏸️ PAUSED
-            </Badge>
-          )}
         </div>
       </CardHeader>
       <CardContent>
-        {embeddingPaused && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200/50 mb-4">
-            <p className="text-sm text-amber-700">Embedding pipeline is paused. Waiting for edge recovery...</p>
-          </div>
-        )}
         {error ? (
           <p className="text-sm text-destructive">{error}</p>
         ) : queue.length === 0 ? (
