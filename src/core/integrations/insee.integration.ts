@@ -63,58 +63,26 @@ function validateSIRETChecksum(siret: string): boolean {
 
 /**
  * Query INSEE SIRENE API
- * Note: Requires INSEE API key in environment variables
+ * SECURITY: This function should only be called from server-side (Supabase Edge Function)
+ * Frontend MUST NOT access process.env or API keys
+ *
+ * See /supabase/functions/_shared/api-clients.ts for server-side implementation
  */
 async function querySIRENEAPI(siret: string): Promise<INSEEEnterprise | null> {
   try {
-    const apiKey = process.env.INSEE_API_KEY;
+    // SECURITY FIX: Removed process.env.INSEE_API_KEY access from frontend
+    // INSEE API queries must be made server-side only to protect API keys
+    warn('[INSEE] API queries moved to server-side Edge Function - using offline validation only');
+    return null;
 
+    /* DEPRECATED - API keys should never be in frontend
+    const apiKey = process.env.INSEE_API_KEY;
     if (!apiKey) {
       warn('[INSEE] API key not configured - using offline validation only');
       return null;
     }
-
-    const endpoint = 'https://api.insee.fr/api/sirene/V3/etablissements';
-    const response = await fetch(`${endpoint}/${siret}`, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        Accept: 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        warn(`[INSEE] SIRET not found: ${siret}`);
-        return null;
-      }
-      console.error(`[INSEE] API error: ${response.statusText}`);
-      return null;
-    }
-
-    const data: any = await response.json();
-    const etablissement = data.etablissement;
-
-    if (!etablissement) {
-      return null;
-    }
-
-    const enterprise: INSEEEnterprise = {
-      siret: etablissement.siret,
-      siren: etablissement.siren,
-      name: etablissement.uniteLegaleVenueNumber?.unitePurgeeDate
-        ? '[INACTIVE]'
-        : etablissement.denominations?.[0] || 'Unknown',
-      status: determineStatus(etablissement),
-      creationDate: etablissement.dateCreation,
-      sector: etablissement.codeNaf || '',
-      sectorLabel: getNAFLabel(etablissement.codeNaf),
-      address: formatAddress(etablissement),
-      city: etablissement.commune || '',
-      zipCode: etablissement.codePostal || '',
-      verificationScore: 95, // High score for API-verified data
-    };
-
-    return enterprise;
+    // ... rest of API call removed for security
+    */
   } catch (error) {
     console.error('[INSEE] API query failed:', error);
     return null;

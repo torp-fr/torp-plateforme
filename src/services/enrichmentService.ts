@@ -285,54 +285,23 @@ export async function fetchCompanyData(siret: string): Promise<CompanyData | und
 }
 
 // ============================================================================
-// VECTORISATION (PLACEHOLDER - À INTÉGRER AVEC OPENAI)
+// VECTORISATION (MOVED TO SUPABASE EDGE FUNCTION)
 // ============================================================================
 
+/**
+ * DEPRECATED: Vectorization now handled by Supabase Edge Function
+ * This keeps API keys server-side only
+ *
+ * Call supabase.functions.invoke('generate-embedding') instead
+ * See /supabase/functions/generate-embedding/index.ts
+ */
 export async function vectorizeEnrichedData(
   data: EnrichedClientData
 ): Promise<number[] | undefined> {
-  // TODO: Intégrer OpenAI Embeddings ou autre service
-  // Pour maintenant, retourner undefined
-  try {
-    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-    if (!apiKey) {
-      warn('⚠️ OpenAI API key not configured for vectorization');
-      return undefined;
-    }
-
-    const textToEmbed = `
-      Client: ${data.client.name}
-      Address: ${data.addressText}
-      DPE Class: ${data.dpe.class || 'N/A'}
-      Building Type: ${data.cadastre.buildingType || 'N/A'}
-      Year: ${data.cadastre.yearConstruction || 'N/A'}
-      ABF: ${data.regulatory.abfZone ? 'Yes' : 'No'}
-      Flood Risk: ${data.regulatory.floodableZone ? 'Yes' : 'No'}
-    `;
-
-    const response = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'text-embedding-3-small',
-        input: textToEmbed,
-      }),
-    });
-
-    if (!response.ok) {
-      warn('⚠️ Embedding API error');
-      return undefined;
-    }
-
-    const result = await response.json();
-    return result.data[0].embedding;
-  } catch (error) {
-    console.error('⚠️ Vectorization error:', error);
-    return undefined;
-  }
+  // Vectorization is now server-side only (Supabase Edge Function)
+  // Frontend should not make direct API calls
+  warn('⚠️ Vectorization has been moved to server-side (Supabase Edge Function)');
+  return undefined;
 }
 
 // ============================================================================

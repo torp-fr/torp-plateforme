@@ -36,55 +36,26 @@ export interface RGEVerificationResult {
 
 /**
  * Query ADEME RGE database
- * Note: Requires ADEME API credentials
+ * SECURITY: This function should only be called from server-side (Supabase Edge Function)
+ * Frontend MUST NOT access process.env or API keys
+ *
+ * See /supabase/functions/_shared/api-clients.ts for server-side implementation
  */
 async function queryRGEDatabase(siret: string): Promise<RGECertification | null> {
   try {
-    const apiKey = process.env.ADEME_RGE_API_KEY;
+    // SECURITY FIX: Removed process.env.ADEME_RGE_API_KEY access from frontend
+    // ADEME RGE API queries must be made server-side only to protect API keys
+    warn('[RGE] API queries moved to server-side Edge Function - offline verification only');
+    return null;
 
+    /* DEPRECATED - API keys should never be in frontend
+    const apiKey = process.env.ADEME_RGE_API_KEY;
     if (!apiKey) {
       warn('[RGE] API key not configured');
       return null;
     }
-
-    // ADEME RGE API endpoint (example)
-    const endpoint = 'https://data.ademe.gouv.fr/rge/search';
-
-    const response = await fetch(`${endpoint}?siret=${siret}`, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        Accept: 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      warn(`[RGE] API error: ${response.statusText}`);
-      return null;
-    }
-
-    const data: any = await response.json();
-
-    if (!data || !data.establishments || data.establishments.length === 0) {
-      return null;
-    }
-
-    const establishment = data.establishments[0];
-
-    const domains = parseDomains(establishment);
-    const isActive = checkCertificationActive(establishment);
-
-    const certification: RGECertification = {
-      siret: establishment.siret,
-      name: establishment.denomination || 'Unknown',
-      domains,
-      validFrom: establishment.dateValidation || '',
-      validUntil: establishment.dateExpiration || '',
-      isActive,
-      certificationNumber: establishment.numeroLicence || '',
-      verificationScore: 98, // High score for API-verified RGE
-    };
-
-    return certification;
+    // ... rest of API call removed for security
+    */
   } catch (error) {
     console.error('[RGE] Database query failed:', error);
     return null;

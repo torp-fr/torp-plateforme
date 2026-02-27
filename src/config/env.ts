@@ -52,13 +52,9 @@ interface EnvConfig {
   };
 
   // AI / LLM Configuration
+  // NOTE: API keys are NOT exposed to frontend
+  // All LLM calls go through Supabase Edge Functions (server-side)
   ai: {
-    openai?: {
-      apiKey: string;
-    };
-    anthropic?: {
-      apiKey: string;
-    };
     primaryProvider: 'openai' | 'claude';
     fallbackEnabled: boolean;
   };
@@ -150,12 +146,8 @@ export const env: EnvConfig = {
   },
 
   ai: {
-    openai: getEnv('VITE_OPENAI_API_KEY') ? {
-      apiKey: getEnv('VITE_OPENAI_API_KEY'),
-    } : undefined,
-    anthropic: getEnv('VITE_ANTHROPIC_API_KEY') ? {
-      apiKey: getEnv('VITE_ANTHROPIC_API_KEY'),
-    } : undefined,
+    // SECURITY: API keys NOT exposed to frontend
+    // All calls go through Supabase Edge Functions (server-side only)
     primaryProvider: (getEnv('VITE_AI_PRIMARY_PROVIDER', 'openai') as 'openai' | 'claude'),
     fallbackEnabled: getBoolEnv('VITE_AI_FALLBACK_ENABLED', true),
   },
