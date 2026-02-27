@@ -1,7 +1,10 @@
 /**
  * AI Client for Supabase Edge Functions
  * Supports Claude API with automatic model fallback
+ * Includes token counting & validation
  */
+
+import { validateTokens, type TokenCountResult, type TokenCountError } from './token-counter.ts';
 
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
 
@@ -17,12 +20,24 @@ export interface AIResponse {
   data?: any;
   error?: string;
   model?: string;
+  tokens?: {
+    estimated: number;
+    actual?: number;
+  };
+  tokenValidation?: {
+    inputTokens: number;
+    outputTokens: number;
+    estimatedTotal: number;
+    safeLimit: number;
+  };
 }
 
 export async function callClaude(
   prompt: string,
   systemPrompt: string,
-  apiKey: string
+  apiKey: string,
+  maxTokens: number = 4096,
+  skipTokenValidation: boolean = false
 ): Promise<AIResponse> {
   let lastError: string | null = null;
 
@@ -30,6 +45,52 @@ export async function callClaude(
   for (const model of CLAUDE_MODELS) {
     try {
       console.log(`[AI Client] Trying model: ${model}`);
+
+      // ============================================
+      // TOKEN COUNTING & VALIDATION (unless skipped)
+      // ============================================
+      let tokenValidation: TokenCountResult | TokenCountError | null = null;
+
+      if (!skipTokenValidation) {
+        tokenValidation = validateTokens(
+          [{ role: 'user', content: prompt }],
+          model,
+          maxTokens,
+          systemPrompt
+        );
+
+        // Check if validation returned an error
+        if (tokenValidation && 'error' in tokenValidation && tokenValidation.error !== undefined) {
+          const errorData = tokenValidation as TokenCountError;
+          console.warn('[AI Client] Token limit exceeded:', {
+            model,
+            inputTokens: errorData.inputTokens,
+            outputTokens: errorData.outputTokens,
+            maxAllowed: errorData.maxAllowed
+          });
+
+          return {
+            success: false,
+            error: `Context limit exceeded: ${errorData.message}`,
+            model,
+            tokenValidation: {
+              inputTokens: errorData.inputTokens,
+              outputTokens: errorData.outputTokens,
+              estimatedTotal: errorData.inputTokens + errorData.outputTokens,
+              safeLimit: errorData.maxAllowed
+            }
+          };
+        }
+
+        const validTokens = tokenValidation as TokenCountResult;
+        console.log('[AI Client] Token validation passed:', {
+          model,
+          inputTokens: validTokens.inputTokens,
+          outputTokens: validTokens.outputTokens,
+          estimatedTotal: validTokens.estimatedTotal,
+          safeLimit: validTokens.safeLimit
+        });
+      }
 
       const response = await fetch(CLAUDE_API_URL, {
         method: 'POST',
@@ -40,7 +101,7 @@ export async function callClaude(
         },
         body: JSON.stringify({
           model,
-          max_tokens: 4096,
+          max_tokens: maxTokens,
           system: systemPrompt,
           messages: [{ role: 'user', content: prompt }],
         }),
@@ -57,11 +118,17 @@ export async function callClaude(
         }
 
         // For other errors, return immediately
-        return { success: false, error: `Claude API error: ${errorText}` };
+        return { success: false, error: `Claude API error: ${errorText}`, model };
       }
 
       const result = await response.json();
       const content = result.content[0]?.text || '';
+
+      // Parse token usage from response
+      const tokens = {
+        estimated: tokenValidation && !('error' in tokenValidation) ? (tokenValidation as TokenCountResult).estimatedTotal : 0,
+        actual: result.usage ? result.usage.input_tokens + result.usage.output_tokens : undefined
+      };
 
       // Try to parse JSON from response
       try {
@@ -69,11 +136,50 @@ export async function callClaude(
                           content.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const jsonStr = jsonMatch[1] || jsonMatch[0];
-          return { success: true, data: JSON.parse(jsonStr), model };
+          return {
+            success: true,
+            data: JSON.parse(jsonStr),
+            model,
+            tokens,
+            tokenValidation: tokenValidation && !('error' in tokenValidation)
+              ? {
+                  inputTokens: (tokenValidation as TokenCountResult).inputTokens,
+                  outputTokens: (tokenValidation as TokenCountResult).outputTokens,
+                  estimatedTotal: (tokenValidation as TokenCountResult).estimatedTotal,
+                  safeLimit: (tokenValidation as TokenCountResult).safeLimit
+                }
+              : undefined
+          };
         }
-        return { success: true, data: content, model };
+        return {
+          success: true,
+          data: content,
+          model,
+          tokens,
+          tokenValidation: tokenValidation && !('error' in tokenValidation)
+            ? {
+                inputTokens: (tokenValidation as TokenCountResult).inputTokens,
+                outputTokens: (tokenValidation as TokenCountResult).outputTokens,
+                estimatedTotal: (tokenValidation as TokenCountResult).estimatedTotal,
+                safeLimit: (tokenValidation as TokenCountResult).safeLimit
+              }
+            : undefined
+        };
       } catch {
-        return { success: true, data: content, model };
+        return {
+          success: true,
+          data: content,
+          model,
+          tokens,
+          tokenValidation: tokenValidation && !('error' in tokenValidation)
+            ? {
+                inputTokens: (tokenValidation as TokenCountResult).inputTokens,
+                outputTokens: (tokenValidation as TokenCountResult).outputTokens,
+                estimatedTotal: (tokenValidation as TokenCountResult).estimatedTotal,
+                safeLimit: (tokenValidation as TokenCountResult).safeLimit
+              }
+            : undefined
+        };
       }
     } catch (error) {
       lastError = String(error);
@@ -85,7 +191,7 @@ export async function callClaude(
       }
 
       // For other errors, return
-      return { success: false, error: lastError };
+      return { success: false, error: lastError, model };
     }
   }
 

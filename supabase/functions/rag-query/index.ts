@@ -6,6 +6,12 @@ import {
   extractDevisData,
   type RAGContext
 } from '../_shared/rag-orchestrator.ts';
+import {
+  countTokens,
+  validateTokens,
+  type TokenCountResult,
+  type TokenCountError
+} from '../_shared/token-counter.ts';
 
 /**
  * Endpoint RAG standalone
@@ -48,8 +54,59 @@ serve(async (req) => {
         if (!claudeApiKey) {
           return errorResponse('CLAUDE_API_KEY non configurée');
         }
+
+        // ============================================
+        // TOKEN COUNTING & VALIDATION
+        // ============================================
+        const extractionPromptPreview = `Analyse ce devis et extrait les informations structurées.
+
+DEVIS:
+${devisText}
+
+[... JSON schema ...]`;
+
+        const tokenValidation = validateTokens(
+          [{ role: 'user', content: extractionPromptPreview }],
+          'claude-3-5-sonnet-20241022',
+          4096,
+          'Tu es un expert en analyse de devis du bâtiment. Extrait les données avec précision. Retourne uniquement du JSON valide.'
+        );
+
+        // Check if validation returned an error
+        if (tokenValidation && 'error' in tokenValidation && tokenValidation.error !== undefined) {
+          const errorData = tokenValidation as TokenCountError;
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: 'context_limit_exceeded',
+              message: errorData.message,
+              details: {
+                inputTokens: errorData.inputTokens,
+                outputTokens: errorData.outputTokens,
+                totalTokens: errorData.inputTokens + errorData.outputTokens,
+                maxAllowed: errorData.maxAllowed
+              }
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const validTokens = tokenValidation as TokenCountResult;
+        console.log('[RAG Query Extract] Token validation passed:', {
+          inputTokens: validTokens.inputTokens,
+          outputTokens: validTokens.outputTokens,
+          estimatedTotal: validTokens.estimatedTotal,
+          safeLimit: validTokens.safeLimit
+        });
+
         const extracted = await extractDevisData(devisText, claudeApiKey);
-        return successResponse({ extracted });
+        return successResponse({
+          extracted,
+          tokens: {
+            estimated: validTokens.estimatedTotal,
+            safeLimit: validTokens.safeLimit
+          }
+        });
       }
 
       // Vérification entreprise

@@ -1,8 +1,14 @@
 // supabase/functions/llm-completion/index.ts
-// Edge Function pour appeler les LLMs de mani??re s??curis??e (cl??s API c??t?? serveur)
+// Edge Function pour appeler les LLMs de manière sécurisée (clés API côté serveur)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  validateTokens,
+  formatTokenError,
+  type TokenCountResult,
+  type TokenCountError
+} from '../_shared/token-counter.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,7 +32,7 @@ serve(async (req) => {
   }
 
   try {
-    // V??rifier l'authentification Supabase
+    // Vérifier l'authentification Supabase
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       throw new Error('Missing authorization header')
@@ -38,13 +44,13 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     )
 
-    // V??rifier que l'utilisateur est authentifi??
+    // Vérifier que l'utilisateur est authentifié
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
     if (authError || !user) {
       throw new Error('Unauthorized - Invalid or expired token')
     }
 
-    // Parser le body de la requ??te
+    // Parser le body de la requête
     const params: CompletionRequest = await req.json()
 
     const {
@@ -61,6 +67,57 @@ serve(async (req) => {
       throw new Error('Missing or invalid messages parameter')
     }
 
+    // ============================================
+    // TOKEN COUNTING & VALIDATION
+    // ============================================
+    const selectedModel = model || (provider === 'anthropic' ? 'claude-sonnet-4-20250514' : 'gpt-4o')
+
+    // Validate tokens before making API call
+    const tokenValidation = validateTokens(messages, selectedModel, max_tokens, system)
+
+    // Check if validation returned an error
+    if ('error' in tokenValidation && tokenValidation.error !== undefined) {
+      const errorData = tokenValidation as TokenCountError
+      console.warn('[Token Validation] Limit exceeded:', {
+        model: selectedModel,
+        inputTokens: errorData.inputTokens,
+        outputTokens: errorData.outputTokens,
+        maxAllowed: errorData.maxAllowed
+      })
+
+      return new Response(
+        JSON.stringify({
+          error: 'context_limit_exceeded',
+          message: errorData.message,
+          details: {
+            inputTokens: errorData.inputTokens,
+            outputTokens: errorData.outputTokens,
+            totalTokens: errorData.inputTokens + errorData.outputTokens,
+            maxAllowed: errorData.maxAllowed
+          }
+        }),
+        {
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      )
+    }
+
+    const validTokens = tokenValidation as TokenCountResult
+    console.log('[Token Validation] Passed:', {
+      model: selectedModel,
+      inputTokens: validTokens.inputTokens,
+      outputTokens: validTokens.outputTokens,
+      estimatedTotal: validTokens.estimatedTotal,
+      safeLimit: validTokens.safeLimit
+    })
+
+    // ============================================
+    // LLM CALL
+    // ============================================
     let response: Response;
 
     if (provider === 'anthropic') {
@@ -70,7 +127,7 @@ serve(async (req) => {
         throw new Error('Anthropic API key not configured')
       }
 
-      const anthropicModel = model || 'claude-sonnet-4-20250514'
+      const anthropicModel = selectedModel
 
       response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -93,9 +150,9 @@ serve(async (req) => {
         throw new Error('OpenAI API key not configured')
       }
 
-      const openaiModel = model || 'gpt-4o'
+      const openaiModel = selectedModel
 
-      // Pr??parer les messages avec system prompt si fourni
+      // Préparer les messages avec system prompt si fourni
       const openaiMessages = system
         ? [{ role: 'system', content: system }, ...messages]
         : messages
@@ -124,19 +181,27 @@ serve(async (req) => {
 
     const result = await response.json()
 
-    // Normaliser la r??ponse
+    // Normaliser la réponse
     const normalizedResponse = provider === 'anthropic'
       ? {
           content: result.content?.[0]?.text || '',
           model: result.model,
           usage: result.usage,
           provider: 'anthropic',
+          tokens: {
+            estimated: validTokens.estimatedTotal,
+            actual: result.usage?.input_tokens + result.usage?.output_tokens || null
+          }
         }
       : {
           content: result.choices?.[0]?.message?.content || '',
           model: result.model,
           usage: result.usage,
           provider: 'openai',
+          tokens: {
+            estimated: validTokens.estimatedTotal,
+            actual: result.usage?.total_tokens || null
+          }
         }
 
     return new Response(

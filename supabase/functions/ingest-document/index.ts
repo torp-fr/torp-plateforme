@@ -6,6 +6,12 @@ import {
   chunkText,
   cleanExtractedText,
 } from '../_shared/embeddings.ts';
+import {
+  validateTokens,
+  countTokens,
+  type TokenCountResult,
+  type TokenCountError
+} from '../_shared/token-counter.ts';
 
 /**
  * Architecture OCR robuste avec fallbacks multiples
@@ -25,6 +31,47 @@ async function ocrWithOpenAIVision(buffer: ArrayBuffer, mimeType: string, apiKey
   const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
   const mediaType = mimeType.startsWith('image/') ? mimeType : 'image/png';
 
+  // ============================================
+  // TOKEN COUNTING & VALIDATION
+  // ============================================
+  const systemPrompt = 'Tu es un expert OCR en documents techniques du bâtiment.';
+  const userPrompt = `Extrais TOUT le texte de ce document technique du bâtiment de manière structurée.
+
+IMPORTANT : Conserve absolument :
+- Les titres et numéros (DTU, NF, articles)
+- Les tableaux (format markdown)
+- Les valeurs techniques (dimensions, résistances, etc.)
+- Les listes à puces et énumérations
+- Les références normatives
+
+Retourne UNIQUEMENT le texte extrait.`;
+
+  const tokenValidation = validateTokens(
+    [{ role: 'user', content: userPrompt }],
+    'gpt-4o',
+    16000,
+    systemPrompt
+  );
+
+  // Check if validation returned an error
+  if (tokenValidation && 'error' in tokenValidation && tokenValidation.error !== undefined) {
+    const errorData = tokenValidation as TokenCountError;
+    console.warn('[OCR Vision] Token limit exceeded:', {
+      inputTokens: errorData.inputTokens,
+      outputTokens: errorData.outputTokens,
+      maxAllowed: errorData.maxAllowed
+    });
+    throw new Error(`[OCR Vision] Context limit exceeded: ${errorData.message}`);
+  }
+
+  const validTokens = tokenValidation as TokenCountResult;
+  console.log('[OCR Vision] Token validation passed:', {
+    inputTokens: validTokens.inputTokens,
+    outputTokens: validTokens.outputTokens,
+    estimatedTotal: validTokens.estimatedTotal,
+    safeLimit: validTokens.safeLimit
+  });
+
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -34,22 +81,14 @@ async function ocrWithOpenAIVision(buffer: ArrayBuffer, mimeType: string, apiKey
     body: JSON.stringify({
       model: 'gpt-4o',
       max_tokens: 16000,
+      system: systemPrompt,
       messages: [{
         role: 'user',
         content: [
           { type: 'image_url', image_url: { url: `data:${mediaType};base64,${base64}`, detail: 'high' } },
           {
             type: 'text',
-            text: `Extrais TOUT le texte de ce document technique du bâtiment de manière structurée.
-
-IMPORTANT : Conserve absolument :
-- Les titres et numéros (DTU, NF, articles)
-- Les tableaux (format markdown)
-- Les valeurs techniques (dimensions, résistances, etc.)
-- Les listes à puces et énumérations
-- Les références normatives
-
-Retourne UNIQUEMENT le texte extrait.`
+            text: userPrompt
           }
         ]
       }]
