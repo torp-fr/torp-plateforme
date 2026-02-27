@@ -187,13 +187,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     };
 
+    // Watchdog: Force loading timeout after 5 seconds
+    // Prevents infinite loading spinner if auth bootstrap hangs
+    const watchdogTimeout = setTimeout(() => {
+      if (isMounted && isLoading) {
+        console.error('⚠️ [Auth Watchdog] Loading timeout exceeded (5s) - forcing completion');
+        setIsLoading(false);
+      }
+    }, 5000);
+
     // Execute initialization
     loadUser();
     setupAuthListener();
 
-    // Cleanup subscription on unmount
+    // Cleanup subscription and watchdog on unmount
     return () => {
       isMounted = false;
+      clearTimeout(watchdogTimeout);
       try {
         subscription?.unsubscribe();
       } catch (error) {
