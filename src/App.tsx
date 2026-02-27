@@ -39,7 +39,6 @@ import JobStatusPage from "./pages/analysis/JobStatusPage";
 
 // Admin Pages
 import { DashboardPage } from "./pages/admin/DashboardPage";
-import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { SystemHealthPage } from "./pages/admin/SystemHealthPage";
 import { LiveIntelligencePage } from "./pages/admin/LiveIntelligencePage";
 import { OrchestrationsPage } from "./pages/admin/OrchestrationsPage";
@@ -81,7 +80,6 @@ const AppContent = () => {
               <Route path="knowledge" element={<KnowledgeBasePage />} />
               <Route path="security" element={<SecurityPage />} />
               <Route path="settings" element={<AdminSettingsPage />} />
-              <Route path="users" element={<AdminUsersPage />} />
             </Route>
           </Route>
 

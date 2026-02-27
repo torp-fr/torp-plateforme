@@ -9,6 +9,7 @@ import { TrendingUp, Users, FileText, Loader2 } from 'lucide-react';
 import { analyticsService } from '@/services/api/analytics.service';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface GlobalStats {
   userCount: number;
@@ -26,7 +27,7 @@ export function LiveIntelligencePage() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        setIsLoading(true);
+        if (!stats) setIsLoading(true);
         const data = await analyticsService.getGlobalStats();
         setStats(data);
         setError(null);
@@ -49,20 +50,64 @@ export function LiveIntelligencePage() {
     return () => clearInterval(interval);
   }, [toast]);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (error) {
+  if (error && !stats) {
     return (
       <EmptyState
         title="Impossible de charger les données"
         description={error}
       />
+    );
+  }
+
+  if (!stats && isLoading) {
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Live Intelligence</h1>
+          <p className="text-muted-foreground">Real-time platform analytics and insights</p>
+        </div>
+
+        {/* Skeleton Loaders */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardHeader className="space-y-2">
+              <Skeleton className="h-4 w-24" />
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Skeleton className="h-8 w-16" />
+              <Skeleton className="h-3 w-32" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="space-y-2">
+              <Skeleton className="h-4 w-32" />
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Skeleton className="h-8 w-20" />
+              <Skeleton className="h-3 w-24" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="space-y-2">
+              <Skeleton className="h-4 w-28" />
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Skeleton className="h-8 w-16" />
+              <Skeleton className="h-3 w-24" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="space-y-2">
+              <Skeleton className="h-4 w-16" />
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Skeleton className="h-8 w-12" />
+              <Skeleton className="h-3 w-32" />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     );
   }
 
@@ -78,9 +123,17 @@ export function LiveIntelligencePage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Live Intelligence</h1>
-        <p className="text-muted-foreground">Real-time platform analytics and insights</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Live Intelligence</h1>
+          <p className="text-muted-foreground">Real-time platform analytics and insights</p>
+        </div>
+        {isLoading && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Actualisation...</span>
+          </div>
+        )}
       </div>
 
       {/* Key Metrics */}
