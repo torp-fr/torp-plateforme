@@ -122,11 +122,8 @@ export function AICommandCenterStrip() {
       window.removeEventListener('RAG_EDGE_STATUS_UPDATED', handleEdgeUpdate);
       window.removeEventListener('RAG_BIG_DOC_MODE_ACTIVATED', handleBigDocMode);
       window.removeEventListener('RAG_BIG_DOC_MODE_CLEARED', handleBigDocClear);
-      window.removeEventListener('RAG_DOC_LOCKED', handleDocLocked);
-      window.removeEventListener('RAG_DOC_UNLOCKED', handleDocUnlocked);
       window.removeEventListener('RAG_STREAM_MODE_ACTIVATED', handleStreamModeActivated);
       window.removeEventListener('RAG_STREAM_MODE_CLEARED', handleStreamModeCleared);
-      window.removeEventListener('RAG_STREAM_CONTROLLER_UPDATED', handleStreamControllerUpdated);
       if (heartbeatIntervalRef.current) {
         clearInterval(heartbeatIntervalRef.current);
       }
