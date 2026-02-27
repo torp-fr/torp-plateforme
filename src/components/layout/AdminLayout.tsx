@@ -9,7 +9,6 @@ import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import {
   BarChart3,
   Database,
-  Users,
   Settings,
   LogOut,
   Menu,
@@ -86,12 +85,6 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
     href: '/analytics/system',
     icon: Plug,
     label: 'APIs',
-  },
-  {
-    id: 'users',
-    href: '/analytics/users',
-    icon: Users,
-    label: 'Utilisateurs',
   },
   {
     id: 'settings',

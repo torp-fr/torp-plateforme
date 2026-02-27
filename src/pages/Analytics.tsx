@@ -34,7 +34,7 @@ import { supabase } from '@/lib/supabase';
 import type { ContextEngineResult } from '@/core/engines/context.engine';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
-type TabType = 'overview' | 'orchestration' | 'kb' | 'doctrine' | 'fraud' | 'adaptive' | 'apis' | 'logs' | 'upload-kb' | 'users' | 'config';
+type TabType = 'overview' | 'orchestration' | 'kb' | 'doctrine' | 'fraud' | 'adaptive' | 'apis' | 'logs' | 'upload-kb' | 'config';
 
 /**
  * Pricing Statistics Card - PHASE 36 Extension
@@ -992,37 +992,6 @@ export function UploadKBTab() {
   return (
     <div className="space-y-6">
       <KnowledgeBaseUpload />
-    </div>
-  );
-}
-
-/**
- * Users Tab Component
- */
-function UsersTab({ navigate }: { navigate: any }) {
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold">Gestion des Utilisateurs</h2>
-          <p className="text-muted-foreground">Gérez les rôles et permissions</p>
-        </div>
-        <Button onClick={() => navigate('/analytics/users')}>
-          Gérer les utilisateurs
-        </Button>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Accédez à la page de gestion</CardTitle>
-          <CardDescription>Cliquez sur le bouton ci-dessus pour accéder à la gestion complète des utilisateurs</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground text-sm">
-            Vous pouvez promouvoir des utilisateurs au rôle d'administrateur, gérer les permissions KB, et consulter l'historique d'audit.
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }
