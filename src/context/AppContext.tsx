@@ -103,7 +103,6 @@ interface AppContextType {
   currentProject: Project | null;
   isAnalyzing: boolean;
   isAuthenticated: boolean; // Session exists (auth token valid)
-  roleLoaded: boolean; // Admin role from profile has been fetched
   setUser: (user: User | null) => void;
   setUserType: (type: UserType) => void;
   setProjects: (projects: Project[]) => void;
@@ -123,7 +122,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false); // Session exists (auth token valid)
-  const [roleLoaded, setRoleLoaded] = useState(false); // Admin role from profile loaded
 
   // Compute isAdmin from user
   const isAdmin = user?.isAdmin === true;
@@ -145,14 +143,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             email: session.user.email || 'unknown',
             name: '',
             type: 'B2C',
-            isAdmin: false, // default until profile loads
+            // isAdmin undefined until profile loads
           });
-          setRoleLoaded(false); // Mark role as pending load
         } else {
           log('[Auth] No session');
           setIsAuthenticated(false);
           setUser(null);
-          setRoleLoaded(false);
         }
       }
     );
@@ -184,17 +180,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         if (userProfile) {
           log('[Profile] ✓ Loaded:', userProfile.email);
-          setUser(userProfile);
+          // Merge profile data, determine admin role
+          setUser(prev => ({
+            ...prev,
+            ...userProfile,
+            isAdmin: userProfile.role === 'admin',
+          }));
           setUserType(userProfile.type);
-          setRoleLoaded(true); // Mark role as loaded
-        } else {
-          setRoleLoaded(true); // Mark role as loaded even if profile is null
         }
       } catch (err) {
         if (!isMounted) return;
         log('[Profile] Load failed, continuing with minimal profile');
-        setRoleLoaded(true); // Mark role as loaded even on error
-        // Continue even if profile fails - user is still authenticated
+        // Mark role as determined (false) even on error
+        setUser(prev => prev ? { ...prev, isAdmin: false } : null);
       }
     };
 
@@ -301,7 +299,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       currentProject,
       isAnalyzing,
       isAuthenticated,
-      roleLoaded,
       setUser,
       setUserType,
       setProjects,

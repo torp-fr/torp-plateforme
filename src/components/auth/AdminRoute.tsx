@@ -14,16 +14,16 @@ interface AdminRouteProps {
 }
 
 export function AdminRoute({ children }: AdminRouteProps) {
-  const { user, roleLoaded } = useApp();
+  const { user } = useApp();
 
   // Not authenticated
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  // Wait silently until role is loaded from profile
-  // This prevents incorrect redirect to /dashboard while profile is being fetched
-  if (!roleLoaded) {
+  // Wait silently until role is determined from profile
+  // isAdmin is undefined while profile loads, false if not admin, true if admin
+  if (user.isAdmin === undefined) {
     return null;
   }
 
