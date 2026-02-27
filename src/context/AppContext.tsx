@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import { supabase } from '@/lib/supabase';
 import { authService } from '@/services/api/supabase/auth.service';
 import { devisService } from '@/services/api/supabase/devis.service';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
@@ -121,94 +122,89 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [projects, setProjects] = useState<Project[]>([]); // Analyses de devis
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isLoading, setIsLoading] = useState(true); // Chargement initial de l'auth
+  const [isLoading, setIsLoading] = useState(true); // ONLY represents session bootstrap timing
   const [isAuthenticated, setIsAuthenticated] = useState(false); // Session exists (auth token valid)
+
+  // PHASE 3: StrictMode safety - prevent double bootstrap
+  const didBootstrap = useRef(false);
 
   // Compute isAdmin from user
   const isAdmin = user?.isAdmin === true;
 
-  // Bootstrap auth: Check initial session and setup listener
-  // PHASE 37: Non-blocking bootstrap - session only
-  // 1. Check session (fast)
-  // 2. Set isLoading=false immediately
-  // 3. Fetch profile in background
+  // ════════════════════════════════════════════════════════════════════════════
+  // PHASE 1 + 2 + 3: CRITICAL BOOTSTRAP - SESSION ONLY (non-blocking)
+  // ════════════════════════════════════════════════════════════════════════════
+  // Rules:
+  // 1. ZERO network calls before setIsLoading(false)
+  // 2. ZERO DB fetches during bootstrap
+  // 3. ZERO profile loading during bootstrap
+  // 4. ZERO side effects except auth listener setup
+  // 5. setIsLoading(true) appears ONLY in initial useState (line 124)
+  // ════════════════════════════════════════════════════════════════════════════
   useEffect(() => {
+    // PHASE 3: Prevent double execution in StrictMode
+    if (didBootstrap.current) {
+      log('[Bootstrap] Already bootstrapped, skipping');
+      return;
+    }
+    didBootstrap.current = true;
+
     let isMounted = true;
 
-    const bootstrapAuth = async () => {
+    const bootstrapSession = async () => {
       try {
-        // PHASE 37.1: Get session ONLY (fast, non-blocking)
-        const authUser = await authService.getSession();
+        // PHASE 7: Performance logging
+        time('SESSION_BOOTSTRAP');
+
+        // PHASE 1: Get session ONLY - no network, no DB
+        const { data } = await supabase.auth.getSession();
+
+        timeEnd('SESSION_BOOTSTRAP');
+
         if (!isMounted) return;
 
-        if (authUser) {
-          log('✓ Session restaurée:', authUser.email);
+        // Set authenticated state from session
+        if (data.session) {
+          log('[Bootstrap] ✓ Session found:', data.session.user?.email);
           setIsAuthenticated(true);
-          // Set minimal user object with auth info (email, id)
-          // Profile will be loaded asynchronously below
+          // Set minimal user - profile loads in background
           setUser({
-            id: authUser.id,
-            email: authUser.email || 'unknown',
-            name: '', // Will be filled from profile
-            type: 'B2C', // Default, will be updated from profile
+            id: data.session.user.id,
+            email: data.session.user.email || 'unknown',
+            name: '', // Will be set from profile
+            type: 'B2C', // Will be set from profile
           });
         } else {
-          log('ℹ️ Aucune session active');
+          log('[Bootstrap] ℹ️ No active session');
           setIsAuthenticated(false);
         }
-      } catch (error) {
-        console.error('⚠️ Erreur lors de la restauration de session:', error);
+      } catch (err) {
+        if (!isMounted) return;
+        error('[Bootstrap] Session check failed:', err);
         setIsAuthenticated(false);
       } finally {
         if (isMounted) {
-          setIsLoading(false); // Set to false immediately after session check
+          // CRITICAL: Set isLoading(false) immediately after session check
+          // Profile loading happens SEPARATELY and asynchronously
+          setIsLoading(false);
         }
       }
     };
 
-    bootstrapAuth();
+    bootstrapSession();
 
-    // PHASE 37.2: Fetch profile in background (after session check)
-    const fetchProfileInBackground = async () => {
-      // Wait a tick to let isLoading be set first
-      await new Promise(resolve => setTimeout(resolve, 0));
-
-      try {
-        // Get current session to find user ID
-        const authUser = await authService.getSession();
-        if (!isMounted || !authUser) return;
-
-        // Now fetch profile asynchronously
-        const userProfile = await authService.getUserProfile(authUser.id);
-        if (!isMounted) return;
-
-        if (userProfile) {
-          log('✓ Profil chargé en arrière-plan:', userProfile.email);
-          setUser(userProfile);
-          setUserType(userProfile.type);
-        }
-      } catch (error) {
-        log('⚠️ Erreur lors du chargement du profil:', error instanceof Error ? error.message : String(error));
-        // Don't set isLoading or authenticated to false
-        // User is still authenticated, profile just failed to load
-      }
-    };
-
-    // Start background profile fetch (non-blocking)
-    fetchProfileInBackground();
-
-    // Setup listener for auth state changes (login/logout/refresh)
-    // This updates state without touching isLoading
+    // Setup auth state change listener
+    // This triggers on login/logout/refresh (NOT during bootstrap)
     const { data } = authService.onAuthStateChange((sessionUser) => {
       if (!isMounted) return;
 
       if (sessionUser) {
-        log('✓ Auth event - user signed in:', sessionUser.email);
+        log('[Auth Event] User signed in:', sessionUser.email);
         setIsAuthenticated(true);
         setUser(sessionUser);
         setUserType(sessionUser.type);
       } else {
-        log('ℹ️ Auth event - user signed out');
+        log('[Auth Event] User signed out');
         setIsAuthenticated(false);
         setUser(null);
         setUserType('B2C');
@@ -217,16 +213,56 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     });
 
-    // Cleanup listener on unmount
+    // Cleanup
     return () => {
       isMounted = false;
       try {
         data?.subscription?.unsubscribe();
-      } catch (error) {
-        console.error('⚠️ Erreur unsubscribe:', error);
+      } catch (err) {
+        console.error('[Bootstrap] Unsubscribe error:', err);
       }
     };
   }, []);
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // PHASE 2: BACKGROUND PROFILE LOADING (non-blocking, separate effect)
+  // ════════════════════════════════════════════════════════════════════════════
+  // This effect runs AFTER bootstrap completes and UI renders.
+  // It fetches profile data asynchronously without touching isLoading.
+  // ════════════════════════════════════════════════════════════════════════════
+  useEffect(() => {
+    // Only fetch profile if authenticated
+    if (!isAuthenticated || !user?.id) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadProfileInBackground = async () => {
+      try {
+        log('[Profile] Loading profile for user:', user.id);
+        const userProfile = await authService.getUserProfile(user.id);
+        if (!isMounted) return;
+
+        if (userProfile) {
+          log('[Profile] ✓ Loaded:', userProfile.email);
+          setUser(userProfile);
+          setUserType(userProfile.type);
+        }
+      } catch (err) {
+        if (!isMounted) return;
+        log('[Profile] ⚠️ Load failed:', err instanceof Error ? err.message : String(err));
+        // Continue even if profile fails - user is still authenticated
+      }
+    };
+
+    // Start profile load (no await - non-blocking)
+    loadProfileInBackground();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated, user?.id]);
 
   // Load user's analyzed devis when user changes
   useEffect(() => {

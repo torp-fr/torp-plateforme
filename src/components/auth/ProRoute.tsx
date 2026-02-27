@@ -26,16 +26,10 @@ export const ProRoute = ({
   const { user, isLoading, isAuthenticated } = useApp();
   const location = useLocation();
 
-  // Show nothing while checking authentication
+  // PHASE 6: Hard mode - no visible spinner during bootstrap
+  // Return null during session check (<200ms) instead of showing spinner
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse text-center">
-          <div className="h-12 w-12 rounded-full bg-primary/20 mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Chargement...</p>
-        </div>
-      </div>
-    );
+    return null;  // Minimal blocking - blank render during bootstrap
   }
 
   // Not authenticated - redirect to login
@@ -83,15 +77,10 @@ export const ProtectedRoute = ({
   const { isLoading, isAuthenticated } = useApp();
   const location = useLocation();
 
+  // PHASE 6: Hard mode - no visible spinner during bootstrap
+  // Return null during session check (<200ms) instead of showing spinner
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse text-center">
-          <div className="h-12 w-12 rounded-full bg-primary/20 mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Chargement...</p>
-        </div>
-      </div>
-    );
+    return null;  // Minimal blocking - blank render during bootstrap
   }
 
   // Check session authentication, not profile existence
