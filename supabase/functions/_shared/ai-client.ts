@@ -2,9 +2,11 @@
  * AI Client for Supabase Edge Functions
  * Supports Claude API with automatic model fallback
  * Includes token counting & validation
+ * Tracks LLM usage and costs
  */
 
 import { validateTokens, type TokenCountResult, type TokenCountError } from './token-counter.ts';
+import { trackLLMUsage, type LogRequest } from './llm-usage-logger.ts';
 
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
 
@@ -23,12 +25,21 @@ export interface AIResponse {
   tokens?: {
     estimated: number;
     actual?: number;
+    input?: number;
+    output?: number;
   };
   tokenValidation?: {
     inputTokens: number;
     outputTokens: number;
     estimatedTotal: number;
     safeLimit: number;
+  };
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    cost: number;
+    latencyMs: number;
   };
 }
 
@@ -37,9 +48,16 @@ export async function callClaude(
   systemPrompt: string,
   apiKey: string,
   maxTokens: number = 4096,
-  skipTokenValidation: boolean = false
+  skipTokenValidation: boolean = false,
+  options?: {
+    userId?: string;
+    action?: string;
+    sessionId?: string;
+    supabaseClient?: any;
+  }
 ): Promise<AIResponse> {
   let lastError: string | null = null;
+  const startTime = Date.now();
 
   // Try each model in order
   for (const model of CLAUDE_MODELS) {
@@ -123,11 +141,59 @@ export async function callClaude(
 
       const result = await response.json();
       const content = result.content[0]?.text || '';
+      const latencyMs = Date.now() - startTime;
+
+      // Extract actual token usage from API response
+      const actualInputTokens = result.usage?.input_tokens || 0;
+      const actualOutputTokens = result.usage?.output_tokens || 0;
+      const actualTotalTokens = actualInputTokens + actualOutputTokens;
 
       // Parse token usage from response
       const tokens = {
         estimated: tokenValidation && !('error' in tokenValidation) ? (tokenValidation as TokenCountResult).estimatedTotal : 0,
-        actual: result.usage ? result.usage.input_tokens + result.usage.output_tokens : undefined
+        actual: actualTotalTokens,
+        input: actualInputTokens,
+        output: actualOutputTokens
+      };
+
+      // ============================================
+      // TRACK LLM USAGE & COST
+      // ============================================
+      if (options?.supabaseClient && options?.action) {
+        const { calculateCost } = await import('./llm-pricing.ts');
+        const costEstimate = calculateCost(model, actualInputTokens, actualOutputTokens);
+
+        // Log usage asynchronously (don't block response)
+        trackLLMUsage(options.supabaseClient, {
+          userId: options.userId,
+          action: options.action,
+          model,
+          inputTokens: actualInputTokens,
+          outputTokens: actualOutputTokens,
+          latencyMs,
+          sessionId: options.sessionId
+        }).catch(err => {
+          console.error('[AI Client] Failed to track usage:', err);
+        });
+
+        console.log('[AI Client] Usage tracked:', {
+          model,
+          tokens: actualTotalTokens,
+          cost: costEstimate.toFixed(6),
+          latency: latencyMs
+        });
+      }
+
+      // Calculate cost if we have token information
+      const { calculateCost } = await import('./llm-pricing.ts');
+      const costEstimate = calculateCost(model, actualInputTokens, actualOutputTokens);
+
+      const usageInfo = {
+        inputTokens: actualInputTokens,
+        outputTokens: actualOutputTokens,
+        totalTokens: actualTotalTokens,
+        cost: costEstimate,
+        latencyMs
       };
 
       // Try to parse JSON from response
@@ -141,6 +207,7 @@ export async function callClaude(
             data: JSON.parse(jsonStr),
             model,
             tokens,
+            usage: usageInfo,
             tokenValidation: tokenValidation && !('error' in tokenValidation)
               ? {
                   inputTokens: (tokenValidation as TokenCountResult).inputTokens,
@@ -156,6 +223,7 @@ export async function callClaude(
           data: content,
           model,
           tokens,
+          usage: usageInfo,
           tokenValidation: tokenValidation && !('error' in tokenValidation)
             ? {
                 inputTokens: (tokenValidation as TokenCountResult).inputTokens,
@@ -166,11 +234,21 @@ export async function callClaude(
             : undefined
         };
       } catch {
+        const { calculateCost: calcCost } = await import('./llm-pricing.ts');
+        const fallbackCost = calcCost(model, actualInputTokens, actualOutputTokens);
+
         return {
           success: true,
           data: content,
           model,
           tokens,
+          usage: {
+            inputTokens: actualInputTokens,
+            outputTokens: actualOutputTokens,
+            totalTokens: actualTotalTokens,
+            cost: fallbackCost,
+            latencyMs
+          },
           tokenValidation: tokenValidation && !('error' in tokenValidation)
             ? {
                 inputTokens: (tokenValidation as TokenCountResult).inputTokens,

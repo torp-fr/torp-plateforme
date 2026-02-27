@@ -12,6 +12,7 @@ import {
   type TokenCountResult,
   type TokenCountError
 } from '../_shared/token-counter.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 /**
  * Endpoint RAG standalone
@@ -172,9 +173,25 @@ Retourne un JSON avec cette structure exacte:
         });
 
         // ============================================
-        // EXTRACT DEVIS DATA
+        // EXTRACT DEVIS DATA WITH USAGE TRACKING
         // ============================================
-        const extracted = await extractDevisData(devisText, claudeApiKey);
+        let supabaseClient = null;
+        try {
+          const supabaseUrl = Deno.env.get('SUPABASE_URL');
+          const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+          if (supabaseUrl && supabaseKey) {
+            supabaseClient = createClient(supabaseUrl, supabaseKey);
+          }
+        } catch (err) {
+          console.error('[RAG Query] Failed to create Supabase client:', err);
+        }
+
+        const extracted = await extractDevisData(devisText, claudeApiKey, {
+          userId: null, // Can be extracted from auth header if available
+          sessionId: crypto.randomUUID(),
+          supabaseClient
+        });
+
         return successResponse({
           extracted,
           tokens: {

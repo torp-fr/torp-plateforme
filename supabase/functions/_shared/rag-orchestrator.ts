@@ -204,7 +204,12 @@ const KNOWLEDGE_BASE = {
 
 export async function extractDevisData(
   devisText: string,
-  claudeApiKey: string
+  claudeApiKey: string,
+  options?: {
+    userId?: string;
+    sessionId?: string;
+    supabaseClient?: any;
+  }
 ): Promise<DevisExtractedData> {
   const extractionPrompt = `Analyse ce devis et extrait les informations structurées.
 
@@ -247,7 +252,15 @@ Retourne un JSON avec cette structure exacte:
   const response = await callClaude(
     extractionPrompt,
     'Tu es un expert en analyse de devis du bâtiment. Extrait les données avec précision. Retourne uniquement du JSON valide.',
-    claudeApiKey
+    claudeApiKey,
+    4096,
+    false,
+    {
+      userId: options?.userId,
+      action: 'extract',
+      sessionId: options?.sessionId,
+      supabaseClient: options?.supabaseClient
+    }
   );
 
   if (response.success && response.data) {
