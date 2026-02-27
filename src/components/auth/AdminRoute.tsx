@@ -14,11 +14,17 @@ interface AdminRouteProps {
 }
 
 export function AdminRoute({ children }: AdminRouteProps) {
-  const { user } = useApp();
+  const { user, roleLoaded } = useApp();
 
   // Not authenticated
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Wait silently until role is loaded from profile
+  // This prevents incorrect redirect to /dashboard while profile is being fetched
+  if (!roleLoaded) {
+    return null;
   }
 
   // Not admin (role from Supabase profiles, loaded in background)
