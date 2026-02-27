@@ -9,6 +9,7 @@ import { adminService, type AdminUser } from '@/services/api/supabase/admin.serv
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Users,
   Shield,
@@ -33,7 +34,7 @@ export function AdminUsersPage() {
 
   async function loadUsers() {
     try {
-      setLoading(true);
+      if (users.length === 0) setLoading(true);
       const allUsers = await adminService.getAllUsers();
       setUsers(allUsers);
     } catch (err) {
@@ -140,13 +141,46 @@ export function AdminUsersPage() {
       {/* Users Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Tous les Utilisateurs</CardTitle>
-          <CardDescription>Cliquez sur un utilisateur pour modifier son rôle</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Tous les Utilisateurs</CardTitle>
+              <CardDescription>Cliquez sur un utilisateur pour modifier son rôle</CardDescription>
+            </div>
+            {loading && users.length > 0 && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader className="h-4 w-4 animate-spin" />
+                <span>Actualisation...</span>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-8">
-              <Loader className="h-6 w-6 animate-spin text-primary" />
+          {!users.length && loading ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-3 px-4 font-semibold">Email</th>
+                    <th className="text-left py-3 px-4 font-semibold">Nom</th>
+                    <th className="text-left py-3 px-4 font-semibold">Rôle</th>
+                    <th className="text-left py-3 px-4 font-semibold">KB Upload</th>
+                    <th className="text-left py-3 px-4 font-semibold">Créé</th>
+                    <th className="text-left py-3 px-4 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...Array(5)].map((_, i) => (
+                    <tr key={i} className="border-b">
+                      <td className="py-3 px-4"><Skeleton className="h-4 w-32" /></td>
+                      <td className="py-3 px-4"><Skeleton className="h-4 w-24" /></td>
+                      <td className="py-3 px-4"><Skeleton className="h-6 w-20" /></td>
+                      <td className="py-3 px-4"><Skeleton className="h-4 w-8" /></td>
+                      <td className="py-3 px-4"><Skeleton className="h-4 w-24" /></td>
+                      <td className="py-3 px-4"><Skeleton className="h-8 w-24" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : users.length === 0 ? (
             <p className="text-center py-8 text-muted-foreground">Aucun utilisateur trouvé</p>

@@ -52,7 +52,7 @@ function PricingStatisticsCard() {
   useEffect(() => {
     const fetchPricingStats = async () => {
       try {
-        setLoading(true);
+        if (!pricingStats) setLoading(true);
         setError(null);
         const { pricingExtractionService } = await import('@/services/ai/pricing-extraction.service');
         const stats = await pricingExtractionService.getPricingStats();
@@ -62,7 +62,6 @@ function PricingStatisticsCard() {
         const message = err instanceof Error ? err.message : 'Failed to load pricing statistics';
         console.error('[Analytics] Pricing stats error:', message);
         setError(message);
-        setPricingStats(null);
       } finally {
         setLoading(false);
       }
@@ -150,7 +149,7 @@ function KnowledgeBaseStatsCard() {
   useEffect(() => {
     const fetchDocCount = async () => {
       try {
-        setLoading(true);
+        if (docCount === null) setLoading(true);
         setError(null);
         // PHASE 35.1: Query knowledge_documents table (correct table name)
         const { supabase } = await import('@/lib/supabase');
@@ -222,7 +221,7 @@ function AnalyticsStatsCards() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        setLoading(true);
+        if (!stats) setLoading(true);
         setError(null);
         const data = await analyticsService.getGlobalStats();
         log('[Analytics] Global stats loaded:', data);
