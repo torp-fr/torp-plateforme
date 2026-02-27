@@ -134,22 +134,7 @@ export class IngestionStateMachineService {
       if (toState === DocumentIngestionState.COMPLETED) {
         updateData.ingestion_completed_at = new Date().toISOString();
         log(`[STATE MACHINE] ⏱️ Ingestion completed at ${updateData.ingestion_completed_at}`);
-
-        // PHASE 9: Clear big doc mode when document completes
-        (window as any).__RAG_BIG_DOC_MODE__ = false;
-        window.dispatchEvent(new Event('RAG_BIG_DOC_MODE_CLEARED'));
-
-        // PHASE 11: Clear stream mode when document completes
-        (window as any).__RAG_STREAM_MODE__ = false;
-        window.dispatchEvent(new Event('RAG_STREAM_MODE_CLEARED'));
-
-        // PHASE 17: Unlock document when completion
-        if ((window as any).__RAG_DOC_LOCKS__) {
-          delete (window as any).__RAG_DOC_LOCKS__[documentId];
-        }
-        window.dispatchEvent(
-          new CustomEvent('RAG_DOC_UNLOCKED', { detail: { documentId } })
-        );
+        // PHASE 40: No window state cleanup needed (DB-driven architecture)
       }
 
       // Update state in database with SAFE payload validation
@@ -219,28 +204,10 @@ export class IngestionStateMachineService {
       log(`[STATE MACHINE] Reason: ${reason}`);
       log(`[STATE MACHINE] Error: ${errorMessage}`);
 
-      // PHASE 8: If EMBEDDING failed → trigger global pause
-      if (reason === IngestionFailureReason.EMBEDDING_API_ERROR ||
-          reason === IngestionFailureReason.EMBEDDING_TIMEOUT ||
-          reason === IngestionFailureReason.EMBEDDING_PARTIAL_FAILURE) {
-        warn(`[STATE MACHINE] 🔴 CRITICAL: Embedding failure detected - pausing pipeline`);
-        (window as any).__RAG_EMBEDDING_PAUSED__ = true;
-        window.dispatchEvent(new Event('RAG_EMBEDDING_PAUSED'));
-      }
-
-      // PHASE 17: DOCUMENT-LEVEL LOCK on critical failures
-      if (reason === IngestionFailureReason.EMBEDDING_API_ERROR ||
-          reason === IngestionFailureReason.EMBEDDING_TIMEOUT ||
-          reason === IngestionFailureReason.EMBEDDING_PARTIAL_FAILURE ||
-          reason === IngestionFailureReason.CHUNKING_ERROR) {
-        warn(`[STATE MACHINE] 🔒 DOCUMENT LOCK: Isolating failed document to prevent retry storm`);
-        (window as any).__RAG_DOC_LOCKS__ ??= {};
-        (window as any).__RAG_DOC_LOCKS__[documentId] = true;
-        warn(`[DOC LOCK] 🔒 Locked document ${documentId}`);
-        window.dispatchEvent(
-          new CustomEvent('RAG_DOC_LOCKED', { detail: { documentId } })
-        );
-      }
+      // PHASE 40: All state is now in DB, no global state needed
+      // Errors are tracked in last_ingestion_error, status is FAILED
+      // Retry attempts are bounded by ingestion_attempts column (DB)
+      // No need for window globals or event dispatches
 
       // Build error details as JSON string for storage in last_ingestion_error
       const errorDetails = {
@@ -266,48 +233,11 @@ export class IngestionStateMachineService {
         return false;
       }
 
-      // PHASE 40: Clean up internal state for the failed document
-      this.cleanupDocumentState(documentId);
-
       log(`[STATE MACHINE] ✅ Document marked as FAILED`);
       return true;
     } catch (error) {
       console.error(`[STATE MACHINE] 💥 Error marking as failed:`, error);
       return false;
-    }
-  }
-
-  /**
-   * PHASE 40: Clean up internal state when document processing is complete or fails
-   * Prevents memory leaks and dangling timers/controllers
-   *
-   * Clears:
-   * - Retry count tracking
-   * - Document lock
-   * - Any pending timers
-   * - Stream controller state
-   */
-  private cleanupDocumentState(documentId: string): void {
-    try {
-      // Clear retry count
-      if ((window as any).__RAG_RETRY_COUNTS__) {
-        delete (window as any).__RAG_RETRY_COUNTS__[documentId];
-      }
-
-      // Clear document lock
-      if ((window as any).__RAG_DOC_LOCKS__) {
-        delete (window as any).__RAG_DOC_LOCKS__[documentId];
-      }
-
-      // Clear stream controller if present
-      if ((window as any).__RAG_STREAM_CONTROLLER__) {
-        // Don't delete the whole controller, just mark it clean
-        (window as any).__RAG_STREAM_CONTROLLER__.activeDocument = null;
-      }
-
-      log(`[STATE MACHINE] 🧹 Cleaned up internal state for document ${documentId}`);
-    } catch (error) {
-      warn(`[STATE MACHINE] Cleanup error for ${documentId}:`, error);
     }
   }
 

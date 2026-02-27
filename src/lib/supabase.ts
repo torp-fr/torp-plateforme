@@ -64,10 +64,6 @@ let _supabase: ReturnType<typeof createClient<Database>> | null = null;
 
 export function getSupabase() {
   if (!_supabase) {
-    // DEBUG GLOBAL COUNTER
-    // @ts-ignore
-    window.__SUPABASE_INIT_COUNT = (window.__SUPABASE_INIT_COUNT || 0) + 1;
-
     _supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
       auth: {
         autoRefreshToken: true,
@@ -82,7 +78,7 @@ export function getSupabase() {
       },
     });
 
-    log('🔥 SUPABASE INIT COUNT =', window.__SUPABASE_INIT_COUNT);
+    log('🔥 SUPABASE INITIALIZED');
   }
 
   return _supabase;

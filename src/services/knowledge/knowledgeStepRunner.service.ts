@@ -4,6 +4,8 @@
 // =======================================================
 
 import { supabase } from "@/lib/supabase";
+import { knowledgeBrainService } from '@/services/ai/knowledge-brain.service';
+import { log, warn, error as logError } from '@/lib/logger';
 
 // PHASE 40: Server-side hash computation via Supabase Edge Function or RLS trigger
 // Browser code cannot use crypto module
@@ -17,13 +19,26 @@ const PIPELINE_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 // =======================================================
 
 export async function runKnowledgeIngestion(documentId: string) {
-  const claimed = await claimDocument(documentId);
-  if (!claimed) return;
+  log(`[INGESTION] Starting knowledge ingestion for document ${documentId}`);
 
   try {
+    // Step 1: Claim document (atomic DB lock)
+    const claimed = await claimDocument(documentId);
+    if (!claimed) {
+      log(`[INGESTION] Could not claim document ${documentId} (already processing or max retries)`);
+      return;
+    }
+
+    // Step 2: Process document (extract, chunk, embed)
     await processDocument(claimed);
+
+    log(`[INGESTION] ✅ Ingestion complete for document ${documentId}`);
   } catch (err: any) {
-    await markFailed(documentId, err?.message || "Unknown error");
+    const errorMsg = err?.message || "Unknown error";
+    logError(`[INGESTION] ❌ Ingestion failed for document ${documentId}:`, errorMsg);
+
+    // Mark as failed in database
+    await markFailed(documentId, errorMsg);
   }
 }
 
@@ -32,27 +47,55 @@ export async function runKnowledgeIngestion(documentId: string) {
 // =======================================================
 
 async function claimDocument(documentId: string) {
-  const { data, error } = await supabase
-    .from("knowledge_documents")
-    .update({
-      ingestion_status: "processing",
-      ingestion_attempts: supabase.rpc("increment_attempts"), // optional
-      processing_started_at: new Date().toISOString(),
-      pipeline_timeout_at: new Date(Date.now() + PIPELINE_TIMEOUT_MS).toISOString(),
-    })
-    .eq("id", documentId)
-    .eq("ingestion_status", "pending")
-    .select()
-    .single();
+  try {
+    // Fetch current document first
+    const { data: currentDoc, error: fetchError } = await supabase
+      .from("knowledge_documents")
+      .select("ingestion_attempts, ingestion_status")
+      .eq("id", documentId)
+      .single();
 
-  if (error || !data) return null;
+    if (fetchError || !currentDoc) {
+      logError("[CLAIM] Document not found:", fetchError?.message);
+      return null;
+    }
 
-  if (data.ingestion_attempts >= MAX_ATTEMPTS) {
-    await markFailed(documentId, "Max retry attempts exceeded");
+    // Check if already processing or max retries exceeded
+    if (currentDoc.ingestion_status !== "pending") {
+      log("[CLAIM] Document already processing or completed");
+      return null;
+    }
+
+    if (currentDoc.ingestion_attempts >= MAX_ATTEMPTS) {
+      await markFailed(documentId, "Max retry attempts exceeded");
+      return null;
+    }
+
+    // Atomic update: claim document for processing
+    const { data, error } = await supabase
+      .from("knowledge_documents")
+      .update({
+        ingestion_status: "processing",
+        ingestion_attempts: (currentDoc.ingestion_attempts || 0) + 1,
+        processing_started_at: new Date().toISOString(),
+        pipeline_timeout_at: new Date(Date.now() + PIPELINE_TIMEOUT_MS).toISOString(),
+      })
+      .eq("id", documentId)
+      .eq("ingestion_status", "pending")
+      .select()
+      .single();
+
+    if (error || !data) {
+      log("[CLAIM] Failed to claim document (already processing)");
+      return null;
+    }
+
+    log("[CLAIM] Document claimed successfully", { documentId, attempt: data.ingestion_attempts });
+    return data;
+  } catch (err: any) {
+    logError("[CLAIM] Error claiming document:", err.message);
     return null;
   }
-
-  return data;
 }
 
 // =======================================================
@@ -60,29 +103,39 @@ async function claimDocument(documentId: string) {
 // =======================================================
 
 async function processDocument(doc: any) {
-  await ensureStillProcessing(doc.id);
+  log(`[PROCESS] Starting ingestion for document ${doc.id}`);
 
-  checkTimeout(doc);
+  try {
+    // Verify document is still in processing state
+    await ensureStillProcessing(doc.id);
+    checkTimeout(doc);
 
-  const sanitized = doc.sanitized_content;
-  if (!sanitized) throw new Error("Missing sanitized content");
+    // Step 1: Validate content
+    const sanitized = doc.sanitized_content || doc.content;
+    if (!sanitized || sanitized.trim().length === 0) {
+      throw new Error("Missing sanitized content");
+    }
 
-  // PHASE 40: Dedup via content_hash (computed server-side via Edge Function/trigger)
-  // The server will compute SHA256(sanitized_content) and check for duplicates
-  // For now, skip explicit server-side hash check - RLS policies will handle it
-  // TODO: Call Edge Function to compute hash and check duplicates atomically
+    log(`[PROCESS] Document size: ${(sanitized.length / 1024).toFixed(2)}KB`);
 
-  // Step 1 — Chunking
-  const chunks = chunkText(sanitized);
+    // Step 2: Chunk the document
+    const chunks = chunkText(sanitized);
+    if (!chunks.length) {
+      throw new Error("No chunks generated from content");
+    }
 
-  if (!chunks.length) {
-    throw new Error("No chunks generated");
+    log(`[PROCESS] Generated ${chunks.length} chunks`);
+
+    // Step 3: Generate embeddings
+    await processEmbeddingsInBatches(doc.id, chunks);
+
+    // Step 4: Mark as completed
+    await markCompleted(doc.id);
+    log(`[PROCESS] Ingestion complete for document ${doc.id}`);
+  } catch (err: any) {
+    logError(`[PROCESS] Error processing document ${doc.id}:`, err.message);
+    throw err;
   }
-
-  // Step 2 — Embeddings (Batch + concurrency limit)
-  await processEmbeddingsInBatches(doc.id, chunks);
-
-  await markCompleted(doc.id);
 }
 
 // =======================================================
@@ -115,13 +168,59 @@ async function processEmbeddingsInBatches(documentId: string, chunks: string[]) 
 }
 
 async function generateEmbeddingBatch(documentId: string, batch: string[]) {
-  // TODO: replace with real embedding call
-  await Promise.all(
-    batch.map(async (chunk) => {
-      // simulate embedding call
-      return true;
-    })
-  );
+  log(`[EMBEDDING] Processing batch of ${batch.length} chunks for document ${documentId}`);
+
+  // Sequential processing with concurrency limit (max 3 parallel)
+  const results: { chunk: string; embedding: number[] | null; error?: string }[] = [];
+
+  for (let i = 0; i < batch.length; i += 3) {
+    const chunk = batch.slice(i, i + 3);
+    const embeddings = await Promise.all(
+      chunk.map(async (text) => {
+        try {
+          const embedding = await knowledgeBrainService.generateEmbedding(text);
+          return embedding;
+        } catch (err: any) {
+          logError(`[EMBEDDING] Failed for chunk: ${err.message}`);
+          return null;
+        }
+      })
+    );
+
+    for (let j = 0; j < chunk.length; j++) {
+      results.push({
+        chunk: chunk[j],
+        embedding: embeddings[j],
+      });
+    }
+  }
+
+  // Persist chunks and embeddings
+  const embeddingData = results
+    .filter(r => r.chunk && r.chunk.trim().length > 0) // Skip empty chunks
+    .map((r, idx) => ({
+      document_id: documentId,
+      content: r.chunk,
+      embedding: r.embedding || null, // pgvector expects array<float> or null
+      token_count: Math.ceil(r.chunk.length / 4), // Estimate: 1 token ≈ 4 chars
+      chunk_index: idx,
+    }));
+
+  if (embeddingData.length === 0) {
+    throw new Error("No valid chunks to persist");
+  }
+
+  const { error } = await supabase
+    .from("knowledge_chunks")
+    .insert(embeddingData);
+
+  if (error) {
+    logError(`[EMBEDDING] Failed to persist embeddings:`, error.message);
+    throw new Error(`Embedding persistence failed: ${error.message}`);
+  }
+
+  const successCount = embeddingData.filter(e => e.embedding).length;
+  log(`[EMBEDDING] Batch complete - ${successCount}/${embeddingData.length} chunks embedded`);
 }
 
 // =======================================================
@@ -155,23 +254,40 @@ function checkTimeout(doc: any) {
 // =======================================================
 
 async function markCompleted(documentId: string) {
-  await supabase
+  const { error: updateError } = await supabase
     .from("knowledge_documents")
     .update({
       ingestion_status: "completed",
       ingestion_completed_at: new Date().toISOString(),
       pipeline_timeout_at: null,
+      ingestion_progress: 100,
     })
     .eq("id", documentId);
+
+  if (updateError) {
+    logError(`[MARK_COMPLETED] Failed to mark document as completed:`, updateError.message);
+  } else {
+    log(`[MARK_COMPLETED] Document completed successfully:`, documentId);
+  }
 }
 
 async function markFailed(documentId: string, errorMessage: string) {
-  await supabase
+  const { error: updateError } = await supabase
     .from("knowledge_documents")
     .update({
       ingestion_status: "failed",
-      last_error: errorMessage,
+      last_ingestion_error: JSON.stringify({
+        reason: "INGESTION_ERROR",
+        message: errorMessage,
+        timestamp: new Date().toISOString(),
+      }),
       pipeline_timeout_at: null,
     })
     .eq("id", documentId);
+
+  if (updateError) {
+    logError(`[MARK_FAILED] Failed to mark document as failed:`, updateError.message);
+  } else {
+    log(`[MARK_FAILED] Document marked as failed:`, documentId);
+  }
 }

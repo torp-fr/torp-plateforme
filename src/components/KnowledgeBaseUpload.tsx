@@ -102,30 +102,20 @@ export function KnowledgeBaseUpload() {
       log('🧠 [UPLOAD] Setting loading state...');
       setState(prev => ({ ...prev, loading: true, error: null }));
 
-      // PHASE 36.11: Extract document text (PDF or plain text)
-      log('🧠 [UPLOAD] Extracting document text...');
-      const content = await knowledgeBrainService.extractDocumentTextFromFile(state.file);
-      log('🧠 [UPLOAD] Document text extracted:', { size: content.length });
-
-      if (!content || content.trim().length === 0) {
-        throw new Error('Impossible d\'extraire le texte du document');
-      }
-
-      // PHASE 36.3: Generate safe title from filename or category
+      // PHASE 42: Server-side ingestion (no extraction in browser)
+      log('🧠 [UPLOAD] Server-side ingestion: uploading file...');
       const finalTitle = state.file.name.replace(/\.[^/.]+$/, '') || `Document ${state.category}`;
-      log('🧠 [UPLOAD] Generated title:', finalTitle);
 
-      // PHASE 36.5: Use knowledgeBrainService with minimal schema-compliant payload
-      log('🧠 [UPLOAD] Calling knowledgeBrainService.addKnowledgeDocumentWithTimeout...');
-      const result = await knowledgeBrainService.addKnowledgeDocumentWithTimeout(
-        state.source, // source: 'internal', 'external', or 'official'
-        state.category, // category: matches KNOWLEDGE_CATEGORY_LABELS keys
-        content,
+      const result = await knowledgeBrainService.uploadDocumentForServerIngestion(
+        state.file,
         {
-          title: finalTitle,  // ✅ PHASE 36.3: Always provide title
-          // PHASE 36.5: Removed region, reliability_score, metadata (don't exist in schema)
+          title: finalTitle,
+          category: state.category,
+          source: state.source,
         }
       );
+
+      log('🧠 [UPLOAD] File uploaded - server will handle extraction/OCR/chunking');
 
       if (!result) {
         throw new Error('Document insertion failed');

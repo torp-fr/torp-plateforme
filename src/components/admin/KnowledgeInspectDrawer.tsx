@@ -28,8 +28,9 @@ export function KnowledgeInspectDrawer({ document, onClose }: KnowledgeInspectDr
   const safePreview = document.preview_content ?? '';
 
   const chunkEstimate = safePreview ? Math.ceil(safePreview.length / 1000) : 0;
-  const edgeOnline = !window.__RAG_EDGE_OFFLINE__;
-  const fallbackActive = window.__RAG_EDGE_OFFLINE__ === true;
+  // PHASE 40: No window state (errors handled by service retry logic)
+  const edgeOnline = true;
+  const fallbackActive = false;
 
   return (
     <>

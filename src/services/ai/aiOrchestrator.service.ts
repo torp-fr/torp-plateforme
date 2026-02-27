@@ -338,15 +338,8 @@ class AIOrchestrator {
         );
       }
 
-      // PHASE 17.5: Skip if edge is offline
-      if ((window as any).__RAG_EDGE_OFFLINE__) {
-        warn('[EMBEDDING] Edge offline — skip embedding attempt');
-        throw new AIOrchestrationError(
-          'Edge function offline - embedding skipped',
-          'EDGE_OFFLINE',
-          true
-        );
-      }
+      // PHASE 40: No window state checks (DB-driven)
+      // Let secureAI handle errors (retry logic via withRetry)
 
       // Attempt primary provider (secureAI via Edge Function)
       const primaryResult = await this.withRetry(
