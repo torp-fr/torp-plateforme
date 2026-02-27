@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
 import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@3.11.174';
 import { createCanvas } from 'https://deno.land/x/canvas@v2.8.1/mod.ts';
+import { decompress } from 'https://esm.sh/fflate@0.8.1';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -122,7 +123,7 @@ async function processDocument(doc: any) {
       throw new Error(`Failed to download file: ${downloadError?.message}`);
     }
 
-    // Step 2: Extract text from file (PDF or plain text)
+    // Step 2: Extract text from file based on type
     console.log(`[PROCESS] Extracting text from file (${doc.mime_type})`);
     let extractedText = '';
 
@@ -143,6 +144,12 @@ async function processDocument(doc: any) {
         const processingTime = Date.now() - processingStartTime;
         console.log(`[PROCESS] Text extracted: ${extractedText.length} chars in ${processingTime}ms`);
       }
+    } else if (doc.mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || filePath.endsWith('.docx')) {
+      console.log('[PROCESS] Extracting from DOCX file');
+      extractedText = await extractDocxText(fileData);
+    } else if (doc.mime_type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || filePath.endsWith('.xlsx')) {
+      console.log('[PROCESS] Extracting from XLSX file');
+      extractedText = await extractXlsxText(fileData);
     } else {
       extractedText = new TextDecoder().decode(await fileData.arrayBuffer());
     }
@@ -410,6 +417,245 @@ async function renderPageToImage(pdf: any, pageNum: number): Promise<string> {
     console.error(`[RENDER] Page ${pageNum} render error: ${error}`);
     return '';
   }
+}
+
+/**
+ * Extract text from DOCX file
+ * 1. Unzip file to access word/document.xml
+ * 2. Extract text between <w:t> tags
+ * 3. Decode XML entities
+ * 4. Return clean text
+ */
+async function extractDocxText(fileData: Blob): Promise<string> {
+  try {
+    console.log('[DOCX] Starting extraction');
+    const arrayBuffer = await fileData.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+
+    // Decompress ZIP file
+    const decompressed = await new Promise<Record<string, Uint8Array>>((resolve, reject) => {
+      decompress(uint8Array, (err, data) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
+
+    // Extract word/document.xml
+    const documentXml = decompressed['word/document.xml'];
+    if (!documentXml) {
+      console.log('[DOCX] word/document.xml not found');
+      return '';
+    }
+
+    const xmlText = new TextDecoder().decode(documentXml);
+    console.log('[DOCX] Extracted document.xml');
+
+    // Extract text between <w:t> tags
+    const textMatches = xmlText.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || [];
+    const textParts = textMatches.map(match => {
+      const text = match.replace(/<w:t[^>]*>/, '').replace(/<\/w:t>/, '');
+      return decodeXmlEntities(text);
+    });
+
+    // Join paragraphs - detect paragraph breaks via <w:p>
+    const paragraphBreaks = xmlText.split('<w:p>').length - 1;
+    const textContent = textParts.join('');
+
+    console.log(`[DOCX] Extracted ${textParts.length} text nodes from ${paragraphBreaks} paragraphs`);
+    return textContent.trim();
+  } catch (error) {
+    console.error(`[DOCX] Extraction error: ${error}`);
+    throw new Error(`Failed to extract text from DOCX: ${error}`);
+  }
+}
+
+/**
+ * Extract text from XLSX file
+ * 1. Unzip file to access shared strings and worksheets
+ * 2. Parse xl/sharedStrings.xml for string values
+ * 3. Parse each worksheet and map cell values
+ * 4. Return flattened text representation with table structure
+ */
+async function extractXlsxText(fileData: Blob): Promise<string> {
+  try {
+    console.log('[XLSX] Starting extraction');
+    const arrayBuffer = await fileData.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+
+    // Decompress ZIP file
+    const decompressed = await new Promise<Record<string, Uint8Array>>((resolve, reject) => {
+      decompress(uint8Array, (err, data) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
+
+    // Extract shared strings
+    const sharedStringsXml = decompressed['xl/sharedStrings.xml'];
+    if (!sharedStringsXml) {
+      console.log('[XLSX] xl/sharedStrings.xml not found');
+      return '';
+    }
+
+    const sharedStringsText = new TextDecoder().decode(sharedStringsXml);
+    const sharedStrings = extractSharedStrings(sharedStringsText);
+    console.log(`[XLSX] Extracted ${sharedStrings.length} shared strings`);
+
+    // Extract worksheet data
+    let allContent = '';
+    let worksheetCount = 0;
+
+    // Get all worksheet files
+    for (const [filename, data] of Object.entries(decompressed)) {
+      if (filename.startsWith('xl/worksheets/sheet') && filename.endsWith('.xml')) {
+        worksheetCount++;
+        const worksheetXml = new TextDecoder().decode(data);
+        const worksheetContent = extractWorksheetContent(worksheetXml, sharedStrings);
+        if (worksheetContent) {
+          allContent += worksheetContent + '\n';
+        }
+      }
+    }
+
+    console.log(`[XLSX] Extracted content from ${worksheetCount} worksheets`);
+    return allContent.trim();
+  } catch (error) {
+    console.error(`[XLSX] Extraction error: ${error}`);
+    throw new Error(`Failed to extract text from XLSX: ${error}`);
+  }
+}
+
+/**
+ * Extract shared strings from XLSX sharedStrings.xml
+ * Returns array of string values in order
+ */
+function extractSharedStrings(xml: string): string[] {
+  const strings: string[] = [];
+  const siMatches = xml.split('<si>');
+
+  for (let i = 1; i < siMatches.length; i++) {
+    const siBlock = siMatches[i];
+    const tMatches = siBlock.match(/<t[^>]*>([^<]*)<\/t>/g) || [];
+
+    const stringParts: string[] = [];
+    tMatches.forEach(match => {
+      const text = match.replace(/<t[^>]*>/, '').replace(/<\/t>/, '');
+      stringParts.push(decodeXmlEntities(text));
+    });
+
+    if (stringParts.length > 0) {
+      strings.push(stringParts.join(''));
+    }
+  }
+
+  return strings;
+}
+
+/**
+ * Extract content from a single worksheet
+ * Maps cell references to shared string indices and returns formatted text
+ */
+function extractWorksheetContent(xml: string, sharedStrings: string[]): string {
+  const cells: { row: number; col: number; value: string }[] = [];
+
+  // Match <c> (cell) tags
+  const cellMatches = xml.match(/<c r="([A-Z]+)(\d+)"[^>]*>([^<]*(?:<(?!\/c>)[^>]*>[^<]*)*)<\/c>/g) || [];
+
+  for (const cellMatch of cellMatches) {
+    const rMatch = cellMatch.match(/r="([A-Z]+)(\d+)"/);
+    if (!rMatch) continue;
+
+    const colStr = rMatch[1];
+    const rowStr = rMatch[2];
+    const row = parseInt(rowStr);
+    const col = columnToNumber(colStr);
+
+    // Check if this is a string cell (type="s" references shared strings)
+    const isStringCell = cellMatch.includes('t="s"');
+    let value = '';
+
+    if (isStringCell) {
+      const valueMatch = cellMatch.match(/<v>(\d+)<\/v>/);
+      if (valueMatch) {
+        const stringIndex = parseInt(valueMatch[1]);
+        value = sharedStrings[stringIndex] || '';
+      }
+    } else {
+      // Direct value cell
+      const valueMatch = cellMatch.match(/<v>([^<]*)<\/v>/);
+      if (valueMatch) {
+        value = decodeXmlEntities(valueMatch[1]);
+      }
+    }
+
+    if (value) {
+      cells.push({ row, col, value });
+    }
+  }
+
+  if (cells.length === 0) {
+    return '';
+  }
+
+  // Sort by row, then column
+  cells.sort((a, b) => a.row - b.row || a.col - b.col);
+
+  // Group by row and format as table-like text
+  const rows: Record<number, Record<number, string>> = {};
+  let maxCol = 0;
+
+  for (const cell of cells) {
+    if (!rows[cell.row]) {
+      rows[cell.row] = {};
+    }
+    rows[cell.row][cell.col] = cell.value;
+    maxCol = Math.max(maxCol, cell.col);
+  }
+
+  // Build output as rows separated by newlines, columns by pipes
+  const lines: string[] = [];
+  const sortedRows = Object.keys(rows)
+    .map(Number)
+    .sort((a, b) => a - b);
+
+  for (const rowNum of sortedRows) {
+    const rowData = rows[rowNum];
+    const rowValues: string[] = [];
+
+    for (let col = 1; col <= maxCol; col++) {
+      rowValues.push(rowData[col] || '');
+    }
+
+    // Only add non-empty rows
+    if (rowValues.some(v => v.length > 0)) {
+      lines.push(rowValues.join(' | '));
+    }
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Convert column letter(s) to column number (A=1, B=2, ..., Z=26, AA=27, etc.)
+ */
+function columnToNumber(col: string): number {
+  let result = 0;
+  for (let i = 0; i < col.length; i++) {
+    result = result * 26 + (col.charCodeAt(i) - 64);
+  }
+  return result;
+}
+
+/**
+ * Decode XML entities (&lt;, &gt;, &amp;, &quot;, &apos;)
+ */
+function decodeXmlEntities(text: string): string {
+  return text
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
 }
 
 function chunkText(text: string, chunkSize: number): string[] {
