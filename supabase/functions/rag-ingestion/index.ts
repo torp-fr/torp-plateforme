@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
 import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@3.11.174';
+import { createCanvas } from 'https://deno.land/x/canvas@v2.8.1/mod.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -10,8 +11,10 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const MAX_ATTEMPTS = 3;
 const CHUNK_SIZE = 3000;
 const EMBEDDING_BATCH_SIZE = 20;
-const OCR_TEXT_THRESHOLD = 1000;
-const PIPELINE_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+const OCR_TEXT_THRESHOLD = 200; // Pages with < 200 chars get OCR
+const PIPELINE_TIMEOUT_MS = 2.5 * 60 * 1000; // 2.5 minutes
+const OCR_THROTTLE_MS = 200; // 200ms between OCR calls
+const MAX_CONCURRENT_OCR = 5; // Max 5 concurrent OCR requests
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -124,22 +127,27 @@ async function processDocument(doc: any) {
     let extractedText = '';
 
     if (doc.mime_type === 'application/pdf' || filePath.endsWith('.pdf')) {
-      extractedText = await extractPdfText(fileData);
+      const processingStartTime = Date.now();
+      const abortController = new AbortController();
+
+      // Set timeout for entire pipeline (2.5 minutes)
+      const timeoutHandle = setTimeout(() => {
+        console.log('[PROCESS] Pipeline timeout reached, aborting');
+        abortController.abort();
+      }, PIPELINE_TIMEOUT_MS);
+
+      try {
+        extractedText = await extractPdfTextWithOCR(fileData, abortController);
+      } finally {
+        clearTimeout(timeoutHandle);
+        const processingTime = Date.now() - processingStartTime;
+        console.log(`[PROCESS] Text extracted: ${extractedText.length} chars in ${processingTime}ms`);
+      }
     } else {
       extractedText = new TextDecoder().decode(await fileData.arrayBuffer());
     }
 
     console.log(`[PROCESS] Text extracted: ${extractedText.length} chars`);
-
-    // Step 3: If text too short, try OCR
-    if (extractedText.length < OCR_TEXT_THRESHOLD) {
-      console.log(`[PROCESS] Text too short (${extractedText.length} chars) - attempting OCR`);
-      const ocrText = await tryOCR(fileData);
-      if (ocrText && ocrText.length > extractedText.length) {
-        extractedText = ocrText;
-        console.log(`[PROCESS] OCR successful: ${extractedText.length} chars`);
-      }
-    }
 
     if (!extractedText || extractedText.trim().length === 0) {
       throw new Error('Failed to extract text from document (no text content found)');
@@ -163,64 +171,193 @@ async function processDocument(doc: any) {
   }
 }
 
-async function extractPdfText(fileData: Blob): Promise<string> {
+/**
+ * PHASE 1-4: Multi-page PDF processing with OCR support
+ * - Extracts text page-by-page
+ * - For pages with < 200 chars: renders to image and uses Google Vision OCR
+ * - Implements throttling (200ms between calls), concurrency limits (5), and timeout control
+ * - Memory-safe: processes sequentially, clears resources after each page
+ */
+async function extractPdfTextWithOCR(fileData: Blob, abortController: AbortController): Promise<string> {
   try {
     const arrayBuffer = await fileData.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
 
-    // Use pdfjs-dist to extract text
     pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
     const pdf = await pdfjsLib.getDocument(uint8Array).promise;
-    let textContent = '';
+    console.log(`[PDF] Processing ${pdf.numPages} pages`);
 
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const pageText = content.items
-        .map((item: any) => item.str || '')
-        .join(' ');
-      textContent += pageText + '\n';
+    let finalText = '';
+    const ocrQueue: Array<{ pageNum: number; pageText: string }> = [];
+    let ocrTasksInFlight = 0;
+
+    // Phase 1 & 4: Process pages sequentially to maintain memory safety
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      // Check abort signal
+      if (abortController.signal.aborted) {
+        console.log(`[PDF] Processing aborted at page ${pageNum}`);
+        break;
+      }
+
+      try {
+        const page = await pdf.getPage(pageNum);
+        const content = await page.getTextContent();
+        const pageText = content.items
+          .map((item: any) => item.str || '')
+          .join(' ')
+          .trim();
+
+        console.log(`[PDF] Page ${pageNum}: ${pageText.length} chars`);
+
+        // Check if page needs OCR (less than threshold)
+        if (pageText.length < OCR_TEXT_THRESHOLD && pageText.length > 0) {
+          console.log(`[PDF] Page ${pageNum} below threshold, scheduling OCR`);
+          ocrQueue.push({ pageNum, pageText });
+        } else {
+          finalText += pageText + '\n';
+        }
+
+        // Phase 4: Clear page resources
+        page.cleanup?.();
+      } catch (pageError) {
+        console.error(`[PDF] Error processing page ${pageNum}: ${pageError}`);
+      }
     }
 
-    return textContent.trim();
+    // Phase 2 & 3: Process OCR queue with throttling and concurrency control
+    if (ocrQueue.length > 0) {
+      console.log(`[OCR] Starting OCR for ${ocrQueue.length} pages with max ${MAX_CONCURRENT_OCR} concurrent tasks`);
+      const ocrResults = await processOCRQueue(ocrQueue, fileData, pdf, uint8Array, abortController);
+      finalText += ocrResults;
+    }
+
+    return finalText.trim();
   } catch (error) {
-    console.error(`[PDF] Extraction error: ${error}`);
-    return '';
+    console.error(`[PDF] Fatal extraction error: ${error}`);
+    throw error;
   }
 }
 
-async function tryOCR(fileData: Blob): Promise<string> {
+/**
+ * Process OCR queue with proper concurrency control and throttling
+ * Phase 2: Implements throttling (200ms between calls)
+ * Phase 3: Implements timeout control via abortController
+ * Max 5 concurrent OCR requests
+ */
+async function processOCRQueue(
+  queue: Array<{ pageNum: number; pageText: string }>,
+  fileData: Blob,
+  pdf: any,
+  uint8Array: Uint8Array,
+  abortController: AbortController
+): Promise<string> {
+  let results = '';
+  let inFlightCount = 0;
+  let queueIndex = 0;
+  const inFlightPromises: Promise<void>[] = [];
+
+  // Helper to add task result
+  const addResult = (pageNum: number, text: string, originalText: string) => {
+    if (text && text.length > originalText.length) {
+      results += text + '\n';
+      console.log(`[OCR] Page ${pageNum}: OCR improved text to ${text.length} chars`);
+    } else {
+      results += originalText + '\n';
+      console.log(`[OCR] Page ${pageNum}: Using original text (${originalText.length} chars)`);
+    }
+  };
+
+  // Process queue with concurrency limit
+  while (queueIndex < queue.length || inFlightCount > 0) {
+    if (abortController.signal.aborted) {
+      console.log('[OCR] Processing aborted');
+      break;
+    }
+
+    // Start new tasks while under concurrency limit
+    while (inFlightCount < MAX_CONCURRENT_OCR && queueIndex < queue.length) {
+      const item = queue[queueIndex];
+      queueIndex++;
+      inFlightCount++;
+
+      const taskPromise = (async () => {
+        try {
+          const ocrText = await performPageOCR(fileData, item.pageNum, uint8Array, pdf, abortController);
+          addResult(item.pageNum, ocrText, item.pageText);
+        } catch (error) {
+          console.error(`[OCR] Error on page ${item.pageNum}: ${error}`);
+          results += item.pageText + '\n';
+        } finally {
+          inFlightCount--;
+        }
+      })();
+
+      inFlightPromises.push(taskPromise);
+
+      // Phase 2: Throttle - 200ms between starting new OCR tasks
+      if (queueIndex < queue.length && inFlightCount < MAX_CONCURRENT_OCR) {
+        await new Promise(r => setTimeout(r, OCR_THROTTLE_MS));
+      }
+    }
+
+    // Wait for at least one task to complete before starting new ones
+    if (inFlightCount >= MAX_CONCURRENT_OCR && queueIndex < queue.length) {
+      await Promise.race(inFlightPromises);
+    }
+  }
+
+  // Wait for all remaining tasks to complete
+  await Promise.all(inFlightPromises);
+
+  return results;
+}
+
+/**
+ * Render a single PDF page to image and send to Google Vision API
+ * Phase 1: Render page to canvas
+ * Phase 2: Convert to PNG base64
+ * Phase 3: Send to Google Vision with DOCUMENT_TEXT_DETECTION
+ */
+async function performPageOCR(
+  fileData: Blob,
+  pageNum: number,
+  uint8Array: Uint8Array,
+  pdf: any,
+  abortController: AbortController
+): Promise<string> {
+  const googleApiKey = Deno.env.get('GOOGLE_VISION_API_KEY');
+  if (!googleApiKey) {
+    console.log(`[OCR] Page ${pageNum}: Google Vision API key not configured`);
+    return '';
+  }
+
   try {
-    const googleApiKey = Deno.env.get('GOOGLE_VISION_API_KEY');
-    if (!googleApiKey) {
-      console.log('[OCR] Google Vision API key not configured');
+    // Render page to image
+    const imageBase64 = await renderPageToImage(pdf, pageNum);
+    if (!imageBase64) {
+      console.log(`[OCR] Page ${pageNum}: Failed to render page to image`);
       return '';
     }
 
-    // Convert to base64 for Google Vision API
-    const arrayBuffer = await fileData.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-
+    // Send to Google Vision API with DOCUMENT_TEXT_DETECTION
     const response = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${googleApiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         requests: [
           {
-            image: { content: base64 },
-            features: [
-              { type: 'DOCUMENT_TEXT_DETECTION' },
-              { type: 'TEXT_DETECTION' },
-            ],
+            image: { content: imageBase64 },
+            features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
           },
         ],
       }),
+      signal: abortController.signal,
     });
 
     if (!response.ok) {
       const error = await response.text();
-      console.error(`[OCR] API error: ${response.status} - ${error}`);
+      console.error(`[OCR] Page ${pageNum} API error: ${response.status}`);
       return '';
     }
 
@@ -229,12 +366,48 @@ async function tryOCR(fileData: Blob): Promise<string> {
     const text = annotations?.text || '';
 
     if (text) {
-      console.log(`[OCR] Successfully extracted ${text.length} chars via Google Vision`);
+      console.log(`[OCR] Page ${pageNum}: Extracted ${text.length} chars via Google Vision`);
     }
 
     return text;
   } catch (error) {
-    console.error(`[OCR] Error: ${error}`);
+    console.error(`[OCR] Page ${pageNum} error: ${error}`);
+    return '';
+  }
+}
+
+/**
+ * Render PDF page to PNG image (base64)
+ * Uses canvas to convert PDF page to image
+ */
+async function renderPageToImage(pdf: any, pageNum: number): Promise<string> {
+  try {
+    const page = await pdf.getPage(pageNum);
+    const viewport = page.getViewport({ scale: 2 }); // 2x scale for better OCR quality
+
+    // Create canvas - use reasonable defaults (max 2000px width)
+    const maxWidth = 2000;
+    const scale = Math.min(1, maxWidth / viewport.width);
+    const scaledViewport = page.getViewport({ scale: 2 * scale });
+
+    const canvas = createCanvas(Math.ceil(scaledViewport.width), Math.ceil(scaledViewport.height));
+    const context = canvas.getContext('2d');
+
+    const renderContext = {
+      canvasContext: context,
+      viewport: scaledViewport,
+    };
+
+    await page.render(renderContext).promise;
+
+    // Convert canvas to PNG base64
+    const imageData = canvas.toDataURL('image/png');
+    // Remove data:image/png;base64, prefix
+    const base64 = imageData.replace(/^data:image\/png;base64,/, '');
+
+    return base64;
+  } catch (error) {
+    console.error(`[RENDER] Page ${pageNum} render error: ${error}`);
     return '';
   }
 }
