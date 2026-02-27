@@ -91,14 +91,93 @@ class KnowledgeBrainService {
   }
 
   /**
-   * PHASE 36.11: Extract readable text from document (PDF or plain text)
-   * Public API for document text extraction
-   * Detects PDF header and extracts text using pdf-parse
-   * Falls back to TextDecoder for plain text files
-   * Never returns binary data
+   * PHASE 42: Server-side document ingestion
+   * Upload file to Storage and trigger Edge Function for extraction
+   * No extraction happens in browser - all processing server-side
    */
-  async extractDocumentTextFromFile(file: File): Promise<string> {
-    return this.extractDocumentText(file);
+  async uploadDocumentForServerIngestion(
+    file: File,
+    options: {
+      title?: string;
+      category: string;
+      source: 'internal' | 'external' | 'official';
+    }
+  ) {
+    try {
+      log('[KNOWLEDGE BRAIN] 📤 Server-side ingestion: uploading file to Storage');
+
+      // Step 1: Upload to Supabase Storage
+      const timestamp = Date.now();
+      const storagePath = `knowledge-documents/${timestamp}-${file.name}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('knowledge-files')
+        .upload(storagePath, file, { upsert: false });
+
+      if (uploadError) {
+        throw new Error(`Storage upload failed: ${uploadError.message}`);
+      }
+
+      log('[KNOWLEDGE BRAIN] ✅ File uploaded to Storage:', storagePath);
+
+      // Step 2: Create document record in DB with file_path
+      const safeTitle = options.title?.trim() || file.name.replace(/\.[^/.]+$/, '');
+
+      const { data: doc, error: dbError } = await supabase
+        .from('knowledge_documents')
+        .insert({
+          title: safeTitle,
+          category: options.category,
+          source: options.source,
+          file_path: storagePath,
+          file_size: file.size,
+          mime_type: file.type,
+          ingestion_status: 'pending',
+          ingestion_progress: 0,
+          is_active: true,
+        })
+        .select('id')
+        .single();
+
+      if (dbError || !doc) {
+        throw new Error(`Database insert failed: ${dbError?.message || 'Unknown error'}`);
+      }
+
+      log('[KNOWLEDGE BRAIN] ✅ Document created in DB:', doc.id);
+
+      // Step 3: Trigger Edge Function for server-side ingestion
+      // Edge Function will handle extraction, OCR, chunking, embedding
+      this.triggerServerIngestion(doc.id).catch(err => {
+        console.error('[KNOWLEDGE BRAIN] ❌ Server ingestion trigger failed:', err);
+      });
+
+      return doc;
+    } catch (error) {
+      console.error('[KNOWLEDGE BRAIN] ❌ Upload error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Trigger Edge Function for server-side document ingestion
+   */
+  private async triggerServerIngestion(documentId: string) {
+    try {
+      log('[KNOWLEDGE BRAIN] 🚀 Triggering server ingestion Edge Function');
+
+      const { error } = await supabase.functions.invoke('rag-ingestion', {
+        body: { documentId },
+      });
+
+      if (error) {
+        console.error('[KNOWLEDGE BRAIN] ❌ Edge Function error:', error);
+        throw error;
+      }
+
+      log('[KNOWLEDGE BRAIN] ✅ Edge Function triggered');
+    } catch (error) {
+      console.error('[KNOWLEDGE BRAIN] ❌ Server ingestion trigger error:', error);
+    }
   }
 
   /**
