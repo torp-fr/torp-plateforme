@@ -58,6 +58,12 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
     exact: true,
   },
   {
+    id: 'llm-usage',
+    href: '/analytics/llm-usage',
+    icon: TrendingUp,
+    label: 'LLM Usage',
+  },
+  {
     id: 'orchestrations',
     href: '/analytics/orchestrations',
     icon: Zap,

@@ -46,6 +46,7 @@ import { OrchestrationsPage } from "./pages/admin/OrchestrationsPage";
 import { KnowledgeBasePage } from "./pages/admin/KnowledgeBasePage";
 import { SecurityPage } from "./pages/admin/SecurityPage";
 import { AdminSettingsPage } from "./pages/admin/AdminSettingsPage";
+import { LLMUsageAnalyticsPage } from "./pages/admin/LLMUsageAnalyticsPage";
 
 const queryClient = new QueryClient();
 
@@ -82,6 +83,7 @@ const AppContent = () => {
               <Route path="security" element={<SecurityPage />} />
               <Route path="settings" element={<AdminSettingsPage />} />
               <Route path="users" element={<AdminUsersPage />} />
+              <Route path="llm-usage" element={<LLMUsageAnalyticsPage />} />
             </Route>
           </Route>
 
