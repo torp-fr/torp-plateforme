@@ -127,14 +127,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Compute isAdmin from user
   const isAdmin = user?.isAdmin === true;
 
-  // Check for existing session on mount and listen for auth changes
+  // Bootstrap auth: Check initial session and setup listener
+  // isLoading represents ONLY initial bootstrap, never set to true after mount
   useEffect(() => {
     let isMounted = true;
-    let subscription: any = null;
 
-    // Check initial session
-    const loadUser = async () => {
+    const bootstrapAuth = async () => {
       try {
+        // Get initial session
         const currentUser = await authService.getCurrentUser();
         if (!isMounted) return;
 
@@ -150,62 +150,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } catch (error) {
         console.error('⚠️ Erreur lors de la restauration de session:', error);
         setIsAuthenticated(false);
-        // Ne pas crasher, continuer sans session
       } finally {
         if (isMounted) {
-          setIsLoading(false);
+          setIsLoading(false); // Only set once at end of bootstrap
         }
       }
     };
 
-    // Setup auth state listener
-    const setupAuthListener = () => {
-      try {
-        const { data } = authService.onAuthStateChange((sessionUser) => {
-          if (!isMounted) return;
+    bootstrapAuth();
 
-          if (sessionUser) {
-            log('✓ SIGNED_IN event:', sessionUser.email);
-            // Session exists - user is authenticated
-            setIsAuthenticated(true);
-            setUser(sessionUser);
-            setUserType(sessionUser.type);
-          } else {
-            log('ℹ️ SIGNED_OUT event');
-            // Session cleared - user is not authenticated
-            setIsAuthenticated(false);
-            setUser(null);
-            setProjects([]);
-            setCurrentProject(null);
-          }
-        });
+    // Setup listener for auth state changes (login/logout/refresh)
+    // This updates state without touching isLoading
+    const { data } = authService.onAuthStateChange((sessionUser) => {
+      if (!isMounted) return;
 
-        subscription = data?.subscription;
-      } catch (error) {
-        console.error('⚠️ Erreur setup auth listener:', error);
-        // Ne pas crasher, continuer sans listener
+      if (sessionUser) {
+        log('✓ Auth event - user signed in:', sessionUser.email);
+        setIsAuthenticated(true);
+        setUser(sessionUser);
+        setUserType(sessionUser.type);
+      } else {
+        log('ℹ️ Auth event - user signed out');
+        setIsAuthenticated(false);
+        setUser(null);
+        setUserType('B2C');
+        setProjects([]);
+        setCurrentProject(null);
       }
-    };
+    });
 
-    // Watchdog: Force loading timeout after 5 seconds
-    // Prevents infinite loading spinner if auth bootstrap hangs
-    const watchdogTimeout = setTimeout(() => {
-      if (isMounted && isLoading) {
-        console.error('⚠️ [Auth Watchdog] Loading timeout exceeded (5s) - forcing completion');
-        setIsLoading(false);
-      }
-    }, 5000);
-
-    // Execute initialization
-    loadUser();
-    setupAuthListener();
-
-    // Cleanup subscription and watchdog on unmount
+    // Cleanup listener on unmount
     return () => {
       isMounted = false;
-      clearTimeout(watchdogTimeout);
       try {
-        subscription?.unsubscribe();
+        data?.subscription?.unsubscribe();
       } catch (error) {
         console.error('⚠️ Erreur unsubscribe:', error);
       }
