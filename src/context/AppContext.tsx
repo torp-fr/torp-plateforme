@@ -129,38 +129,43 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const isAdmin = user?.isAdmin === true;
 
   // ════════════════════════════════════════════════════════════════════════════
-  // CRITICAL BOOTSTRAP - SESSION ONLY (non-blocking)
+  // CRITICAL BOOTSTRAP - TIMEOUT-PROTECTED SESSION ONLY
   // ════════════════════════════════════════════════════════════════════════════
+  // GUARANTEE: UI ALWAYS unlocks after 300ms, even if Supabase hangs
+  // Pattern: Promise.race([getSession(), 300ms timeout])
   // Rules:
-  // 1. ZERO network calls before setIsLoading(false)
-  // 2. ZERO DB fetches during bootstrap
-  // 3. ZERO profile loading during bootstrap
-  // 4. setIsLoading(false) MUST be in finally block (always executes)
-  // 5. setIsLoading(true) appears ONLY in initial useState
+  // 1. No infinite spinner possible - timeout always wins
+  // 2. Profile loads in separate effect (non-blocking)
+  // 3. setIsLoading(false) ALWAYS executes in finally block
+  // 4. No other setIsLoading(true) in bootstrap
   // ════════════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    let isMounted = true;
+    let cancelled = false;
 
-    const bootstrapSession = async () => {
+    async function bootstrap() {
       try {
-        // PHASE 7: Performance logging
+        // CRITICAL: Timeout-protected session read (300ms max)
+        // Even if Supabase hangs, UI must unlock after 300ms
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise(resolve =>
+          setTimeout(() => resolve({ data: { session: null } }), 300)
+        );
+
         time('SESSION_BOOTSTRAP');
-
-        // Get session ONLY - no network, no DB
-        const { data } = await supabase.auth.getSession();
-
+        const result = await Promise.race([sessionPromise, timeoutPromise]);
         timeEnd('SESSION_BOOTSTRAP');
 
-        if (!isMounted) return;
+        if (cancelled) return;
 
-        // Set authenticated state from session
-        if (data.session) {
-          log('[Bootstrap] ✓ Session found:', data.session.user?.email);
+        const session = result?.data?.session ?? null;
+
+        if (session) {
+          log('[Bootstrap] ✓ Session found:', session.user?.email);
           setIsAuthenticated(true);
           // Set minimal user - profile loads in background
           setUser({
-            id: data.session.user.id,
-            email: data.session.user.email || 'unknown',
+            id: session.user.id,
+            email: session.user.email || 'unknown',
             name: '', // Will be set from profile
             type: 'B2C', // Will be set from profile
           });
@@ -169,23 +174,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setIsAuthenticated(false);
         }
       } catch (err) {
-        if (!isMounted) return;
+        if (cancelled) return;
         error('[Bootstrap] Session check failed:', err);
         setIsAuthenticated(false);
       } finally {
-        if (isMounted) {
-          // CRITICAL: Set isLoading(false) ALWAYS, even on error
+        if (!cancelled) {
+          // CRITICAL: ALWAYS unlock UI, even on Supabase timeout/error
           setIsLoading(false);
         }
       }
-    };
+    }
 
-    bootstrapSession();
+    bootstrap();
 
     // Setup auth state change listener
     // This triggers on login/logout/refresh (NOT during bootstrap)
     const { data } = authService.onAuthStateChange((sessionUser) => {
-      if (!isMounted) return;
+      if (cancelled) return;
 
       if (sessionUser) {
         log('[Auth Event] User signed in:', sessionUser.email);
@@ -204,7 +209,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // Cleanup
     return () => {
-      isMounted = false;
+      cancelled = true;
       try {
         data?.subscription?.unsubscribe();
       } catch (err) {
