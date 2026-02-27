@@ -23,13 +23,8 @@ export const ProRoute = ({
   redirectTo = '/login',
   allowAdmin = true,
 }: ProRouteProps) => {
-  const { user, isLoading, isAuthenticated } = useApp();
+  const { user, isAuthenticated } = useApp();
   const location = useLocation();
-
-  // During bootstrap, return null (loading spinner shown in App root)
-  if (isLoading) {
-    return null;
-  }
 
   // Not authenticated - redirect to login
   if (!isAuthenticated) {
@@ -73,66 +68,12 @@ export const ProtectedRoute = ({
   children,
   redirectTo = '/login',
 }: ProtectedRouteProps) => {
-  const { isLoading, isAuthenticated } = useApp();
+  const { isAuthenticated } = useApp();
   const location = useLocation();
-
-  // During bootstrap, return null (loading spinner shown in App root)
-  if (isLoading) {
-    return null;
-  }
 
   // Check session authentication, not profile existence
   if (!isAuthenticated) {
     return <Navigate to={redirectTo} state={{ from: location }} replace />;
-  }
-
-  return <>{children}</>;
-};
-
-/**
- * AdminRoute Component
- * Protected route wrapper for admin users only
- */
-interface AdminRouteProps {
-  children: ReactNode;
-  redirectTo?: string;
-}
-
-export const AdminRoute = ({
-  children,
-  redirectTo = '/dashboard',
-}: AdminRouteProps) => {
-  const { user, isLoading, isAuthenticated } = useApp();
-  const location = useLocation();
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse text-center">
-          <div className="h-12 w-12 rounded-full bg-primary/20 mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Chargement...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Check session authentication first
-  if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  // Then check admin role if we have a profile
-  if (user && user.type !== 'admin') {
-    return (
-      <Navigate
-        to={redirectTo}
-        state={{
-          message: 'Accès réservé aux administrateurs.',
-          from: location,
-        }}
-        replace
-      />
-    );
   }
 
   return <>{children}</>;
