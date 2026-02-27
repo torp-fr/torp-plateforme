@@ -299,3 +299,71 @@ export function isEdgeFunctionError(value: unknown): value is EdgeFunctionError 
     typeof obj.code === 'string'
   );
 }
+
+/**
+ * Score breakdown for devis analysis
+ */
+export interface ScoreBreakdown {
+  scoreTotal?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * Recommendations for devis
+ */
+export interface DevisRecommendations {
+  budgetRealEstime?: number;
+  margeNegociation?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * Analyzed devis from database
+ */
+export interface DevisAnalyzed {
+  id: string;
+  projectName?: string;
+  fileName?: string;
+  devisNumber?: string;
+  entreprise?: {
+    nom: string;
+    [key: string]: unknown;
+  };
+  projectType?: string;
+  status: 'analyzed' | 'pending' | 'error';
+  score_total?: number;
+  grade?: string;
+  amount?: number;
+  created_at?: string;
+  recommendations?: DevisRecommendations;
+  detected_overcosts?: number;
+  score_entreprise?: ScoreBreakdown;
+  score_prix?: ScoreBreakdown;
+  score_completude?: ScoreBreakdown;
+  score_conformite?: ScoreBreakdown;
+  score_delais?: ScoreBreakdown;
+}
+
+/**
+ * Analysis result with detailed scores
+ */
+export interface AnalysisResult {
+  detailedScores: {
+    entreprise: number;
+    prix: number;
+    completude: number;
+    conformite: number;
+    delais: number;
+  };
+  rawData: {
+    scoreEntreprise: ScoreBreakdown | null;
+    scorePrix: ScoreBreakdown | null;
+    scoreCompletude: ScoreBreakdown | null;
+    scoreConformite: ScoreBreakdown | null;
+    scoreDelais: ScoreBreakdown | null;
+    montantTotal: number;
+    margeNegociation?: number;
+    surcoutsDetectes: number;
+    budgetRealEstime: number;
+  };
+}

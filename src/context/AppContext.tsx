@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { authService } from '@/services/api/supabase/auth.service';
 import { devisService } from '@/services/api/supabase/devis.service';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
+import type { AnalysisResult, DevisAnalyzed } from '@/types/rag.types';
 
 // User types - Particulier (B2C), Professionnel (B2B), Admin
 export type UserType = 'B2C' | 'B2B' | 'admin' | 'super_admin';
@@ -91,7 +92,7 @@ export interface Project {
   amount: string;
   createdAt: string;
   company?: string;
-  analysisResult?: any;
+  analysisResult?: AnalysisResult;
 }
 
 interface AppContextType {
@@ -130,10 +131,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Check for existing session on mount and listen for auth changes
   useEffect(() => {
     let isMounted = true;
-    let subscription: any = null;
+    let subscription: ReturnType<typeof authService.onAuthStateChange> | null = null;
 
     // Check initial session
-    const loadUser = async () => {
+    const loadUser = async (): Promise<void> => {
       try {
         const currentUser = await authService.getCurrentUser();
         if (!isMounted) return;
@@ -159,9 +160,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     // Setup auth state listener
-    const setupAuthListener = () => {
+    const setupAuthListener = (): void => {
       try {
-        const { data } = authService.onAuthStateChange((sessionUser) => {
+        subscription = authService.onAuthStateChange((sessionUser) => {
           if (!isMounted) return;
 
           if (sessionUser) {
@@ -179,8 +180,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setCurrentProject(null);
           }
         });
-
-        subscription = data?.subscription;
       } catch (error) {
         console.error('⚠️ Erreur setup auth listener:', error);
         // Ne pas crasher, continuer sans listener
@@ -204,7 +203,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Load user's analyzed devis when user changes
   useEffect(() => {
-    const loadUserDevis = async () => {
+    const loadUserDevis = async (): Promise<void> => {
       if (!user?.id) {
         setProjects([]);
         return;
@@ -215,37 +214,43 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const analyzedDevis = await devisService.getUserAnalyzedDevis(user.id, 50);
 
         // Transform devis to Project format for compatibility
-        const devisProjects: Project[] = analyzedDevis.map(devis => ({
-          id: devis.id,
-          name: (devis as any).projectName || devis.fileName?.replace('.pdf', '') || `Devis ${(devis as any).devisNumber || 'sans numéro'}`,
-          company: (devis as any).entreprise?.nom || 'Entreprise',
-          type: 'Analyse devis',
-          status: devis.status === 'analyzed' ? 'completed' : devis.status as any,
-          score: devis.score_total || 0,
-          grade: devis.grade || '?',
-          amount: `${((devis as any).recommendations?.budgetRealEstime || devis.amount || 0).toLocaleString('fr-FR')}€`,
-          createdAt: devis.created_at || new Date().toISOString(),
-          analysisResult: {
-            detailedScores: {
-              entreprise: (devis.score_entreprise as any)?.scoreTotal || 0,
-              prix: (devis.score_prix as any)?.scoreTotal || 0,
-              completude: (devis.score_completude as any)?.scoreTotal || 0,
-              conformite: (devis.score_conformite as any)?.scoreTotal || 0,
-              delais: (devis.score_delais as any)?.scoreTotal || 0,
+        const devisProjects: Project[] = analyzedDevis.map((devis: DevisAnalyzed) => {
+          const projectName = devis.projectName || devis.fileName?.replace('.pdf', '') || `Devis ${devis.devisNumber || 'sans numéro'}`;
+          const companyName = devis.entreprise?.nom || 'Entreprise';
+          const budgetAmount = devis.recommendations?.budgetRealEstime || devis.amount || 0;
+
+          return {
+            id: devis.id,
+            name: projectName,
+            company: companyName,
+            type: 'Analyse devis',
+            status: devis.status === 'analyzed' ? 'completed' : devis.status,
+            score: devis.score_total || 0,
+            grade: devis.grade || '?',
+            amount: `${budgetAmount.toLocaleString('fr-FR')}€`,
+            createdAt: devis.created_at || new Date().toISOString(),
+            analysisResult: {
+              detailedScores: {
+                entreprise: devis.score_entreprise?.scoreTotal || 0,
+                prix: devis.score_prix?.scoreTotal || 0,
+                completude: devis.score_completude?.scoreTotal || 0,
+                conformite: devis.score_conformite?.scoreTotal || 0,
+                delais: devis.score_delais?.scoreTotal || 0,
+              },
+              rawData: {
+                scoreEntreprise: devis.score_entreprise || null,
+                scorePrix: devis.score_prix || null,
+                scoreCompletude: devis.score_completude || null,
+                scoreConformite: devis.score_conformite || null,
+                scoreDelais: devis.score_delais || null,
+                montantTotal: budgetAmount,
+                margeNegociation: devis.recommendations?.margeNegociation,
+                surcoutsDetectes: devis.detected_overcosts || 0,
+                budgetRealEstime: budgetAmount,
+              },
             },
-            rawData: {
-              scoreEntreprise: devis.score_entreprise,
-              scorePrix: devis.score_prix,
-              scoreCompletude: devis.score_completude,
-              scoreConformite: devis.score_conformite,
-              scoreDelais: devis.score_delais,
-              montantTotal: devis.recommendations?.budgetRealEstime || devis.amount || 0,
-              margeNegociation: devis.recommendations?.margeNegociation,
-              surcoutsDetectes: devis.detected_overcosts || 0,
-              budgetRealEstime: devis.recommendations?.budgetRealEstime || devis.amount || 0,
-            },
-          },
-        }));
+          };
+        });
 
         log(`[AppContext] Loaded ${devisProjects.length} analyzed devis`);
         setProjects(devisProjects);
@@ -259,11 +264,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [user?.id]);
 
 
-  const addProject = (project: Project) => {
+  const addProject = (project: Project): void => {
     setProjects(prev => [project, ...prev]);
   };
 
-  const updateProject = (id: string, updates: Partial<Project>) => {
+  const updateProject = (id: string, updates: Partial<Project>): void => {
     setProjects(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
     if (currentProject?.id === id) {
       setCurrentProject(prev => prev ? { ...prev, ...updates } : null);
@@ -271,7 +276,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // Fonction de déconnexion centralisée
-  const logout = async () => {
+  const logout = async (): Promise<void> => {
     try {
       // D'abord nettoyer l'état local pour feedback immédiat
       setUser(null);
