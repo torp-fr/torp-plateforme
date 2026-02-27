@@ -26,16 +26,9 @@ export const ProRoute = ({
   const { user, isLoading, isAuthenticated } = useApp();
   const location = useLocation();
 
-  // Show nothing while checking authentication
+  // During bootstrap, return null (loading spinner shown in App root)
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse text-center">
-          <div className="h-12 w-12 rounded-full bg-primary/20 mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Chargement...</p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   // Not authenticated - redirect to login
@@ -83,15 +76,9 @@ export const ProtectedRoute = ({
   const { isLoading, isAuthenticated } = useApp();
   const location = useLocation();
 
+  // During bootstrap, return null (loading spinner shown in App root)
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse text-center">
-          <div className="h-12 w-12 rounded-full bg-primary/20 mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Chargement...</p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   // Check session authentication, not profile existence

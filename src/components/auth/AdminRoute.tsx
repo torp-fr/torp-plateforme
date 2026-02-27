@@ -16,16 +16,9 @@ interface AdminRouteProps {
 export function AdminRoute({ children }: AdminRouteProps) {
   const { user, isLoading } = useApp();
 
-  // Show loading only during initial bootstrap
+  // During bootstrap, return null (loading spinner shown in App root)
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Chargement de la session...</p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   // Not authenticated
@@ -33,7 +26,7 @@ export function AdminRoute({ children }: AdminRouteProps) {
     return <Navigate to="/login" replace />;
   }
 
-  // Not admin (role from Supabase profiles, loaded during bootstrap)
+  // Not admin (role from Supabase profiles, loaded in background)
   if (!user.isAdmin) {
     warn('[AdminRoute] Access denied: user is not admin');
     return <Navigate to="/dashboard" replace />;
