@@ -12,6 +12,7 @@ import {
   type TokenCountResult,
   type TokenCountError
 } from '../_shared/token-counter.ts';
+import { analyzeImage } from '../_shared/ai-client.ts';
 
 /**
  * Architecture OCR robuste avec fallbacks multiples
@@ -27,7 +28,7 @@ import {
 // ============================================
 // STRATÉGIE 1 : OpenAI Vision (Images + fallback PDF)
 // ============================================
-async function ocrWithOpenAIVision(buffer: ArrayBuffer, mimeType: string, apiKey: string): Promise<string> {
+async function ocrWithOpenAIVision(buffer: ArrayBuffer, mimeType: string, apiKey: string, supabaseClient?: any, sessionId?: string, userId?: string): Promise<string> {
   const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
   const mediaType = mimeType.startsWith('image/') ? mimeType : 'image/png';
 
@@ -72,36 +73,20 @@ Retourne UNIQUEMENT le texte extrait.`;
     safeLimit: validTokens.safeLimit
   });
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o',
-      max_tokens: 16000,
-      system: systemPrompt,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image_url', image_url: { url: `data:${mediaType};base64,${base64}`, detail: 'high' } },
-          {
-            type: 'text',
-            text: userPrompt
-          }
-        ]
-      }]
-    }),
-  });
+  // Use analyzeImage from ai-client for Vision API call
+  const result = await analyzeImage(
+    base64,
+    mediaType,
+    apiKey,
+    {
+      systemPrompt,
+      userId,
+      sessionId,
+      supabaseClient
+    }
+  );
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`OpenAI Vision: ${response.status} - ${error}`);
-  }
-
-  const data = await response.json();
-  return data.choices[0]?.message?.content || '';
+  return result.analysis || '';
 }
 
 // ============================================
@@ -227,7 +212,10 @@ async function extractTextSmart(
   buffer: ArrayBuffer,
   mimeType: string,
   fileSize: number,
-  fileName: string
+  fileName: string,
+  supabaseClient?: any,
+  sessionId?: string,
+  userId?: string
 ): Promise<{ text: string; method: string; warnings: string[] }> {
   const warnings: string[] = [];
   const openaiKey = Deno.env.get('OPENAI_API_KEY');
@@ -245,7 +233,7 @@ async function extractTextSmart(
     if (openaiKey) {
       try {
         console.log('[OCR] Strategy: OpenAI Vision (image)');
-        const text = await ocrWithOpenAIVision(buffer, mimeType, openaiKey);
+        const text = await ocrWithOpenAIVision(buffer, mimeType, openaiKey, supabaseClient, sessionId, userId);
         return { text, method: 'OpenAI Vision', warnings };
       } catch (error) {
         console.error('[OCR] OpenAI Vision failed:', error);
@@ -486,11 +474,16 @@ async function handleProcess(body: any, supabase: any) {
     if (dlError) throw dlError;
 
     const buffer = await fileData.arrayBuffer();
+    const sessionId = `doc-${documentId}-${Date.now()}`;
+
     const { text, method, warnings } = await extractTextSmart(
       buffer,
       doc.mime_type,
       doc.file_size,
-      doc.filename
+      doc.filename,
+      supabase,
+      sessionId,
+      'system'
     );
 
     const cleanedText = cleanExtractedText(text);

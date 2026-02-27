@@ -9,6 +9,7 @@ import {
   type TokenCountResult,
   type TokenCountError
 } from '../_shared/token-counter.ts'
+import { callClaude, callOpenAI } from '../_shared/ai-client.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -120,66 +121,87 @@ serve(async (req) => {
     // ============================================
     let response: Response;
 
+    let apiResponse: any;
+
     if (provider === 'anthropic') {
-      // Appel Anthropic Claude
+      // Appel Anthropic Claude via ai-client
       const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')
       if (!anthropicKey) {
         throw new Error('Anthropic API key not configured')
       }
 
-      const anthropicModel = selectedModel
+      const claudeResponse = await callClaude(
+        messages.map(m => `${m.role}: ${m.content}`).join('\n'),
+        system || 'You are a helpful assistant.',
+        anthropicKey,
+        max_tokens,
+        false,
+        {
+          userId: user.id,
+          action: 'llm-completion',
+          sessionId: authHeader,
+          supabaseClient
+        }
+      )
 
-      response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': anthropicKey,
-          'anthropic-version': '2023-06-01',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: anthropicModel,
-          max_tokens,
-          ...(system && { system }),
-          messages: messages.filter(m => m.role !== 'system'),
-        }),
-      })
+      if (!claudeResponse.success) {
+        throw new Error(claudeResponse.error || 'Claude API error')
+      }
+
+      apiResponse = {
+        content: [{ text: claudeResponse.data }],
+        model: claudeResponse.model,
+        usage: {
+          input_tokens: claudeResponse.tokens?.input || 0,
+          output_tokens: claudeResponse.tokens?.output || 0
+        }
+      }
+      provider = 'anthropic'
+
     } else {
-      // Appel OpenAI
+      // Appel OpenAI via ai-client
       const openaiKey = Deno.env.get('OPENAI_API_KEY')
       if (!openaiKey) {
         throw new Error('OpenAI API key not configured')
       }
 
-      const openaiModel = selectedModel
+      const systemPrompt = system || 'You are a helpful assistant.'
+      const userPrompt = messages.map(m => `${m.role}: ${m.content}`).join('\n')
 
-      // Préparer les messages avec system prompt si fourni
-      const openaiMessages = system
-        ? [{ role: 'system', content: system }, ...messages]
-        : messages
-
-      response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openaiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: openaiModel,
-          messages: openaiMessages,
-          max_tokens,
+      const openaiResponse = await callOpenAI(
+        userPrompt,
+        systemPrompt,
+        openaiKey,
+        {
+          model: selectedModel,
+          maxTokens: max_tokens,
           temperature,
-          ...(response_format && { response_format }),
-        }),
-      })
+          userId: user.id,
+          action: 'llm-completion',
+          sessionId: authHeader,
+          supabaseClient
+        }
+      )
+
+      if (!openaiResponse.success) {
+        throw new Error(openaiResponse.error || 'OpenAI API error')
+      }
+
+      apiResponse = {
+        choices: [{ message: { content: openaiResponse.data } }],
+        model: openaiResponse.model,
+        usage: {
+          prompt_tokens: openaiResponse.tokens?.input || 0,
+          completion_tokens: openaiResponse.tokens?.output || 0,
+          total_tokens: openaiResponse.tokens?.actual || 0
+        }
+      }
+      provider = 'openai'
     }
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`${provider} API error:`, errorText)
-      throw new Error(`${provider} API error: ${response.status}`)
-    }
+    response = new Response(JSON.stringify(apiResponse), { status: 200 })
 
-    const result = await response.json()
+    const result = apiResponse
 
     // Normaliser la réponse
     const normalizedResponse = provider === 'anthropic'
@@ -190,7 +212,7 @@ serve(async (req) => {
           provider: 'anthropic',
           tokens: {
             estimated: validTokens.estimatedTotal,
-            actual: result.usage?.input_tokens + result.usage?.output_tokens || null
+            actual: (result.usage?.input_tokens || 0) + (result.usage?.output_tokens || 0) || null
           }
         }
       : {

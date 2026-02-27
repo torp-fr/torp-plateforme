@@ -1,6 +1,16 @@
 /**
  * Anthropic Claude Service
- * Wrapper for Anthropic Claude API calls
+ * Wrapper for Anthropic Claude API calls (Client-side)
+ *
+ * ⚠️ IMPORTANT: This is the ONLY acceptable direct SDK import location.
+ * All server-side/Edge Function calls MUST use ai-client.ts instead.
+ *
+ * This client-side service uses the Anthropic SDK directly because:
+ * 1. Client-side browser context cannot import Edge Function code
+ * 2. Requires dangerouslyAllowBrowser flag for browser usage
+ * 3. API keys are already exposed to client (no additional security concern)
+ *
+ * For better tracking and security, consider routing through Edge Function wrapper.
  *
  * Modèles disponibles et stables:
  * - claude-sonnet-4-20250514 (Claude 4 Sonnet - rapide, efficace)
@@ -10,6 +20,8 @@
  * Fallback automatique en cas d'erreur 404 sur un modèle
  */
 
+// ✅ EXCEPTION: This is permitted as the only direct SDK import
+// All other files must use ai-client.ts for centralized tracking
 import Anthropic from '@anthropic-ai/sdk';
 import { env } from '@/config/env';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';

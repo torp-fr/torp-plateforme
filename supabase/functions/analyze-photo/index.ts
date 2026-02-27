@@ -16,6 +16,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { analyzeImage } from '../_shared/ai-client.ts'
 
 // CORS: Restrict to Supabase origin only
 const corsHeaders = {
@@ -302,67 +303,72 @@ serve(async (req) => {
     }
 
     // ============================================================
-    // 4. CALL OPENAI VISION API
+    // 4. CALL OPENAI VISION API via ai-client
     // ============================================================
 
-    // Call OpenAI Vision API
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: analysisType === 'diagnostic' ? DIAGNOSTIC_SYSTEM_PROMPT : CONSTRUCTION_SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image_url',
-                image_url: {
-                  url: imageUrl,
-                  detail: 'high',
-                },
-              },
-              {
-                type: 'text',
-                text: (() => {
-                  let msg = 'Analyse cette image.'
-                  if (context) {
-                    const parts: string[] = []
-                    if (context.yearBuilt) parts.push(`Bâtiment construit en ${context.yearBuilt}`)
-                    if (context.type) parts.push(`Type: ${context.type}`)
-                    if (context.lotCode) parts.push(`Lot concerné: ${context.lotCode}`)
-                    if (context.projectType) parts.push(`Type de projet: ${context.projectType}`)
-                    if (context.expectedPhase) parts.push(`Phase attendue: ${context.expectedPhase}`)
-                    if (context.knownIssues?.length) parts.push(`Problèmes connus: ${context.knownIssues.join(', ')}`)
-                    if (parts.length > 0) msg = `Contexte: ${parts.join('. ')}.\n\nAnalyse cette image.`
-                  }
-                  return msg
-                })(),
-              },
-            ],
-          },
-        ],
-        max_tokens: 3000,
-        temperature: 0.2,
-      }),
-    })
+    // Fetch image and convert to base64
+    let imageBase64: string
+    let mediaType: string = 'image/jpeg'
 
-    if (!response.ok) {
-      const errorData = await response.json()
-      console.error('OpenAI API error:', errorData)
+    try {
+      const imgResponse = await fetch(imageUrl)
+      if (!imgResponse.ok) {
+        throw new Error(`Failed to fetch image: ${imgResponse.status}`)
+      }
+
+      const imageBlob = await imgResponse.blob()
+      mediaType = imageBlob.type || 'image/jpeg'
+      const arrayBuffer = await imageBlob.arrayBuffer()
+      imageBase64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
+    } catch (fetchErr) {
+      console.error('Image fetch error:', fetchErr)
+      return new Response(
+        JSON.stringify({
+          error: 'Image processing error',
+          message: 'Failed to fetch or process image',
+          code: 'IMAGE_FETCH_ERROR',
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    // Create Supabase client for tracking
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    )
+
+    // Call vision API via ai-client
+    let content: string
+    try {
+      const analysisResult = await analyzeImage(
+        imageBase64,
+        mediaType,
+        openaiApiKey,
+        {
+          analysisType,
+          systemPrompt: analysisType === 'diagnostic' ? DIAGNOSTIC_SYSTEM_PROMPT : CONSTRUCTION_SYSTEM_PROMPT,
+          userId,
+          sessionId: authHeader,
+          supabaseClient
+        }
+      )
+      content = analysisResult.analysis
+    } catch (error) {
+      console.error('Vision API error:', error)
       return new Response(
         JSON.stringify({
           error: 'Analysis service error',
           message: 'OpenAI API request failed',
           code: 'OPENAI_ERROR',
-          details: errorData.error?.message || 'Unknown error',
+          details: error instanceof Error ? error.message : 'Unknown error',
         }),
         {
-          status: response.status,
+          status: 400,
           headers: {
             ...corsHeaders,
             'Content-Type': 'application/json',
@@ -371,9 +377,6 @@ serve(async (req) => {
         }
       )
     }
-
-    const result = await response.json()
-    const content = result.choices?.[0]?.message?.content
 
     if (!content) {
       return new Response(

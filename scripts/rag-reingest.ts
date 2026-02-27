@@ -18,7 +18,7 @@
 import { createClient } from '@supabase/supabase-js';
 import * as fs from 'fs';
 import * as dotenv from 'dotenv';
-import OpenAI from 'openai';
+import { generateEmbedding } from '../supabase/functions/_shared/ai-client.ts';
 
 // Load environment variables
 dotenv.config();
@@ -38,7 +38,6 @@ if (!openaiKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
-const openai = new OpenAI({ apiKey: openaiKey });
 
 // Parse arguments
 const args = process.argv.slice(2);
@@ -64,18 +63,28 @@ interface ReingestionStats {
 }
 
 /**
- * Génère les embeddings pour une liste de textes
+ * Génère les embeddings pour une liste de textes via ai-client
  */
-async function generateEmbeddings(texts: string[]): Promise<number[][]> {
+async function generateEmbeddings(texts: string[], sessionId: string): Promise<number[][]> {
   if (texts.length === 0) return [];
 
   try {
-    const response = await openai.embeddings.create({
-      model: 'text-embedding-3-small',
-      input: texts,
-    });
+    const embeddings: number[][] = [];
 
-    return response.data.map(d => d.embedding);
+    for (const text of texts) {
+      const result = await generateEmbedding(
+        text,
+        openaiKey,
+        'text-embedding-3-small',
+        {
+          sessionId,
+          supabaseClient: supabase
+        }
+      );
+      embeddings.push(result.embedding);
+    }
+
+    return embeddings;
   } catch (error) {
     console.error('   ❌ Erreur génération embeddings:', error);
     throw error;
@@ -198,7 +207,8 @@ async function extractTextFromBlob(blob: Blob): Promise<string | null> {
  * Réingère un document spécifique
  */
 async function reingestDocument(
-  documentId: string
+  documentId: string,
+  sessionId: string
 ): Promise<{ success: boolean; chunksCreated: number; error?: string }> {
   try {
     // 1. Récupérer les infos du document
@@ -263,7 +273,7 @@ async function reingestDocument(
       const texts = batch.map(c => c.content);
 
       try {
-        const embeddings = await generateEmbeddings(texts);
+        const embeddings = await generateEmbeddings(texts, sessionId);
 
         for (let j = 0; j < batch.length; j++) {
           chunksWithEmbeddings.push({
@@ -388,7 +398,8 @@ async function runReingestion(): Promise<ReingestionStats> {
     for (const docId of batch) {
       console.log(`\n📄 Traitement: ${docId}`);
 
-      const result = await reingestDocument(docId);
+      const sessionId = `rag-reingest-${docId}-${Date.now()}`;
+      const result = await reingestDocument(docId, sessionId);
 
       stats.documentsProcessed++;
 

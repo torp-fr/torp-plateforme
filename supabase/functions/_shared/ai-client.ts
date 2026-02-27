@@ -276,3 +276,258 @@ export async function callClaude(
   // All models failed
   return { success: false, error: `All Claude models failed. Last error: ${lastError}` };
 }
+
+/**
+ * Generate embeddings with OpenAI
+ * Centralizes all embedding requests through this function
+ * Automatically tracks usage and costs
+ */
+export async function generateEmbedding(
+  text: string,
+  apiKey: string,
+  model: string = 'text-embedding-3-small',
+  options?: {
+    userId?: string;
+    sessionId?: string;
+    supabaseClient?: any;
+  }
+): Promise<{
+  embedding: number[];
+  usage?: {
+    prompt_tokens: number;
+  };
+}> {
+  const startTime = Date.now();
+
+  const response = await fetch('https://api.openai.com/v1/embeddings', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ model, input: text }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Embedding API error: ${response.status} - ${error}`);
+  }
+
+  const data = await response.json();
+  const latencyMs = Date.now() - startTime;
+  const inputTokens = data.usage?.prompt_tokens || 0;
+
+  // Track usage
+  if (options?.supabaseClient && options?.sessionId) {
+    const { calculateCost } = await import('./llm-pricing.ts');
+    const cost = calculateCost(model, inputTokens, 0);
+
+    trackLLMUsage(options.supabaseClient, {
+      action: 'embedding',
+      model,
+      inputTokens,
+      outputTokens: 0,
+      latencyMs,
+      userId: options?.userId,
+      sessionId: options?.sessionId
+    }).catch(err => console.error('[Embedding] Tracking failed:', err));
+
+    console.log('[Embedding] Usage tracked:', {
+      model,
+      tokens: inputTokens,
+      cost: cost.toFixed(6),
+      latency: latencyMs
+    });
+  }
+
+  return {
+    embedding: data.data[0].embedding,
+    usage: data.usage
+  };
+}
+
+/**
+ * Analyze images with GPT-4 Vision
+ * Centralizes all vision API requests
+ * Automatically tracks usage and costs
+ */
+export async function analyzeImage(
+  imageBase64: string,
+  mediaType: string,
+  apiKey: string,
+  options?: {
+    analysisType?: string;
+    systemPrompt?: string;
+    userId?: string;
+    sessionId?: string;
+    supabaseClient?: any;
+  }
+): Promise<{
+  analysis: string;
+  usage?: { input_tokens: number; output_tokens: number };
+}> {
+  const startTime = Date.now();
+
+  const systemPrompt = options?.systemPrompt ||
+    'You are an expert in analyzing construction and renovation project photos.';
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:${mediaType};base64,${imageBase64}`,
+                detail: 'high'
+              }
+            }
+          ]
+        }
+      ],
+      max_tokens: 2000
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Vision API error: ${response.status} - ${error}`);
+  }
+
+  const data = await response.json();
+  const latencyMs = Date.now() - startTime;
+  const inputTokens = data.usage?.prompt_tokens || 0;
+  const outputTokens = data.usage?.completion_tokens || 0;
+
+  // Track usage
+  if (options?.supabaseClient && options?.sessionId) {
+    const { calculateCost } = await import('./llm-pricing.ts');
+    const cost = calculateCost('gpt-4o', inputTokens, outputTokens);
+
+    trackLLMUsage(options.supabaseClient, {
+      action: options?.analysisType || 'analyze-image',
+      model: 'gpt-4o',
+      inputTokens,
+      outputTokens,
+      latencyMs,
+      userId: options?.userId,
+      sessionId: options?.sessionId
+    }).catch(err => console.error('[Vision] Tracking failed:', err));
+
+    console.log('[Vision] Usage tracked:', {
+      model: 'gpt-4o',
+      tokens: inputTokens + outputTokens,
+      cost: cost.toFixed(6),
+      latency: latencyMs
+    });
+  }
+
+  return {
+    analysis: data.choices[0]?.message?.content || '',
+    usage: data.usage
+  };
+}
+
+/**
+ * Call OpenAI API for chat completions
+ * Centralizes all OpenAI completion requests
+ * Automatically tracks usage and costs
+ */
+export async function callOpenAI(
+  userPrompt: string,
+  systemPrompt: string,
+  apiKey: string,
+  options?: {
+    model?: string;
+    maxTokens?: number;
+    temperature?: number;
+    userId?: string;
+    sessionId?: string;
+    supabaseClient?: any;
+  }
+): Promise<AIResponse> {
+  const startTime = Date.now();
+  const model = options?.model || 'gpt-4o';
+  const maxTokens = options?.maxTokens || 2000;
+  const temperature = options?.temperature || 0.7;
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      max_tokens: maxTokens,
+      temperature
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`OpenAI API error: ${response.status} - ${error}`);
+  }
+
+  const data = await response.json();
+  const latencyMs = Date.now() - startTime;
+  const inputTokens = data.usage?.prompt_tokens || 0;
+  const outputTokens = data.usage?.completion_tokens || 0;
+
+  // Track usage
+  if (options?.supabaseClient && options?.sessionId) {
+    const { calculateCost } = await import('./llm-pricing.ts');
+    const cost = calculateCost(model, inputTokens, outputTokens);
+
+    trackLLMUsage(options.supabaseClient, {
+      action: 'completion',
+      model,
+      inputTokens,
+      outputTokens,
+      latencyMs,
+      userId: options?.userId,
+      sessionId: options?.sessionId
+    }).catch(err => console.error('[OpenAI] Tracking failed:', err));
+
+    console.log('[OpenAI] Usage tracked:', {
+      model,
+      tokens: inputTokens + outputTokens,
+      cost: cost.toFixed(6),
+      latency: latencyMs
+    });
+  }
+
+  const content = data.choices[0]?.message?.content || '';
+
+  return {
+    success: true,
+    data: content,
+    model,
+    tokens: {
+      estimated: inputTokens + outputTokens,
+      actual: inputTokens + outputTokens,
+      input: inputTokens,
+      output: outputTokens
+    },
+    usage: {
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      cost: (await import('./llm-pricing.ts')).calculateCost(model, inputTokens, outputTokens),
+      latencyMs
+    }
+  };
+}

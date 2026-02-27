@@ -1,4 +1,12 @@
+/**
+ * Generate Embedding Edge Function
+ * Centralized through ai-client.ts for usage tracking
+ * All API calls go through generateEmbedding() function
+ */
+
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { generateEmbedding } from "../_shared/ai-client.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,26 +40,50 @@ Deno.serve(async (req) => {
     });
   }
 
-  const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY");
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${OPENAI_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: model || "text-embedding-3-small",
-      input: text,
-    }),
-  });
+  try {
+    const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY");
 
-  const json = await response.json();
-  return new Response(
-    JSON.stringify({
-      embedding: json.data[0].embedding,
-    }),
-    {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    // Create Supabase client for usage tracking
+    let supabaseClient = null;
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL");
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (supabaseUrl && supabaseKey) {
+        supabaseClient = createClient(supabaseUrl, supabaseKey);
+      }
+    } catch (err) {
+      console.warn("[Embeddings] Could not create Supabase client:", err);
     }
-  );
+
+    // ============================================
+    // ALL API CALLS GO THROUGH ai-client.ts
+    // ============================================
+    const result = await generateEmbedding(
+      text,
+      OPENAI_KEY,
+      model || "text-embedding-3-small",
+      {
+        sessionId: crypto.randomUUID(),
+        supabaseClient
+      }
+    );
+
+    return new Response(
+      JSON.stringify({
+        embedding: result.embedding,
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  } catch (error) {
+    console.error("[Embeddings] Error:", error);
+    return new Response(
+      JSON.stringify({ error: String(error) }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
 });
