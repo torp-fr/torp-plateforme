@@ -38,10 +38,54 @@ serve(async (req) => {
         if (!devisText) {
           return errorResponse('devisText requis pour action "full"');
         }
+
+        // ============================================
+        // RAG ORCHESTRATION
+        // ============================================
         const context = await orchestrateRAG({ devisText });
+
+        // ============================================
+        // GENERATE FULL PROMPT
+        // ============================================
+        const fullPrompt = generateAIPromptFromRAG(context, devisText);
+
+        // ============================================
+        // TOKEN VALIDATION ON CONCATENATED PROMPT
+        // ============================================
+        const systemPrompt = 'Vous êtes un expert en analyse de devis du bâtiment.';
+        const tokenValidation = validateTokens(
+          [{ role: 'user', content: fullPrompt }],
+          'claude-3-5-sonnet-20241022',
+          4096,
+          systemPrompt
+        );
+
+        // Check if validation returned an error
+        if (tokenValidation && 'error' in tokenValidation && tokenValidation.error !== undefined) {
+          const errorData = tokenValidation as TokenCountError;
+          console.warn('[RAG Query Full] Context limit exceeded:', {
+            inputTokens: errorData.inputTokens,
+            outputTokens: errorData.outputTokens,
+            maxAllowed: errorData.maxAllowed
+          });
+          return contextLimitExceededResponse(errorData);
+        }
+
+        const validTokens = tokenValidation as TokenCountResult;
+        console.log('[RAG Query Full] Token validation passed:', {
+          inputTokens: validTokens.inputTokens,
+          outputTokens: validTokens.outputTokens,
+          estimatedTotal: validTokens.estimatedTotal,
+          safeLimit: validTokens.safeLimit
+        });
+
         return successResponse({
           context,
-          prompt: generateAIPromptFromRAG(context, devisText)
+          prompt: fullPrompt,
+          tokens: {
+            estimated: validTokens.estimatedTotal,
+            safeLimit: validTokens.safeLimit
+          }
         });
       }
 
@@ -56,39 +100,67 @@ serve(async (req) => {
         }
 
         // ============================================
-        // TOKEN COUNTING & VALIDATION
+        // CONSTRUCT ACTUAL EXTRACTION PROMPT
         // ============================================
-        const extractionPromptPreview = `Analyse ce devis et extrait les informations structurées.
+        const extractionPrompt = `Analyse ce devis et extrait les informations structurées.
 
 DEVIS:
 ${devisText}
 
-[... JSON schema ...]`;
+Retourne un JSON avec cette structure exacte:
+{
+  "entreprise": {
+    "nom": "nom de l'entreprise",
+    "siret": "numéro SIRET si présent (14 chiffres)",
+    "siren": "numéro SIREN si présent (9 chiffres)",
+    "adresse": "adresse complète",
+    "telephone": "téléphone",
+    "email": "email"
+  },
+  "travaux": [
+    {
+      "type": "type de travaux (isolation, chauffage, etc.)",
+      "description": "description détaillée",
+      "quantite": nombre,
+      "unite": "m², unité, ml, etc.",
+      "prixUnitaire": prix_unitaire_ht,
+      "prixTotal": prix_total_ht,
+      "categorie": "catégorie principale"
+    }
+  ],
+  "montants": {
+    "ht": montant_total_ht,
+    "tva": montant_tva,
+    "ttc": montant_ttc,
+    "acompte": montant_acompte_si_present
+  },
+  "dateDevis": "date du devis",
+  "validite": "durée de validité",
+  "delaiTravaux": "délai d'exécution",
+  "garanties": ["liste des garanties mentionnées"]
+}`;
 
+        const systemPrompt = 'Tu es un expert en analyse de devis du bâtiment. Extrait les données avec précision. Retourne uniquement du JSON valide.';
+
+        // ============================================
+        // TOKEN VALIDATION ON ACTUAL PROMPT
+        // ============================================
         const tokenValidation = validateTokens(
-          [{ role: 'user', content: extractionPromptPreview }],
+          [{ role: 'user', content: extractionPrompt }],
           'claude-3-5-sonnet-20241022',
           4096,
-          'Tu es un expert en analyse de devis du bâtiment. Extrait les données avec précision. Retourne uniquement du JSON valide.'
+          systemPrompt
         );
 
         // Check if validation returned an error
         if (tokenValidation && 'error' in tokenValidation && tokenValidation.error !== undefined) {
           const errorData = tokenValidation as TokenCountError;
-          return new Response(
-            JSON.stringify({
-              success: false,
-              error: 'context_limit_exceeded',
-              message: errorData.message,
-              details: {
-                inputTokens: errorData.inputTokens,
-                outputTokens: errorData.outputTokens,
-                totalTokens: errorData.inputTokens + errorData.outputTokens,
-                maxAllowed: errorData.maxAllowed
-              }
-            }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+          console.warn('[RAG Query Extract] Context limit exceeded:', {
+            inputTokens: errorData.inputTokens,
+            outputTokens: errorData.outputTokens,
+            maxAllowed: errorData.maxAllowed
+          });
+          return contextLimitExceededResponse(errorData);
         }
 
         const validTokens = tokenValidation as TokenCountResult;
@@ -99,6 +171,9 @@ ${devisText}
           safeLimit: validTokens.safeLimit
         });
 
+        // ============================================
+        // EXTRACT DEVIS DATA
+        // ============================================
         const extracted = await extractDevisData(devisText, claudeApiKey);
         return successResponse({
           extracted,
@@ -249,5 +324,26 @@ function errorResponse(message: string, status = 400) {
   return new Response(
     JSON.stringify({ success: false, error: message }),
     { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
+}
+
+/**
+ * Structured error response for context limit exceeded
+ * Returns standardized format for token validation failures
+ */
+function contextLimitExceededResponse(errorData: TokenCountError) {
+  return new Response(
+    JSON.stringify({
+      success: false,
+      error: 'context_limit_exceeded',
+      message: errorData.message,
+      details: {
+        estimated_tokens: errorData.inputTokens,
+        safe_limit: errorData.maxAllowed,
+        output_tokens: errorData.outputTokens,
+        total_would_be: errorData.inputTokens + errorData.outputTokens
+      }
+    }),
+    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
 }
