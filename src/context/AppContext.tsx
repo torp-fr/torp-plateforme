@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { authService } from '@/services/api/supabase/auth.service';
 import { devisService } from '@/services/api/supabase/devis.service';
@@ -125,30 +125,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isLoading, setIsLoading] = useState(true); // ONLY represents session bootstrap timing
   const [isAuthenticated, setIsAuthenticated] = useState(false); // Session exists (auth token valid)
 
-  // PHASE 3: StrictMode safety - prevent double bootstrap
-  const didBootstrap = useRef(false);
-
   // Compute isAdmin from user
   const isAdmin = user?.isAdmin === true;
 
   // ════════════════════════════════════════════════════════════════════════════
-  // PHASE 1 + 2 + 3: CRITICAL BOOTSTRAP - SESSION ONLY (non-blocking)
+  // CRITICAL BOOTSTRAP - SESSION ONLY (non-blocking)
   // ════════════════════════════════════════════════════════════════════════════
   // Rules:
   // 1. ZERO network calls before setIsLoading(false)
   // 2. ZERO DB fetches during bootstrap
   // 3. ZERO profile loading during bootstrap
-  // 4. ZERO side effects except auth listener setup
-  // 5. setIsLoading(true) appears ONLY in initial useState (line 124)
+  // 4. setIsLoading(false) MUST be in finally block (always executes)
+  // 5. setIsLoading(true) appears ONLY in initial useState
   // ════════════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    // PHASE 3: Prevent double execution in StrictMode
-    if (didBootstrap.current) {
-      log('[Bootstrap] Already bootstrapped, skipping');
-      return;
-    }
-    didBootstrap.current = true;
-
     let isMounted = true;
 
     const bootstrapSession = async () => {
@@ -156,7 +146,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         // PHASE 7: Performance logging
         time('SESSION_BOOTSTRAP');
 
-        // PHASE 1: Get session ONLY - no network, no DB
+        // Get session ONLY - no network, no DB
         const { data } = await supabase.auth.getSession();
 
         timeEnd('SESSION_BOOTSTRAP');
@@ -184,8 +174,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setIsAuthenticated(false);
       } finally {
         if (isMounted) {
-          // CRITICAL: Set isLoading(false) immediately after session check
-          // Profile loading happens SEPARATELY and asynchronously
+          // CRITICAL: Set isLoading(false) ALWAYS, even on error
           setIsLoading(false);
         }
       }
