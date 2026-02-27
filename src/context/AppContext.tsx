@@ -129,35 +129,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const isAdmin = user?.isAdmin === true;
 
   // ════════════════════════════════════════════════════════════════════════════
-  // CRITICAL BOOTSTRAP - TIMEOUT-PROTECTED SESSION ONLY
+  // CRITICAL BOOTSTRAP - CLEAN SESSION ONLY
   // ════════════════════════════════════════════════════════════════════════════
-  // GUARANTEE: UI ALWAYS unlocks after 300ms, even if Supabase hangs
-  // Pattern: Promise.race([getSession(), 300ms timeout])
+  // GUARANTEE: Session persistence - no artificial timeouts
+  // Pattern: Await getSession() normally, setIsLoading(false) in finally
   // Rules:
-  // 1. No infinite spinner possible - timeout always wins
+  // 1. Await getSession() normally - trust the session
   // 2. Profile loads in separate effect (non-blocking)
   // 3. setIsLoading(false) ALWAYS executes in finally block
-  // 4. No other setIsLoading(true) in bootstrap
+  // 4. ProtectedRoute redirects only when: isLoading===false AND no session
   // ════════════════════════════════════════════════════════════════════════════
   useEffect(() => {
     let cancelled = false;
 
     async function bootstrap() {
       try {
-        // CRITICAL: Timeout-protected session read (300ms max)
-        // Even if Supabase hangs, UI must unlock after 300ms
-        const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise(resolve =>
-          setTimeout(() => resolve({ data: { session: null } }), 300)
-        );
-
+        // Clean session read - no artificial timeouts
+        // Trust Supabase to return the session
         time('SESSION_BOOTSTRAP');
-        const result = await Promise.race([sessionPromise, timeoutPromise]);
+        const { data } = await supabase.auth.getSession();
         timeEnd('SESSION_BOOTSTRAP');
 
         if (cancelled) return;
 
-        const session = result?.data?.session ?? null;
+        const session = data?.session ?? null;
 
         if (session) {
           log('[Bootstrap] ✓ Session found:', session.user?.email);
@@ -179,7 +174,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setIsAuthenticated(false);
       } finally {
         if (!cancelled) {
-          // CRITICAL: ALWAYS unlock UI, even on Supabase timeout/error
+          // CRITICAL: ALWAYS unlock UI when bootstrap completes or fails
           setIsLoading(false);
         }
       }
