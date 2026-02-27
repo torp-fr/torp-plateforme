@@ -23,8 +23,20 @@ export const ProRoute = ({
   redirectTo = '/login',
   allowAdmin = true,
 }: ProRouteProps) => {
-  const { user, isAuthenticated } = useApp();
+  const { user, isAuthenticated, isLoading } = useApp();
   const location = useLocation();
+
+  // While auth initialization is in progress, show spinner
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Not authenticated - redirect to login
   if (!isAuthenticated) {
@@ -68,8 +80,20 @@ export const ProtectedRoute = ({
   children,
   redirectTo = '/login',
 }: ProtectedRouteProps) => {
-  const { isAuthenticated } = useApp();
+  const { isAuthenticated, isLoading } = useApp();
   const location = useLocation();
+
+  // While auth initialization is in progress, show spinner
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Check session authentication, not profile existence
   if (!isAuthenticated) {

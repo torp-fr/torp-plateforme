@@ -1,7 +1,6 @@
 /**
  * AdminRoute - Protects routes for admin users only
- * Relies on Supabase auth listener for session state
- * Profile data (isAdmin) loads in background
+ * Uses official Supabase auth pattern with isLoading state
  */
 
 import React from 'react';
@@ -14,24 +13,32 @@ interface AdminRouteProps {
 }
 
 export function AdminRoute({ children }: AdminRouteProps) {
-  const { user } = useApp();
+  const { user, isLoading } = useApp();
 
+  // While auth initialization is in progress, show spinner
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Auth complete. Check access deterministically.
   // Not authenticated
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  // Wait silently until role is determined from profile
-  // isAdmin is undefined while profile loads, false if not admin, true if admin
-  if (user.isAdmin === undefined) {
-    return null;
-  }
-
-  // Not admin (role from Supabase profiles, loaded in background)
+  // Not admin
   if (!user.isAdmin) {
     warn('[AdminRoute] Access denied: user is not admin');
     return <Navigate to="/dashboard" replace />;
   }
 
+  // Admin user → allow access
   return <>{children}</>;
 }

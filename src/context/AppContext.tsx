@@ -103,6 +103,7 @@ interface AppContextType {
   currentProject: Project | null;
   isAnalyzing: boolean;
   isAuthenticated: boolean; // Session exists (auth token valid)
+  isLoading: boolean; // Auth initialization in progress
   setUser: (user: User | null) => void;
   setUserType: (type: UserType) => void;
   setProjects: (projects: Project[]) => void;
@@ -122,93 +123,102 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false); // Session exists (auth token valid)
+  const [isLoading, setIsLoading] = useState(true); // Auth initialization in progress
 
   // Compute isAdmin from user
   const isAdmin = user?.isAdmin === true;
 
   // ════════════════════════════════════════════════════════════════════════════
-  // AUTH STATE MANAGEMENT - SUPABASE LISTENER ONLY
+  // OFFICIAL SUPABASE AUTH PATTERN - SYNCHRONOUS BOOTSTRAP
   // ════════════════════════════════════════════════════════════════════════════
-  // App renders immediately. Supabase onAuthStateChange controls auth state.
-  // NO blocking bootstrap. NO getSession on mount. NO async initialization.
+  // 1. Get session
+  // 2. If session exists, fetch full profile
+  // 3. Set complete user object with isAdmin
+  // 4. Set isLoading(false) when done
+  // Routes check isLoading → show spinner while true
   // ════════════════════════════════════════════════════════════════════════════
   useEffect(() => {
+    let isMounted = true;
+
+    const initAuth = async () => {
+      try {
+        // STEP 1: Get session
+        const { data } = await supabase.auth.getSession();
+        const session = data?.session;
+
+        if (!session) {
+          // No session → no user
+          if (isMounted) {
+            setUser(null);
+            setIsAuthenticated(false);
+          }
+          return;
+        }
+
+        // STEP 2: Fetch profile synchronously before rendering protected routes
+        const userProfile = await authService.getUserProfile(session.user.id);
+
+        if (!userProfile) {
+          // Session exists but no profile → no user
+          if (isMounted) {
+            setUser(null);
+            setIsAuthenticated(false);
+          }
+          return;
+        }
+
+        if (!isMounted) return;
+
+        // STEP 3: Set complete user with isAdmin calculated
+        console.log('[Auth] Role received:', userProfile.role);
+        const isAdmin = userProfile.role?.toLowerCase() === 'admin';
+        console.log('[Auth] isAdmin calculated:', isAdmin);
+
+        setUser({
+          id: session.user.id,
+          email: session.user.email || 'unknown',
+          ...userProfile,
+          isAdmin: isAdmin,
+        });
+        setUserType(userProfile.type);
+        setIsAuthenticated(true);
+      } catch (err) {
+        console.error('[Auth] Initialization error:', err);
+        if (isMounted) {
+          setUser(null);
+          setIsAuthenticated(false);
+        }
+      } finally {
+        // STEP 4: Always stop loading when initialization completes
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    // Run initialization
+    initAuth();
+
+    // STEP 5: Listen for auth changes (login/logout) after initial load
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        if (session) {
-          log('[Auth] Session detected:', session.user?.email);
-          setIsAuthenticated(true);
-          setUser({
-            id: session.user.id,
-            email: session.user.email || 'unknown',
-            name: '',
-            type: 'B2C',
-            // isAdmin undefined until profile loads
-          });
-        } else {
-          log('[Auth] No session');
-          setIsAuthenticated(false);
+        if (!isMounted) return;
+
+        if (!session) {
+          // User logged out
           setUser(null);
+          setIsAuthenticated(false);
+          setProjects([]);
+          setCurrentProject(null);
         }
       }
     );
 
     return () => {
+      isMounted = false;
       listener?.subscription?.unsubscribe();
     };
   }, []);
-
-  // ════════════════════════════════════════════════════════════════════════════
-  // BACKGROUND PROFILE LOADING - NON-BLOCKING
-  // ════════════════════════════════════════════════════════════════════════════
-  // Profile loads after user is set. Does NOT modify global state.
-  // Does NOT block UI. Runs in background.
-  // ════════════════════════════════════════════════════════════════════════════
-  useEffect(() => {
-    // Only fetch profile if authenticated
-    if (!isAuthenticated || !user?.id) {
-      return;
-    }
-
-    let isMounted = true;
-
-    const loadProfileInBackground = async () => {
-      try {
-        log('[Profile] Loading profile for user:', user.id);
-        const userProfile = await authService.getUserProfile(user.id);
-        if (!isMounted) return;
-
-        if (userProfile) {
-          log('[Profile] ✓ Loaded:', userProfile.email);
-          // Defensive logging for role comparison
-          console.log('[Profile] Role received:', userProfile.role);
-
-          // Merge profile data, determine admin role (case-insensitive)
-          const isAdmin = userProfile.role?.toLowerCase() === 'admin';
-          console.log('[Profile] isAdmin calculated:', isAdmin);
-
-          setUser(prev => ({
-            ...prev,
-            ...userProfile,
-            isAdmin: isAdmin, // Always set explicitly to override any userProfile.isAdmin
-          }));
-          setUserType(userProfile.type);
-        }
-      } catch (err) {
-        if (!isMounted) return;
-        log('[Profile] Load failed, continuing with minimal profile');
-        // Mark role as determined (false) even on error
-        setUser(prev => prev ? { ...prev, isAdmin: false } : null);
-      }
-    };
-
-    // Start profile load (no await - non-blocking)
-    loadProfileInBackground();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isAuthenticated, user?.id]);
 
   // Load user's analyzed devis when user changes
   useEffect(() => {
@@ -305,6 +315,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       currentProject,
       isAnalyzing,
       isAuthenticated,
+      isLoading,
       setUser,
       setUserType,
       setProjects,
