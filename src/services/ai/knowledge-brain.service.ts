@@ -165,7 +165,7 @@ class KnowledgeBrainService {
     try {
       log('[KNOWLEDGE BRAIN] 🚀 Triggering server ingestion Edge Function');
 
-      const { error } = await supabase.functions.invoke('rag-ingestion', {
+      const { error } = await supabase.functions.invoke('ingest-document', {
         body: { documentId },
       });
 

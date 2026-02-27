@@ -1,7 +1,10 @@
 /**
  * Analysis Services
- * Exporte tous les services d'analyse
+ *
+ * UNIFIED RAG ARCHITECTURE:
+ * All analysis operations now go through Supabase Edge Functions.
+ * Frontend should call: supabase.functions.invoke('rag-query', {...})
  */
 
-export { AnalysisCommands, analysisCommands } from './AnalysisCommands';
-export type { AnalysisResult, StoredAnalysis } from './AnalysisCommands';
+// Services consolidated into Edge Functions
+// See: supabase/functions/rag-query/

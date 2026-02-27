@@ -1,9 +1,15 @@
 /**
  * Knowledge Base Services Index
- * Central export for all knowledge base functionality
+ *
+ * UNIFIED RAG ARCHITECTURE:
+ * All RAG operations now go through Supabase Edge Functions:
+ * - rag-query: Main RAG endpoint for searches and analysis
+ * - ingest-document: Document ingestion with OCR and embeddings
+ * - generate-embedding: Vector embedding generation
+ *
+ * Frontend should call: supabase.functions.invoke('rag-query', {...})
+ *
+ * Type definitions still exported for reference.
  */
 
 export * from './types';
-export { RAGOrchestratorService, ragOrchestratorService } from './rag-orchestrator.service';
-export { DocumentIngestionService, documentIngestionService } from './document-ingestion.service';
-export { DomainAnalysisService, domainAnalysisService } from './domain-analysis.service';

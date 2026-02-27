@@ -4,6 +4,5 @@ export type { RGECoherenceResult, TravauxDetecte, CoherenceItem, IncoherenceItem
 export { transparencyScoringService } from './transparency-scoring.service';
 export type { TransparencyAnalysis, CritereScore, ElementDetecte, TransparencyInput } from './transparency-scoring.service';
 
-// Contextual Scoring with KB and Project Context
-export { contextualScoringService } from './contextual-scoring.service';
-export type { ContextualScoreResult, RoomScore, ExtractedQuote } from './contextual-scoring.service';
+// Contextual Scoring moved to Edge Functions
+// Use: supabase.functions.invoke('rag-query', {...}) for contextual analysis

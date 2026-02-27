@@ -9,11 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { ScoreGauge } from '@/components/ScoreGauge';
 import { Home, Download, AlertCircle, CheckCircle2, TrendingUp, Zap } from 'lucide-react';
-import { performRagAnalysis } from '@/services/ragService';
-import type { RagContext } from '@/services/ragService';
 import type { CCFData } from '@/components/guided-ccf/GuidedCCF';
 import type { EnrichedClientData } from '@/types/enrichment';
-import { log, warn, error, time, timeEnd } from '@/lib/logger';
+import { log, warn } from '@/lib/logger';
 
 interface AnalysisResult {
   score: number;
@@ -68,36 +66,11 @@ export function QuoteAnalysisPage() {
           ],
         };
 
-        // Si données enrichies disponibles, lancer RAG analysis
-        if (enrichedData) {
-          try {
-            const ragAnalysis = performRagAnalysis({
-              enrichedData,
-              ccfData,
-            });
-
-            analysisResult = {
-              score: ragAnalysis.overall_score,
-              status: ragAnalysis.status,
-              conformity: ragAnalysis.conformity_score,
-              filename: quoteData.filename,
-              projectName: ccfData.projectName || 'Projet sans nom',
-              alerts: ragAnalysis.alerts.map(a => ({
-                type: a.type,
-                message: a.message,
-                severity: a.severity,
-              })),
-              recommendations: ragAnalysis.recommendations.map(r => ({
-                title: r.title,
-                description: r.description,
-                priority: r.priority,
-              })),
-            };
-
-            log('✅ RAG Analysis completed:', analysisResult);
-          } catch (ragError) {
-            warn('⚠️ RAG analysis failed, using basic analysis:', ragError);
-          }
+        // NOTE: Enhanced RAG analysis now goes through Edge Functions (rag-query)
+        // For MVP, using basic analysis from form data
+        // TODO: Integrate with supabase.functions.invoke('rag-query', {...}) for full analysis
+        if (enrichedData && ccfData) {
+          log('📊 Analysis page loaded with enriched data and CCF');
         }
 
         setAnalysis(analysisResult);
