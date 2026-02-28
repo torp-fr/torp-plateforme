@@ -18,8 +18,6 @@ import { chunkText, getChunkingStats, validateChunks } from '@/utils/chunking';
 import { KnowledgeHealthService } from './knowledge-health.service';
 // PHASE 36.11: PDF text extraction (using centralized PDF.js wrapper)
 import { extractPdfText, isPdfFile, validatePdfSize } from '@/lib/pdfExtract';
-// PHASE 39: Step Runner trigger for progressive integration
-import { triggerStepRunner } from '@/api/knowledge-step-trigger';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface KnowledgeDocument {
@@ -145,9 +143,11 @@ class KnowledgeBrainService {
 
       log('[KNOWLEDGE BRAIN] ✅ Document created in DB:', doc.id);
 
-      // Database trigger will automatically invoke Edge Function for ingestion
-      // No client-side invocation needed - architecture is now fully server-side
-      // Trigger path: INSERT → on_document_pending trigger → pg_net HTTP POST → Edge Function
+      // Trigger Edge Function for ingestion
+      log('[KNOWLEDGE BRAIN] Triggering Edge ingestion:', doc.id);
+      await supabase.functions.invoke('rag-ingestion', {
+        body: { documentId: doc.id }
+      });
 
       return doc;
     } catch (error) {
@@ -572,19 +572,11 @@ class KnowledgeBrainService {
         source,
       };
 
-      // PHASE 39: Trigger Step Runner for progressive integration
-      log('[STEP TRIGGER] launching for', doc.id);
-      triggerStepRunner(doc.id)
-        .then((result) => {
-          if (result.success) {
-            log('[STEP TRIGGER] ✅ triggered successfully for', doc.id);
-          } else {
-            warn('[STEP TRIGGER] ⚠️ trigger warning for', doc.id, ':', result.error);
-          }
-        })
-        .catch((err) => {
-          console.error('[STEP TRIGGER] ❌ trigger error for', doc.id, ':', err);
-        });
+      // Trigger Edge Function for ingestion
+      log('[KNOWLEDGE BRAIN] Triggering Edge ingestion:', doc.id);
+      await supabase.functions.invoke('rag-ingestion', {
+        body: { documentId: doc.id }
+      });
 
       // ✅ PHASE 36.9 STEP 5: RETURN IMMEDIATELY TO UI
       log('[KNOWLEDGE BRAIN] 🚀 Document returned to UI');
@@ -593,8 +585,8 @@ class KnowledgeBrainService {
       // No background async pipeline
       // No document chunking
       // No embedding generation
-      // StepRunner owns all ingestion responsibility
-      log('[KNOWLEDGE BRAIN] 🔒 Passive mode active - StepRunner owns ingestion (PHASE 19.2)');
+      // Edge Function owns all ingestion responsibility
+      log('[KNOWLEDGE BRAIN] 🔒 Passive mode active - Edge Function owns ingestion (PHASE 19.2)');
 
       return doc;
     } catch (error) {
