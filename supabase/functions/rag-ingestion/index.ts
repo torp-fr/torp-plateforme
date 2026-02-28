@@ -7,6 +7,29 @@ const supabase = createClient(
 
 Deno.serve(async (req) => {
   try {
+    // SECURITY: Verify Authorization header for server-to-server calls
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.error("❌ Unauthorized: missing Authorization header");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: missing Authorization header" }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const providedToken = authHeader.substring(7);
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!serviceRoleKey || providedToken !== serviceRoleKey) {
+      console.error("❌ Unauthorized: invalid token");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: invalid token" }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log("✅ Authorization verified (service role)");
+
     if (req.method !== "POST") {
       return new Response("Method Not Allowed", { status: 405 });
     }
