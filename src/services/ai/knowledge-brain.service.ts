@@ -144,10 +144,16 @@ class KnowledgeBrainService {
       log('[KNOWLEDGE BRAIN] ✅ Document created in DB:', doc.id);
 
       // Trigger Edge Function for ingestion
-      log('[KNOWLEDGE BRAIN] Triggering Edge ingestion:', doc.id);
-      await supabase.functions.invoke('rag-ingestion', {
-        body: { documentId: doc.id }
-      });
+      console.log("DOC ID BEFORE INVOKE:", doc?.id);
+      console.log("ABOUT TO CALL EDGE...");
+      try {
+        const result = await supabase.functions.invoke('rag-ingestion', {
+          body: { documentId: doc.id },
+        });
+        console.log("EDGE RESULT:", result);
+      } catch (err) {
+        console.error("EDGE ERROR:", err);
+      }
 
       return doc;
     } catch (error) {
@@ -573,10 +579,16 @@ class KnowledgeBrainService {
       };
 
       // Trigger Edge Function for ingestion
-      log('[KNOWLEDGE BRAIN] Triggering Edge ingestion:', doc.id);
-      await supabase.functions.invoke('rag-ingestion', {
-        body: { documentId: doc.id }
-      });
+      console.log("DOC ID BEFORE INVOKE:", doc?.id);
+      console.log("ABOUT TO CALL EDGE...");
+      try {
+        const result = await supabase.functions.invoke('rag-ingestion', {
+          body: { documentId: doc.id },
+        });
+        console.log("EDGE RESULT:", result);
+      } catch (err) {
+        console.error("EDGE ERROR:", err);
+      }
 
       // ✅ PHASE 36.9 STEP 5: RETURN IMMEDIATELY TO UI
       log('[KNOWLEDGE BRAIN] 🚀 Document returned to UI');
