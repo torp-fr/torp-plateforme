@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
 import * as pdfjsLib from 'https://esm.sh/pdfjs-dist@3.11.174';
@@ -17,7 +16,7 @@ const PIPELINE_TIMEOUT_MS = 2.5 * 60 * 1000; // 2.5 minutes
 const OCR_THROTTLE_MS = 200; // 200ms between OCR calls
 const MAX_CONCURRENT_OCR = 5; // Max 5 concurrent OCR requests
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
