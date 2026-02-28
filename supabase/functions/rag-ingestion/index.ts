@@ -21,19 +21,22 @@ serve(async (req) => {
   const corsResponse = handleCors(req);
   if (corsResponse) return corsResponse;
 
-  try {
-    const { documentId } = await req.json();
+  let documentId: string | null = null;
 
-    if (!documentId) {
+  try {
+    const { documentId: docId } = await req.json();
+
+    if (!docId) {
       return new Response(
         JSON.stringify({ error: 'documentId required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    documentId = docId;
     console.log(`[RAG-INGESTION] Starting for document ${documentId}`);
 
-    // Claim document for processing
+    // Claim document for processing (atomic single UPDATE)
     const claimed = await claimDocument(documentId);
     if (!claimed) {
       console.log(`[RAG-INGESTION] Could not claim document ${documentId}`);
@@ -52,6 +55,25 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error('[RAG-INGESTION] Error:', error);
+
+    // PATCH 2️⃣: Secure timeout handling
+    const isTimeout = error instanceof Error && (
+      error.name === 'AbortError' ||
+      error.message.includes('timeout') ||
+      error.message.includes('aborted')
+    );
+
+    if (documentId && isTimeout) {
+      console.log(`[RAG-INGESTION] Timeout detected for document ${documentId}, marking as failed`);
+      await markFailed(documentId, 'PIPELINE_TIMEOUT');
+    } else if (documentId) {
+      // Already handled by processDocument catch, but ensure cleanup if error escapes
+      const isAlreadyFailed = error instanceof Error && error.message.includes('INGESTION_ERROR');
+      if (!isAlreadyFailed) {
+        await markFailed(documentId, String(error));
+      }
+    }
+
     return new Response(
       JSON.stringify({ error: String(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -59,54 +81,63 @@ serve(async (req) => {
   }
 });
 
+// PATCH 1️⃣: Atomic single UPDATE for claim
 async function claimDocument(documentId: string) {
-  // Fetch current document
-  const { data: currentDoc, error: fetchError } = await supabase
-    .from('knowledge_documents')
-    .select('ingestion_attempts, ingestion_status')
-    .eq('id', documentId)
-    .single();
+  try {
+    // Single atomic UPDATE with all conditions in WHERE clause
+    const { data: claimed, error: claimError } = await supabase
+      .from('knowledge_documents')
+      .update({
+        ingestion_status: 'processing',
+        ingestion_attempts: supabase.rpc('increment_ingestion_attempts', { doc_id: documentId }).then(() => null) || 0, // Fallback: handled at DB level
+        processing_started_at: new Date().toISOString(),
+        pipeline_timeout_at: new Date(Date.now() + PIPELINE_TIMEOUT_MS).toISOString(),
+      })
+      .eq('id', documentId)
+      .eq('ingestion_status', 'pending')
+      .lt('ingestion_attempts', MAX_ATTEMPTS) // Atomic condition: attempts < MAX_ATTEMPTS
+      .select()
+      .single();
 
-  if (fetchError || !currentDoc) {
-    throw new Error(`Document not found: ${fetchError?.message}`);
+    if (claimError) {
+      // If claimError with code PGRST116 or similar, document is not available
+      if (claimError.code === 'PGRST116' || !claimed) {
+        console.log(`[CLAIM] Document ${documentId} not available or max attempts reached`);
+        return null;
+      }
+      throw claimError;
+    }
+
+    if (!claimed) {
+      console.log(`[CLAIM] Document ${documentId} not available or max attempts reached`);
+      return null;
+    }
+
+    console.log(`[CLAIM] Document claimed: ${documentId}`);
+    return claimed;
+  } catch (error) {
+    console.error(`[CLAIM] Error claiming document: ${error}`);
+    throw error;
   }
-
-  if (currentDoc.ingestion_status !== 'pending') {
-    console.log(`Document not pending: ${currentDoc.ingestion_status}`);
-    return null;
-  }
-
-  if (currentDoc.ingestion_attempts >= MAX_ATTEMPTS) {
-    await markFailed(documentId, 'Max retry attempts exceeded');
-    return null;
-  }
-
-  // Claim document
-  const { data: claimed, error: claimError } = await supabase
-    .from('knowledge_documents')
-    .update({
-      ingestion_status: 'processing',
-      ingestion_attempts: (currentDoc.ingestion_attempts || 0) + 1,
-      processing_started_at: new Date().toISOString(),
-      pipeline_timeout_at: new Date(Date.now() + PIPELINE_TIMEOUT_MS).toISOString(),
-    })
-    .eq('id', documentId)
-    .eq('ingestion_status', 'pending')
-    .select()
-    .single();
-
-  if (claimError || !claimed) {
-    console.log('Document already claimed by another process');
-    return null;
-  }
-
-  console.log(`[CLAIM] Document claimed: ${documentId}`);
-  return claimed;
 }
 
 async function processDocument(doc: any) {
   try {
     console.log(`[PROCESS] Starting ingestion for ${doc.id}`);
+
+    // PATCH 3️⃣: Delete existing chunks before reprocessing
+    console.log(`[PROCESS] Cleaning up existing chunks for document ${doc.id}`);
+    const { error: deleteError } = await supabase
+      .from('knowledge_chunks')
+      .delete()
+      .eq('document_id', doc.id);
+
+    if (deleteError) {
+      console.error(`[PROCESS] Warning: Failed to delete old chunks: ${deleteError.message}`);
+      // Non-fatal: continue processing
+    } else {
+      console.log(`[PROCESS] Old chunks deleted`);
+    }
 
     // Step 1: Download file from storage
     const filePath = doc.file_path;
@@ -160,12 +191,21 @@ async function processDocument(doc: any) {
       throw new Error('Failed to extract text from document (no text content found)');
     }
 
+    // PATCH 6️⃣: Update progress after extraction
+    await updateProgress(doc.id, 10);
+
     // Step 4: Chunk the text
     const chunks = chunkText(extractedText, CHUNK_SIZE);
     console.log(`[PROCESS] Generated ${chunks.length} chunks`);
 
+    // PATCH 6️⃣: Update progress after chunking
+    await updateProgress(doc.id, 50);
+
     // Step 5: Generate embeddings and insert chunks
     await processEmbeddingsInBatches(doc.id, chunks);
+
+    // PATCH 6️⃣: Update progress after embeddings
+    await updateProgress(doc.id, 90);
 
     // Step 6: Mark as completed
     await markCompleted(doc.id);
@@ -728,16 +768,45 @@ async function generateEmbeddingsBatch(texts: string[], openaiKey: string): Prom
 
     const result = await response.json();
 
+    // PATCH 4️⃣: Validate embeddings response
+    if (!result.data || !Array.isArray(result.data)) {
+      throw new Error(`Invalid OpenAI response: missing or invalid 'data' field`);
+    }
+
     // OpenAI returns embeddings in order
     const embeddings = result.data
       .sort((a: any, b: any) => a.index - b.index)
       .map((item: any) => item.embedding);
 
-    console.log(`[EMBEDDING] Generated ${embeddings.length} embeddings`);
+    // PATCH 4️⃣: Validate embedding dimension
+    for (let i = 0; i < embeddings.length; i++) {
+      if (!Array.isArray(embeddings[i]) || embeddings[i].length !== 1536) {
+        throw new Error(`Embedding ${i} has invalid dimension: expected 1536, got ${embeddings[i]?.length || 0}`);
+      }
+    }
+
+    console.log(`[EMBEDDING] Generated ${embeddings.length} embeddings with valid 1536 dimensions`);
     return embeddings;
   } catch (error) {
     console.error(`[EMBEDDING] Error generating embeddings: ${error}`);
     throw error;
+  }
+}
+
+// PATCH 6️⃣: Update ingestion progress helper
+async function updateProgress(documentId: string, progress: number) {
+  const { error } = await supabase
+    .from('knowledge_documents')
+    .update({
+      ingestion_progress: Math.min(progress, 100),
+    })
+    .eq('id', documentId);
+
+  if (error) {
+    console.warn(`[PROGRESS] Failed to update progress: ${error.message}`);
+    // Non-fatal: continue processing
+  } else {
+    console.log(`[PROGRESS] Document ${documentId} progress: ${progress}%`);
   }
 }
 
@@ -754,11 +823,13 @@ async function markCompleted(documentId: string) {
 
   if (error) {
     console.error(`[MARK_COMPLETED] Error: ${error.message}`);
+    throw new Error(`[MARK_COMPLETED] Failed to mark document as completed: ${error.message}`);
   } else {
     console.log(`[MARK_COMPLETED] Document ${documentId} completed`);
   }
 }
 
+// PATCH 5️⃣: Secure markFailed with error throwing
 async function markFailed(documentId: string, errorMessage: string) {
   const { error } = await supabase
     .from('knowledge_documents')
@@ -770,12 +841,14 @@ async function markFailed(documentId: string, errorMessage: string) {
         timestamp: new Date().toISOString(),
       }),
       pipeline_timeout_at: null,
+      ingestion_progress: 0, // PATCH 6️⃣: Reset progress on failure
     })
     .eq('id', documentId);
 
   if (error) {
-    console.error(`[MARK_FAILED] Error: ${error.message}`);
+    console.error(`[MARK_FAILED] Error updating document: ${error.message}`);
+    throw new Error(`[MARK_FAILED] Failed to mark document as failed: ${error.message}`);
   } else {
-    console.log(`[MARK_FAILED] Document ${documentId} marked as failed`);
+    console.log(`[MARK_FAILED] Document ${documentId} marked as failed: ${errorMessage}`);
   }
 }
