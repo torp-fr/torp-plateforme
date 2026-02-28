@@ -8,7 +8,7 @@ import { log, warn, error, time, timeEnd } from '@/lib/logger';
 interface QueueItem {
   id: string;
   title: string;
-  ingestion_status?: string;
+  status?: string; // Status from ingestion_jobs
   created_at: string;
 }
 
@@ -22,10 +22,12 @@ export function EmbeddingQueuePanel() {
       setLoading(true);
       setError(null);
 
+      // NOTE: Ingestion status is now tracked in ingestion_jobs table
+      // Fetch pending/processing jobs with their document titles
       const { data, error: dbError } = await supabase
-        .from('knowledge_documents')
-        .select('id, title, ingestion_status, created_at')
-        .neq('ingestion_status', 'completed')
+        .from('ingestion_jobs')
+        .select('id, file_name:file_name, status, created_at')
+        .in('status', ['chunk_preview_ready', 'embedding_in_progress'])
         .order('created_at', { ascending: false })
         .limit(5);
 
@@ -35,8 +37,14 @@ export function EmbeddingQueuePanel() {
         return;
       }
 
-      setQueue(data || []);
-
+      // Map ingestion_jobs data to QueueItem format
+      const mappedData = (data || []).map(item => ({
+        id: item.id,
+        title: item.file_name || `Job ${item.id.substring(0, 8)}`,
+        status: item.status,
+        created_at: item.created_at
+      }));
+      setQueue(mappedData);
 
       // Dispatch OPS event for other components
       window.dispatchEvent(new Event('RAG_OPS_EVENT'));
@@ -69,15 +77,18 @@ export function EmbeddingQueuePanel() {
 
   const getStatusColor = (status?: string) => {
     if (!status || status === 'completed') return 'bg-green-50 text-green-700 border-green-200';
-    if (status === 'processing') return 'bg-blue-50 text-blue-700 border-blue-200';
-    if (status === 'error') return 'bg-red-50 text-red-700 border-red-200';
-    return 'bg-amber-50 text-amber-700 border-amber-200';
+    if (status === 'embedding_in_progress') return 'bg-blue-50 text-blue-700 border-blue-200';
+    if (status === 'failed') return 'bg-red-50 text-red-700 border-red-200';
+    if (status === 'chunk_preview_ready') return 'bg-amber-50 text-amber-700 border-amber-200';
+    return 'bg-gray-50 text-gray-700 border-gray-200';
   };
 
   const getStatusLabel = (status?: string) => {
     if (!status || status === 'completed') return '✓ Complété';
-    if (status === 'processing') return '⏳ Traitement';
-    if (status === 'error') return '✗ Erreur';
+    if (status === 'embedding_in_progress') return '⏳ Génération embeddings';
+    if (status === 'failed') return '✗ Erreur';
+    if (status === 'chunk_preview_ready') return '⏳ Prêt à traiter';
+    if (status === 'analysed') return '⏳ Analysé';
     return '⏳ En attente';
   };
 
@@ -125,8 +136,8 @@ export function EmbeddingQueuePanel() {
                     {new Date(item.created_at).toLocaleString('fr-FR')}
                   </p>
                 </div>
-                <Badge variant="outline" className={getStatusColor(item.ingestion_status)}>
-                  {getStatusLabel(item.ingestion_status)}
+                <Badge variant="outline" className={getStatusColor(item.status)}>
+                  {getStatusLabel(item.status)}
                 </Badge>
               </div>
             ))}

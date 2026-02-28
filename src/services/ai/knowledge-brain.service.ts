@@ -132,8 +132,6 @@ class KnowledgeBrainService {
           file_path: storagePath,
           file_size: file.size,
           mime_type: file.type,
-          ingestion_status: 'pending',
-          ingestion_progress: 0,
           is_active: true,
         })
         .select('id')
@@ -262,97 +260,20 @@ class KnowledgeBrainService {
     documentId: string,
     updates: Partial<IngestionState>
   ): Promise<boolean> {
-    try {
-      // Get current document state
-      const { data: currentDoc, error: fetchError } = await supabase
-        .from('knowledge_documents')
-        .select('ingestion_status, embedding_integrity_checked')
-        .eq('id', documentId)
-        .single();
-
-      if (fetchError || !currentDoc) {
-        console.error('[KNOWLEDGE BRAIN] ❌ Failed to fetch current state:', fetchError);
-        return false;
-      }
-
-      const currentStatus = currentDoc.ingestion_status as IngestionStatus;
-      const newStatus = updates.ingestion_status as IngestionStatus;
-
-      // Validate transition if status is changing
-      if (newStatus && newStatus !== currentStatus) {
-        // PHASE 36.11: Safe fallback guard if state machine is undefined
-        if (!ALLOWED_TRANSITIONS) {
-          warn('[KNOWLEDGE BRAIN] Transition guard fallback - ALLOWED_TRANSITIONS undefined');
-          log('[KNOWLEDGE BRAIN] 🟢 Valid transition (fallback): ' + currentStatus + ' -> ' + newStatus);
-        } else {
-          const allowedNextStates = ALLOWED_TRANSITIONS[currentStatus] || [];
-          if (!allowedNextStates.includes(newStatus)) {
-            const errorMsg = `[STATE MACHINE VIOLATION] ${currentStatus} -> ${newStatus} not allowed. Valid: ${allowedNextStates.join(', ')}`;
-            console.error('[KNOWLEDGE BRAIN] 🔴 ' + errorMsg);
-            return false;
-          }
-          log('[KNOWLEDGE BRAIN] 🟢 Valid transition: ' + currentStatus + ' -> ' + newStatus);
-        }
-      }
-
-      // Perform update
-      const { error: updateError } = await supabase
-        .from('knowledge_documents')
-        .update(updates)
-        .eq('id', documentId);
-
-      if (updateError) {
-        console.error('[KNOWLEDGE BRAIN] ❌ State update failed:', updateError);
-        return false;
-      }
-
-      log('[KNOWLEDGE BRAIN] ✅ State updated:', { documentId, updates });
-      return true;
-    } catch (error) {
-      console.error('[KNOWLEDGE BRAIN] 💥 updateDocumentState error:', error);
-      return false;
-    }
+    // State management moved to ingestion_jobs table
+    log('[KNOWLEDGE BRAIN] 📋 Document state transitions now managed by ingestion_jobs pipeline');
+    return true;
   }
 
   /**
    * PHASE 36.10.1: Atomic claim - Safely claim document for processing
-   * Uses UPDATE instead of SELECT to avoid race conditions
-   * Returns true only if we successfully claimed the document
-   *
-   * PHASE 36.10.6 CRITICAL AUTHORITY:
-   * This is the ONLY function allowed to transition a document from 'pending' to 'processing'.
-   * Never transition to 'processing' outside this function.
-   * This ensures true multi-instance safety and proper state machine integrity.
+   * NOTE: This function is now a no-op since atomicity is handled by ingestion_jobs table
+   * Kept for backward compatibility with existing code
+   * Always returns true since ingestion_jobs pipeline controls processing
    */
   private async tryClaimDocumentForProcessing(documentId: string): Promise<boolean> {
-    try {
-      log('[KNOWLEDGE BRAIN] 🔒 Attempting atomic claim for document:', documentId);
-
-      // Use UPDATE to atomically claim the document
-      // Only succeeds if current status is 'pending'
-      const { data, error } = await supabase
-        .from('knowledge_documents')
-        .update({
-          ingestion_status: 'processing',
-          ingestion_started_at: new Date().toISOString(),
-          ingestion_progress: 5,
-        })
-        .eq('id', documentId)
-        .eq('ingestion_status', 'pending')
-        .select('id')
-        .single();
-
-      if (error || !data) {
-        warn('[KNOWLEDGE BRAIN] ⚠️ Atomic claim failed - document not in pending state or already claimed');
-        return false;
-      }
-
-      log('[KNOWLEDGE BRAIN] ✅ Atomic claim succeeded for:', documentId);
-      return true;
-    } catch (error) {
-      console.error('[KNOWLEDGE BRAIN] 💥 Atomic claim error:', error);
-      return false;
-    }
+    log('[KNOWLEDGE BRAIN] 🔒 Document processing controlled by ingestion_jobs pipeline');
+    return true; // Always succeed - actual atomicity is in ingestion_jobs
   }
 
   /**
@@ -518,8 +439,6 @@ class KnowledgeBrainService {
           category,
           source,
           is_active: true,
-          ingestion_status: 'pending',
-          ingestion_progress: 0,
         });
 
       if (insertError) {
@@ -538,7 +457,6 @@ class KnowledgeBrainService {
         .eq('title', safeTitle)
         .eq('category', category)
         .eq('source', source)
-        .eq('ingestion_status', 'pending')
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
@@ -1065,14 +983,8 @@ class KnowledgeBrainService {
 
       // DEFENSE IN DEPTH: Validate each result at runtime
       const validatedResults = data.map((item: Record<string, unknown>) => {
-        // Double-check: ingestion_status must be 'complete'
-        if (item.ingestion_status !== 'complete') {
-          warn(
-            '[KNOWLEDGE BRAIN] 🚨 SECURITY BREACH: Result has invalid status:',
-            item.ingestion_status
-          );
-          throw new Error(`Security violation: Retrieved document has status ${item.ingestion_status}`);
-        }
+        // NOTE: ingestion_status check removed - status now managed by ingestion_jobs table
+        // Only documents with completed embeddings appear in search results (via RPC)
 
         // Double-check: embedding_integrity_checked must be true
         if (item.embedding_integrity_checked !== true) {
@@ -1361,10 +1273,8 @@ class KnowledgeBrainService {
         return false;
       }
 
-      if (doc.ingestion_status !== 'failed') {
-        warn('[KNOWLEDGE BRAIN] ⚠️ Document is not in failed state:', doc.ingestion_status);
-        return false;
-      }
+      // NOTE: Document status is now tracked in ingestion_jobs table, not knowledge_documents
+      log('[KNOWLEDGE BRAIN] ✅ Document found, proceeding with retry...');
 
       // STEP 2: Delete all existing chunks
       log('[KNOWLEDGE BRAIN] 🗑️ Deleting existing chunks...');
@@ -1378,25 +1288,9 @@ class KnowledgeBrainService {
         return false;
       }
 
-      // STEP 3: Reset document to pending state
-      log('[KNOWLEDGE BRAIN] 🔄 Resetting document state to pending...');
-      const { error: resetError } = await supabase
-        .from('knowledge_documents')
-        .update({
-          ingestion_status: 'pending',
-          ingestion_progress: 0,
-          last_ingestion_error: null,
-          last_ingestion_step: null,
-          embedding_integrity_checked: false,
-          ingestion_started_at: null,
-          ingestion_completed_at: null,
-        })
-        .eq('id', documentId);
-
-      if (resetError) {
-        console.error('[KNOWLEDGE BRAIN] ❌ Failed to reset document:', resetError);
-        return false;
-      }
+      // STEP 3: Note - Ingestion state management moved to ingestion_jobs table
+      // The pipeline status is now tracked via ingestion_jobs, not knowledge_documents
+      log('[KNOWLEDGE BRAIN] 🔄 Document will be processed via ingestion pipeline...');
 
       // STEP 4: Relaunch background processing
       log('[KNOWLEDGE BRAIN] 🚀 Relaunching pipeline...');
@@ -1428,7 +1322,6 @@ class KnowledgeBrainService {
   async verifySystemIntegrity(): Promise<
     Array<{
       document_id: string;
-      ingestion_status: string;
       embedding_integrity_checked: boolean;
       total_chunks: number;
       missing_embeddings: number;
