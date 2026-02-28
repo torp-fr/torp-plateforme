@@ -21,6 +21,7 @@ import { KNOWLEDGE_CATEGORY_LABELS, getAllCategories } from '@/constants/knowled
 import { knowledgeBrainService } from '@/services/ai/knowledge-brain.service';
 import { env } from '@/config/env';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
 
 // Map of sources with French labels
 const SOURCES = {
@@ -31,6 +32,38 @@ const SOURCES = {
 
 // Get all available categories with French labels
 const KNOWLEDGE_CATEGORIES = getAllCategories().map(cat => cat.id);
+
+/**
+ * Helper: Create ingestion job via Edge Function
+ */
+async function createIngestionJob(
+  filePath: string,
+  fileName: string,
+  fileSizeBytes: number
+): Promise<string> {
+  const { data, error: err } = await supabase.functions.invoke(
+    'create-ingestion-job',
+    {
+      body: {
+        file_name: fileName,
+        file_path: filePath,
+        file_size_bytes: fileSizeBytes,
+      },
+    }
+  );
+
+  if (err) {
+    console.error('[UPLOAD] create-ingestion-job error:', err);
+    throw new Error(`Failed to create ingestion job: ${err.message || 'Unknown error'}`);
+  }
+
+  if (!data?.job_id) {
+    throw new Error('No job_id returned from create-ingestion-job');
+  }
+
+  log('[UPLOAD] ✅ Ingestion job created:', data.job_id);
+  return data.job_id;
+}
 
 interface UploadState {
   file: File | null;
@@ -106,6 +139,10 @@ export function KnowledgeBaseUpload() {
       log('🧠 [UPLOAD] Server-side ingestion: uploading file...');
       const finalTitle = state.file.name.replace(/\.[^/.]+$/, '') || `Document ${state.category}`;
 
+      // Calculate storage path (same logic as knowledgeBrainService)
+      const timestamp = Date.now();
+      const storagePath = `knowledge-documents/${timestamp}-${state.file.name}`;
+
       const result = await knowledgeBrainService.uploadDocumentForServerIngestion(
         state.file,
         {
@@ -122,6 +159,19 @@ export function KnowledgeBaseUpload() {
       }
 
       log('🧠 [UPLOAD] Document uploaded successfully:', { id: result.id });
+
+      // PHASE 42.1: Create ingestion_job for admin pipeline
+      try {
+        const jobId = await createIngestionJob(
+          storagePath,
+          state.file.name,
+          state.file.size
+        );
+        log('🧠 [UPLOAD] Ingestion job created:', jobId);
+      } catch (jobErr) {
+        warn('🧠 [UPLOAD] Warning: ingestion job creation failed, but file upload succeeded:', jobErr);
+        // Don't fail the upload if ingestion job creation fails
+      }
 
       // Success - reset form
       setState(prev => ({

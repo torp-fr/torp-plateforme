@@ -10,6 +10,7 @@ export const ADMIN_ROUTES = {
   INTELLIGENCE: '/analytics/intelligence',
   ORCHESTRATIONS: '/analytics/orchestrations',
   KNOWLEDGE: '/analytics/knowledge',
+  INGESTION: '/analytics/ingestion',
   SECURITY: '/analytics/security',
   SETTINGS: '/analytics/settings',
 } as const;

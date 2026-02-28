@@ -20,6 +20,7 @@ import {
   BookOpen,
   TrendingUp,
   ChevronDown,
+  Package,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -76,6 +77,13 @@ const ADMIN_SECTIONS = {
         icon: BookOpen,
         label: 'Base de Connaissances',
         description: 'Documents & ingestion',
+      },
+      {
+        id: 'ingestion',
+        href: '/analytics/ingestion',
+        icon: Package,
+        label: 'Pipeline d\'Ingestion',
+        description: 'Gestion des jobs',
       },
       {
         id: 'doctrine',

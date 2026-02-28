@@ -44,6 +44,7 @@ import { SystemHealthPage } from "./pages/admin/SystemHealthPage";
 import { LiveIntelligencePage } from "./pages/admin/LiveIntelligencePage";
 import { OrchestrationsPage } from "./pages/admin/OrchestrationsPage";
 import { KnowledgeBasePage } from "./pages/admin/KnowledgeBasePage";
+import { IngestionPage } from "./pages/admin/IngestionPage";
 import { SecurityPage } from "./pages/admin/SecurityPage";
 import { AdminSettingsPage } from "./pages/admin/AdminSettingsPage";
 import { LLMUsageAnalyticsPage } from "./pages/admin/LLMUsageAnalyticsPage";
@@ -80,6 +81,7 @@ const AppContent = () => {
               <Route path="intelligence" element={<LiveIntelligencePage />} />
               <Route path="orchestrations" element={<OrchestrationsPage />} />
               <Route path="knowledge" element={<KnowledgeBasePage />} />
+              <Route path="ingestion" element={<IngestionPage />} />
               <Route path="security" element={<SecurityPage />} />
               <Route path="settings" element={<AdminSettingsPage />} />
               <Route path="users" element={<AdminUsersPage />} />
