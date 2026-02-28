@@ -145,38 +145,14 @@ class KnowledgeBrainService {
 
       log('[KNOWLEDGE BRAIN] ✅ Document created in DB:', doc.id);
 
-      // Step 3: Trigger Edge Function for server-side ingestion
-      // Edge Function will handle extraction, OCR, chunking, embedding
-      this.triggerServerIngestion(doc.id).catch(err => {
-        console.error('[KNOWLEDGE BRAIN] ❌ Server ingestion trigger failed:', err);
-      });
+      // Database trigger will automatically invoke Edge Function for ingestion
+      // No client-side invocation needed - architecture is now fully server-side
+      // Trigger path: INSERT → on_document_pending trigger → pg_net HTTP POST → Edge Function
 
       return doc;
     } catch (error) {
       console.error('[KNOWLEDGE BRAIN] ❌ Upload error:', error);
       throw error;
-    }
-  }
-
-  /**
-   * Trigger Edge Function for server-side document ingestion
-   */
-  private async triggerServerIngestion(documentId: string) {
-    try {
-      log('[KNOWLEDGE BRAIN] 🚀 Triggering server ingestion Edge Function');
-
-      const { error } = await supabase.functions.invoke('rag-ingestion', {
-        body: { documentId },
-      });
-
-      if (error) {
-        console.error('[KNOWLEDGE BRAIN] ❌ Edge Function error:', error);
-        throw error;
-      }
-
-      log('[KNOWLEDGE BRAIN] ✅ Edge Function triggered');
-    } catch (error) {
-      console.error('[KNOWLEDGE BRAIN] ❌ Server ingestion trigger error:', error);
     }
   }
 
