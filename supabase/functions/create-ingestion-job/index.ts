@@ -1,11 +1,11 @@
 /**
- * Edge Function: create-ingestion-job (PHASE 44)
- * Complete PDF-to-Knowledge workflow
+ * Edge Function: create-ingestion-job
+ * Complete PDF-to-Knowledge workflow (Simplified)
  *
  * Responsibilities:
  * 1. Create ingestion_job record
- * 2. Get public URL for PDF file
- * 3. Call external PDF extractor microservice
+ * 2. Download PDF file from Supabase Storage
+ * 3. Extract text from PDF locally using pdf-parse
  * 4. Split text into chunks (1200 chars)
  * 5. Generate embeddings for each chunk
  * 6. Insert knowledge_document and knowledge_chunks
@@ -13,15 +13,17 @@
  * 8. Cost guard: max 0.10 USD per job
  *
  * Architecture:
- * - PDF extraction: External Node.js microservice (pdf-extractor-service)
+ * - PDF extraction: Local (using pdfjs-dist)
  * - Chunking: 1200 char chunks with overlap
  * - Embeddings: OpenAI text-embedding-3-small
  * - Storage: knowledge_documents + knowledge_chunks
+ * - NO external microservices
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import * as pdfParse from 'https://esm.sh/pdf-parse@1.1.1';
 
 // ============================================================
 // CONSTANTS
@@ -51,12 +53,6 @@ interface CreateIngestionJobResponse {
   message?: string;
 }
 
-interface PdfExtractionResult {
-  success: boolean;
-  text?: string;
-  pages?: number;
-  error?: string;
-}
 
 interface EmbeddingResponse {
   data: Array<{ embedding: number[] }>;
@@ -187,36 +183,36 @@ async function generateEmbeddings(chunks: string[], openaiKey: string): Promise<
 }
 
 // ============================================================
-// HELPER: Extract PDF text via microservice
+// HELPER: Extract PDF text locally
 // ============================================================
 
-async function extractPdfText(fileUrl: string, extractorUrl: string): Promise<string | null> {
+async function extractPdfText(filePath: string, supabase: any): Promise<string | null> {
   try {
-    console.log(`[CREATE-INGESTION] Calling PDF extractor: ${extractorUrl}`);
+    console.log(`[CREATE-INGESTION] Extracting PDF from: ${filePath}`);
 
-    const response = await fetch(`${extractorUrl}/extract`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ file_url: fileUrl }),
-    });
+    // Download file from Supabase Storage
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from('knowledge-files')
+      .download(filePath);
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('[CREATE-INGESTION] PDF extractor error:', errorData);
-      throw new Error(`PDF extraction failed: ${response.status}`);
+    if (downloadError || !fileData) {
+      console.error('[CREATE-INGESTION] Download error:', downloadError);
+      throw new Error(`Failed to download file: ${downloadError?.message}`);
     }
 
-    const data = (await response.json()) as PdfExtractionResult;
+    // Convert Blob to ArrayBuffer
+    const arrayBuffer = await fileData.arrayBuffer();
 
-    if (!data.success || !data.text) {
-      throw new Error(data.error || 'PDF extraction returned no text');
+    // Parse PDF
+    const pdfData = await pdfParse(arrayBuffer);
+
+    if (!pdfData || !pdfData.text) {
+      throw new Error('PDF parsing returned no text');
     }
 
-    console.log(`[CREATE-INGESTION] PDF extracted: ${data.text.length} chars, ${data.pages} pages`);
+    console.log(`[CREATE-INGESTION] PDF extracted: ${pdfData.text.length} chars, ${pdfData.numpages} pages`);
 
-    return data.text;
+    return pdfData.text;
   } catch (error) {
     console.error('[CREATE-INGESTION] PDF extraction error:', error);
     return null;
@@ -256,9 +252,8 @@ serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     const openaiKey = Deno.env.get('OPENAI_API_KEY') || '';
-    const pdfExtractorUrl = Deno.env.get('PDF_EXTRACTOR_URL') || '';
 
-    if (!supabaseUrl || !supabaseServiceKey || !openaiKey || !pdfExtractorUrl) {
+    if (!supabaseUrl || !supabaseServiceKey || !openaiKey) {
       console.error('[CREATE-INGESTION] Missing environment configuration');
       return errorResponse('Server configuration error', 500);
     }
@@ -317,25 +312,12 @@ serve(async (req: Request) => {
     console.log(`[CREATE-INGESTION] Job created: ${jobId}`);
 
     // ============================================================
-    // STEP 2: Get public URL for file
+    // STEP 2: Extract PDF text locally
     // ============================================================
 
-    console.log('[CREATE-INGESTION] Getting public URL for file...');
+    console.log('[CREATE-INGESTION] Extracting PDF text locally...');
 
-    const { data: publicUrlData } = supabase.storage
-      .from('knowledge-files')
-      .getPublicUrl(body.file_path);
-
-    const publicUrl = publicUrlData.publicUrl;
-    console.log(`[CREATE-INGESTION] Public URL: ${publicUrl}`);
-
-    // ============================================================
-    // STEP 3: Extract PDF text
-    // ============================================================
-
-    console.log('[CREATE-INGESTION] Extracting PDF text...');
-
-    const extractedText = await extractPdfText(publicUrl, pdfExtractorUrl);
+    const extractedText = await extractPdfText(body.file_path, supabase);
 
     if (!extractedText || extractedText.trim().length === 0) {
       console.error('[CREATE-INGESTION] PDF extraction failed or returned empty text');
@@ -349,7 +331,7 @@ serve(async (req: Request) => {
     }
 
     // ============================================================
-    // STEP 4: Create knowledge_document
+    // STEP 3: Create knowledge_document
     // ============================================================
 
     console.log('[CREATE-INGESTION] Creating knowledge document...');
@@ -385,7 +367,7 @@ serve(async (req: Request) => {
     console.log(`[CREATE-INGESTION] Document created: ${documentId}`);
 
     // ============================================================
-    // STEP 5: Split text into chunks
+    // STEP 4: Split text into chunks
     // ============================================================
 
     console.log('[CREATE-INGESTION] Chunking text...');
@@ -405,7 +387,7 @@ serve(async (req: Request) => {
     }
 
     // ============================================================
-    // STEP 6: Generate embeddings
+    // STEP 5: Generate embeddings
     // ============================================================
 
     console.log('[CREATE-INGESTION] Generating embeddings...');
@@ -424,7 +406,7 @@ serve(async (req: Request) => {
     }
 
     // ============================================================
-    // STEP 7: Insert knowledge_chunks
+    // STEP 6: Insert knowledge_chunks
     // ============================================================
 
     console.log('[CREATE-INGESTION] Inserting chunks...');
@@ -466,7 +448,7 @@ serve(async (req: Request) => {
     }
 
     // ============================================================
-    // STEP 8: Mark job as completed
+    // STEP 7: Mark job as completed
     // ============================================================
 
     console.log('[CREATE-INGESTION] Marking job as completed...');
