@@ -1,0 +1,10 @@
+{
+  "name": "rag-worker",
+  "type": "module",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "openai": "^4.0.0",
+    "pdf-parse": "^1.1.1",
+    "node-fetch": "^3.3.2"
+  }
+}
