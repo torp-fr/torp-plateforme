@@ -7,34 +7,31 @@
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
 -- 2. Create function that invokes Edge Function via HTTP
+-- NOTE: This function uses environment variables set by Supabase
+-- - SUPABASE_SERVICE_ROLE_KEY: Service role JWT token
+-- - The project ref is available via current_database() or from Supabase settings
 CREATE OR REPLACE FUNCTION trigger_rag_ingestion()
 RETURNS trigger AS $$
 DECLARE
-  service_role_secret TEXT;
-  project_ref TEXT;
+  service_role_key TEXT;
+  project_url TEXT;
 BEGIN
-  -- Retrieve Supabase project configuration
-  -- These values should be set in Postgres settings or environment variables
-  -- Default fallback values - MUST be replaced with actual project values
-  project_ref := COALESCE(
-    current_setting('app.supabase_project_ref', true),
-    'wfmjhduwgsyslxyghfgl'  -- Replace with actual project ref
-  );
+  -- Get service role key from Supabase environment
+  -- This is securely injected by Supabase and accessible in pl/pgsql functions
+  service_role_key := current_setting('app.service_role_key');
 
-  service_role_secret := COALESCE(
-    current_setting('app.service_role_key', true),
-    current_setting('supabase.service_role_key', true),
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  );
+  -- Get project URL from Supabase environment
+  -- Format: https://PROJECT_REF.supabase.co
+  project_url := current_setting('app.supabase_url');
 
   -- Async HTTP POST to Edge Function using pg_net
   -- pg_net is a Postgres extension for making HTTP requests
   -- This call is non-blocking and will retry automatically
   PERFORM net.http_post(
-    url := format('https://%s.supabase.co/functions/v1/rag-ingestion', project_ref),
+    url := project_url || '/functions/v1/rag-ingestion',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', format('Bearer %s', service_role_secret)
+      'Authorization', 'Bearer ' || service_role_key
     ),
     body := jsonb_build_object(
       'documentId', NEW.id
@@ -42,7 +39,7 @@ BEGIN
     timeout_milliseconds := 30000
   );
 
-  RAISE NOTICE '[TRIGGER] rag-ingestion invoked for document %', NEW.id;
+  RAISE LOG '[TRIGGER] Edge Function invoked for document %', NEW.id;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
