@@ -23,6 +23,28 @@ Deno.serve(async (req) => {
   let documentId: string | null = null;
 
   try {
+    // SECURITY: Verify service role authorization for server-to-server calls
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized: missing Authorization header' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const providedToken = authHeader.substring(7);
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!serviceRoleKey || providedToken !== serviceRoleKey) {
+      console.error('[RAG-INGESTION] 🔒 Authorization failed: invalid token');
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized: invalid token' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('[RAG-INGESTION] ✅ Authorization verified (service role)');
+
     const { documentId: docId } = await req.json();
 
     if (!docId) {
