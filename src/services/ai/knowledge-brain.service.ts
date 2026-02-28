@@ -91,9 +91,9 @@ class KnowledgeBrainService {
   }
 
   /**
-   * PHASE 42: Server-side document ingestion
-   * Upload file to Storage and trigger Edge Function for extraction
-   * No extraction happens in browser - all processing server-side
+   * PHASE 42: Upload file to Storage only
+   * knowledge_documents are created in launch-ingestion function
+   * Returns file path for create-ingestion-job
    */
   async uploadDocumentForServerIngestion(
     file: File,
@@ -102,11 +102,11 @@ class KnowledgeBrainService {
       category: string;
       source: 'internal' | 'external' | 'official';
     }
-  ) {
+  ): Promise<{ filePath: string }> {
     try {
-      log('[KNOWLEDGE BRAIN] 📤 Server-side ingestion: uploading file to Storage');
+      log('[KNOWLEDGE BRAIN] 📤 Uploading file to Storage...');
 
-      // Step 1: Upload to Supabase Storage
+      // Upload to Supabase Storage only
       const timestamp = Date.now();
       const storagePath = `knowledge-documents/${timestamp}-${file.name}`;
 
@@ -120,61 +120,11 @@ class KnowledgeBrainService {
 
       log('[KNOWLEDGE BRAIN] ✅ File uploaded to Storage:', storagePath);
 
-      // Step 2: Create document record in DB with file_path
-      const safeTitle = options.title?.trim() || file.name.replace(/\.[^/.]+$/, '');
-
-      const { data: doc, error: dbError } = await supabase
-        .from('knowledge_documents')
-        .insert({
-          title: safeTitle,
-          category: options.category,
-          source: options.source,
-          file_path: storagePath,
-          file_size: file.size,
-          mime_type: file.type,
-          is_active: true,
-        })
-        .select('id')
-        .single();
-
-      if (dbError || !doc) {
-        throw new Error(`Database insert failed: ${dbError?.message || 'Unknown error'}`);
-      }
-
-      log('[KNOWLEDGE BRAIN] ✅ Document created in DB:', doc.id);
-
-      // Step 3: Trigger Edge Function for server-side ingestion
-      // Edge Function will handle extraction, OCR, chunking, embedding
-      this.triggerServerIngestion(doc.id).catch(err => {
-        console.error('[KNOWLEDGE BRAIN] ❌ Server ingestion trigger failed:', err);
-      });
-
-      return doc;
+      // Return file path - knowledge_documents will be created in launch-ingestion
+      return { filePath: storagePath };
     } catch (error) {
       console.error('[KNOWLEDGE BRAIN] ❌ Upload error:', error);
       throw error;
-    }
-  }
-
-  /**
-   * Trigger Edge Function for server-side document ingestion
-   */
-  private async triggerServerIngestion(documentId: string) {
-    try {
-      log('[KNOWLEDGE BRAIN] 🚀 Triggering server ingestion Edge Function');
-
-      const { error } = await supabase.functions.invoke('ingest-document', {
-        body: { documentId },
-      });
-
-      if (error) {
-        console.error('[KNOWLEDGE BRAIN] ❌ Edge Function error:', error);
-        throw error;
-      }
-
-      log('[KNOWLEDGE BRAIN] ✅ Edge Function triggered');
-    } catch (error) {
-      console.error('[KNOWLEDGE BRAIN] ❌ Server ingestion trigger error:', error);
     }
   }
 

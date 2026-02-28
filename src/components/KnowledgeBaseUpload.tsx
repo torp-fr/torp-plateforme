@@ -135,35 +135,25 @@ export function KnowledgeBaseUpload() {
       log('🧠 [UPLOAD] Setting loading state...');
       setState(prev => ({ ...prev, loading: true, error: null }));
 
-      // PHASE 42: Server-side ingestion (no extraction in browser)
-      log('🧠 [UPLOAD] Server-side ingestion: uploading file...');
-      const finalTitle = state.file.name.replace(/\.[^/.]+$/, '') || `Document ${state.category}`;
-
-      // Calculate storage path (same logic as knowledgeBrainService)
-      const timestamp = Date.now();
-      const storagePath = `knowledge-documents/${timestamp}-${state.file.name}`;
-
-      const result = await knowledgeBrainService.uploadDocumentForServerIngestion(
+      // PHASE 43: Simple upload flow
+      // Step 1: Upload file to storage only
+      log('🧠 [UPLOAD] Step 1: Uploading file to storage...');
+      const uploadResult = await knowledgeBrainService.uploadDocumentForServerIngestion(
         state.file,
         {
-          title: finalTitle,
+          title: state.file.name.replace(/\.[^/.]+$/, ''),
           category: state.category,
           source: state.source,
         }
       );
 
-      log('🧠 [UPLOAD] File uploaded - server will handle extraction/OCR/chunking');
+      log('🧠 [UPLOAD] File uploaded successfully');
 
-      if (!result) {
-        throw new Error('Document insertion failed');
-      }
-
-      log('🧠 [UPLOAD] Document uploaded successfully:', { id: result.id });
-
-      // PHASE 42.1: Create ingestion_job for admin pipeline
+      // Step 2: Create ingestion job
+      log('🧠 [UPLOAD] Step 2: Creating ingestion job...');
       try {
         const jobId = await createIngestionJob(
-          storagePath,
+          uploadResult.filePath,
           state.file.name,
           state.file.size
         );
