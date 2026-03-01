@@ -33,10 +33,16 @@ if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
   console.warn("⚠️ GOOGLE_SERVICE_ACCOUNT_JSON environment variable not found. OCR may fail.");
 }
 
+const BUILD_ID = "NUCLEAR_VERIFY_2500_V1";
 const BATCH_SIZE = 50;
 const CHUNK_SIZE = 2500;
 const EMBEDDING_DIMENSION = 1536;
 const POLL_INTERVAL = 10000;
+
+// 🔒 HARD LOCK: Verify chunk size at build time
+if (CHUNK_SIZE !== 2500) {
+  throw new Error("🚨 FATAL: CHUNK_SIZE mismatch at build time. Expected 2500, got " + CHUNK_SIZE);
+}
 
 async function downloadFile(storagePath) {
   try {
@@ -170,6 +176,12 @@ async function processDocument(doc) {
 
     // Step 7: Create smart chunks with metadata
     console.log(`  ✂️ Creating smart chunks...`);
+
+    // 🚨 PRODUCTION ERROR CHECK
+    if (CHUNK_SIZE !== 2500) {
+      throw new Error("🚨 PRODUCTION ERROR: CHUNK_SIZE is not 2500. Current value: " + CHUNK_SIZE);
+    }
+
     let chunks = smartChunkText(cleanedText, sections, CHUNK_SIZE);
 
     if (chunks.length === 0) {
@@ -339,6 +351,12 @@ async function pollDocuments() {
     console.error(`Poll error: ${error.message}`);
   }
 }
+
+// 🚨 NUCLEAR VERIFICATION - RUNTIME PROOF
+console.log("🚨🚨🚨 BUILD VERSION: CHUNK_SIZE_2500_ACTIVE 🚨🚨🚨");
+console.log("🚨 Runtime CHUNK_SIZE value:", CHUNK_SIZE);
+console.log("🚨 Worker file path:", __filename);
+console.log("🚨 BUILD ID:", BUILD_ID);
 
 console.log("🚀 RAG Worker v2 started");
 console.log(`📍 Poll interval: ${POLL_INTERVAL}ms`);
