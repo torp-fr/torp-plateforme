@@ -1,11 +1,46 @@
 /**
  * Thematic Scoring Engine
  * Moteur de scoring 100% déterministe, audit-proof et reproductible
+ * Version: v1.1_stable - Inclut système de bonus positif plafonné
  *
  * @module thematicScoringEngine
  * @requires logger
  * @requires database
  */
+
+/**
+ * Version du moteur de scoring
+ * @constant {string}
+ */
+const ENGINE_VERSION = 'v1.1_stable';
+
+/**
+ * Configuration des règles de bonus positif
+ * @constant {Object}
+ */
+const BONUS_RULES = {
+  regulatoryExcellence: {
+    threshold: 90,
+    points: 3,
+    condition: 'regulatory_score >= 90',
+  },
+  riskExcellence: {
+    threshold: 90,
+    points: 2,
+    condition: 'risk_score >= 90',
+  },
+  transparencyExcellence: {
+    threshold: 95,
+    points: 2,
+    condition: 'transparency_score >= 95',
+  },
+  zeroNonCompliantAndCriticalRisk: {
+    threshold: 0,
+    points: 2,
+    condition: 'nonCompliantItems.length === 0 AND criticalRisks.length === 0',
+  },
+  maxBonus: 5,
+};
 
 /**
  * Configuration de scoring pour chaque thème
@@ -308,6 +343,100 @@ function calculateWeightedScore(themeScores, weights) {
 }
 
 /**
+ * Calcule les bonus positifs appliqués au score pondéré
+ * Système de bonus plafonné pour récompenser l'excellence
+ * @param {Object} themeScores - Les scores des thèmes
+ * @param {Object} analysisData - Les données d'analyse brutes
+ * @returns {Object} { bonusPoints: number, bonusBreakdown: Object }
+ */
+function calculateBonusPoints(themeScores, analysisData) {
+  const bonusBreakdown = {};
+  let totalBonus = 0;
+
+  // Bonus 1: Excellence en conformité réglementaire
+  if (themeScores.regulatory.score >= BONUS_RULES.regulatoryExcellence.threshold) {
+    bonusBreakdown.regulatoryExcellence = {
+      threshold: BONUS_RULES.regulatoryExcellence.threshold,
+      awarded: true,
+      points: BONUS_RULES.regulatoryExcellence.points,
+    };
+    totalBonus += BONUS_RULES.regulatoryExcellence.points;
+  } else {
+    bonusBreakdown.regulatoryExcellence = {
+      threshold: BONUS_RULES.regulatoryExcellence.threshold,
+      awarded: false,
+      points: 0,
+      currentScore: themeScores.regulatory.score,
+    };
+  }
+
+  // Bonus 2: Excellence en gestion des risques
+  if (themeScores.risk.score >= BONUS_RULES.riskExcellence.threshold) {
+    bonusBreakdown.riskExcellence = {
+      threshold: BONUS_RULES.riskExcellence.threshold,
+      awarded: true,
+      points: BONUS_RULES.riskExcellence.points,
+    };
+    totalBonus += BONUS_RULES.riskExcellence.points;
+  } else {
+    bonusBreakdown.riskExcellence = {
+      threshold: BONUS_RULES.riskExcellence.threshold,
+      awarded: false,
+      points: 0,
+      currentScore: themeScores.risk.score,
+    };
+  }
+
+  // Bonus 3: Excellence en transparence
+  if (themeScores.transparency.score >= BONUS_RULES.transparencyExcellence.threshold) {
+    bonusBreakdown.transparencyExcellence = {
+      threshold: BONUS_RULES.transparencyExcellence.threshold,
+      awarded: true,
+      points: BONUS_RULES.transparencyExcellence.points,
+    };
+    totalBonus += BONUS_RULES.transparencyExcellence.points;
+  } else {
+    bonusBreakdown.transparencyExcellence = {
+      threshold: BONUS_RULES.transparencyExcellence.threshold,
+      awarded: false,
+      points: 0,
+      currentScore: themeScores.transparency.score,
+    };
+  }
+
+  // Bonus 4: Zéro non-conformités réglementaires ET zéro risques critiques
+  const nonCompliantCount = analysisData.regulatoryFindings?.nonCompliantItems?.length || 0;
+  const criticalRiskCount = analysisData.riskFindings?.criticalRisks?.length || 0;
+
+  if (nonCompliantCount === 0 && criticalRiskCount === 0) {
+    bonusBreakdown.zeroNonCompliantAndCriticalRisk = {
+      condition: 'nonCompliantItems = 0 AND criticalRisks = 0',
+      awarded: true,
+      points: BONUS_RULES.zeroNonCompliantAndCriticalRisk.points,
+    };
+    totalBonus += BONUS_RULES.zeroNonCompliantAndCriticalRisk.points;
+  } else {
+    bonusBreakdown.zeroNonCompliantAndCriticalRisk = {
+      condition: 'nonCompliantItems = 0 AND criticalRisks = 0',
+      awarded: false,
+      points: 0,
+      nonCompliantCount,
+      criticalRiskCount,
+    };
+  }
+
+  // Appliquer le plafond de bonus (max 5 points)
+  const cappedBonus = Math.min(totalBonus, BONUS_RULES.maxBonus);
+
+  return {
+    bonusPoints: cappedBonus,
+    totalEligibleBonus: totalBonus,
+    bonusBreakdown,
+    bonusCapApplied: totalBonus > BONUS_RULES.maxBonus,
+  };
+}
+
+/**
  * Détermine le grade letter basé sur le score
  * @param {number} score - Score pondéré
  * @returns {string} Grade letter (A, B, C, D, E)
@@ -365,6 +494,7 @@ function validateInput(input) {
 
 /**
  * Moteur de scoring principal
+ * Exécute le pipeline complet: scores thématiques → score pondéré → bonus → score final
  * @param {Object} input - Données d'entrée
  * @param {string} input.projectId - ID du projet
  * @param {string} input.devisId - ID du devis
@@ -372,7 +502,7 @@ function validateInput(input) {
  * @param {Object} input.analysisData - Données d'analyse
  * @param {Object} options - Options de configuration
  * @param {Function} options.persistenceAdapter - Fonction pour persister les résultats
- * @returns {Promise<Object>} Résultats du scoring
+ * @returns {Promise<Object>} Résultats du scoring avec bonus
  */
 async function calculateThematicScore(input, options = {}) {
   const logger = createLogger();
@@ -384,6 +514,7 @@ async function calculateThematicScore(input, options = {}) {
     executionId,
     projectId: input.projectId,
     devisId: input.devisId,
+    engineVersion: ENGINE_VERSION,
   });
 
   try {
@@ -399,10 +530,10 @@ async function calculateThematicScore(input, options = {}) {
 
     const weights = inputValidation.weights;
 
-    // Calcul des scores thématiques
+    // ÉTAPE 1: Calcul des scores thématiques
     const themeScores = calculateThemeScores(input.analysisData);
 
-    logger.debug('Scores thématiques calculés', {
+    logger.debug('Étape 1 - Scores thématiques calculés', {
       executionId,
       scores: Object.entries(themeScores).reduce((acc, [key, val]) => {
         acc[key] = val.score;
@@ -410,19 +541,62 @@ async function calculateThematicScore(input, options = {}) {
       }, {}),
     });
 
-    // Calcul du score pondéré
-    const weightedScore = calculateWeightedScore(themeScores, weights);
+    // ÉTAPE 2: Calcul du score pondéré brut
+    const weightedScoreBrut = calculateWeightedScore(themeScores, weights);
 
-    // Détermination du grade
-    const gradeLetter = determineGradeLetter(weightedScore);
+    logger.debug('Étape 2 - Score pondéré brut calculé', {
+      executionId,
+      weightedScoreBrut,
+    });
 
-    // Validation des résultats
-    if (weightedScore < 0 || weightedScore > 100) {
-      logger.error('Score invalide', {
+    // Validation du score pondéré brut
+    if (weightedScoreBrut < 0 || weightedScoreBrut > 100) {
+      logger.error('Score pondéré brut invalide', {
         executionId,
-        weightedScore,
+        weightedScoreBrut,
       });
-      throw new Error(`Score pondéré invalide: ${weightedScore}`);
+      throw new Error(`Score pondéré brut invalide: ${weightedScoreBrut}`);
+    }
+
+    // ÉTAPE 3: Calcul des bonus positifs
+    const bonusCalculation = calculateBonusPoints(themeScores, input.analysisData);
+    const bonusPoints = bonusCalculation.bonusPoints;
+
+    logger.info('Étape 3 - Bonus positifs calculés', {
+      executionId,
+      bonusPoints,
+      bonusBreakdown: bonusCalculation.bonusBreakdown,
+      bonusCapApplied: bonusCalculation.bonusCapApplied,
+    });
+
+    // ÉTAPE 4: Calcul du score final avec bonus plafonné à 100
+    const weightedScoreFinal = Math.min(
+      Math.round((weightedScoreBrut + bonusPoints) * 100) / 100,
+      100,
+    );
+
+    logger.debug('Étape 4 - Score final calculé', {
+      executionId,
+      weightedScoreBrut,
+      bonusPoints,
+      weightedScoreFinal,
+    });
+
+    // ÉTAPE 5: Détermination du grade basé sur le score final
+    const gradeLetter = determineGradeLetter(weightedScoreFinal);
+
+    logger.info('Étape 5 - Grade déterminé', {
+      executionId,
+      gradeLetter,
+    });
+
+    // Validation du score final
+    if (weightedScoreFinal < 0 || weightedScoreFinal > 100) {
+      logger.error('Score final invalide', {
+        executionId,
+        weightedScoreFinal,
+      });
+      throw new Error(`Score final invalide: ${weightedScoreFinal}`);
     }
 
     const result = {
@@ -448,10 +622,14 @@ async function calculateThematicScore(input, options = {}) {
           breakdown: themeScores.optimization.breakdown,
         },
       },
-      weightedScore,
+      weightedScoreBrut,
+      bonusPoints,
+      bonusBreakdown: bonusCalculation.bonusBreakdown,
+      weightedScore: weightedScoreFinal,
       gradeLetter,
       weights,
       executionId,
+      engineVersion: ENGINE_VERSION,
       timestamp: new Date().toISOString(),
     };
 
@@ -481,8 +659,11 @@ async function calculateThematicScore(input, options = {}) {
     logger.info('Calcul de scoring complété avec succès', {
       executionId,
       duration: `${duration}ms`,
-      weightedScore,
+      weightedScoreBrut,
+      bonusPoints,
+      weightedScoreFinal,
       gradeLetter,
+      engineVersion: ENGINE_VERSION,
     });
 
     return result;
@@ -519,12 +700,15 @@ module.exports = {
   validateAnalysisData,
   calculateThemeScores,
   calculateWeightedScore,
+  calculateBonusPoints,
   determineGradeLetter,
   calculateThemeScore,
 
   // Configuration (pour inspection et audit)
   SCORING_CONFIG,
   GRADE_SCALE,
+  BONUS_RULES,
+  ENGINE_VERSION,
 
   // Logger
   createLogger,
