@@ -34,7 +34,7 @@ if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
 }
 
 const BATCH_SIZE = 50;
-const CHUNK_SIZE = 1000;
+const CHUNK_SIZE = 2500;
 const EMBEDDING_DIMENSION = 1536;
 const POLL_INTERVAL = 10000;
 
