@@ -27,7 +27,7 @@ export async function extractImageText(arrayBuffer, fileName) {
       console.log(`  🔍 Running Google Vision OCR on ${fileName}...`);
 
       // Use documentTextDetection for better OCR results
-      const [result] = await client.documentTextDetection(tempFilePath);
+      const [result] = await client.textDetection(tempFilePath);
       const fullTextAnnotation = result.fullTextAnnotation;
 
       if (!fullTextAnnotation || !fullTextAnnotation.text) {
