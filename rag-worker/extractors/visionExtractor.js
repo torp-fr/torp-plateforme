@@ -26,26 +26,22 @@ export async function extractImageText(arrayBuffer, fileName) {
 
       console.log(`  🔍 Running Google Vision OCR on ${fileName}...`);
 
-      // Use documentTextDetection for better OCR results
+      // Use textDetection for OCR results
       const [result] = await client.textDetection(tempFilePath);
-      const fullTextAnnotation = result.fullTextAnnotation;
+      const text = result.textAnnotations?.[0]?.description;
 
-      if (!fullTextAnnotation || !fullTextAnnotation.text) {
+      if (!text || text.trim().length === 0) {
         throw new Error("No text detected in image");
       }
 
-      const text = fullTextAnnotation.text.trim();
+      const trimmedText = text.trim();
 
-      if (!text || text.length === 0) {
-        throw new Error("Image OCR returned empty text");
-      }
-
-      console.log(`  ✅ Google Vision OCR completed (${text.length} chars)`);
+      console.log(`  ✅ Google Vision OCR completed (${trimmedText.length} chars)`);
 
       return {
-        text: text,
+        text: trimmedText,
         confidence: "ocr",
-        detections: fullTextAnnotation.pages?.length || 1,
+        detections: result.textAnnotations?.length || 0,
       };
     } finally {
       // Clean up temporary file
