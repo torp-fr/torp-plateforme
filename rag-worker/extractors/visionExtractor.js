@@ -1,55 +1,57 @@
+import vision from "@google-cloud/vision";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 export async function extractImageText(arrayBuffer, fileName) {
   try {
-    const base64Image = Buffer.from(arrayBuffer).toString("base64");
+    // Create temporary file from arrayBuffer
+    const tempDir = path.join(__dirname, "..", "temp");
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
 
-    const response = await fetch(
-      "https://vision.googleapis.com/v1/images:annotate?key=" +
-        process.env.GOOGLE_VISION_API_KEY,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          requests: [
-            {
-              image: { content: base64Image },
-              features: [
-                { type: "TEXT_DETECTION" },
-                { type: "DOCUMENT_TEXT_DETECTION" },
-              ],
-            },
-          ],
-        }),
+    const tempFilePath = path.join(tempDir, `ocr-${Date.now()}-${fileName}`);
+    fs.writeFileSync(tempFilePath, Buffer.from(arrayBuffer));
+
+    try {
+      // Initialize Google Vision client with Service Account credentials
+      const client = new vision.ImageAnnotatorClient();
+
+      console.log(`  🔍 Running Google Vision OCR on ${fileName}...`);
+
+      // Use documentTextDetection for better OCR results
+      const [result] = await client.documentTextDetection(tempFilePath);
+      const fullTextAnnotation = result.fullTextAnnotation;
+
+      if (!fullTextAnnotation || !fullTextAnnotation.text) {
+        throw new Error("No text detected in image");
       }
-    );
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(
-        `Google Vision API failed: ${errorData.error?.message || "Unknown error"}`
-      );
+      const text = fullTextAnnotation.text.trim();
+
+      if (!text || text.length === 0) {
+        throw new Error("Image OCR returned empty text");
+      }
+
+      console.log(`  ✅ Google Vision OCR completed (${text.length} chars)`);
+
+      return {
+        text: text,
+        confidence: "ocr",
+        detections: fullTextAnnotation.pages?.length || 1,
+      };
+    } finally {
+      // Clean up temporary file
+      try {
+        fs.unlinkSync(tempFilePath);
+      } catch (cleanupError) {
+        console.warn(`⚠️ Failed to clean up temp file: ${cleanupError.message}`);
+      }
     }
-
-    const result = await response.json();
-
-    if (
-      !result.responses ||
-      !result.responses[0] ||
-      !result.responses[0].fullTextAnnotation
-    ) {
-      throw new Error("No text detected in image");
-    }
-
-    const text = result.responses[0].fullTextAnnotation.text || "";
-
-    if (!text || text.trim().length === 0) {
-      throw new Error("Image OCR returned empty text");
-    }
-
-    return {
-      text: text.trim(),
-      confidence: "ocr",
-      detections: result.responses[0].textAnnotations?.length || 0,
-    };
   } catch (error) {
     throw new Error(`Image OCR failed: ${error.message}`);
   }

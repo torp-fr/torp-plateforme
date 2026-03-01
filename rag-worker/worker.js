@@ -1,3 +1,6 @@
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { supabase } from "./core/supabaseClient.js";
 import {
   extractDocumentText,
@@ -7,6 +10,28 @@ import { cleanText, removeHeaders, normalizeLineEndings } from "./processors/cle
 import { structureSections } from "./processors/structureSections.js";
 import { smartChunkText } from "./processors/smartChunker.js";
 import { generateBatchEmbeddings } from "./core/embeddingService.js";
+
+// ===============================
+// GOOGLE VISION AUTH INITIALIZER
+// ===============================
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+  try {
+    const credentialsPath = path.join(__dirname, "google-credentials.json");
+    fs.writeFileSync(
+      credentialsPath,
+      process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+    );
+    process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
+    console.log("✅ Google Vision credentials initialized from environment variable.");
+  } catch (error) {
+    console.error("❌ Failed to initialize Google Vision credentials:", error.message);
+  }
+} else {
+  console.warn("⚠️ GOOGLE_SERVICE_ACCOUNT_JSON environment variable not found. OCR may fail.");
+}
 
 const BATCH_SIZE = 50;
 const CHUNK_SIZE = 1000;
