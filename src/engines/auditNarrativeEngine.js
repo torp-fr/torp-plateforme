@@ -36,6 +36,45 @@ const NARRATIVE_RULES = {
 };
 
 /**
+ * Configuration des contextes réglementaires par exposition
+ * @constant {Object}
+ */
+const REGULATORY_CONTEXT_LEVELS = {
+  LOW: {
+    threshold: 25,
+    label: 'Low regulatory complexity',
+    label_fr: 'Complexité réglementaire faible',
+    description_b2b: 'Framework réglementaire simple avec peu de contraintes. Dossier applicable facilement gérable.',
+    description_b2c: 'Peu de règles à respecter. C\'est simple.',
+    icon: '🟢',
+  },
+  MODERATE: {
+    threshold: 50,
+    label: 'Moderate regulatory framework',
+    label_fr: 'Cadre réglementaire modéré',
+    description_b2b: 'Framework réglementaire équilibré avec obligations modérées. Couverture standard requise.',
+    description_b2c: 'Un niveau normal de règles et protections. C\'est l\'équilibre habituel.',
+    icon: '🟡',
+  },
+  HIGH: {
+    threshold: 75,
+    label: 'High regulatory constraint',
+    label_fr: 'Contrainte réglementaire élevée',
+    description_b2b: 'Framework réglementaire strict avec obligations substantielles. Couverture exhaustive requise.',
+    description_b2c: 'Beaucoup de règles à respecter. Vous devez être prudent.',
+    icon: '🟠',
+  },
+  VERY_HIGH: {
+    threshold: 101,
+    label: 'Very high regulatory constraint',
+    label_fr: 'Contrainte réglementaire très élevée',
+    description_b2b: 'Framework réglementaire complexe avec obligations étendues et contraintes multiples. Audit de conformité spécialisé fortement recommandé.',
+    description_b2c: 'Beaucoup de règles complexes. Vous devez être très attentif.',
+    icon: '🔴',
+  },
+};
+
+/**
  * Références réglementaires BTP structurées
  * @constant {Object}
  */
@@ -224,6 +263,23 @@ function validateAuditInput(input) {
   } else {
     if (!['B2B', 'B2C'].includes(input.userProfile.type)) {
       errors.push('userProfile.type doit être B2B ou B2C');
+    }
+  }
+
+  // Validation optionnelle de regulatoryExposureData
+  if (input.regulatoryExposureData) {
+    if (typeof input.regulatoryExposureData !== 'object') {
+      errors.push('regulatoryExposureData doit être un objet');
+    } else {
+      if (!Number.isInteger(input.regulatoryExposureData.exposure_index) ||
+          input.regulatoryExposureData.exposure_index < 0 ||
+          input.regulatoryExposureData.exposure_index > 100) {
+        errors.push('regulatoryExposureData.exposure_index doit être un entier entre 0 et 100');
+      }
+      if (!Number.isInteger(input.regulatoryExposureData.applicable_count) ||
+          input.regulatoryExposureData.applicable_count < 0) {
+        errors.push('regulatoryExposureData.applicable_count doit être un entier positif');
+      }
     }
   }
 
@@ -485,9 +541,10 @@ function generateNarrativeSections(userType, deterministicAnalysis, scores) {
  * @param {Object} scoringProfile - Profil de scoring
  * @param {string} userType - B2B ou B2C
  * @param {Object} projectContext - Contexte du projet
+ * @param {Object} regulatoryExposureData - Données d'exposition réglementaire (optionnel)
  * @returns {string} Résumé exécutif
  */
-function generateExecutiveSummary(scoringProfile, userType, projectContext) {
+function generateExecutiveSummary(scoringProfile, userType, projectContext, regulatoryExposureData) {
   const { weightedScore, gradeLetter } = scoringProfile;
   const isB2B = userType === 'B2B';
 
@@ -508,6 +565,16 @@ function generateExecutiveSummary(scoringProfile, userType, projectContext) {
     } else {
       summary += `Le devis présente des défaillances majeures. Un rejet ou une reformulation complète est recommandée.`;
     }
+
+    // Injection du contexte réglementaire pour B2B
+    if (regulatoryExposureData && Number.isInteger(regulatoryExposureData.exposure_index)) {
+      const exposureIndex = regulatoryExposureData.exposure_index;
+      const applicableCount = regulatoryExposureData.applicable_count || 0;
+      const highAuthorityCount = regulatoryExposureData.high_authority_count || 0;
+      const amplificationFactor = calculateAmplificationFactor(exposureIndex);
+
+      summary += `\n\nREGULATORY ENVIRONMENT: This audit evaluates the quote within its authentic regulatory context. ${applicableCount} applicable regulation(s) have been identified, including ${highAuthorityCount} high-authority standards. The compliance penalties are amplified by a factor of ${amplificationFactor.toFixed(2)} to reflect the regulatory complexity of this project.`;
+    }
   } else {
     // B2C
     summary = `Analyse de votre devis (${projectContext.devisId})\n`;
@@ -523,6 +590,18 @@ function generateExecutiveSummary(scoringProfile, userType, projectContext) {
       summary += `Attention requise. Votre devis présente plusieurs zones de risque. Ne signez pas avant d'avoir clarifié les points problématiques avec le prestataire.`;
     } else {
       summary += `À rejeter ou reformuler. Trop de problèmes graves. Relancez le prestataire pour un nouveau devis mieux protecteur.`;
+    }
+
+    // Injection du contexte réglementaire pour B2C
+    if (regulatoryExposureData && Number.isInteger(regulatoryExposureData.exposure_index)) {
+      const exposureIndex = regulatoryExposureData.exposure_index;
+      const applicableCount = regulatoryExposureData.applicable_count || 0;
+
+      summary += `\n\nVotre projet s'inscrit dans un cadre réglementaire avec ${applicableCount} règle(s) applicable(s). Cela n'indique pas automatiquement un problème, mais cela signifie que votre projet opère dans un environnement plus réglementé et nécessite donc une attention particulière.`;
+
+      if (exposureIndex > 75) {
+        summary += ` Cela ne signifie pas automatiquement qu'il y a un problème, mais cela signifie que plus d'attention est requise avant de signer.`;
+      }
     }
   }
 
@@ -597,6 +676,144 @@ function identifyRegulatoryReferences(analysisData, scores) {
 }
 
 /**
+ * Détermine le niveau de contexte réglementaire basé sur l'indice d'exposition
+ * @param {number} exposureIndex - Indice d'exposition (0-100)
+ * @returns {Object} Configuration du niveau de contexte
+ */
+function determineContextLevel(exposureIndex) {
+  if (exposureIndex < 25) {
+    return REGULATORY_CONTEXT_LEVELS.LOW;
+  } else if (exposureIndex >= 25 && exposureIndex <= 50) {
+    return REGULATORY_CONTEXT_LEVELS.MODERATE;
+  } else if (exposureIndex > 50 && exposureIndex <= 75) {
+    return REGULATORY_CONTEXT_LEVELS.HIGH;
+  } else {
+    return REGULATORY_CONTEXT_LEVELS.VERY_HIGH;
+  }
+}
+
+/**
+ * Calcule le facteur d'amplification des pénalités réglementaires
+ * Formule: 1 + (exposure_index / 100)
+ * @param {number} exposureIndex - Indice d'exposition (0-100)
+ * @returns {number} Facteur d'amplification arrondi à 2 décimales
+ */
+function calculateAmplificationFactor(exposureIndex) {
+  if (!Number.isInteger(exposureIndex) || exposureIndex < 0 || exposureIndex > 100) {
+    return 1.0;
+  }
+  const factor = 1 + (exposureIndex / 100);
+  return Math.min(Math.round(factor * 100) / 100, 2.0);
+}
+
+/**
+ * Détermine le niveau de sensibilité de conformité basé sur l'indice d'exposition
+ * @param {number} exposureIndex - Indice d'exposition (0-100)
+ * @returns {string} Niveau de sensibilité: "standard" | "elevated" | "critical"
+ */
+function determineComplianceSensitivity(exposureIndex) {
+  if (exposureIndex < 25) {
+    return 'standard';
+  } else if (exposureIndex >= 25 && exposureIndex <= 75) {
+    return 'elevated';
+  } else {
+    return 'critical';
+  }
+}
+
+/**
+ * Génère l'indicateur de pression réglementaire
+ * @param {number} exposureIndex - Indice d'exposition (0-100)
+ * @param {number} amplificationFactor - Facteur d'amplification
+ * @returns {Object} Indicateur de pression structuré
+ */
+function generateRegulatoryPressureIndicator(exposureIndex, amplificationFactor) {
+  return {
+    pressureScore: exposureIndex,
+    riskAmplificationLevel: amplificationFactor,
+    complianceSensitivity: determineComplianceSensitivity(exposureIndex),
+  };
+}
+
+/**
+ * Génère une explication narrative de l'amplification des pénalités
+ * @param {string} userType - B2B ou B2C
+ * @param {number} exposureIndex - Indice d'exposition
+ * @param {number} amplificationFactor - Facteur d'amplification
+ * @returns {string} Explication narrative
+ */
+function generateAmplificationExplanation(userType, exposureIndex, amplificationFactor) {
+  const isB2B = userType === 'B2B';
+
+  if (amplificationFactor <= 1.0) {
+    return isB2B
+      ? 'Faible exposition réglementaire : pénalités non amplifiées.'
+      : 'Peu de règles s\'appliquent : pas d\'amplification des pénalités.';
+  }
+
+  const percentage = Math.round((amplificationFactor - 1) * 100);
+
+  if (isB2B) {
+    return `Exposition réglementaire modérée à élevée : les pénalités liées à la conformité sont amplifiées de ${percentage}% pour refléter la complexité du cadre réglementaire applicable. Cela signifie que chaque manquement réglementaire a un impact augmenté sur le score, en fonction du nombre et de la sévérité des obligations réglementaires pertinentes.`;
+  } else {
+    return `Vous devez respecter plusieurs règles : chaque problème de conformité compte ${percentage}% plus lourd. Plus il y a de règles à respecter, plus chaque problème devient important.`;
+  }
+}
+
+/**
+ * Génère l'impact du score de l'amplification réglementaire
+ * @param {string} userType - B2B ou B2C
+ * @param {number} amplificationFactor - Facteur d'amplification
+ * @returns {string} Explication de l'impact sur le score
+ */
+function generateScoringImpactExplanation(userType, amplificationFactor) {
+  const isB2B = userType === 'B2B';
+
+  if (amplificationFactor <= 1.0) {
+    return isB2B
+      ? 'Score réglementaire calculé sans amplification.'
+      : 'Votre score est calculé normalement.';
+  }
+
+  if (isB2B) {
+    return `Le score réglementaire intègre un facteur d'amplification de ${amplificationFactor.toFixed(2)}. Cela reflète le fait que dans un environnement hautement réglementé, les écarts de conformité ont des conséquences disproportionnées. Les pénalités pour non-conformité sont multipliées par ce facteur, réduisant potentiellement le score global de manière plus significative que dans un cadre réglementaire simple.`;
+  } else {
+    return `Votre score tient compte d'un multiplicateur de ${amplificationFactor.toFixed(2)}. Cela signifie que chaque problème compte plus lourd parce que vous devez respecter beaucoup de règles. C'est pourquoi il est important de tout vérifier quand il y a beaucoup de contraintes réglementaires.`;
+  }
+}
+
+/**
+ * Génère le contexte réglementaire complet
+ * @param {Object} regulatoryExposureData - Données d'exposition réglementaire
+ * @param {string} userType - B2B ou B2C
+ * @returns {Object} Contexte réglementaire structuré
+ */
+function generateRegulatoryContext(regulatoryExposureData, userType) {
+  if (!regulatoryExposureData || !Number.isInteger(regulatoryExposureData.exposure_index)) {
+    return null;
+  }
+
+  const exposureIndex = regulatoryExposureData.exposure_index;
+  const contextLevel = determineContextLevel(exposureIndex);
+  const amplificationFactor = calculateAmplificationFactor(exposureIndex);
+
+  return {
+    exposureIndex,
+    applicableRegulations: regulatoryExposureData.applicable_count || 0,
+    highAuthorityRegulations: regulatoryExposureData.high_authority_count || 0,
+    amplificationFactor,
+    contextLevel: contextLevel.label,
+    contextLevelFr: contextLevel.label_fr,
+    contextIcon: contextLevel.icon,
+    narrativeExplanation: userType === 'B2B'
+      ? contextLevel.description_b2b
+      : contextLevel.description_b2c,
+    amplificationExplanation: generateAmplificationExplanation(userType, exposureIndex, amplificationFactor),
+    scoringImpactExplanation: generateScoringImpactExplanation(userType, amplificationFactor),
+  };
+}
+
+/**
  * Moteur d'audit narratif principal
  * @param {Object} input - Données d'entrée
  * @param {Object} options - Options de configuration
@@ -652,6 +869,7 @@ async function generateAuditNarrative(input, options = {}) {
       input.scoringProfile,
       input.userProfile.type,
       input.projectContext,
+      input.regulatoryExposureData,
     );
 
     // Identification des références réglementaires
@@ -659,6 +877,18 @@ async function generateAuditNarrative(input, options = {}) {
       input.analysisData,
       input.scoringProfile.scores,
     );
+
+    // Génération du contexte réglementaire (si exposition fournie)
+    const regulatoryContext = input.regulatoryExposureData
+      ? generateRegulatoryContext(input.regulatoryExposureData, input.userProfile.type)
+      : null;
+
+    logger.debug('Contexte réglementaire généré', {
+      auditId,
+      hasRegulatoryContext: !!regulatoryContext,
+      contextLevel: regulatoryContext?.contextLevel,
+      amplificationFactor: regulatoryContext?.amplificationFactor,
+    });
 
     // Génération de l'analyse détaillée par thème
     const detailedAnalysis = {
@@ -669,6 +899,32 @@ async function generateAuditNarrative(input, options = {}) {
       optimization: generateThemeAnalysis('optimization', input, deterministicAnalysis),
     };
 
+    // Génération de l'indicateur de pression réglementaire (si exposition fournie)
+    let regulatoryPressureIndicator = null;
+    if (input.regulatoryExposureData && Number.isInteger(input.regulatoryExposureData.exposure_index)) {
+      const amplificationFactor = calculateAmplificationFactor(input.regulatoryExposureData.exposure_index);
+      regulatoryPressureIndicator = generateRegulatoryPressureIndicator(
+        input.regulatoryExposureData.exposure_index,
+        amplificationFactor,
+      );
+    }
+
+    // Ajustement des priorités de recommandations basé sur la pression réglementaire
+    let adjustedRecommendations = narrativeSections.recommendations;
+    if (regulatoryPressureIndicator && regulatoryPressureIndicator.complianceSensitivity) {
+      adjustedRecommendations = adjustRecommendationsByRegulatoryPressure(
+        narrativeSections.recommendations,
+        regulatoryPressureIndicator.complianceSensitivity,
+      );
+
+      logger.debug('Recommandations ajustées par pression réglementaire', {
+        auditId,
+        complianceSensitivity: regulatoryPressureIndicator.complianceSensitivity,
+        originalCount: narrativeSections.recommendations.length,
+        adjustedCount: adjustedRecommendations.length,
+      });
+    }
+
     // Compilation du rapport
     const report = {
       auditId,
@@ -678,9 +934,11 @@ async function generateAuditNarrative(input, options = {}) {
       executiveSummary,
       strengths: narrativeSections.strengths,
       weaknesses: narrativeSections.weaknesses,
-      recommendations: narrativeSections.recommendations,
+      recommendations: adjustedRecommendations,
       detailedAnalysis,
       regulatoryReferences,
+      regulatoryContext,
+      regulatoryPressureIndicator,
       scoringProfile: input.scoringProfile,
       timestamp: new Date().toISOString(),
       generatedAt: new Date().toISOString(),
@@ -810,6 +1068,77 @@ function generateThemeAnalysis(theme, input, deterministicAnalysis) {
 }
 
 /**
+ * Ajuste les priorités des recommandations en fonction de la pression réglementaire
+ * Pure function: déterministe, sans effets secondaires
+ *
+ * Règles:
+ * - "standard": pas de changement
+ * - "elevated": SHORT_TERM → IMMEDIATE pour thème "regulatory" uniquement
+ * - "critical": SHORT_TERM → IMMEDIATE et MEDIUM_TERM → SHORT_TERM
+ *
+ * @param {Array} recommendations - Tableau de recommandations
+ * @param {string} complianceSensitivity - Niveau de sensibilité: "standard" | "elevated" | "critical"
+ * @returns {Array} Recommandations ajustées avec métadonnées de pression
+ */
+function adjustRecommendationsByRegulatoryPressure(recommendations, complianceSensitivity) {
+  // Validation
+  if (!Array.isArray(recommendations)) {
+    return [];
+  }
+
+  if (!['standard', 'elevated', 'critical'].includes(complianceSensitivity)) {
+    return recommendations.map(rec => ({
+      ...rec,
+      originalPriority: rec.priority,
+      adjustedByRegulatoryPressure: false,
+      pressureLevel: 'unknown',
+    }));
+  }
+
+  // Si sensibilité "standard", retourner sans changement (mais avec métadonnées)
+  if (complianceSensitivity === 'standard') {
+    return recommendations.map(rec => ({
+      ...rec,
+      originalPriority: rec.priority,
+      adjustedByRegulatoryPressure: false,
+      pressureLevel: 'standard',
+    }));
+  }
+
+  // Ajuster les priorités selon le niveau de sensibilité
+  return recommendations.map(rec => {
+    const originalPriority = rec.priority;
+    let adjustedPriority = rec.priority;
+    let wasAdjusted = false;
+
+    if (complianceSensitivity === 'elevated') {
+      // elevated: SHORT_TERM → IMMEDIATE pour "regulatory" uniquement
+      if (rec.priority === 'SHORT_TERM' && rec.theme === 'regulatory') {
+        adjustedPriority = 'IMMEDIATE';
+        wasAdjusted = true;
+      }
+    } else if (complianceSensitivity === 'critical') {
+      // critical: SHORT_TERM → IMMEDIATE et MEDIUM_TERM → SHORT_TERM (tous thèmes)
+      if (rec.priority === 'SHORT_TERM') {
+        adjustedPriority = 'IMMEDIATE';
+        wasAdjusted = true;
+      } else if (rec.priority === 'MEDIUM_TERM') {
+        adjustedPriority = 'SHORT_TERM';
+        wasAdjusted = true;
+      }
+    }
+
+    return {
+      ...rec,
+      priority: adjustedPriority,
+      originalPriority,
+      adjustedByRegulatoryPressure: wasAdjusted,
+      pressureLevel: complianceSensitivity,
+    };
+  });
+}
+
+/**
  * Génère un ID d'audit unique
  * @returns {string}
  */
@@ -830,12 +1159,25 @@ module.exports = {
   generateNarrativeSections,
   generateExecutiveSummary,
   identifyRegulatoryReferences,
+  generateRegulatoryContext,
   generateThemeAnalysis,
+
+  // Fonctions helper pour contexte réglementaire
+  determineContextLevel,
+  calculateAmplificationFactor,
+  determineComplianceSensitivity,
+  generateRegulatoryPressureIndicator,
+  generateAmplificationExplanation,
+  generateScoringImpactExplanation,
+
+  // Fonctions helper pour ajustement de recommandations
+  adjustRecommendationsByRegulatoryPressure,
 
   // Configuration (pour inspection et audit)
   NARRATIVE_RULES,
   REGULATORY_REFERENCES,
   NARRATIVE_TEMPLATES,
+  REGULATORY_CONTEXT_LEVELS,
 
   // Logger
   createLogger,
