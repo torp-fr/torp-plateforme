@@ -50,6 +50,26 @@ function fallbackChunking(text, chunkSize) {
   return chunks;
 }
 
+function computeAuthorityWeight(category) {
+  const weights = {
+    DTU: 5,
+    EUROCODE: 5,
+    NORM: 4,
+    REGULATION: 4,
+    LEGAL: 4,
+    TECHNICAL_GUIDE: 3,
+    GUIDELINE: 2,
+    BEST_PRACTICE: 2,
+    MANUAL: 1,
+    TRAINING: 1,
+    CASE_STUDY: 1,
+    LESSONS_LEARNED: 1,
+    PRICING_REFERENCE: 1,
+  };
+
+  return weights[category] || 1;
+}
+
 async function processDocument(doc) {
   const documentId = doc.id;
   console.log(`Processing: ${documentId}`);
@@ -93,6 +113,16 @@ async function processDocument(doc) {
     const rawText = extractionResult.text;
     const sourceType = detectSourceType(doc.mime_type, doc.file_path);
     const extractionConfidence = extractionResult.confidence;
+    const authorityWeight = computeAuthorityWeight(doc.category);
+    const documentMetadata = {
+      category: doc.category || null,
+      documentVersion: doc.version_number || null,
+      authorityWeight,
+      metierTarget: doc.metier_target || null,
+      documentType: doc.category || null,
+      effectiveDate: doc.effective_date || null,
+      expirationDate: doc.expiration_date || null,
+    };
 
     console.log(
       `  ✅ Extracted ${rawText.length} characters (${extractionConfidence})`
@@ -156,6 +186,13 @@ async function processDocument(doc) {
         metadata: JSON.stringify(chunk.metadata),
         source_type: sourceType,
         extraction_confidence: extractionConfidence,
+        category: documentMetadata.category,
+        document_version: documentMetadata.documentVersion,
+        authority_weight: documentMetadata.authorityWeight,
+        metier_target: documentMetadata.metierTarget,
+        document_type: documentMetadata.documentType,
+        effective_date: documentMetadata.effectiveDate,
+        expiration_date: documentMetadata.expirationDate,
       }));
 
       const { error: insertError } = await supabase
