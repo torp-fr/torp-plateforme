@@ -269,12 +269,27 @@ function validateAnalysisData(analysisData) {
 }
 
 /**
+ * Calcule le multiplicateur de pénalité basé sur l'exposition réglementaire
+ * Formule: 1 + (exposure_index / 100), plafonné à 2.0
+ * @param {number} exposureIndex - Indice d'exposition (0-100)
+ * @returns {number} Multiplicateur de pénalité (1.0 à 2.0)
+ */
+function calculatePenaltyMultiplier(exposureIndex) {
+  if (!Number.isInteger(exposureIndex) || exposureIndex < 0 || exposureIndex > 100) {
+    return 1.0;
+  }
+  const multiplier = 1 + (exposureIndex / 100);
+  return Math.min(multiplier, 2.0);
+}
+
+/**
  * Calcule le score pour un thème spécifique
  * @param {string} theme - Nom du thème
  * @param {Object} findings - Données des findings pour ce thème
- * @returns {Object} { score: number, breakdown: Object }
+ * @param {Object} exposureData - Données d'exposition réglementaire (optionnel)
+ * @returns {Object} { score: number, breakdown: Object, exposureMultiplier: number }
  */
-function calculateThemeScore(theme, findings) {
+function calculateThemeScore(theme, findings, exposureData) {
   const config = SCORING_CONFIG[theme];
   if (!config) {
     throw new Error(`Thème invalide: ${theme}`);
@@ -283,16 +298,31 @@ function calculateThemeScore(theme, findings) {
   let score = config.baseScore;
   const breakdown = {};
 
+  // Calculer le multiplicateur de pénalité pour le thème régulateur si exposition fournie
+  let penaltyMultiplier = 1.0;
+  if (theme === 'regulatory' && exposureData && exposureData.exposure_index !== undefined) {
+    penaltyMultiplier = calculatePenaltyMultiplier(exposureData.exposure_index);
+  }
+
   // Calculer les pénalités basées sur la configuration
   for (const [key, penalty] of Object.entries(config.penalties)) {
     const count = findings[key] ? findings[key].length : 0;
-    const deduction = count * penalty;
+    let basePenalty = count * penalty;
+
+    // Appliquer le multiplicateur au thème régulateur
+    let adjustedPenalty = basePenalty;
+    if (theme === 'regulatory' && penaltyMultiplier > 1.0) {
+      adjustedPenalty = Math.round(basePenalty * penaltyMultiplier * 100) / 100;
+    }
+
     breakdown[key] = {
       count,
       penalty,
-      deduction,
+      basePenalty,
+      adjustedPenalty,
+      multiplier: penaltyMultiplier > 1.0 ? Math.round(penaltyMultiplier * 100) / 100 : undefined,
     };
-    score -= deduction;
+    score -= adjustedPenalty;
   }
 
   // Appliquer le plancher
@@ -304,18 +334,20 @@ function calculateThemeScore(theme, findings) {
     score,
     breakdown,
     floor: config.floor,
+    exposureMultiplier: penaltyMultiplier > 1.0 ? Math.round(penaltyMultiplier * 100) / 100 : undefined,
   };
 }
 
 /**
  * Calcule tous les scores thématiques
  * @param {Object} analysisData - Les données d'analyse
+ * @param {Object} exposureData - Données d'exposition réglementaire (optionnel)
  * @returns {Object} Scores pour chaque thème
  */
-function calculateThemeScores(analysisData) {
+function calculateThemeScores(analysisData, exposureData) {
   const scores = {};
 
-  scores.regulatory = calculateThemeScore('regulatory', analysisData.regulatoryFindings);
+  scores.regulatory = calculateThemeScore('regulatory', analysisData.regulatoryFindings, exposureData);
   scores.risk = calculateThemeScore('risk', analysisData.riskFindings);
   scores.technical = calculateThemeScore('technical', analysisData.technicalFindings);
   scores.transparency = calculateThemeScore('transparency', analysisData.transparencyFindings);
@@ -543,7 +575,7 @@ async function calculateThematicScore(input, options = {}) {
     const weights = inputValidation.weights;
 
     // ÉTAPE 1: Calcul des scores thématiques
-    const themeScores = calculateThemeScores(input.analysisData);
+    const themeScores = calculateThemeScores(input.analysisData, input.regulatoryExposureData);
 
     logger.debug('Étape 1 - Scores thématiques calculés', {
       executionId,
@@ -553,19 +585,16 @@ async function calculateThematicScore(input, options = {}) {
       }, {}),
     });
 
-    // ÉTAPE 1B: Ajustement du score réglementaire si données d'exposition fournies
+    // ÉTAPE 1B: Log détails amplification pénalités si exposition fournie
     if (input.regulatoryExposureData && input.regulatoryExposureData.exposure_index !== undefined) {
-      const exposureAdjustment = input.regulatoryExposureData.exposure_index / 5;
-      const baseRegulatoryScore = themeScores.regulatory.score;
-      const adjustedRegulatoryScore = Math.max(0, baseRegulatoryScore - exposureAdjustment);
-      themeScores.regulatory.score = Math.round(adjustedRegulatoryScore * 100) / 100;
-
-      logger.debug('Étape 1B - Score réglementaire ajusté par exposition', {
+      const exposureIndex = input.regulatoryExposureData.exposure_index;
+      const penaltyMultiplier = calculatePenaltyMultiplier(exposureIndex);
+      logger.debug('Étape 1B - Amplification de pénalités réglementaires appliquée', {
         executionId,
-        exposureIndex: input.regulatoryExposureData.exposure_index,
-        exposureAdjustment: Math.round(exposureAdjustment * 100) / 100,
-        baseRegulatoryScore,
-        adjustedRegulatoryScore: themeScores.regulatory.score,
+        exposureIndex,
+        penaltyMultiplier: Math.round(penaltyMultiplier * 100) / 100,
+        regulatoryScore: themeScores.regulatory.score,
+        regulatoryBreakdown: themeScores.regulatory.breakdown,
       });
     }
 
