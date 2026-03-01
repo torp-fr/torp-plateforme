@@ -113,6 +113,12 @@ async function processDocument(doc) {
       return;
     }
 
+    // Delete existing chunks to avoid duplicates
+    await supabase
+      .from("knowledge_chunks")
+      .delete()
+      .eq("document_id", documentId);
+
     // Step 2: Download file
     console.log(`  📥 Downloading file...`);
     const arrayBuffer = await downloadFile(doc.file_path);
@@ -163,42 +169,31 @@ async function processDocument(doc) {
 
     console.log(`  ✅ Inserted ${insertedChunks} chunks`);
 
-    // Step 7: Generate embeddings
+    // Step 7: Generate embeddings (batch)
     console.log(`  🤖 Generating embeddings...`);
-    let embeddedChunks = 0;
-    let failedEmbeddings = 0;
+    const embeddingResponse = await openai.embeddings.create({
+      model: "text-embedding-3-small",
+      input: chunks.map((c) => c.content),
+    });
 
-    for (let i = 0; i < chunks.length; i++) {
-      try {
-        const embedding = await generateEmbedding(chunks[i].content);
+    const embeddings = embeddingResponse.data.map((d) => d.embedding);
 
-        const { error: updateError } = await supabase
-          .from("knowledge_chunks")
-          .update({
-            embedding,
-            embedding_generated_at: new Date().toISOString(),
-          })
-          .eq("document_id", documentId)
-          .eq("chunk_index", i);
-
-        if (updateError) {
-          throw new Error(`Failed to store embedding: ${updateError.message}`);
-        }
-
-        embeddedChunks++;
-      } catch (error) {
-        console.error(`    ❌ Embedding failed for chunk ${i}: ${error.message}`);
-        failedEmbeddings++;
-      }
+    if (embeddings.some((e) => e.length !== EMBEDDING_DIMENSION)) {
+      throw new Error("Embedding dimension mismatch detected");
     }
 
-    console.log(`  ✅ Generated ${embeddedChunks} embeddings`);
-
-    if (failedEmbeddings > 0) {
-      throw new Error(
-        `${failedEmbeddings} embeddings failed out of ${chunks.length}`
-      );
+    for (let i = 0; i < embeddings.length; i++) {
+      await supabase
+        .from("knowledge_chunks")
+        .update({
+          embedding: embeddings[i],
+          embedding_generated_at: new Date().toISOString(),
+        })
+        .eq("document_id", documentId)
+        .eq("chunk_index", i);
     }
+
+    console.log(`  ✅ Generated ${embeddings.length} embeddings`);
 
     // Step 8: Mark as completed
     console.log(`  ✅ Marking document as completed...`);
