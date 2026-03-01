@@ -14,7 +14,10 @@ export async function extractImageText(arrayBuffer, fileName) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
 
-    const tempFilePath = path.join(tempDir, `ocr-${Date.now()}-${fileName}`);
+    // Sanitize filename to prevent ENOENT path errors (remove directory components)
+    const safeFileName = path.basename(fileName);
+
+    const tempFilePath = path.join(tempDir, `ocr-${Date.now()}-${safeFileName}`);
     fs.writeFileSync(tempFilePath, Buffer.from(arrayBuffer));
 
     try {
