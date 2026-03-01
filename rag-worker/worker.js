@@ -29,6 +29,27 @@ async function downloadFile(storagePath) {
   }
 }
 
+function fallbackChunking(text, chunkSize) {
+  const chunks = [];
+  const trimmedText = text.trim();
+
+  if (!trimmedText || trimmedText.length === 0) {
+    return chunks;
+  }
+
+  for (let i = 0; i < trimmedText.length; i += chunkSize) {
+    chunks.push({
+      content: trimmedText.substring(i, i + chunkSize),
+      chunk_index: chunks.length,
+      section_title: null,
+      section_level: null,
+      metadata: {},
+    });
+  }
+
+  return chunks;
+}
+
 async function processDocument(doc) {
   const documentId = doc.id;
   console.log(`Processing: ${documentId}`);
@@ -83,6 +104,10 @@ async function processDocument(doc) {
     cleanedText = removeHeaders(cleanedText);
     cleanedText = cleanText(cleanedText);
 
+    if (!cleanedText || cleanedText.trim().length === 0) {
+      throw new Error("No text content to process after cleaning");
+    }
+
     // Step 6: Structure text into sections
     console.log(`  📚 Structuring sections...`);
     const sections = structureSections(cleanedText);
@@ -90,8 +115,22 @@ async function processDocument(doc) {
 
     // Step 7: Create smart chunks with metadata
     console.log(`  ✂️ Creating smart chunks...`);
-    const chunks = smartChunkText(cleanedText, sections, CHUNK_SIZE);
-    console.log(`  ✅ Created ${chunks.length} chunks`);
+    let chunks = smartChunkText(cleanedText, sections, CHUNK_SIZE);
+
+    if (chunks.length === 0) {
+      console.log(`  ⚠️ Smart chunker returned 0 chunks, activating fallback chunking`);
+      chunks = fallbackChunking(cleanedText, CHUNK_SIZE);
+
+      if (chunks.length === 0) {
+        throw new Error(
+          "Fallback chunking also returned 0 chunks - text too small or invalid"
+        );
+      }
+
+      console.log(`  ✅ Fallback created ${chunks.length} chunks`);
+    } else {
+      console.log(`  ✅ Created ${chunks.length} chunks`);
+    }
 
     // Step 8: Update progress
     await supabase
