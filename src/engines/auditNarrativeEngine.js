@@ -909,6 +909,22 @@ async function generateAuditNarrative(input, options = {}) {
       );
     }
 
+    // Ajustement des priorités de recommandations basé sur la pression réglementaire
+    let adjustedRecommendations = narrativeSections.recommendations;
+    if (regulatoryPressureIndicator && regulatoryPressureIndicator.complianceSensitivity) {
+      adjustedRecommendations = adjustRecommendationsByRegulatoryPressure(
+        narrativeSections.recommendations,
+        regulatoryPressureIndicator.complianceSensitivity,
+      );
+
+      logger.debug('Recommandations ajustées par pression réglementaire', {
+        auditId,
+        complianceSensitivity: regulatoryPressureIndicator.complianceSensitivity,
+        originalCount: narrativeSections.recommendations.length,
+        adjustedCount: adjustedRecommendations.length,
+      });
+    }
+
     // Compilation du rapport
     const report = {
       auditId,
@@ -918,7 +934,7 @@ async function generateAuditNarrative(input, options = {}) {
       executiveSummary,
       strengths: narrativeSections.strengths,
       weaknesses: narrativeSections.weaknesses,
-      recommendations: narrativeSections.recommendations,
+      recommendations: adjustedRecommendations,
       detailedAnalysis,
       regulatoryReferences,
       regulatoryContext,
@@ -1052,6 +1068,77 @@ function generateThemeAnalysis(theme, input, deterministicAnalysis) {
 }
 
 /**
+ * Ajuste les priorités des recommandations en fonction de la pression réglementaire
+ * Pure function: déterministe, sans effets secondaires
+ *
+ * Règles:
+ * - "standard": pas de changement
+ * - "elevated": SHORT_TERM → IMMEDIATE pour thème "regulatory" uniquement
+ * - "critical": SHORT_TERM → IMMEDIATE et MEDIUM_TERM → SHORT_TERM
+ *
+ * @param {Array} recommendations - Tableau de recommandations
+ * @param {string} complianceSensitivity - Niveau de sensibilité: "standard" | "elevated" | "critical"
+ * @returns {Array} Recommandations ajustées avec métadonnées de pression
+ */
+function adjustRecommendationsByRegulatoryPressure(recommendations, complianceSensitivity) {
+  // Validation
+  if (!Array.isArray(recommendations)) {
+    return [];
+  }
+
+  if (!['standard', 'elevated', 'critical'].includes(complianceSensitivity)) {
+    return recommendations.map(rec => ({
+      ...rec,
+      originalPriority: rec.priority,
+      adjustedByRegulatoryPressure: false,
+      pressureLevel: 'unknown',
+    }));
+  }
+
+  // Si sensibilité "standard", retourner sans changement (mais avec métadonnées)
+  if (complianceSensitivity === 'standard') {
+    return recommendations.map(rec => ({
+      ...rec,
+      originalPriority: rec.priority,
+      adjustedByRegulatoryPressure: false,
+      pressureLevel: 'standard',
+    }));
+  }
+
+  // Ajuster les priorités selon le niveau de sensibilité
+  return recommendations.map(rec => {
+    const originalPriority = rec.priority;
+    let adjustedPriority = rec.priority;
+    let wasAdjusted = false;
+
+    if (complianceSensitivity === 'elevated') {
+      // elevated: SHORT_TERM → IMMEDIATE pour "regulatory" uniquement
+      if (rec.priority === 'SHORT_TERM' && rec.theme === 'regulatory') {
+        adjustedPriority = 'IMMEDIATE';
+        wasAdjusted = true;
+      }
+    } else if (complianceSensitivity === 'critical') {
+      // critical: SHORT_TERM → IMMEDIATE et MEDIUM_TERM → SHORT_TERM (tous thèmes)
+      if (rec.priority === 'SHORT_TERM') {
+        adjustedPriority = 'IMMEDIATE';
+        wasAdjusted = true;
+      } else if (rec.priority === 'MEDIUM_TERM') {
+        adjustedPriority = 'SHORT_TERM';
+        wasAdjusted = true;
+      }
+    }
+
+    return {
+      ...rec,
+      priority: adjustedPriority,
+      originalPriority,
+      adjustedByRegulatoryPressure: wasAdjusted,
+      pressureLevel: complianceSensitivity,
+    };
+  });
+}
+
+/**
  * Génère un ID d'audit unique
  * @returns {string}
  */
@@ -1082,6 +1169,9 @@ module.exports = {
   generateRegulatoryPressureIndicator,
   generateAmplificationExplanation,
   generateScoringImpactExplanation,
+
+  // Fonctions helper pour ajustement de recommandations
+  adjustRecommendationsByRegulatoryPressure,
 
   // Configuration (pour inspection et audit)
   NARRATIVE_RULES,
