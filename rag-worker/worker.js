@@ -1,15 +1,12 @@
-import { createClient } from "@supabase/supabase-js";
-import { OpenAI } from "openai";
-import pdf from "pdf-parse";
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { supabase } from "./core/supabaseClient.js";
+import {
+  extractDocumentText,
+  detectSourceType,
+} from "./extractors/extractionService.js";
+import { cleanText, removeHeaders, normalizeLineEndings } from "./processors/cleanText.js";
+import { structureSections } from "./processors/structureSections.js";
+import { smartChunkText } from "./processors/smartChunker.js";
+import { generateBatchEmbeddings } from "./core/embeddingService.js";
 
 const BATCH_SIZE = 50;
 const CHUNK_SIZE = 1000;
@@ -32,71 +29,12 @@ async function downloadFile(storagePath) {
   }
 }
 
-async function extractText(arrayBuffer, mimeType) {
-  try {
-    const uint8Array = new Uint8Array(arrayBuffer);
-
-    // Check for PDF header
-    const header = String.fromCharCode(
-      uint8Array[0],
-      uint8Array[1],
-      uint8Array[2],
-      uint8Array[3]
-    );
-
-    if (header === "%PDF" || mimeType === "application/pdf") {
-      console.log(`  📄 PDF detected - parsing...`);
-      const buffer = Buffer.from(arrayBuffer);
-      const pdfData = await pdf(buffer);
-      return pdfData.text;
-    }
-
-    // Plain text
-    console.log(`  📝 Text file detected`);
-    return new TextDecoder().decode(uint8Array);
-  } catch (error) {
-    throw new Error(`Text extraction failed: ${error.message}`);
-  }
-}
-
-function chunkText(text, chunkSize) {
-  const chunks = [];
-  for (let i = 0; i < text.length; i += chunkSize) {
-    chunks.push({
-      content: text.substring(i, i + chunkSize),
-      tokenCount: Math.ceil(text.substring(i, i + chunkSize).length / 4),
-    });
-  }
-  return chunks;
-}
-
-async function generateEmbedding(text) {
-  try {
-    const response = await openai.embeddings.create({
-      model: "text-embedding-3-small",
-      input: text,
-    });
-
-    const embedding = response.data[0].embedding;
-
-    if (embedding.length !== EMBEDDING_DIMENSION) {
-      throw new Error(
-        `Embedding dimension mismatch: expected ${EMBEDDING_DIMENSION}, got ${embedding.length}`
-      );
-    }
-
-    return embedding;
-  } catch (error) {
-    throw new Error(`Embedding generation failed: ${error.message}`);
-  }
-}
-
 async function processDocument(doc) {
   const documentId = doc.id;
   console.log(`Processing: ${documentId}`);
 
   try {
-    // Step 1: Claim document
+    // Step 1: Claim document (atomic pattern)
     const { data: claimed, error: claimError } = await supabase
       .from("knowledge_documents")
       .update({
@@ -113,21 +51,49 @@ async function processDocument(doc) {
       return;
     }
 
-    // Step 2: Download file
+    // Step 2: Delete existing chunks to avoid duplicates
+    console.log(`  🗑️ Cleaning up existing chunks...`);
+    await supabase
+      .from("knowledge_chunks")
+      .delete()
+      .eq("document_id", documentId);
+
+    // Step 3: Download file
     console.log(`  📥 Downloading file...`);
     const arrayBuffer = await downloadFile(doc.file_path);
 
-    // Step 3: Extract text
+    // Step 4: Extract text based on file type
     console.log(`  🔍 Extracting text...`);
-    const text = await extractText(arrayBuffer, doc.mime_type);
-    console.log(`  ✅ Extracted ${text.length} characters`);
+    const extractionResult = await extractDocumentText(
+      arrayBuffer,
+      doc.file_path,
+      doc.mime_type
+    );
+    const rawText = extractionResult.text;
+    const sourceType = detectSourceType(doc.mime_type, doc.file_path);
+    const extractionConfidence = extractionResult.confidence;
 
-    // Step 4: Chunk text
-    console.log(`  ✂️ Chunking text...`);
-    const chunks = chunkText(text, CHUNK_SIZE);
+    console.log(
+      `  ✅ Extracted ${rawText.length} characters (${extractionConfidence})`
+    );
+
+    // Step 5: Clean and normalize text
+    console.log(`  🧹 Cleaning text...`);
+    let cleanedText = normalizeLineEndings(rawText);
+    cleanedText = removeHeaders(cleanedText);
+    cleanedText = cleanText(cleanedText);
+
+    // Step 6: Structure text into sections
+    console.log(`  📚 Structuring sections...`);
+    const sections = structureSections(cleanedText);
+    console.log(`  ✅ Found ${sections.length} sections`);
+
+    // Step 7: Create smart chunks with metadata
+    console.log(`  ✂️ Creating smart chunks...`);
+    const chunks = smartChunkText(cleanedText, sections, CHUNK_SIZE);
     console.log(`  ✅ Created ${chunks.length} chunks`);
 
-    // Step 5: Update progress
+    // Step 8: Update progress
     await supabase
       .from("knowledge_documents")
       .update({
@@ -135,17 +101,22 @@ async function processDocument(doc) {
       })
       .eq("id", documentId);
 
-    // Step 6: Batch insert chunks
-    console.log(`  📚 Inserting chunks...`);
+    // Step 9: Batch insert chunks
+    console.log(`  📝 Inserting chunks (batch size: ${BATCH_SIZE})...`);
     let insertedChunks = 0;
 
     for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
       const batch = chunks.slice(i, i + BATCH_SIZE);
-      const payload = batch.map((chunk, batchIndex) => ({
+      const payload = batch.map((chunk) => ({
         document_id: documentId,
-        chunk_index: i + batchIndex,
+        chunk_index: chunk.chunk_index,
         content: chunk.content,
-        token_count: chunk.tokenCount,
+        token_count: Math.ceil(chunk.content.length / 4),
+        section_title: chunk.section_title,
+        section_level: chunk.section_level,
+        metadata: JSON.stringify(chunk.metadata),
+        source_type: sourceType,
+        extraction_confidence: extractionConfidence,
       }));
 
       const { error: insertError } = await supabase
@@ -163,44 +134,44 @@ async function processDocument(doc) {
 
     console.log(`  ✅ Inserted ${insertedChunks} chunks`);
 
-    // Step 7: Generate embeddings
-    console.log(`  🤖 Generating embeddings...`);
-    let embeddedChunks = 0;
-    let failedEmbeddings = 0;
+    // Step 10: Update progress before embeddings
+    await supabase
+      .from("knowledge_documents")
+      .update({
+        ingestion_progress: 50,
+      })
+      .eq("id", documentId);
 
-    for (let i = 0; i < chunks.length; i++) {
-      try {
-        const embedding = await generateEmbedding(chunks[i].content);
+    // Step 11: Generate batch embeddings
+    console.log(`  🤖 Generating embeddings (batch mode)...`);
+    const texts = chunks.map((c) => c.content);
+    const embeddings = await generateBatchEmbeddings(texts);
 
-        const { error: updateError } = await supabase
-          .from("knowledge_chunks")
-          .update({
-            embedding,
-            embedding_generated_at: new Date().toISOString(),
-          })
-          .eq("document_id", documentId)
-          .eq("chunk_index", i);
-
-        if (updateError) {
-          throw new Error(`Failed to store embedding: ${updateError.message}`);
-        }
-
-        embeddedChunks++;
-      } catch (error) {
-        console.error(`    ❌ Embedding failed for chunk ${i}: ${error.message}`);
-        failedEmbeddings++;
+    // Validate all embeddings
+    for (let i = 0; i < embeddings.length; i++) {
+      if (embeddings[i].length !== EMBEDDING_DIMENSION) {
+        throw new Error(
+          `Embedding ${i} has invalid dimension: ${embeddings[i].length}`
+        );
       }
     }
 
-    console.log(`  ✅ Generated ${embeddedChunks} embeddings`);
-
-    if (failedEmbeddings > 0) {
-      throw new Error(
-        `${failedEmbeddings} embeddings failed out of ${chunks.length}`
-      );
+    // Step 12: Update chunks with embeddings
+    console.log(`  📊 Storing embeddings...`);
+    for (let i = 0; i < embeddings.length; i++) {
+      await supabase
+        .from("knowledge_chunks")
+        .update({
+          embedding: embeddings[i],
+          embedding_generated_at: new Date().toISOString(),
+        })
+        .eq("document_id", documentId)
+        .eq("chunk_index", i);
     }
 
-    // Step 8: Mark as completed
+    console.log(`  ✅ Generated ${embeddings.length} embeddings`);
+
+    // Step 13: Mark as completed
     console.log(`  ✅ Marking document as completed...`);
     const { error: completeError } = await supabase
       .from("knowledge_documents")
@@ -255,10 +226,11 @@ async function pollDocuments() {
   }
 }
 
-console.log("🚀 RAG Worker started");
+console.log("🚀 RAG Worker v2 started");
 console.log(`📍 Poll interval: ${POLL_INTERVAL}ms`);
 console.log(`📦 Batch size: ${BATCH_SIZE}`);
 console.log(`📄 Chunk size: ${CHUNK_SIZE}`);
+console.log(`🔑 Formats: PDF, DOCX, XLSX, Images (OCR), TXT`);
 
 setInterval(pollDocuments, POLL_INTERVAL);
 
