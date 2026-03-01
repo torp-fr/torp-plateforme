@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Service API Géoportail Urbanisme (GPU)
  * Récupération des données PLU, zonage, prescriptions
@@ -97,7 +99,7 @@ class GPUService {
       );
 
       if (!response.ok) {
-        console.warn(`GPU getDocument error: ${response.status} for ${codeInsee}`);
+        warn(`GPU getDocument error: ${response.status} for ${codeInsee}`);
         return null;
       }
 
@@ -135,7 +137,7 @@ class GPUService {
       );
 
       if (!response.ok) {
-        console.warn(`GPU getZoneUrba error: ${response.status}`);
+        warn(`GPU getZoneUrba error: ${response.status}`);
         return [];
       }
 
@@ -172,7 +174,7 @@ class GPUService {
       );
 
       if (!response.ok) {
-        console.warn(`GPU getZoneUrbaByPoint error: ${response.status}`);
+        warn(`GPU getZoneUrbaByPoint error: ${response.status}`);
         return null;
       }
 
@@ -208,7 +210,7 @@ class GPUService {
       );
 
       if (!response.ok) {
-        console.warn(`GPU getPrescriptions error: ${response.status}`);
+        warn(`GPU getPrescriptions error: ${response.status}`);
         return [];
       }
 

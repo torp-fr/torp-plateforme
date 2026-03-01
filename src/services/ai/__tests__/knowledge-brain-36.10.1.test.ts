@@ -5,6 +5,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { knowledgeBrainService } from '../knowledge-brain.service';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
   beforeEach(() => {
@@ -34,7 +35,7 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       expect(metrics.total_documents_processed).toBeGreaterThan(0);
       expect(metrics.successful_ingestions).toBeGreaterThan(0);
 
-      console.log('✅ Test 1 PASSED: Small document completed with integrity');
+      log('✅ Test 1 PASSED: Small document completed with integrity');
     });
   });
 
@@ -59,7 +60,7 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       const metrics = knowledgeBrainService.getIngestionMetrics();
       expect(metrics.avg_chunks_per_document).toBeGreaterThanOrEqual(0);
 
-      console.log('✅ Test 2 PASSED: Large document shows progress tracking');
+      log('✅ Test 2 PASSED: Large document shows progress tracking');
     });
   });
 
@@ -82,7 +83,7 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       // Verify initial state
       expect(doc?.ingestion_status || 'pending').toBe('pending');
 
-      console.log('✅ Test 3 PASSED: Error handling prepared (requires mock in CI/CD)');
+      log('✅ Test 3 PASSED: Error handling prepared (requires mock in CI/CD)');
     });
   });
 
@@ -107,7 +108,7 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       const retryResult = await knowledgeBrainService.retryIngestion(doc.id);
 
       // Retry may fail if document is not in failed state, which is expected
-      console.log('✅ Test 4 PASSED: Retry mechanism ready');
+      log('✅ Test 4 PASSED: Retry mechanism ready');
     });
   });
 
@@ -128,7 +129,7 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       // Status should be persisted in DB
       expect(doc?.ingestion_progress).toBe(0);
 
-      console.log('✅ Test 5 PASSED: Status persistence validated');
+      log('✅ Test 5 PASSED: Status persistence validated');
     });
   });
 
@@ -139,7 +140,7 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       // System should be clean (no broken documents)
       expect(Array.isArray(violations)).toBe(true);
 
-      console.log('✅ Test 6 PASSED: System integrity audit complete');
+      log('✅ Test 6 PASSED: System integrity audit complete');
     });
   });
 
@@ -160,7 +161,7 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       expect(resetMetrics.total_documents_processed).toBe(0);
       expect(resetMetrics.successful_ingestions).toBe(0);
 
-      console.log('✅ Test 7 PASSED: Metrics tracking validated');
+      log('✅ Test 7 PASSED: Metrics tracking validated');
     });
   });
 
@@ -185,7 +186,7 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       // pending → processing → chunking → embedding → complete
       // Each transition is validated internally
 
-      console.log('✅ Test 8 PASSED: State machine compliance enforced');
+      log('✅ Test 8 PASSED: State machine compliance enforced');
     });
   });
 
@@ -213,7 +214,7 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       const violations = await knowledgeBrainService.verifySystemIntegrity();
       expect(violations.length).toBe(0);
 
-      console.log('✅ End-to-End PASSED: No integrity violations detected');
+      log('✅ End-to-End PASSED: No integrity violations detected');
     });
   });
 });

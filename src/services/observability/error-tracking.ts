@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Error Tracking - Centralized error handling and reporting
  * Provides error context capture for debugging and monitoring
@@ -31,7 +33,7 @@ class ErrorTracking {
    * Capture message with context
    */
   captureMessage(message: string, context?: ErrorContext): void {
-    console.warn('[ErrorTracking] Message captured:', {
+    warn('[ErrorTracking] Message captured:', {
       message,
       context: context?.context,
       ...context,

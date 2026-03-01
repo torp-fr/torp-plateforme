@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { useApp } from "@/context/AppContext";
-import torpLogo from "@/assets/torp-logo-red.png";
+import { BRANDING } from "@/config/branding";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,9 +55,9 @@ export const Header = () => {
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+          <Link to={user ? dashboardLink : "/"} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <img
-              src={torpLogo}
+              src={BRANDING.logoPrimary}
               alt="TORP"
               className="h-10 w-auto"
             />

@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '@/lib/supabase';
 import { authService } from '@/services/api/supabase/auth.service';
 import { devisService } from '@/services/api/supabase/devis.service';
+import { log, error } from '@/lib/logger';
 
 // User types - Particulier (B2C), Professionnel (B2B), Admin
 export type UserType = 'B2C' | 'B2B' | 'admin' | 'super_admin';
@@ -100,8 +102,8 @@ interface AppContextType {
   projects: Project[]; // Analyses de devis
   currentProject: Project | null;
   isAnalyzing: boolean;
-  isLoading: boolean; // État de chargement de l'authentification
   isAuthenticated: boolean; // Session exists (auth token valid)
+  isLoading: boolean; // Auth initialization in progress
   setUser: (user: User | null) => void;
   setUserType: (type: UserType) => void;
   setProjects: (projects: Project[]) => void;
@@ -120,84 +122,101 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [projects, setProjects] = useState<Project[]>([]); // Analyses de devis
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isLoading, setIsLoading] = useState(true); // Chargement initial de l'auth
   const [isAuthenticated, setIsAuthenticated] = useState(false); // Session exists (auth token valid)
+  const [isLoading, setIsLoading] = useState(true); // Auth initialization in progress
 
   // Compute isAdmin from user
   const isAdmin = user?.isAdmin === true;
 
-  // Check for existing session on mount and listen for auth changes
+  // ════════════════════════════════════════════════════════════════════════════
+  // OFFICIAL SUPABASE AUTH PATTERN - SYNCHRONOUS BOOTSTRAP
+  // ════════════════════════════════════════════════════════════════════════════
+  // 1. Get session
+  // 2. If session exists, fetch full profile
+  // 3. Set complete user object with isAdmin
+  // 4. Set isLoading(false) when done
+  // Routes check isLoading → show spinner while true
+  // ════════════════════════════════════════════════════════════════════════════
   useEffect(() => {
     let isMounted = true;
-    let subscription: any = null;
 
-    // Check initial session
-    const loadUser = async () => {
+    const initAuth = async () => {
       try {
-        const currentUser = await authService.getCurrentUser();
+        // STEP 1: Get session
+        const { data } = await supabase.auth.getSession();
+        const session = data?.session;
+
+        if (!session) {
+          // No session → no user
+          if (isMounted) {
+            setUser(null);
+            setIsAuthenticated(false);
+          }
+          return;
+        }
+
+        // STEP 2: Fetch profile synchronously before rendering protected routes
+        const userProfile = await authService.getUserProfile(session.user.id);
+
+        if (!userProfile) {
+          // Session exists but no profile → no user
+          if (isMounted) {
+            setUser(null);
+            setIsAuthenticated(false);
+          }
+          return;
+        }
+
         if (!isMounted) return;
 
-        if (currentUser) {
-          console.log('✓ Session restaurée:', currentUser.email);
-          setIsAuthenticated(true);
-          setUser(currentUser);
-          setUserType(currentUser.type);
-        } else {
-          console.log('ℹ️ Aucune session active');
+        // STEP 3: Set complete user with isAdmin calculated
+        console.log('[Auth] Role received:', userProfile.role);
+        const isAdmin = userProfile.role?.toLowerCase() === 'admin';
+        console.log('[Auth] isAdmin calculated:', isAdmin);
+
+        setUser({
+          id: session.user.id,
+          email: session.user.email || 'unknown',
+          ...userProfile,
+          isAdmin: isAdmin,
+        });
+        setUserType(userProfile.type);
+        setIsAuthenticated(true);
+      } catch (err) {
+        console.error('[Auth] Initialization error:', err);
+        if (isMounted) {
+          setUser(null);
           setIsAuthenticated(false);
         }
-      } catch (error) {
-        console.error('⚠️ Erreur lors de la restauration de session:', error);
-        setIsAuthenticated(false);
-        // Ne pas crasher, continuer sans session
       } finally {
+        // STEP 4: Always stop loading when initialization completes
         if (isMounted) {
           setIsLoading(false);
         }
       }
     };
 
-    // Setup auth state listener
-    const setupAuthListener = () => {
-      try {
-        const { data } = authService.onAuthStateChange((sessionUser) => {
-          if (!isMounted) return;
+    // Run initialization
+    initAuth();
 
-          if (sessionUser) {
-            console.log('✓ SIGNED_IN event:', sessionUser.email);
-            // Session exists - user is authenticated
-            setIsAuthenticated(true);
-            setUser(sessionUser);
-            setUserType(sessionUser.type);
-          } else {
-            console.log('ℹ️ SIGNED_OUT event');
-            // Session cleared - user is not authenticated
-            setIsAuthenticated(false);
-            setUser(null);
-            setProjects([]);
-            setCurrentProject(null);
-          }
-        });
+    // STEP 5: Listen for auth changes (login/logout) after initial load
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!isMounted) return;
 
-        subscription = data?.subscription;
-      } catch (error) {
-        console.error('⚠️ Erreur setup auth listener:', error);
-        // Ne pas crasher, continuer sans listener
+        if (!session) {
+          // User logged out
+          setUser(null);
+          setIsAuthenticated(false);
+          setProjects([]);
+          setCurrentProject(null);
+        }
       }
-    };
+    );
 
-    // Execute initialization
-    loadUser();
-    setupAuthListener();
-
-    // Cleanup subscription on unmount
     return () => {
       isMounted = false;
-      try {
-        subscription?.unsubscribe();
-      } catch (error) {
-        console.error('⚠️ Erreur unsubscribe:', error);
-      }
+      listener?.subscription?.unsubscribe();
     };
   }, []);
 
@@ -210,7 +229,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       try {
-        console.log('[AppContext] Loading analyzed devis for user:', user.id);
+        log('[AppContext] Loading analyzed devis for user:', user.id);
         const analyzedDevis = await devisService.getUserAnalyzedDevis(user.id, 50);
 
         // Transform devis to Project format for compatibility
@@ -246,7 +265,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           },
         }));
 
-        console.log(`[AppContext] Loaded ${devisProjects.length} analyzed devis`);
+        log(`[AppContext] Loaded ${devisProjects.length} analyzed devis`);
         setProjects(devisProjects);
       } catch (error) {
         console.error('[AppContext] Error loading user devis:', error);
@@ -280,7 +299,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       // Ensuite appeler le service de déconnexion
       await authService.logout();
-      console.log('✓ Déconnexion réussie');
+      log('✓ Déconnexion réussie');
     } catch (error) {
       console.error('⚠️ Erreur lors de la déconnexion:', error);
       // Même en cas d'erreur, l'état est déjà nettoyé
@@ -295,8 +314,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       projects,
       currentProject,
       isAnalyzing,
-      isLoading,
       isAuthenticated,
+      isLoading,
       setUser,
       setUserType,
       setProjects,

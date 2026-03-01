@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { Project } from '@/context/AppContext';
 import type { Database } from '@/types/supabase';
 import { runOrchestration } from '@/core/platform/engineOrchestrator';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 type DbProject = Database['public']['Tables']['projects']['Row'];
 type DbProjectInsert = Database['public']['Tables']['projects']['Insert'];
@@ -122,11 +123,11 @@ export class SupabaseProjectService {
         data: appProject,
       }).catch((err) => {
         // Silently catch orchestration errors to not affect project creation
-        console.warn('[ProjectService] Orchestration warning:', err);
+        warn('[ProjectService] Orchestration warning:', err);
       });
     } catch (orchestrationError) {
       // Silently catch synchronous errors to not affect project creation
-      console.warn('[ProjectService] Orchestration initialization warning:', orchestrationError);
+      warn('[ProjectService] Orchestration initialization warning:', orchestrationError);
     }
 
     return appProject;
@@ -176,11 +177,11 @@ export class SupabaseProjectService {
         data: appProject,
       }).catch((err) => {
         // Silently catch orchestration errors to not affect project update
-        console.warn('[ProjectService] Orchestration warning:', err);
+        warn('[ProjectService] Orchestration warning:', err);
       });
     } catch (orchestrationError) {
       // Silently catch synchronous errors to not affect project update
-      console.warn('[ProjectService] Orchestration initialization warning:', orchestrationError);
+      warn('[ProjectService] Orchestration initialization warning:', orchestrationError);
     }
 
     return appProject;

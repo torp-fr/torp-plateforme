@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Lock, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
-import torpLogo from '@/assets/torp-logo-red.png';
+import { BRANDING } from '@/config/branding';
 import { authService } from '@/services/api/supabase/auth.service';
 
 export default function ResetPassword() {
@@ -202,7 +202,7 @@ export default function ResetPassword() {
         <Card className="backdrop-blur-sm bg-white/95 shadow-strong">
           <CardHeader className="text-center">
             <div className="flex items-center justify-center gap-3 mb-4">
-              <img src={torpLogo} alt="TORP" className="h-12 w-auto" />
+              <img src={BRANDING.logoPrimary} alt="TORP" className="h-12 w-auto" />
               <div>
                 <CardTitle className="text-2xl font-bold text-primary">TORP</CardTitle>
                 <p className="text-xs text-muted-foreground">Nouveau mot de passe</p>

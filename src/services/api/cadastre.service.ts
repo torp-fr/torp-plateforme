@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Service Cadastre & Analyse des Risques
  * Utilise les APIs IGN Cadastre et Géorisques
@@ -110,7 +112,7 @@ class CadastreService {
       );
 
       if (!response.ok) {
-        console.warn('[CadastreService] Cadastre API error:', response.status);
+        warn('[CadastreService] Cadastre API error:', response.status);
         return [];
       }
 

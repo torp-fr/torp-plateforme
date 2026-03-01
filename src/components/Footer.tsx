@@ -1,4 +1,4 @@
-import torpLogo from "@/assets/torp-logo.png";
+import { BRANDING } from "@/config/branding";
 
 export const Footer = () => {
   return (
@@ -7,7 +7,7 @@ export const Footer = () => {
         <div className="grid md:grid-cols-4 gap-8">
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <img src={torpLogo} alt="TORP" className="h-8 w-8" />
+              <img src={BRANDING.logoIcon} alt="TORP" className="h-8 w-8" />
               <h3 className="text-xl font-bold">TORP</h3>
             </div>
             <p className="text-gray-300 text-sm">

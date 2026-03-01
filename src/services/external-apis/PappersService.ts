@@ -5,6 +5,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 import type {
   PappersCompanyData,
   FinancialMetrics,
@@ -24,18 +25,18 @@ class PappersService {
    */
   async getCompanyBySIRET(siret: string): Promise<PappersCompanyData | null> {
     try {
-      console.log(`🔍 Pappers lookup: ${siret}`);
+      log(`🔍 Pappers lookup: ${siret}`);
 
       // 1. Check cache in Supabase
       const cached = await this.getCachedData(siret);
       if (cached && this.isDataValid(cached)) {
-        console.log(`✅ Pappers data from cache (valid until ${cached.pappers_valid_until})`);
+        log(`✅ Pappers data from cache (valid until ${cached.pappers_valid_until})`);
         return this.transformPappersData(cached);
       }
 
       // 2. API call to Pappers
       if (!this.apiKey) {
-        console.warn('⚠️ VITE_PAPPERS_API_KEY not configured');
+        warn('⚠️ VITE_PAPPERS_API_KEY not configured');
         return null;
       }
 
@@ -55,7 +56,7 @@ class PappersService {
       // 3. Store in cache
       await this.cacheCompanyData(siret, rawData);
 
-      console.log(`✅ Pappers data fetched and cached: ${siret}`);
+      log(`✅ Pappers data fetched and cached: ${siret}`);
       return this.transformPappersData(rawData);
     } catch (error) {
       console.error(`❌ Pappers lookup error for ${siret}:`, error);
@@ -358,7 +359,7 @@ class PappersService {
       if (error) {
         console.error('❌ Error caching company data:', error);
       } else {
-        console.log(`✅ Company data cached: ${siret}`);
+        log(`✅ Company data cached: ${siret}`);
       }
     } catch (err) {
       console.error('❌ Error in caching:', err);

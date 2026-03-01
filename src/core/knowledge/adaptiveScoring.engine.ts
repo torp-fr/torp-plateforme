@@ -12,6 +12,7 @@ import {
   getNormativeRule,
 } from './knowledgeRegistry';
 import { TORP_KNOWLEDGE_CORE } from './knowledgeRegistry';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Adjustment breakdown details
@@ -67,7 +68,7 @@ function detectProjectSector(context: EngineExecutionContext): string {
     // Default to residential
     return 'residential';
   } catch (error) {
-    console.warn('[AdaptiveScoring] Failed to detect sector, defaulting to residential');
+    warn('[AdaptiveScoring] Failed to detect sector, defaulting to residential');
     return 'residential';
   }
 }
@@ -101,7 +102,7 @@ function calculateSectorMultiplier(context: EngineExecutionContext): number {
     const coefficient = getSectorCoefficient(sector);
 
     if (!coefficient) {
-      console.warn(`[AdaptiveScoring] No coefficient found for sector: ${sector}`);
+      warn(`[AdaptiveScoring] No coefficient found for sector: ${sector}`);
       return 1.0; // No adjustment
     }
 
@@ -110,11 +111,11 @@ function calculateSectorMultiplier(context: EngineExecutionContext): number {
     // Multiplier effect: 1.0 = no change, 1.2 = +20%, etc.
     const multiplier = Math.min(coefficient.complexityMultiplier, 1.5); // Cap at 1.5x
 
-    console.log(`[AdaptiveScoring] Sector multiplier for ${sector}:`, multiplier);
+    log(`[AdaptiveScoring] Sector multiplier for ${sector}:`, multiplier);
     return multiplier;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.warn(`[AdaptiveScoring] Error calculating sector multiplier: ${errorMessage}`);
+    warn(`[AdaptiveScoring] Error calculating sector multiplier: ${errorMessage}`);
     return 1.0;
   }
 }
@@ -158,11 +159,11 @@ function calculateRiskMultiplier(context: EngineExecutionContext): number {
       riskFactors.push('missing_geographic_data');
     }
 
-    console.log(`[AdaptiveScoring] Risk multiplier: ${riskMultiplier}, factors:`, riskFactors);
+    log(`[AdaptiveScoring] Risk multiplier: ${riskMultiplier}, factors:`, riskFactors);
     return Math.max(riskMultiplier, 0.5); // Don't reduce below 50%
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.warn(`[AdaptiveScoring] Error calculating risk multiplier: ${errorMessage}`);
+    warn(`[AdaptiveScoring] Error calculating risk multiplier: ${errorMessage}`);
     return 1.0;
   }
 }
@@ -199,7 +200,7 @@ function calculateNormativePenalty(context: EngineExecutionContext): number {
           // Critical requirement not met
           violations.push(rule.id);
           totalPenalty += 10; // -10 points per critical violation
-          console.log(`[AdaptiveScoring] Critical violation: ${rule.label}`);
+          log(`[AdaptiveScoring] Critical violation: ${rule.label}`);
         }
       } else if (rule.severity === 'high') {
         // High severity: smaller penalty if missing
@@ -211,16 +212,16 @@ function calculateNormativePenalty(context: EngineExecutionContext): number {
         if (!hasDocumentation) {
           violations.push(rule.id);
           totalPenalty += 5; // -5 points per high violation
-          console.log(`[AdaptiveScoring] High severity violation: ${rule.label}`);
+          log(`[AdaptiveScoring] High severity violation: ${rule.label}`);
         }
       }
     });
 
-    console.log(`[AdaptiveScoring] Normative penalty: ${totalPenalty}, violations:`, violations);
+    log(`[AdaptiveScoring] Normative penalty: ${totalPenalty}, violations:`, violations);
     return totalPenalty;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.warn(`[AdaptiveScoring] Error calculating normative penalty: ${errorMessage}`);
+    warn(`[AdaptiveScoring] Error calculating normative penalty: ${errorMessage}`);
     return 0;
   }
 }
@@ -261,7 +262,7 @@ function calculatePricingPenalty(context: EngineExecutionContext): number {
             // Price is severely below minimum
             violations.push(`${lotType}_below_minimum`);
             totalPenalty += 10; // -10 points for severe underpricing
-            console.log(
+            log(
               `[AdaptiveScoring] Severe underpricing for ${lotType}: €${avgPriceForLot} vs €${reference.minPricePerUnit}-${reference.maxPricePerUnit}`
             );
           } else if (avgPriceForLot < reference.minPricePerUnit) {
@@ -272,22 +273,22 @@ function calculatePricingPenalty(context: EngineExecutionContext): number {
             // Price is severely above maximum
             violations.push(`${lotType}_above_maximum`);
             totalPenalty += 7; // -7 points for severe overpricing
-            console.log(
+            log(
               `[AdaptiveScoring] Severe overpricing for ${lotType}: €${avgPriceForLot} vs €${reference.minPricePerUnit}-${reference.maxPricePerUnit}`
             );
           }
         }
       } catch (error) {
         // Continue with next lot type
-        console.warn(`[AdaptiveScoring] Error checking pricing for ${lotType}`);
+        warn(`[AdaptiveScoring] Error checking pricing for ${lotType}`);
       }
     });
 
-    console.log(`[AdaptiveScoring] Pricing penalty: ${totalPenalty}, violations:`, violations);
+    log(`[AdaptiveScoring] Pricing penalty: ${totalPenalty}, violations:`, violations);
     return totalPenalty;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.warn(`[AdaptiveScoring] Error calculating pricing penalty: ${errorMessage}`);
+    warn(`[AdaptiveScoring] Error calculating pricing penalty: ${errorMessage}`);
     return 0;
   }
 }
@@ -299,11 +300,11 @@ export async function runAdaptiveScoringEngine(
   executionContext: EngineExecutionContext
 ): Promise<AdaptiveScoringResult> {
   try {
-    console.log('[AdaptiveScoring] Starting adaptive scoring');
+    log('[AdaptiveScoring] Starting adaptive scoring');
 
     // Step 1: Get base score
     const baseScore = getBaseScore(executionContext);
-    console.log(`[AdaptiveScoring] Base score: ${baseScore}`);
+    log(`[AdaptiveScoring] Base score: ${baseScore}`);
 
     // Step 2: Calculate adjustments
     const sectorMultiplier = calculateSectorMultiplier(executionContext);
@@ -339,7 +340,7 @@ export async function runAdaptiveScoringEngine(
     // Step 6: Enrich execution context
     (executionContext as any).adaptiveScore = result;
 
-    console.log(`[AdaptiveScoring] Adaptive scoring complete`, {
+    log(`[AdaptiveScoring] Adaptive scoring complete`, {
       baseScore,
       adjustedScore,
       change: adjustedScore - baseScore,

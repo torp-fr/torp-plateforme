@@ -10,6 +10,7 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 import { analyticsService } from '@/services/api/analytics.service';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface HealthStatus {
   database: string;
@@ -27,7 +28,7 @@ export function SystemHealthPage() {
   useEffect(() => {
     const fetchHealth = async () => {
       try {
-        setIsLoading(true);
+        if (!health) setIsLoading(true);
         const healthData = await analyticsService.getPlatformHealth();
         setHealth(healthData);
         setError(null);
@@ -50,15 +51,7 @@ export function SystemHealthPage() {
     return () => clearInterval(interval);
   }, [toast]);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (error || !health) {
+  if (error && !health) {
     return (
       <EmptyState
         title="Impossible de charger les métriques"
@@ -77,12 +70,63 @@ export function SystemHealthPage() {
     return status === 'operational' ? '✓ Opérationnel' : '✗ Erreur';
   };
 
+  if (!health && isLoading) {
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">System Health</h1>
+          <p className="text-muted-foreground">Monitor system status and performance metrics</p>
+        </div>
+
+        {/* Skeleton Loader */}
+        <Card>
+          <CardHeader className="space-y-2">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-40" />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-6 w-24" />
+            </div>
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-6 w-24" />
+            </div>
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-6 w-24" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!health) {
+    return (
+      <EmptyState
+        title="Aucune donnée disponible"
+        description="Les données de santé système ne sont pas disponibles"
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">System Health</h1>
-        <p className="text-muted-foreground">Monitor system status and performance metrics</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">System Health</h1>
+          <p className="text-muted-foreground">Monitor system status and performance metrics</p>
+        </div>
+        {isLoading && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Actualisation...</span>
+          </div>
+        )}
       </div>
 
       {/* Status Overview */}

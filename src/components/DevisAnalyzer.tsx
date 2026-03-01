@@ -413,7 +413,7 @@ const DevisAnalyzer: React.FC<DevisAnalyzerProps> = ({ onAnalysisComplete }) => 
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {analysisResult.scoreEntreprise.benefices.map((benefice, index) => (
-                    <div key={index} className="flex items-center gap-2">
+                    <div key={`benefit-${index}`} className="flex items-center gap-2">
                       <CheckCircle className="h-4 w-4 text-success flex-shrink-0" />
                       <span className="text-sm">{benefice}</span>
                     </div>
@@ -439,13 +439,13 @@ const DevisAnalyzer: React.FC<DevisAnalyzerProps> = ({ onAnalysisComplete }) => 
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {analysisResult.scoreCompletude.elementsManquants.map((element, index) => (
-                    <div key={index} className="flex items-center gap-2">
+                    <div key={`missing-${index}`} className="flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4 text-warning flex-shrink-0" />
                       <span className="text-sm">{element} non chiffré</span>
                     </div>
                   ))}
                   {analysisResult.scoreCompletude.risquesTechniques.map((risque, index) => (
-                    <div key={index} className="flex items-center gap-2">
+                    <div key={`risk-${index}`} className="flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4 text-warning flex-shrink-0" />
                       <span className="text-sm">{risque}</span>
                     </div>
@@ -560,7 +560,7 @@ const DevisAnalyzer: React.FC<DevisAnalyzerProps> = ({ onAnalysisComplete }) => 
           <TabsContent value="actions" className="space-y-6">
             <div className="space-y-4">
               {analysisResult.recommandations.map((rec, index) => (
-                <Card key={index}>
+                <Card key={`rec-${index}`}>
                   <CardContent className="p-6">
                     <div className="flex items-start gap-4">
                       <div className={`p-2 rounded-lg ${

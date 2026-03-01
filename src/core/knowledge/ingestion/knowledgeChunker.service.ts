@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Knowledge Chunker Service v1.0
  * Intelligently splits documents into semantic chunks for RAG
@@ -36,7 +38,7 @@ export function chunkDocument(
   overlapTokens: number = 50
 ): KnowledgeChunk[] {
   try {
-    console.log('[KnowledgeChunker] Chunking document, max tokens:', maxTokensPerChunk);
+    log('[KnowledgeChunker] Chunking document, max tokens:', maxTokensPerChunk);
 
     const chunks: KnowledgeChunk[] = [];
 
@@ -46,7 +48,7 @@ export function chunkDocument(
       .map((p) => p.trim())
       .filter((p) => p.length > 0);
 
-    console.log('[KnowledgeChunker] Found', paragraphs.length, 'paragraphs');
+    log('[KnowledgeChunker] Found', paragraphs.length, 'paragraphs');
 
     let currentChunk = '';
     let currentTokenCount = 0;
@@ -92,14 +94,14 @@ export function chunkDocument(
       });
     }
 
-    console.log('[KnowledgeChunker] Created', chunks.length, 'chunks');
+    log('[KnowledgeChunker] Created', chunks.length, 'chunks');
 
     // Log chunk statistics
     const avgTokens = chunks.length > 0
       ? Math.round(chunks.reduce((sum, c) => sum + c.tokenCount, 0) / chunks.length)
       : 0;
 
-    console.log('[KnowledgeChunker] Avg tokens per chunk:', avgTokens);
+    log('[KnowledgeChunker] Avg tokens per chunk:', avgTokens);
 
     return chunks;
   } catch (error) {
@@ -176,7 +178,7 @@ export function extractKeyTerms(text: string, limit: number = 10): string[] {
       .slice(0, limit)
       .map((entry) => entry[0]);
   } catch (error) {
-    console.warn('[KnowledgeChunker] Failed to extract key terms:', error);
+    warn('[KnowledgeChunker] Failed to extract key terms:', error);
     return [];
   }
 }

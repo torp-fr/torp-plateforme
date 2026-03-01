@@ -11,6 +11,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 import {
   DocumentIngestionState,
   IngestionFailureReason,
@@ -86,7 +87,7 @@ export class IngestionStateMachineService {
     stepName: string
   ): Promise<boolean> {
     try {
-      console.log(`[STATE MACHINE] 🔄 Transitioning document ${documentId} to ${toState}`);
+      log(`[STATE MACHINE] 🔄 Transitioning document ${documentId} to ${toState}`);
 
       // Get current state first
       const { data: doc, error: fetchError } = await supabase
@@ -102,6 +103,12 @@ export class IngestionStateMachineService {
 
       const currentState = doc.ingestion_status as DocumentIngestionState;
 
+      // PATCH 1-2: FAILED state lock - prevent any transitions FROM FAILED
+      if (currentState === DocumentIngestionState.FAILED) {
+        warn(`[STATE LOCK] ⚠️ Ignoring transition from FAILED state (immutable)`);
+        return false;
+      }
+
       // Validate transition
       if (!this.isValidTransition(currentState, toState)) {
         console.error(
@@ -113,7 +120,6 @@ export class IngestionStateMachineService {
       // Build update object with existing Supabase columns
       const updateData: any = {
         ingestion_status: toState,
-        last_ingestion_step: stepName,
         ingestion_progress: this.getProgressPercent(toState),
         updated_at: new Date().toISOString(),
       };
@@ -121,27 +127,51 @@ export class IngestionStateMachineService {
       // Set ingestion_started_at when transitioning to EXTRACTING
       if (toState === DocumentIngestionState.EXTRACTING) {
         updateData.ingestion_started_at = new Date().toISOString();
-        console.log(`[STATE MACHINE] ⏱️ Ingestion started at ${updateData.ingestion_started_at}`);
+        log(`[STATE MACHINE] ⏱️ Ingestion started at ${updateData.ingestion_started_at}`);
       }
 
       // Set ingestion_completed_at when transitioning to COMPLETED
       if (toState === DocumentIngestionState.COMPLETED) {
         updateData.ingestion_completed_at = new Date().toISOString();
-        console.log(`[STATE MACHINE] ⏱️ Ingestion completed at ${updateData.ingestion_completed_at}`);
+        log(`[STATE MACHINE] ⏱️ Ingestion completed at ${updateData.ingestion_completed_at}`);
+        // PHASE 40: No window state cleanup needed (DB-driven architecture)
       }
 
-      // Update state in database
+      // Update state in database with SAFE payload validation
+      // PHASE STABILIZATION: Only send valid columns
+      const safeUpdateData = {
+        ingestion_status: updateData.ingestion_status,
+        ingestion_progress: updateData.ingestion_progress,
+        updated_at: updateData.updated_at,
+        ...(updateData.ingestion_started_at && { ingestion_started_at: updateData.ingestion_started_at }),
+        ...(updateData.ingestion_completed_at && { ingestion_completed_at: updateData.ingestion_completed_at }),
+      };
+
+      log('[STATE MACHINE] 🔄 Attempting state transition:', {
+        documentId,
+        fromState: currentState,
+        toState: toState,
+        payload: safeUpdateData,
+      });
+
       const { error: updateError } = await supabase
         .from('knowledge_documents')
-        .update(updateData)
+        .update(safeUpdateData)
         .eq('id', documentId);
 
       if (updateError) {
         console.error(`[STATE MACHINE] 🔴 State update failed:`, updateError);
+        console.error('[STATE MACHINE PATCH ERROR]', {
+          message: updateError.message,
+          code: (updateError as any).code,
+          documentId,
+          payload: safeUpdateData,
+          fullError: updateError,
+        });
         return false;
       }
 
-      console.log(`[STATE MACHINE] ✅ Transitioned: ${currentState} → ${toState}`);
+      log(`[STATE MACHINE] ✅ Transitioned: ${currentState} → ${toState}`);
       return true;
     } catch (error) {
       console.error(`[STATE MACHINE] 💥 Transition error:`, error);
@@ -150,7 +180,8 @@ export class IngestionStateMachineService {
   }
 
   /**
-   * Mark document as FAILED with reason and error details
+   * PHASE 8: Mark document as FAILED with reason and error details
+   * ALSO triggers global embedding pause if critical
    *
    * Stores error information in existing Supabase column:
    * - last_ingestion_error: JSON string with reason, message, and stack
@@ -167,11 +198,16 @@ export class IngestionStateMachineService {
     errorStack?: string
   ): Promise<boolean> {
     try {
-      console.log(
+      log(
         `[STATE MACHINE] 🔴 Marking document ${documentId} as FAILED`
       );
-      console.log(`[STATE MACHINE] Reason: ${reason}`);
-      console.log(`[STATE MACHINE] Error: ${errorMessage}`);
+      log(`[STATE MACHINE] Reason: ${reason}`);
+      log(`[STATE MACHINE] Error: ${errorMessage}`);
+
+      // PHASE 40: All state is now in DB, no global state needed
+      // Errors are tracked in last_ingestion_error, status is FAILED
+      // Retry attempts are bounded by ingestion_attempts column (DB)
+      // No need for window globals or event dispatches
 
       // Build error details as JSON string for storage in last_ingestion_error
       const errorDetails = {
@@ -197,7 +233,7 @@ export class IngestionStateMachineService {
         return false;
       }
 
-      console.log(`[STATE MACHINE] ✅ Document marked as FAILED`);
+      log(`[STATE MACHINE] ✅ Document marked as FAILED`);
       return true;
     } catch (error) {
       console.error(`[STATE MACHINE] 💥 Error marking as failed:`, error);

@@ -5,6 +5,7 @@
 
 import { supabase } from '@/lib/supabase';
 import type { KBSearchResult, KBChunk } from './types';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export class RAGService {
   private readonly DEFAULT_LIMIT = 5;
@@ -23,7 +24,7 @@ export class RAGService {
     limit: number = this.DEFAULT_LIMIT
   ): Promise<KBSearchResult> {
     try {
-      console.log(`🔍 Searching for: "${query}"`);
+      log(`🔍 Searching for: "${query}"`);
 
       // 1. Vectoriser la query
       const queryEmbedding = await this.getQueryEmbedding(query);
@@ -36,7 +37,7 @@ export class RAGService {
         results = this.applyFilters(results, filters);
       }
 
-      console.log(`✅ Found ${results.chunks.length} relevant chunks`);
+      log(`✅ Found ${results.chunks.length} relevant chunks`);
 
       return {
         chunks: results.chunks,
@@ -58,7 +59,7 @@ export class RAGService {
    */
   async searchByWorkType(workType: string, limit = 10): Promise<KBChunk[]> {
     try {
-      console.log(`🔧 Searching documents for work type: ${workType}`);
+      log(`🔧 Searching documents for work type: ${workType}`);
 
       // Chercher dans les métadatas et keywords
       const { data, error } = await supabase
@@ -70,7 +71,7 @@ export class RAGService {
 
       if (error) throw error;
 
-      console.log(`✅ Found ${(data || []).length} documents for ${workType}`);
+      log(`✅ Found ${(data || []).length} documents for ${workType}`);
       return data || [];
     } catch (error) {
       console.error('❌ Work type search error:', error);
@@ -87,7 +88,7 @@ export class RAGService {
     limit = 10
   ): Promise<KBChunk[]> {
     try {
-      console.log(`📍 Searching documents for region: ${region}`);
+      log(`📍 Searching documents for region: ${region}`);
 
       let query = supabase
         .from('knowledge_base_chunks')
@@ -104,7 +105,7 @@ export class RAGService {
 
       if (error) throw error;
 
-      console.log(`✅ Found ${(data || []).length} documents for ${region}`);
+      log(`✅ Found ${(data || []).length} documents for ${region}`);
       return data || [];
     } catch (error) {
       console.error('❌ Region search error:', error);
@@ -238,7 +239,7 @@ ${chunk.metadata?.workTypes ? `- Travaux: ${chunk.metadata.workTypes.join(', ')}
     }
   ): Promise<KBChunk[]> {
     try {
-      console.log(`🔎 Complex search: ${query}`);
+      log(`🔎 Complex search: ${query}`);
 
       // 1. Recherche vectorielle
       const vectorResults = await this.retrieveRelevant(query, {

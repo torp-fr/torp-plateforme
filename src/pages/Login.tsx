@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,30 +8,54 @@ import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import torpLogo from '@/assets/torp-logo-red.png';
+import { BRANDING } from '@/config/branding';
 import { authService } from '@/services/api';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const { setUser } = useApp();
+  const { setUser, user, isLoading: isAuthLoading } = useApp();
   const { toast } = useToast();
+
+  // Redirect if session already exists (e.g., after page refresh)
+  useEffect(() => {
+    if (!isAuthLoading && user) {
+      log('[Login] Session exists, redirecting based on role:', user.role, 'isAdmin:', user.isAdmin);
+
+      // Use same redirect logic as handleLogin
+      if (user.isAdmin === true) {
+        navigate('/analytics');
+      } else if (user.type === 'B2B') {
+        navigate('/projets');
+      } else {
+        navigate('/dashboard');
+      }
+    }
+  }, [user, isAuthLoading, navigate]);
+
+  // Admin redirect trigger on user change
+  useEffect(() => {
+    if (user?.isAdmin === true) {
+      navigate('/analytics', { replace: true });
+    }
+  }, [user]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      console.log('[Login] Connexion avec:', email);
+      log('[Login] Connexion avec:', email);
 
       const response = await authService.login({
         email,
         password,
       });
 
-      console.log('[Login] Connexion réussie:', response.user.email, 'Role:', response.user.role, 'isAdmin:', response.user.isAdmin, 'type:', response.user.type, '(typeof isAdmin:', typeof response.user.isAdmin, ')');
+      log('[Login] Connexion réussie:', response.user.email, 'Role:', response.user.role, 'isAdmin:', response.user.isAdmin, 'type:', response.user.type, '(typeof isAdmin:', typeof response.user.isAdmin, ')');
 
       setUser(response.user);
 
@@ -44,13 +68,13 @@ export default function Login() {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       if (response.user.isAdmin === true) {
-        console.log('[Login] Admin détecté, redirection vers /analytics');
+        log('[Login] Admin détecté, redirection vers /analytics');
         navigate('/analytics');
       } else if (response.user.type === 'B2B') {
-        console.log('[Login] Utilisateur B2B, redirection vers /projets');
+        log('[Login] Utilisateur B2B, redirection vers /projets');
         navigate('/projets');
       } else {
-        console.log('[Login] Utilisateur B2C, redirection vers /dashboard');
+        log('[Login] Utilisateur B2C, redirection vers /dashboard');
         navigate('/dashboard');
       }
     } catch (error) {
@@ -78,7 +102,7 @@ export default function Login() {
         <Card className="backdrop-blur-sm bg-white/95 shadow-strong">
           <CardHeader className="text-center">
             <div className="flex items-center justify-center gap-3 mb-4">
-              <img src={torpLogo} alt="TORP" className="h-12 w-auto" />
+              <img src={BRANDING.logoPrimary} alt="TORP" className="h-12 w-auto" />
               <div>
                 <CardTitle className="text-2xl font-bold text-primary">TORP</CardTitle>
                 <CardDescription>Connexion à votre espace</CardDescription>

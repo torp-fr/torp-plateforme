@@ -7,6 +7,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 // =============================================================================
 // TYPES
@@ -65,7 +66,7 @@ export function useChantiers({
   const chantiersQuery = useQuery({
     queryKey: ['chantiers', userType, statusFilter],
     queryFn: async (): Promise<ChantierCard[]> => {
-      console.warn('[useChantiers] This hook is deprecated. Phase 0 tables have been removed.');
+      warn('[useChantiers] This hook is deprecated. Phase 0 tables have been removed.');
       return [];
     },
     enabled,
@@ -90,7 +91,7 @@ export function useChantiers({
   // NOTE: This mutation references phase0_projects which was removed in migration 034
   const updateStatusMutation = useMutation({
     mutationFn: async ({ chantierId, newStatus }: { chantierId: string; newStatus: ChantierStatus }) => {
-      console.warn('[useChantiers] updateStatus mutation is disabled - phase0_projects table removed');
+      warn('[useChantiers] updateStatus mutation is disabled - phase0_projects table removed');
       throw new Error('Cette fonctionnalité n\'est plus disponible après la refonte de l\'architecture.');
     },
     onError: (error: Error) => {

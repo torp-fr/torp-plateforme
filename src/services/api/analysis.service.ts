@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { jobService } from '@/core/jobs/job.service';
 import { devisService } from '@/services/api/supabase/devis.service';
 import { structuredLogger } from '@/services/observability/structured-logger';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface AnalysisRequest {
   userId: string;
@@ -43,8 +44,8 @@ export async function requestAnalysis(request: AnalysisRequest): Promise<string>
   const startTime = Date.now();
 
   try {
-    console.log('[STEP 2] requestAnalysis() CALLED');
-    console.log('[STEP 2] Request details:', {
+    log('[STEP 2] requestAnalysis() CALLED');
+    log('[STEP 2] Request details:', {
       userId: request.userId,
       projectName: request.projectName,
       fileSize: request.file.size,
@@ -59,7 +60,7 @@ export async function requestAnalysis(request: AnalysisRequest): Promise<string>
     });
 
     // Step 1: Upload devis file
-    console.log('[STEP 2] Step 1: Uploading devis file');
+    log('[STEP 2] Step 1: Uploading devis file');
     structuredLogger.info({
       service: 'AnalysisService',
       message: 'Uploading devis file',
@@ -85,7 +86,7 @@ export async function requestAnalysis(request: AnalysisRequest): Promise<string>
     );
     const uploadDuration = performance.now() - uploadStart;
 
-    console.log('[STEP 2] Devis uploaded successfully:', {
+    log('[STEP 2] Devis uploaded successfully:', {
       devisId: devisResult.id,
       duration: uploadDuration.toFixed(0),
     });
@@ -96,7 +97,7 @@ export async function requestAnalysis(request: AnalysisRequest): Promise<string>
     });
 
     // Step 2: Create analysis job
-    console.log('[STEP 2] Step 2: Creating analysis job');
+    log('[STEP 2] Step 2: Creating analysis job');
     structuredLogger.info({
       service: 'AnalysisService',
       message: 'Creating analysis job',
@@ -111,14 +112,14 @@ export async function requestAnalysis(request: AnalysisRequest): Promise<string>
     });
     const jobDuration = performance.now() - jobStart;
 
-    console.log('[STEP 2] Analysis job created:', {
+    log('[STEP 2] Analysis job created:', {
       jobId: job.id,
       duration: jobDuration.toFixed(0),
     });
 
     const totalDuration = Date.now() - startTime;
-    console.log('[STEP 2] requestAnalysis() COMPLETED successfully');
-    console.log('[STEP 2] Total duration:', totalDuration, 'ms');
+    log('[STEP 2] requestAnalysis() COMPLETED successfully');
+    log('[STEP 2] Total duration:', totalDuration, 'ms');
 
     structuredLogger.info({
       service: 'AnalysisService',

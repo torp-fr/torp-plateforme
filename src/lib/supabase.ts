@@ -29,6 +29,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 import { env } from '@/config/env';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 // Get Supabase credentials from environment
 const supabaseUrl = env.app.env === 'production'
@@ -37,39 +38,56 @@ const supabaseUrl = env.app.env === 'production'
 
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-console.log('[Supabase Config] URL:', supabaseUrl);
-console.log('[Supabase Config] Key exists:', !!supabaseAnonKey);
-console.log('[Supabase Config] Key length:', supabaseAnonKey ? supabaseAnonKey.length : 0);
-console.log('[Supabase Config] env.app.env:', env.app.env);
-console.log('[Supabase Config] env.api.useMock:', env.api.useMock);
+log('[Supabase Config] URL:', supabaseUrl);
+log('[Supabase Config] Key exists:', !!supabaseAnonKey);
+log('[Supabase Config] Key length:', supabaseAnonKey ? supabaseAnonKey.length : 0);
+log('[Supabase Config] env.app.env:', env.app.env);
+log('[Supabase Config] env.api.useMock:', env.api.useMock);
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn(
+  warn(
     '⚠️  Supabase credentials not found. Using mock services.\n' +
     'To use real Supabase, set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env'
   );
+}
+
+// DEBUG: Detect duplicate Supabase client instantiation
+if (!supabaseUrl) {
+  console.error('🔥 CRITICAL: supabaseUrl is EMPTY - This indicates a duplicate Supabase client initialization outside /src/lib/supabase.ts');
 }
 
 /**
  * Supabase client instance
  * Typed with Database schema for full TypeScript support
  */
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-    storage: window.localStorage,
-  },
-  global: {
-    headers: {
-      'x-application-name': 'torp-web-app',
-    },
-  },
-});
+let _supabase: ReturnType<typeof createClient<Database>> | null = null;
+
+export function getSupabase() {
+  if (!_supabase) {
+    _supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+        storage: window.localStorage,
+      },
+      global: {
+        headers: {
+          'x-application-name': 'torp-web-app',
+        },
+      },
+    });
+
+    log('🔥 SUPABASE INITIALIZED');
+  }
+
+  return _supabase;
+}
+
+export const supabase = getSupabase();
 
 // DEBUG: Verify supabase client URL for Edge Function invoke debugging
-console.log('[SUPABASE CLIENT INIT]', {
+log('[SUPABASE CLIENT INIT]', {
   supabaseUrl,
   hasAnonKey: !!supabaseAnonKey,
   clientUrl: supabase.supabaseUrl,

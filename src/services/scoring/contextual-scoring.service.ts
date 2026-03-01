@@ -8,6 +8,7 @@ import { projectContextService } from '@/services/project';
 import { claudeService } from '@/services/ai';
 import type { ProjectContext } from '@/types/ProjectContext';
 import type { KBChunk } from '@/services/knowledge-base/types';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface ExtractedQuote {
   id?: string;
@@ -80,7 +81,7 @@ export class ContextualScoringService {
     projectContextId: string
   ): Promise<ContextualScoreResult> {
     try {
-      console.log(`🎯 Starting contextual scoring for quote: ${quote.id}`);
+      log(`🎯 Starting contextual scoring for quote: ${quote.id}`);
 
       // 1. Récupérer le contexte projet
       const projectContext = await projectContextService.getProjectContext(projectContextId);
@@ -127,7 +128,7 @@ export class ContextualScoringService {
         },
       };
 
-      console.log(`✅ Scoring complete: ${result.grade} (${result.pourcentage.toFixed(1)}%)`);
+      log(`✅ Scoring complete: ${result.grade} (${result.pourcentage.toFixed(1)}%)`);
       return result;
     } catch (error) {
       console.error('❌ Contextual scoring error:', error);
@@ -145,7 +146,7 @@ export class ContextualScoringService {
     totalChunksUsed: number;
   }> {
     try {
-      console.log(`📚 Retrieving KB context for project...`);
+      log(`📚 Retrieving KB context for project...`);
 
       const workTypeDocs: Record<string, KBChunk[]> = {};
       const workTypes = projectContext.rooms.flatMap(r => r.works.map(w => w.type));
@@ -172,7 +173,7 @@ export class ContextualScoringService {
         + regionDocs.length
         + projectTypeDocs.length;
 
-      console.log(`✅ Retrieved ${totalChunksUsed} KB chunks`);
+      log(`✅ Retrieved ${totalChunksUsed} KB chunks`);
 
       return {
         workTypeDocs,

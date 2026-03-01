@@ -5,6 +5,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 interface SystemHealthStatus {
   total_documents: number;
@@ -115,7 +116,7 @@ export class KnowledgeHealthService {
       }
 
       const executionTime = Date.now() - startTime;
-      console.log(
+      log(
         `[HEALTH] System health check completed in ${executionTime}ms`
       );
 
@@ -162,7 +163,7 @@ export class KnowledgeHealthService {
       const diagnostic = data[0] as VectorDimensionDiagnostic;
 
       // Log vector health
-      console.log(
+      log(
         `[VECTOR] Dimension check: avg=${diagnostic.avg_dimension}, ` +
         `min=${diagnostic.min_dimension}, max=${diagnostic.max_dimension}, ` +
         `uniform=${diagnostic.dimension_uniform}, ` +
@@ -170,7 +171,7 @@ export class KnowledgeHealthService {
       );
 
       if (!diagnostic.dimension_uniform) {
-        console.warn(
+        warn(
           `[VECTOR] ⚠️ Non-uniform vector dimensions detected! ` +
           `Invalid chunks: ${diagnostic.invalid_chunks}`
         );
@@ -209,7 +210,7 @@ export class KnowledgeHealthService {
       const stalledCount = (data || []).length;
 
       if (stalledCount > 0) {
-        console.warn(
+        warn(
           `[STALL] ⚠️ Found ${stalledCount} stalled documents, ` +
           `query time=${executionTime}ms`
         );
@@ -225,7 +226,7 @@ export class KnowledgeHealthService {
           );
         }
       } else {
-        console.log(`[STALL] ✅ No stalled documents detected, time=${executionTime}ms`);
+        log(`[STALL] ✅ No stalled documents detected, time=${executionTime}ms`);
       }
 
       return (data as StalledDocument[]) || [];
@@ -258,12 +259,12 @@ export class KnowledgeHealthService {
       const gapCount = (data || []).length;
 
       if (gapCount > 0) {
-        console.warn(
+        warn(
           `[EMBEDDINGS] ⚠️ Found ${gapCount} documents with embedding gaps, ` +
           `time=${executionTime}ms`
         );
       } else {
-        console.log(
+        log(
           `[EMBEDDINGS] ✅ No embedding gaps detected, time=${executionTime}ms`
         );
       }
@@ -300,7 +301,7 @@ export class KnowledgeHealthService {
       const executionTime = Date.now() - startTime;
 
       if (data && data.length > 0) {
-        console.log(
+        log(
           `[PERF] RPC Performance (${timeWindowHours}h window):` +
           ` ${data.map((d: RpcPerformanceStat) =>
               `${d.rpc_name}: avg=${d.avg_execution_time_ms}ms, ` +
@@ -343,7 +344,7 @@ export class KnowledgeHealthService {
 
       if (data && data.length > 0) {
         const stats = data[0] as EmbeddingPerformanceStat;
-        console.log(
+        log(
           `[EMBED_PERF] Embedding Performance (${timeWindowHours}h window): ` +
           `total=${stats.total_embeddings_generated}, ` +
           `avg=${stats.avg_time_ms}ms, ` +
@@ -389,7 +390,7 @@ export class KnowledgeHealthService {
       const status = data[0] as SystemStatusView;
 
       // Log summary
-      console.log(
+      log(
         `[STATUS_VIEW] System Status Summary: ` +
         `total=${status.total_documents}, ` +
         `complete=${status.complete_documents} (${status.completion_percentage}%), ` +
@@ -429,7 +430,7 @@ export class KnowledgeHealthService {
       );
 
       if (dbError) {
-        console.warn(
+        warn(
           `[METRICS] Failed to log RPC metric: ${dbError.message}`
         );
         return null;
@@ -437,7 +438,7 @@ export class KnowledgeHealthService {
 
       return (data as string) || null;
     } catch (error) {
-      console.warn(`[METRICS] Failed to log RPC metric: ${error}`);
+      warn(`[METRICS] Failed to log RPC metric: ${error}`);
       return null;
     }
   }
@@ -466,7 +467,7 @@ export class KnowledgeHealthService {
       );
 
       if (error) {
-        console.warn(
+        warn(
           `[METRICS] Failed to log embedding metric: ${error.message}`
         );
         return null;
@@ -474,7 +475,7 @@ export class KnowledgeHealthService {
 
       return (data as string) || null;
     } catch (error) {
-      console.warn(`[METRICS] Failed to log embedding metric: ${error}`);
+      warn(`[METRICS] Failed to log embedding metric: ${error}`);
       return null;
     }
   }
@@ -504,7 +505,7 @@ export class KnowledgeHealthService {
       }
 
       if (health.documents_missing_embeddings > 0) {
-        console.warn(
+        warn(
           `[GUARD] ⚠️ WARNING: ${health.documents_missing_embeddings} complete ` +
           `documents with missing embeddings`
         );
@@ -512,14 +513,14 @@ export class KnowledgeHealthService {
       }
 
       if (health.ingestion_stalled_documents > 0) {
-        console.warn(
+        warn(
           `[GUARD] ⚠️ WARNING: ${health.ingestion_stalled_documents} stalled documents`
         );
         // Not blocking - just warning
       }
 
       if (!health.system_healthy) {
-        console.warn(
+        warn(
           `[GUARD] ⚠️ System not fully healthy, but retrieval permitted`
         );
       }
@@ -554,7 +555,7 @@ export class KnowledgeHealthService {
     overallStatus: 'HEALTHY' | 'DEGRADED' | 'CRITICAL';
   }> {
     try {
-      console.log('[DIAGNOSTICS] Starting full system diagnostics...');
+      log('[DIAGNOSTICS] Starting full system diagnostics...');
       const startTime = Date.now();
 
       const [
@@ -589,7 +590,7 @@ export class KnowledgeHealthService {
 
       const executionTime = Date.now() - startTime;
 
-      console.log(
+      log(
         `[DIAGNOSTICS] Full diagnostics completed: ` +
         `status=${overallStatus}, time=${executionTime}ms`
       );

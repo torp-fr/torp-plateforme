@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface CompletionParams {
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
@@ -42,11 +43,11 @@ class SecureAIService {
     const session = await this.waitForSession();
 
     // EDGE DEBUG — BEFORE INVOKE
-    const projectUrl = session?.user?.id ? 'authenticated' : 'guest';
+    const projectUrl = supabase.supabaseUrl;
     const hasSession = !!session?.access_token;
     const payloadSize = JSON.stringify({ text: truncatedText, model }).length;
 
-    console.log('[EDGE DEBUG] invoking generate-embedding', {
+    log('[EDGE DEBUG] invoking generate-embedding', {
       projectUrl,
       hasSession,
       payloadSize,
@@ -57,9 +58,10 @@ class SecureAIService {
     });
 
     // CRITICAL: Verify supabase client URL (fixes edge invoke origin mismatch)
-    console.log('[EDGE DEBUG URL]', supabase.supabaseUrl);
-    console.log('[EDGE INVOKE FINAL]', supabase.supabaseUrl);
+    log('[EDGE CALL] projectUrl:', projectUrl);
+    log('[EDGE INVOKE FINAL]', supabase.supabaseUrl);
 
+    log('EDGE INVOKING VIA SDK');
     const invokeStart = Date.now();
     const { data, error } = await supabase.functions.invoke(
       'generate-embedding',
@@ -76,7 +78,7 @@ class SecureAIService {
     const invokeDuration = Date.now() - invokeStart;
 
     // EDGE DEBUG — AFTER INVOKE
-    console.log('[EDGE DEBUG] response received', {
+    log('[EDGE DEBUG] response received', {
       error: error ? { message: error.message, context: error.context } : null,
       hasData: !!data,
       dataKeys: data ? Object.keys(data) : [],
@@ -86,7 +88,7 @@ class SecureAIService {
     });
 
     if (error) {
-      console.error('[SECURE AI] EDGE ERROR', {
+      console.error('[EDGE CALL FAILED]', {
         message: error.message,
         context: error.context,
         statusCode: error.status || 'unknown',
@@ -103,7 +105,7 @@ class SecureAIService {
       throw new Error('INVALID_EMBEDDING_RESPONSE');
     }
 
-    console.log('[EDGE DEBUG] embedding generated successfully', {
+    log('[EDGE DEBUG] embedding generated successfully', {
       embeddingDimension: data.embedding.length,
       totalDuration: invokeDuration,
       source: 'secure-ai.service',
@@ -123,7 +125,7 @@ class SecureAIService {
     const hasSession = !!session?.access_token;
     const payloadSize = JSON.stringify(params).length;
 
-    console.log('[EDGE DEBUG] invoking llm-completion', {
+    log('[EDGE DEBUG] invoking llm-completion', {
       hasSession,
       payloadSize,
       model: params.model,
@@ -132,8 +134,8 @@ class SecureAIService {
     });
 
     // CRITICAL: Verify supabase client URL (fixes edge invoke origin mismatch)
-    console.log('[EDGE DEBUG URL]', supabase.supabaseUrl);
-    console.log('[EDGE INVOKE FINAL]', supabase.supabaseUrl);
+    log('[EDGE DEBUG URL]', supabase.supabaseUrl);
+    log('[EDGE INVOKE FINAL]', supabase.supabaseUrl);
 
     const invokeStart = Date.now();
     const { data, error } = await supabase.functions.invoke(
@@ -148,7 +150,7 @@ class SecureAIService {
     const invokeDuration = Date.now() - invokeStart;
 
     // EDGE DEBUG — AFTER INVOKE
-    console.log('[EDGE DEBUG] llm-completion response received', {
+    log('[EDGE DEBUG] llm-completion response received', {
       error: error ? { message: error.message, context: error.context } : null,
       hasData: !!data,
       contentLength: data?.content?.length || null,

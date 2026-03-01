@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useProjectUsers } from '@/hooks/useProjectUsers';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 import {
   CheckCircle,
   Crown,
@@ -121,7 +122,7 @@ const UserPermissionsManager = ({ projectId }: UserPermissionsManagerProps) => {
   const updateUserPermission = (userId: string, permission: keyof User['permissions'], value: boolean) => {
     // Note: Les permissions sont basées sur le rôle dans le système actuel
     // Pour modifier les permissions individuelles, il faudrait étendre le schéma DB
-    console.log('[UserPermissionsManager] Permission update requested:', { userId, permission, value });
+    log('[UserPermissionsManager] Permission update requested:', { userId, permission, value });
   };
 
   const handleRemoveUser = (userId: string) => {
@@ -191,7 +192,7 @@ const UserPermissionsManager = ({ projectId }: UserPermissionsManagerProps) => {
           <CardContent className="pt-6">
             <div className="space-y-4">
               {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} className="h-24 w-full rounded-lg" />
+                <Skeleton key={`skeleton-${i}`} className="h-24 w-full rounded-lg" />
               ))}
             </div>
           </CardContent>
@@ -664,8 +665,8 @@ const UserPermissionsManager = ({ projectId }: UserPermissionsManagerProps) => {
                         { time: '11:15', user: 'p.martin@nantesmetropole.fr', action: 'Consultation dashboard analytics', level: 'info' },
                         { time: '09:45', user: 'system', action: 'Anonymisation automatique données', level: 'info' },
                         { time: '08:30', user: 'failed_login', action: 'Tentative connexion échouée', level: 'warning' }
-                      ].map((log, index) => (
-                        <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                      ].map((log) => (
+                        <div key={`log-${log.time}-${log.action}`} className="flex items-center justify-between p-3 border rounded-lg">
                           <div className="flex items-center gap-3">
                             <div className={`w-2 h-2 rounded-full ${
                               log.level === 'warning' ? 'bg-yellow-500' : 'bg-green-500'

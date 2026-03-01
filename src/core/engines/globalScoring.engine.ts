@@ -5,6 +5,7 @@
  */
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Global Scoring Result
@@ -71,7 +72,7 @@ function extractComplianceScore(context: EngineExecutionContext): number {
 
     return Math.max(0, Math.min(100, baseScore));
   } catch (error) {
-    console.warn('[GlobalScoringEngine] Error extracting compliance score', error);
+    warn('[GlobalScoringEngine] Error extracting compliance score', error);
     return 50;
   }
 }
@@ -84,7 +85,7 @@ function extractEnterpriseScore(context: EngineExecutionContext): number {
     const enterpriseNormalized = context.enterprise?.normalizedScore || 0;
     return enterpriseNormalized;
   } catch (error) {
-    console.warn('[GlobalScoringEngine] Error extracting enterprise score', error);
+    warn('[GlobalScoringEngine] Error extracting enterprise score', error);
     return 0;
   }
 }
@@ -97,7 +98,7 @@ function extractPricingScore(context: EngineExecutionContext): number {
     const pricingNormalized = context.pricing?.normalizedScore || 0;
     return pricingNormalized;
   } catch (error) {
-    console.warn('[GlobalScoringEngine] Error extracting pricing score', error);
+    warn('[GlobalScoringEngine] Error extracting pricing score', error);
     return 0;
   }
 }
@@ -110,7 +111,7 @@ function extractQualityScore(context: EngineExecutionContext): number {
     const qualityNormalized = context.quality?.normalizedScore || 0;
     return qualityNormalized;
   } catch (error) {
-    console.warn('[GlobalScoringEngine] Error extracting quality score', error);
+    warn('[GlobalScoringEngine] Error extracting quality score', error);
     return 0;
   }
 }
@@ -124,7 +125,7 @@ export async function runGlobalScoringEngine(
   const startTime = Date.now();
 
   try {
-    console.log('[GlobalScoringEngine] Starting global scoring');
+    log('[GlobalScoringEngine] Starting global scoring');
 
     // Extract individual pillar scores
     const complianceScore = extractComplianceScore(executionContext);
@@ -167,7 +168,7 @@ export async function runGlobalScoringEngine(
       },
     };
 
-    console.log('[GlobalScoringEngine] Global scoring complete', {
+    log('[GlobalScoringEngine] Global scoring complete', {
       complianceScore,
       enterpriseScore,
       pricingScore,

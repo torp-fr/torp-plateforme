@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Platform Audit Service - PHASE 31
  * Comprehensive structural audit of TORP platform
@@ -193,7 +195,7 @@ export class PlatformAuditService {
    * Run full platform audit
    */
   async runFullPlatformAudit(): Promise<PlatformAuditReport> {
-    console.log('🔍 Starting PHASE 31 Platform Audit...');
+    log('🔍 Starting PHASE 31 Platform Audit...');
 
     const architectureMap = this.buildArchitectureMap();
     const circularDeps = this.detectCircularDependencies();
@@ -225,7 +227,7 @@ export class PlatformAuditService {
       summary
     };
 
-    console.log(`✅ Audit complete. Integrity Score: ${integrityScore}/100`);
+    log(`✅ Audit complete. Integrity Score: ${integrityScore}/100`);
     return report;
   }
 

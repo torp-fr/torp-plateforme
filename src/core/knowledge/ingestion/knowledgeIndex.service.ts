@@ -5,7 +5,8 @@
 
 import type { KnowledgeChunk as ChunkerChunk } from './knowledgeChunker.service';
 import { generateEmbeddingsForChunks } from './knowledgeEmbedding.service';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Index statistics
@@ -17,35 +18,20 @@ export interface IndexStats {
   lastUpdated: string;
 }
 
-/**
- * Initialize Supabase client
- */
-function getSupabaseClient() {
-  const supabaseUrl = process.env.SUPABASE_URL || '';
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase configuration');
-  }
-
-  return createClient(supabaseUrl, supabaseKey);
-}
 
 /**
  * Index chunks by generating embeddings
  */
 export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): Promise<boolean> {
   try {
-    console.log('[KnowledgeIndex] Indexing', chunks.length, 'chunks for document:', documentId);
-
-    const supabase = getSupabaseClient();
+    log('[KnowledgeIndex] Indexing', chunks.length, 'chunks for document:', documentId);
 
     // Step 1: Generate embeddings
     const embeddings = await generateEmbeddingsForChunks(chunks);
-    console.log('[KnowledgeIndex] Generated', embeddings.length, 'embeddings');
+    log('[KnowledgeIndex] Generated', embeddings.length, 'embeddings');
 
     if (embeddings.length === 0) {
-      console.warn('[KnowledgeIndex] No embeddings generated');
+      warn('[KnowledgeIndex] No embeddings generated');
       return false;
     }
 
@@ -64,12 +50,12 @@ export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): P
           .eq('chunk_index', i);
 
         if (error) {
-          console.warn(`[KnowledgeIndex] Failed to update chunk ${i}:`, error);
+          warn(`[KnowledgeIndex] Failed to update chunk ${i}:`, error);
         }
       }
     }
 
-    console.log('[KnowledgeIndex] Indexing complete for document:', documentId);
+    log('[KnowledgeIndex] Indexing complete for document:', documentId);
     return true;
   } catch (error) {
     console.error('[KnowledgeIndex] Indexing failed:', error);
@@ -92,7 +78,7 @@ export async function semanticSearch(
   }[]
 > {
   try {
-    console.log('[KnowledgeIndex] Semantic search for:', query);
+    log('[KnowledgeIndex] Semantic search for:', query);
 
     const { generateEmbedding } = await import('./knowledgeEmbedding.service');
 
@@ -129,7 +115,7 @@ export async function semanticSearch(
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, limit);
 
-    console.log('[KnowledgeIndex] Found', results.length, 'relevant chunks');
+    log('[KnowledgeIndex] Found', results.length, 'relevant chunks');
     return results;
   } catch (error) {
     console.error('[KnowledgeIndex] Search failed:', error);
@@ -177,7 +163,7 @@ export async function getIndexStats(): Promise<IndexStats> {
  */
 export async function rebuildIndex(documentId: string): Promise<boolean> {
   try {
-    console.log('[KnowledgeIndex] Rebuilding index for document:', documentId);
+    log('[KnowledgeIndex] Rebuilding index for document:', documentId);
 
     const supabase = getSupabaseClient();
 
@@ -216,7 +202,7 @@ export async function optimizeIndex(): Promise<{
   consolidatedChunks: number;
 }> {
   try {
-    console.log('[KnowledgeIndex] Starting index optimization');
+    log('[KnowledgeIndex] Starting index optimization');
 
     // This would implement deduplication and consolidation
     // For now, return statistics

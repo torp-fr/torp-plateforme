@@ -10,6 +10,8 @@
  */
 
 import * as pdfjsLib from 'pdfjs-dist';
+import { extractPdfText } from '@/lib/pdfExtract';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 // Types
 export interface PDFAnalysis {
@@ -192,7 +194,7 @@ class SmartPDFProcessor {
           confidence = 0;
           ocrPagesCount++;
           // Dans une vraie implémentation, on appellerait Tesseract ici
-          console.warn(`[SmartPDF] Page ${i}: OCR nécessaire mais non implémenté`);
+          warn(`[SmartPDF] Page ${i}: OCR nécessaire mais non implémenté`);
         } else {
           nativePagesCount++;
         }

@@ -9,7 +9,6 @@ import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import {
   BarChart3,
   Database,
-  Users,
   Settings,
   LogOut,
   Menu,
@@ -17,6 +16,10 @@ import {
   ChevronDown,
   User,
   Sparkles,
+  Zap,
+  AlertTriangle,
+  TrendingUp,
+  Plug,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
@@ -30,7 +33,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import torpLogo from '@/assets/torp-logo-red.png';
+import { BRANDING } from '@/config/branding';
 
 interface AdminLayoutProps {
   children?: ReactNode;
@@ -44,7 +47,7 @@ interface NavItem {
   exact?: boolean;
 }
 
-// Navigation ADMIN - Ne change JAMAIS
+// Navigation ADMIN - Route-driven cockpit navigation
 const ADMIN_NAV_ITEMS: NavItem[] = [
   {
     id: 'dashboard',
@@ -54,34 +57,34 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
     exact: true,
   },
   {
-    id: 'system',
-    href: '/analytics/system',
-    icon: Database,
-    label: 'System Health',
+    id: 'orchestrations',
+    href: '/analytics/orchestrations',
+    icon: Zap,
+    label: "Cockpit d'Orchestration",
+  },
+  {
+    id: 'security',
+    href: '/analytics/security',
+    icon: AlertTriangle,
+    label: 'Surveillance Fraude',
   },
   {
     id: 'intelligence',
     href: '/analytics/intelligence',
-    icon: BarChart3,
-    label: 'Live Intelligence',
-  },
-  {
-    id: 'orchestrations',
-    href: '/analytics/orchestrations',
-    icon: BarChart3,
-    label: 'Orchestrations',
+    icon: TrendingUp,
+    label: 'Adaptatif',
   },
   {
     id: 'knowledge',
     href: '/analytics/knowledge',
     icon: Database,
-    label: 'Knowledge Base',
+    label: 'Base de Connaissances',
   },
   {
-    id: 'security',
-    href: '/analytics/security',
-    icon: Users,
-    label: 'Security',
+    id: 'system',
+    href: '/analytics/system',
+    icon: Plug,
+    label: 'APIs',
   },
   {
     id: 'settings',
@@ -146,7 +149,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       {/* Logo */}
       <div className="p-4 border-b border-sidebar-border">
         <Link to="/analytics" className="flex items-center gap-3">
-          <img src={torpLogo} alt="TORP" className="h-10 w-auto" />
+          <img src={BRANDING.logoPrimary} alt="TORP" className="h-10 w-auto" />
           <div>
             <div className="flex items-center gap-2">
               <span className="font-bold text-lg text-sidebar-foreground">TORP</span>
@@ -217,7 +220,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
               {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
             <Link to="/analytics" className="flex items-center gap-2">
-              <img src={torpLogo} alt="TORP" className="h-8 w-auto" />
+              <img src={BRANDING.logoPrimary} alt="TORP" className="h-8 w-auto" />
               <span className="font-bold">TORP</span>
             </Link>
           </div>
@@ -229,7 +232,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         </div>
       </header>
 
-      <div className="flex">
+      <div className="flex min-h-screen overflow-hidden">
         {/* Sidebar Desktop - FIXE */}
         <aside className="hidden md:flex md:flex-col w-64 bg-sidebar text-sidebar-foreground min-h-screen fixed left-0 top-0 border-r border-sidebar-border">
           <SidebarContent />
@@ -253,7 +256,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         )}
 
         {/* Main content */}
-        <main className="flex-1 md:ml-64 min-h-screen bg-background">
+        <main className="flex-1 md:ml-64 min-h-screen bg-background overflow-auto">
           {/* Header Desktop */}
           <header className="hidden md:flex bg-background border-b h-14 items-center justify-between px-6 sticky top-0 z-40">
             <div className="flex items-center gap-4">

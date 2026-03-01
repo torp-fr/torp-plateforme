@@ -10,6 +10,7 @@
 import { supabase } from '@/lib/supabase';
 import type { CCFData } from '@/components/guided-ccf/GuidedCCF';
 import type { EnrichedClientData } from '@/types/enrichment';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 // ============================================================================
 // TYPES
@@ -98,7 +99,7 @@ export async function createCCF(data: CCFData): Promise<SupabaseCCF | null> {
       return null;
     }
 
-    console.log('✅ CCF created in Supabase:', created);
+    log('✅ CCF created in Supabase:', created);
     return created;
   } catch (error) {
     console.error('❌ CCF creation error:', error);
@@ -197,7 +198,7 @@ export async function storeEnrichedData(
       return null;
     }
 
-    console.log('✅ Enriched data stored:', data);
+    log('✅ Enriched data stored:', data);
     return data;
   } catch (error) {
     console.error('❌ Enriched data store error:', error);
@@ -274,7 +275,7 @@ export async function uploadQuotePDF(
     if (!session) {
       throw new Error('No active session - please login and retry');
     }
-    console.log('✅ [uploadQuotePDF] Session verified:', session.user?.id);
+    log('✅ [uploadQuotePDF] Session verified:', session.user?.id);
 
     // Sanitize filename - remove special characters that Supabase Storage rejects
     const sanitizedName = file.name
@@ -285,7 +286,7 @@ export async function uploadQuotePDF(
     // Upload fichier à Supabase Storage
     const filePath = `ccf/${ccfId}/${Date.now()}_${sanitizedName}`;
 
-    console.log('🔄 [uploadQuotePDF] Starting file upload...', {
+    log('🔄 [uploadQuotePDF] Starting file upload...', {
       bucket: 'quote-uploads',
       filePath,
       fileSize: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
@@ -321,7 +322,7 @@ export async function uploadQuotePDF(
       throw new Error(`Storage error: ${uploadError.message}`);
     }
 
-    console.log('✅ [uploadQuotePDF] File uploaded to storage', {
+    log('✅ [uploadQuotePDF] File uploaded to storage', {
       durationMs: uploadDuration.toFixed(0),
       path: filePath,
     });
@@ -335,7 +336,7 @@ export async function uploadQuotePDF(
       throw new Error('Failed to generate public URL for uploaded file');
     }
 
-    console.log('🔄 [uploadQuotePDF] Creating database record...');
+    log('🔄 [uploadQuotePDF] Creating database record...');
 
     const dbStartTime = performance.now();
 
@@ -374,7 +375,7 @@ export async function uploadQuotePDF(
       throw new Error(`Database error: ${dbError.message}`);
     }
 
-    console.log('✅ [uploadQuotePDF] Quote uploaded successfully', {
+    log('✅ [uploadQuotePDF] Quote uploaded successfully', {
       id: record.id,
       uploadDurationMs: uploadDuration.toFixed(0),
       dbDurationMs: dbDuration.toFixed(0),
@@ -436,7 +437,7 @@ export async function createAnalysis(
       return null;
     }
 
-    console.log('✅ Analysis created:', data.id);
+    log('✅ Analysis created:', data.id);
     return data.id;
   } catch (error) {
     console.error('❌ Analysis creation error:', error);
@@ -481,14 +482,14 @@ export async function migrateFromLocalStorage(): Promise<boolean> {
     const enrichedJson = localStorage.getItem('enrichedClientData');
 
     if (!ccfJson) {
-      console.warn('⚠️ No CCF data in localStorage');
+      warn('⚠️ No CCF data in localStorage');
       return false;
     }
 
     const ccfData = JSON.parse(ccfJson) as CCFData & { enrichedData?: EnrichedClientData };
     const enrichedData = ccfData.enrichedData || (enrichedJson ? JSON.parse(enrichedJson) : null);
 
-    console.log('📤 Migrating from localStorage...');
+    log('📤 Migrating from localStorage...');
 
     // Créer CCF dans Supabase
     const createdCCF = await createCCF(ccfData);
@@ -504,7 +505,7 @@ export async function migrateFromLocalStorage(): Promise<boolean> {
       has_enrichment: !!enrichedData,
     });
 
-    console.log('✅ Migration completed successfully');
+    log('✅ Migration completed successfully');
     return true;
   } catch (error) {
     console.error('❌ Migration error:', error);

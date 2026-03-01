@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Environment Configuration
  * Centralized, type-safe access to environment variables
@@ -130,7 +132,7 @@ export const env: EnvConfig = {
   },
 
   upload: {
-    maxFileSize: getNumEnv('VITE_MAX_FILE_SIZE', 10485760), // 10MB default
+    maxFileSize: getNumEnv('VITE_MAX_FILE_SIZE', 100 * 1024 * 1024), // 100MB default (was 10MB)
     allowedTypes: getEnv('VITE_ALLOWED_FILE_TYPES', '.pdf,.jpg,.jpeg,.png,.doc,.docx').split(','),
   },
 
@@ -218,14 +220,14 @@ export const validateEnv = (): void => {
  */
 export const logEnvInfo = (): void => {
   if (env.app.debugMode) {
-    console.log('🔧 Environment Configuration:');
-    console.log(`   App: ${env.app.name} v${env.app.version}`);
-    console.log(`   Environment: ${env.app.env}`);
-    console.log(`   API: ${env.api.baseUrl}`);
-    console.log(`   Auth Provider: ${env.auth.provider}`);
-    console.log(`   Mock API: ${env.api.useMock ? 'Yes' : 'No'}`);
-    console.log(`   Free Mode: ${env.freeMode.enabled ? 'Yes' : 'No'}${env.freeMode.enabled ? ` (${env.freeMode.defaultCredits} credits)` : ''}`);
-    console.log(`   Features: Payment=${env.features.paymentEnabled}, AI=${env.features.chatAIEnabled}, Marketplace=${env.features.marketplaceEnabled}`);
+    log('🔧 Environment Configuration:');
+    log(`   App: ${env.app.name} v${env.app.version}`);
+    log(`   Environment: ${env.app.env}`);
+    log(`   API: ${env.api.baseUrl}`);
+    log(`   Auth Provider: ${env.auth.provider}`);
+    log(`   Mock API: ${env.api.useMock ? 'Yes' : 'No'}`);
+    log(`   Free Mode: ${env.freeMode.enabled ? 'Yes' : 'No'}${env.freeMode.enabled ? ` (${env.freeMode.defaultCredits} credits)` : ''}`);
+    log(`   Features: Payment=${env.features.paymentEnabled}, AI=${env.features.chatAIEnabled}, Marketplace=${env.features.marketplaceEnabled}`);
   }
 };
 

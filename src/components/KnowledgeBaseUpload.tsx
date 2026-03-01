@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { KNOWLEDGE_CATEGORY_LABELS, getAllCategories } from '@/constants/knowledge-categories';
 import { knowledgeBrainService } from '@/services/ai/knowledge-brain.service';
+import { env } from '@/config/env';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 // Map of sources with French labels
 const SOURCES = {
@@ -67,11 +69,12 @@ export function KnowledgeBaseUpload() {
       return;
     }
 
-    // Validate file size (10MB max)
-    if (file.size > 10 * 1024 * 1024) {
+    // Validate file size (use configured max from env)
+    if (file.size > env.upload.maxFileSize) {
+      const maxSizeMB = (env.upload.maxFileSize / (1024 * 1024)).toFixed(0);
       setState(prev => ({
         ...prev,
-        error: 'Le fichier ne doit pas dépasser 10 MB',
+        error: `Le fichier ne doit pas dépasser ${maxSizeMB} MB`,
       }));
       return;
     }
@@ -84,7 +87,7 @@ export function KnowledgeBaseUpload() {
   }
 
   async function handleUpload() {
-    console.log('🧠 [UPLOAD] Handler called - START');
+    log('🧠 [UPLOAD] Handler called - START');
 
     if (!state.file || !state.category) {
       console.error('🧠 [UPLOAD] Missing required fields', { file: !!state.file, category: state.category });
@@ -96,39 +99,29 @@ export function KnowledgeBaseUpload() {
     }
 
     try {
-      console.log('🧠 [UPLOAD] Setting loading state...');
+      log('🧠 [UPLOAD] Setting loading state...');
       setState(prev => ({ ...prev, loading: true, error: null }));
 
-      // PHASE 36.11: Extract document text (PDF or plain text)
-      console.log('🧠 [UPLOAD] Extracting document text...');
-      const content = await knowledgeBrainService.extractDocumentTextFromFile(state.file);
-      console.log('🧠 [UPLOAD] Document text extracted:', { size: content.length });
-
-      if (!content || content.trim().length === 0) {
-        throw new Error('Impossible d\'extraire le texte du document');
-      }
-
-      // PHASE 36.3: Generate safe title from filename or category
+      // PHASE 42: Server-side ingestion (no extraction in browser)
+      log('🧠 [UPLOAD] Server-side ingestion: uploading file...');
       const finalTitle = state.file.name.replace(/\.[^/.]+$/, '') || `Document ${state.category}`;
-      console.log('🧠 [UPLOAD] Generated title:', finalTitle);
 
-      // PHASE 36.5: Use knowledgeBrainService with minimal schema-compliant payload
-      console.log('🧠 [UPLOAD] Calling knowledgeBrainService.addKnowledgeDocumentWithTimeout...');
-      const result = await knowledgeBrainService.addKnowledgeDocumentWithTimeout(
-        state.source, // source: 'internal', 'external', or 'official'
-        state.category, // category: matches KNOWLEDGE_CATEGORY_LABELS keys
-        content,
+      const result = await knowledgeBrainService.uploadDocumentForServerIngestion(
+        state.file,
         {
-          title: finalTitle,  // ✅ PHASE 36.3: Always provide title
-          // PHASE 36.5: Removed region, reliability_score, metadata (don't exist in schema)
+          title: finalTitle,
+          category: state.category,
+          source: state.source,
         }
       );
+
+      log('🧠 [UPLOAD] File uploaded - server will handle extraction/OCR/chunking');
 
       if (!result) {
         throw new Error('Document insertion failed');
       }
 
-      console.log('🧠 [UPLOAD] Document uploaded successfully:', { id: result.id });
+      log('🧠 [UPLOAD] Document uploaded successfully:', { id: result.id });
 
       // Success - reset form
       setState(prev => ({
@@ -151,7 +144,7 @@ export function KnowledgeBaseUpload() {
         setState(prev => ({ ...prev, success: false }));
       }, 3000);
 
-      console.log('🧠 [UPLOAD] Handler completed successfully');
+      log('🧠 [UPLOAD] Handler completed successfully');
     } catch (err) {
       console.error('❌ [UPLOAD] Handler error:', err);
       setState(prev => ({
@@ -225,7 +218,7 @@ export function KnowledgeBaseUpload() {
               </div>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">Max 10MB. PDF ou TXT uniquement.</p>
+          <p className="text-xs text-muted-foreground">Max {(env.upload.maxFileSize / (1024 * 1024)).toFixed(0)}MB. PDF ou TXT uniquement.</p>
         </div>
 
         {/* Category - PHASE 36.2: Display French labels */}
