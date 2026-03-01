@@ -260,19 +260,27 @@ async function processDocument(doc) {
     // Step 12: Batch update chunks with embeddings
     console.log(`  📊 Batch updating ${embeddings.length} embeddings...`);
     const now = new Date().toISOString();
-    const updates = chunks.map((chunk, index) => ({
-      document_id: documentId,
-      chunk_index: chunk.chunk_index,
-      embedding: embeddings[index],
-      embedding_generated_at: now,
-    }));
 
-    const { error: upsertError } = await supabase
-      .from("knowledge_chunks")
-      .upsert(updates, { onConflict: ["document_id", "chunk_index"] });
+    // Update each chunk individually to avoid upsert constraints
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      const embedding = embeddings[i];
 
-    if (upsertError) {
-      throw new Error(`Batch embedding update failed: ${upsertError.message}`);
+      const { error: updateError } = await supabase
+        .from("knowledge_chunks")
+        .update({
+          embedding: embedding,
+          embedding_generated_at: now,
+          embedding_status: "completed",
+        })
+        .eq("document_id", documentId)
+        .eq("chunk_index", chunk.chunk_index);
+
+      if (updateError) {
+        throw new Error(
+          `Failed to update embedding for chunk ${chunk.chunk_index}: ${updateError.message}`
+        );
+      }
     }
 
     console.log(`  ✅ Updated ${embeddings.length} embeddings`);
