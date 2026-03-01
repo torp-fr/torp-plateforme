@@ -1,4 +1,4 @@
-export function smartChunkText(text, sections, chunkSize = 1000) {
+export function smartChunkText(text, sections, chunkSize = 2500) {
   const chunks = [];
   let globalIndex = 0;
 
