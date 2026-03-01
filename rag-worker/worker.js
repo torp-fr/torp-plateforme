@@ -195,20 +195,25 @@ async function processDocument(doc) {
       }
     }
 
-    // Step 12: Update chunks with embeddings
-    console.log(`  📊 Storing embeddings...`);
-    for (let i = 0; i < embeddings.length; i++) {
-      await supabase
-        .from("knowledge_chunks")
-        .update({
-          embedding: embeddings[i],
-          embedding_generated_at: new Date().toISOString(),
-        })
-        .eq("document_id", documentId)
-        .eq("chunk_index", i);
+    // Step 12: Batch update chunks with embeddings
+    console.log(`  📊 Batch updating ${embeddings.length} embeddings...`);
+    const now = new Date().toISOString();
+    const updates = chunks.map((chunk, index) => ({
+      document_id: documentId,
+      chunk_index: chunk.chunk_index,
+      embedding: embeddings[index],
+      embedding_generated_at: now,
+    }));
+
+    const { error: upsertError } = await supabase
+      .from("knowledge_chunks")
+      .upsert(updates, { onConflict: ["document_id", "chunk_index"] });
+
+    if (upsertError) {
+      throw new Error(`Batch embedding update failed: ${upsertError.message}`);
     }
 
-    console.log(`  ✅ Generated ${embeddings.length} embeddings`);
+    console.log(`  ✅ Updated ${embeddings.length} embeddings`);
 
     // Step 13: Mark as completed
     console.log(`  ✅ Marking document as completed...`);
