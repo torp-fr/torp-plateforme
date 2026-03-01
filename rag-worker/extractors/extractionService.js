@@ -19,7 +19,7 @@ export async function extractDocumentText(arrayBuffer, fileName, mimeType) {
   const fileExt = getFileExtension(fileName).toLowerCase();
   const normalizedMimeType = (mimeType || "").toLowerCase();
 
-  // PDF with fallback to Vision OCR
+  // PDF with native extraction only (no OCR fallback)
   if (
     fileExt === "pdf" ||
     normalizedMimeType === MIME_TYPES.pdf
@@ -28,19 +28,29 @@ export async function extractDocumentText(arrayBuffer, fileName, mimeType) {
     try {
       const result = await extractPdfText(arrayBuffer);
 
-      if (result.text.trim().length < 500) {
+      if (!result.text || result.text.trim().length < 500) {
         console.log(
-          `  ⚠️ PDF extraction too short (${result.text.length} chars) - falling back to OCR`
+          `  ⚠️ Scanned PDF detected (native extraction empty or too short) - skipping document (OCR disabled)`
         );
-        return await extractImageText(arrayBuffer, fileName);
+        return {
+          text: "",
+          confidence: "native_failed",
+          skipped: true,
+          reason: "scanned_pdf_not_supported",
+        };
       }
 
       return result;
     } catch (error) {
       console.log(
-        `  ⚠️ PDF native extraction failed: ${error.message} - falling back to OCR`
+        `  ⚠️ PDF native extraction failed: ${error.message} - skipping document (OCR disabled)`
       );
-      return await extractImageText(arrayBuffer, fileName);
+      return {
+        text: "",
+        confidence: "native_failed",
+        skipped: true,
+        reason: "native_extraction_error",
+      };
     }
   }
 
