@@ -457,6 +457,7 @@ function determineGradeLetter(score) {
  * @param {string} input.devisId - ID du devis
  * @param {Object} input.complexityWeights - Poids de scoring
  * @param {Object} input.analysisData - Données d'analyse
+ * @param {Object} input.regulatoryExposureData - Données d'exposition réglementaire (optionnel)
  * @returns {Object} { isValid: boolean, errors: Array<string> }
  */
 function validateInput(input) {
@@ -483,6 +484,17 @@ function validateInput(input) {
   const analysisValidation = validateAnalysisData(input.analysisData);
   if (!analysisValidation.isValid) {
     errors.push(...analysisValidation.errors);
+  }
+
+  // Validation optionnelle de regulatoryExposureData
+  if (input.regulatoryExposureData) {
+    if (typeof input.regulatoryExposureData !== 'object') {
+      errors.push('regulatoryExposureData doit être un objet');
+    } else if (!Number.isInteger(input.regulatoryExposureData.exposure_index) ||
+               input.regulatoryExposureData.exposure_index < 0 ||
+               input.regulatoryExposureData.exposure_index > 100) {
+      errors.push('regulatoryExposureData.exposure_index doit être un entier entre 0 et 100');
+    }
   }
 
   return {
@@ -540,6 +552,22 @@ async function calculateThematicScore(input, options = {}) {
         return acc;
       }, {}),
     });
+
+    // ÉTAPE 1B: Ajustement du score réglementaire si données d'exposition fournies
+    if (input.regulatoryExposureData && input.regulatoryExposureData.exposure_index !== undefined) {
+      const exposureAdjustment = input.regulatoryExposureData.exposure_index / 5;
+      const baseRegulatoryScore = themeScores.regulatory.score;
+      const adjustedRegulatoryScore = Math.max(0, baseRegulatoryScore - exposureAdjustment);
+      themeScores.regulatory.score = Math.round(adjustedRegulatoryScore * 100) / 100;
+
+      logger.debug('Étape 1B - Score réglementaire ajusté par exposition', {
+        executionId,
+        exposureIndex: input.regulatoryExposureData.exposure_index,
+        exposureAdjustment: Math.round(exposureAdjustment * 100) / 100,
+        baseRegulatoryScore,
+        adjustedRegulatoryScore: themeScores.regulatory.score,
+      });
+    }
 
     // ÉTAPE 2: Calcul du score pondéré brut
     const weightedScoreBrut = calculateWeightedScore(themeScores, weights);
