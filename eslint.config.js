@@ -25,5 +25,16 @@ export default tseslint.config(
       ],
       "@typescript-eslint/no-unused-vars": "off",
     },
+  },
+  {
+    files: ["src/components/**/*", "src/pages/**/*", "src/hooks/**/*"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          "patterns": ["@/core/*"]
+        }
+      ]
+    }
   }
 );
