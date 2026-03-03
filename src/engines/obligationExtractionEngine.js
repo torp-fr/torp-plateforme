@@ -6,6 +6,8 @@
  * @module obligationExtractionEngine
  */
 
+import { getExtractionPrompt, isValidStrategy, getDefaultStrategyForCategory } from '../prompts/index.js';
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -184,6 +186,85 @@ Règles:
   const userPrompt = `Extrait les obligations du texte suivant:\n\n${chunkContent}`;
 
   return { systemPrompt, userPrompt };
+}
+
+/**
+ * Load extraction strategy from document_type
+ * Fetches document_type_id from knowledge_documents, then extraction_strategy from document_types
+ * @param {string} documentId - Document ID
+ * @param {Object} supabase - Supabase client
+ * @param {Object} logger - Logger instance
+ * @returns {Promise<string>} Extraction strategy or default fallback
+ */
+async function loadExtractionStrategy(documentId, supabase, logger) {
+  try {
+    // Fetch document metadata
+    const { data: document, error: docError } = await supabase
+      .from('knowledge_documents')
+      .select('document_type_id, category')
+      .eq('id', documentId)
+      .single();
+
+    if (docError || !document) {
+      logger.warn('strategy_load_no_document', { documentId, error: docError?.message });
+      return null; // Will use fallback
+    }
+
+    // If document_type_id is present, fetch extraction_strategy
+    if (document.document_type_id) {
+      const { data: docType, error: typeError } = await supabase
+        .from('document_types')
+        .select('extraction_strategy')
+        .eq('id', document.document_type_id)
+        .single();
+
+      if (typeError || !docType) {
+        logger.warn('strategy_load_type_not_found', { documentTypeId: document.document_type_id });
+        return null;
+      }
+
+      if (docType.extraction_strategy && isValidStrategy(docType.extraction_strategy)) {
+        logger.info('strategy_loaded', { strategy: docType.extraction_strategy });
+        return docType.extraction_strategy;
+      }
+    }
+
+    // Fallback: use category-based default
+    if (document.category) {
+      const defaultStrategy = getDefaultStrategyForCategory(document.category);
+      logger.info('strategy_from_category', { category: document.category, strategy: defaultStrategy });
+      return defaultStrategy;
+    }
+
+    logger.warn('strategy_no_fallback', { documentId });
+    return null;
+  } catch (error) {
+    logger.error('strategy_load_error', { error: error.message });
+    return null;
+  }
+}
+
+/**
+ * Build extraction prompt with strategy
+ * Uses router to select appropriate prompt template based on extraction_strategy
+ * @param {string} chunkContent - Knowledge chunk text
+ * @param {string} strategy - Extraction strategy
+ * @param {Object} logger - Logger instance
+ * @returns {Object} System and user prompts
+ */
+function buildExtractionPromptWithStrategy(chunkContent, strategy, logger) {
+  try {
+    const systemPrompt = getExtractionPrompt(strategy, chunkContent);
+    logger.info('prompt_built_with_strategy', { strategy });
+    return {
+      systemPrompt,
+      userPrompt: chunkContent // Content is already in the system prompt
+    };
+  } catch (error) {
+    logger.warn('prompt_build_error', { error: error.message, fallback: 'to_legacy' });
+    // Fallback to original prompt
+    return buildExtractionPrompt(chunkContent);
+  }
 }
 
 // ============================================================================
@@ -365,10 +446,22 @@ async function extractObligationsFromChunk(chunk, documentId, supabase, openaiCl
     logger.info('validation_complete', { status: 'success' });
 
     // ======================================================================
+    // LOAD EXTRACTION STRATEGY (Document Type driven)
+    // ======================================================================
+    logger.info('strategy_loading', { action: 'fetching extraction strategy from document_type' });
+    const extractionStrategy = await loadExtractionStrategy(documentId, supabase, logger);
+
+    // ======================================================================
     // LLM EXTRACTION
     // ======================================================================
-    logger.info('prompt_building', { action: 'constructing extraction prompt' });
-    const { systemPrompt, userPrompt } = buildExtractionPrompt(chunk.content);
+    logger.info('prompt_building', { action: 'constructing extraction prompt', strategy: extractionStrategy || 'default' });
+
+    let systemPrompt, userPrompt;
+    if (extractionStrategy) {
+      ({ systemPrompt, userPrompt } = buildExtractionPromptWithStrategy(chunk.content, extractionStrategy, logger));
+    } else {
+      ({ systemPrompt, userPrompt } = buildExtractionPrompt(chunk.content));
+    }
 
     const llmResult = await callLlmForExtraction(openaiClient, systemPrompt, userPrompt, logger);
 
@@ -532,6 +625,10 @@ module.exports = {
   // Main functions
   extractObligationsFromChunk,
   extractObligationsFromChunks,
+
+  // Strategy-driven extraction
+  loadExtractionStrategy,
+  buildExtractionPromptWithStrategy,
 
   // Utilities (for testing)
   buildExtractionPrompt,
