@@ -19,6 +19,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { apiGet } from '@/services/api/client';
 
 export interface SystemHealthPanelProps {
   loading?: boolean;
@@ -42,13 +43,8 @@ export function SystemHealthPanel({ loading = false, refreshInterval = 30000 }: 
     const loadMetrics = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch('/api/system/health');
-        if (!response.ok) throw new Error('Failed to fetch health data');
-        const result = await response.json();
-        const payload = result.data;
-
+        const payload = await apiGet<Partial<HealthMetrics>>('/api/system/health');
         setMetrics(payload);
-
         setLastRefresh(new Date());
       } catch (error) {
         console.error('[SystemHealthPanel] Error loading metrics:', error);

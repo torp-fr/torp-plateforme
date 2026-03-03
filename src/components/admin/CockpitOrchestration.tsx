@@ -24,6 +24,7 @@ import {
   RecentOrchestrationTable,
 } from './DashboardMetrics';
 import { SystemHealthPanel } from './SystemHealthPanel';
+import { apiGet } from '@/services/api/client';
 
 interface CockpitMetrics {
   totalAnalyses: number;
@@ -67,11 +68,7 @@ export function CockpitOrchestration({ metrics, loading = false }: CockpitProps)
   useEffect(() => {
     const loadEngines = async () => {
       try {
-        const response = await fetch('/api/engine/stats');
-        if (!response.ok) throw new Error('Failed to fetch engine stats');
-        const result = await response.json();
-        const payload = result.data;
-
+        const payload = await apiGet<any>('/api/engine/stats');
         setEngines(payload.engines);
       } catch (error) {
         console.error('[CockpitOrchestration] Error loading engines:', error);
