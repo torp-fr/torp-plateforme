@@ -5,6 +5,7 @@
 
 import type { KnowledgeChunk as ChunkerChunk } from './knowledgeChunker.service';
 import { generateEmbeddingsForChunks } from './knowledgeEmbedding.service';
+import { verifyAndPersistIntegrity } from '../integrity/knowledgeIntegrity.service';
 import { supabase } from '@/lib/supabase';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
@@ -53,6 +54,19 @@ export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): P
           warn(`[KnowledgeIndex] Failed to update chunk ${i}:`, error);
         }
       }
+    }
+
+    // Step 3: Verify and persist integrity report
+    // Called AFTER all embeddings are generated and updated in DB
+    log('[KnowledgeIndex] Starting integrity verification for document:', documentId);
+    const integrityResult = await verifyAndPersistIntegrity(documentId);
+
+    if (integrityResult.success) {
+      log('[KnowledgeIndex] Integrity verification completed with score:',
+          integrityResult.report.integrityScore);
+      log('[KnowledgeIndex] Document publishable:', integrityResult.report.isPublishable);
+    } else {
+      warn('[KnowledgeIndex] Integrity verification failed:', integrityResult.error);
     }
 
     log('[KnowledgeIndex] Indexing complete for document:', documentId);
