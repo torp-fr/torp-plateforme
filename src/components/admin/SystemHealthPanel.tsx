@@ -43,7 +43,7 @@ export function SystemHealthPanel({ loading = false, refreshInterval = 30000 }: 
     const loadMetrics = async () => {
       setIsLoading(true);
       try {
-        const payload = await apiGet<Partial<HealthMetrics>>('/api/system/health');
+        const payload = await apiGet<Partial<HealthMetrics>>('/api/v1/system/health');
         setMetrics(payload);
         setLastRefresh(new Date());
       } catch (error) {

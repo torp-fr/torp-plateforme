@@ -486,8 +486,8 @@ function EngineStatusLiveCard() {
     const fetchEngineData = async () => {
       try {
         const [statsData, statusData] = await Promise.all([
-          apiGet<any>('/api/engine/stats'),
-          apiGet<any>('/api/engine/status'),
+          apiGet<any>('/api/v1/engine/stats'),
+          apiGet<any>('/api/v1/engine/status'),
         ]);
 
         setEngineStats(statsData);
@@ -821,7 +821,7 @@ function LastOrchestrationResultSection() {
     const fetchOrchestrationData = async () => {
       try {
         setLoading(true);
-        const data = await apiGet<any>('/api/engine/orchestration');
+        const data = await apiGet<any>('/api/v1/engine/orchestration');
         setLastOrchestration(data?.lastOrchestration);
       } catch (err) {
         console.error('[LastOrchestrationResultSection] Failed to fetch orchestration data:', err);
