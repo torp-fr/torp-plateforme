@@ -1,3 +1,0 @@
-# Force Vercel to invalidate build cache
-# Deployment: 2026-02-25 Session refresh
-CACHE_BUST=$(date +%s)
