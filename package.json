@@ -5,9 +5,7 @@
   "description": "TORP - Plateforme SaaS d'analyse intelligente de devis BTP",
   "type": "module",
   "scripts": {
-    "start": "node scripts/runTestOnce.js",
-    "_start_original": "node src/server.js",
-    "_note": "TEMPORARY: start script redirected to obligation extraction test. Revert to 'node src/server.js' after testing.",
+    "start": "node src/server.js",
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
@@ -22,7 +20,6 @@
     "test:jest:coverage": "jest --coverage",
     "test:jest:verbose": "jest --verbose",
     "test:engines": "jest tests/thematicScoring.test.js tests/bonusSystem.test.js tests/narrativeEngine.test.js",
-    "test:obligation": "node scripts/testObligationExtraction.js",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
