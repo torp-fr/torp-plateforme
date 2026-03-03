@@ -10,14 +10,19 @@ import { getOrchestrationStatus, getOrchestrationStats, getLastOrchestration } f
 
 /**
  * GET /api/engine/stats
- * Retourne les statistiques des engines (total, actifs, inactifs, erreurs)
+ * Retourne les statistiques des engines + registry complète
+ * Évite la duplication métier côté frontend
  */
 function handleEngineStats(req: any, res: any) {
   try {
     const stats = getEngineStats();
+
     res.status(200).json({
       success: true,
-      data: stats,
+      data: {
+        stats,
+        engines: ENGINE_REGISTRY,
+      },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -55,17 +60,31 @@ function handleEngineStatus(req: any, res: any) {
 
 /**
  * GET /api/engine/orchestration
- * Retourne les statistiques et le dernier résultat d'orchestration
+ * Retourne status + flow + dernière orchestration
+ * Évite la duplication métier côté frontend
  */
 function handleEngineOrchestration(req: any, res: any) {
   try {
-    const stats = getOrchestrationStats();
+    const status = getOrchestrationStatus();
     const lastOrchestration = getLastOrchestration();
+
+    // Engine flow defines the orchestration pipeline sequence
+    const flow = [
+      'contextEngine',
+      'lotEngine',
+      'ruleEngine',
+      'scoringEngine',
+      'enrichmentEngine',
+      'auditEngine',
+      'globalScoringEngine',
+      'trustCappingEngine',
+    ];
 
     res.status(200).json({
       success: true,
       data: {
-        stats,
+        status,
+        flow,
         lastOrchestration,
       },
     });
