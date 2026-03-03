@@ -11,7 +11,7 @@ import { intelligentCacheService } from '@/core/infrastructure/intelligentCache.
 import { engineWatchdogService } from '@/core/infrastructure/engineWatchdog.service';
 
 /**
- * GET /api/system/health
+ * GET /api/v1/system/health
  * Retourne l'état de santé global du système
  */
 function handleSystemHealth(req: any, res: any) {
@@ -57,5 +57,5 @@ function handleSystemHealth(req: any, res: any) {
  * Enregistre les routes système sur l'app Express
  */
 export function registerSystemRoutes(app: Express) {
-  app.get('/api/system/health', handleSystemHealth);
+  app.get('/api/v1/system/health', handleSystemHealth);
 }

@@ -8,7 +8,7 @@ import type { Express } from 'express';
 import { jobService } from '@/core/jobs/job.service';
 
 /**
- * GET /api/jobs/:id
+ * GET /api/v1/jobs/:id
  * Récupère les détails d'un job par son ID
  */
 async function handleGetJob(req: any, res: any) {
@@ -46,7 +46,7 @@ async function handleGetJob(req: any, res: any) {
 }
 
 /**
- * GET /api/jobs/status/:id
+ * GET /api/v1/jobs/status/:id
  * Récupère le statut d'un job
  */
 async function handleGetJobStatus(req: any, res: any) {
@@ -95,6 +95,6 @@ async function handleGetJobStatus(req: any, res: any) {
  * Enregistre les routes jobs sur l'app Express
  */
 export function registerJobRoutes(app: Express) {
-  app.get('/api/jobs/:id', handleGetJob);
-  app.get('/api/jobs/status/:id', handleGetJobStatus);
+  app.get('/api/v1/jobs/:id', handleGetJob);
+  app.get('/api/v1/jobs/status/:id', handleGetJobStatus);
 }

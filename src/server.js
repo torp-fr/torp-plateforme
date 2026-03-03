@@ -88,7 +88,7 @@ app.get('/', (req, res) => {
 
 /**
  * Test obligation extraction endpoint
- * POST /api/test-obligation
+ * POST /api/v1/test-obligation
  *
  * Request body:
  * {
@@ -96,7 +96,7 @@ app.get('/', (req, res) => {
  *   "document_id": "string" (optional, defaults to predefined value)
  * }
  */
-app.post('/api/test-obligation', async (req, res) => {
+app.post('/api/v1/test-obligation', async (req, res) => {
   try {
     const { chunk_id, document_id } = req.body;
 
@@ -240,7 +240,7 @@ async function initialize() {
       console.log(`\n✅ Express server running on http://localhost:${PORT}`);
       console.log(`📝 Routes:`);
       console.log(`   GET  / - Health check`);
-      console.log(`   POST /api/test-obligation - Extract obligations from chunk`);
+      console.log(`   POST /api/v1/test-obligation - Extract obligations from chunk`);
       console.log(`\n🎯 Server ready!\n`);
     });
 
