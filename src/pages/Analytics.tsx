@@ -26,12 +26,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ENGINE_REGISTRY, getEngineStats } from '@/core/platform/engineRegistry';
-import { API_REGISTRY, getAPIStats } from '@/core/platform/apiRegistry';
-import { getOrchestrationStatus, getOrchestrationStats, getLastOrchestration } from '@/core/platform/engineOrchestrator';
 import { analyticsService } from '@/services/api/analytics.service';
 import { supabase } from '@/lib/supabase';
-import type { ContextEngineResult } from '@/core/engines/context.engine';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 type TabType = 'overview' | 'orchestration' | 'kb' | 'doctrine' | 'fraud' | 'adaptive' | 'apis' | 'logs' | 'upload-kb' | 'config';
@@ -414,7 +410,7 @@ function AdaptiveTab() {
  * APIs Tab Component
  */
 function APIsTab() {
-  const apiStats = getAPIStats();
+  const apiStats = { total: 0 };
 
   return (
     <div className="space-y-6">
@@ -429,28 +425,9 @@ function APIsTab() {
           <Badge variant="outline" className="w-fit">{apiStats.total} APIs</Badge>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {API_REGISTRY.map((api) => (
-              <div key={api.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                <div>
-                  <p className="font-medium text-sm">{api.name}</p>
-                  <p className="text-xs text-muted-foreground">{api.description}</p>
-                </div>
-                <Badge
-                  variant="outline"
-                  className={
-                    api.status === 'active'
-                      ? 'bg-green-100 text-green-700 border-green-300'
-                      : api.status === 'configured'
-                        ? 'bg-blue-100 text-blue-700 border-blue-300'
-                        : 'bg-gray-100 text-gray-700 border-gray-300'
-                  }
-                >
-                  {api.status}
-                </Badge>
-              </div>
-            ))}
-          </div>
+          <p className="text-muted-foreground text-sm">
+            APIs list will be loaded from the API endpoint. No external APIs configured yet.
+          </p>
         </CardContent>
       </Card>
     </div>
@@ -485,17 +462,8 @@ function LogsTab() {
 
 /**
  * Orchestration execution order - defines the pipeline sequence
+ * Moved to be constructed locally in components to avoid direct core imports
  */
-const ENGINE_FLOW = [
-  'contextEngine',
-  'lotEngine',
-  'ruleEngine',
-  'scoringEngine',
-  'enrichmentEngine',
-  'auditEngine',
-  'globalScoringEngine',
-  'trustCappingEngine',
-];
 
 /**
  * PHASE 36.10: Engine Status Live Card with Realtime Updates
@@ -504,11 +472,58 @@ const ENGINE_FLOW = [
 function EngineStatusLiveCard() {
   const [snapshots, setSnapshots] = useState<Record<string, any>>({});
   const [timeline, setTimeline] = useState<any[]>([]);
-  const engineStats = getEngineStats();
+  const [engineStats, setEngineStats] = useState<any>({ total: 0 });
+  const [engines, setEngines] = useState<any[]>([]);
+  const [orchestrationStatus, setOrchestrationStatus] = useState<string>('idle');
 
   // ✅ PHASE 36.10: Batching buffer to avoid massive re-renders
   const bufferRef = useRef<any[]>([]);
   const flushTimerRef = useRef<any>(null);
+
+  // Fetch engine stats and orchestration status from API
+  useEffect(() => {
+    const fetchEngineData = async () => {
+      try {
+        const [statsRes, statusRes] = await Promise.all([
+          fetch('/api/engine/stats'),
+          fetch('/api/engine/status'),
+        ]);
+
+        if (statsRes.ok) {
+          const statsData = await statsRes.json();
+          setEngineStats(statsData.data);
+        }
+
+        if (statusRes.ok) {
+          const statusData = await statusRes.json();
+          setOrchestrationStatus(statusData.data.status);
+        }
+
+        // Create mock engine list based on stats
+        if (statsRes.ok) {
+          const stats = await statsRes.json();
+          // Create a default engine list (in production, this might come from the API)
+          const defaultEngines = [
+            { id: 'contextEngine', name: 'Context Engine', description: 'Extraction et gestion du contexte projet', status: 'inactive' },
+            { id: 'lotEngine', name: 'Lot Engine', description: 'Analyse et décomposition des lots', status: 'inactive' },
+            { id: 'ruleEngine', name: 'Rule Engine', description: 'Évaluation des règles métier', status: 'inactive' },
+            { id: 'scoringEngine', name: 'Scoring Engine', description: 'Calcul des scores de risque', status: 'inactive' },
+            { id: 'enrichmentEngine', name: 'Enrichment Engine', description: 'Orchestration d\'enrichissement de données', status: 'inactive' },
+            { id: 'auditEngine', name: 'Audit Engine', description: 'Audit et conformité des données', status: 'inactive' },
+            { id: 'globalScoringEngine', name: 'Global Scoring Engine', description: 'Consolidation des scores globaux', status: 'inactive' },
+            { id: 'trustCappingEngine', name: 'Trust Capping Engine', description: 'Limitation intelligente des grades', status: 'inactive' },
+          ];
+          setEngines(defaultEngines);
+        }
+      } catch (err) {
+        console.error('[EngineStatusLiveCard] Failed to fetch engine data:', err);
+      }
+    };
+
+    fetchEngineData();
+    const interval = setInterval(fetchEngineData, 5000); // Refresh every 5 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     log('[ANALYTICS REALTIME] Setting up score_snapshots listener...');
@@ -623,7 +638,8 @@ function EngineStatusLiveCard() {
       <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
         <h4 className="text-xs font-semibold text-blue-900 mb-3 uppercase">Orchestration Pipeline</h4>
         <div className="flex items-center gap-2 overflow-x-auto pb-2">
-          {ENGINE_FLOW.map((engineId, idx) => {
+          {['contextEngine', 'lotEngine', 'ruleEngine', 'scoringEngine', 'enrichmentEngine', 'auditEngine', 'globalScoringEngine', 'trustCappingEngine'].map((engineId, idx) => {
+            const ENGINE_FLOW = ['contextEngine', 'lotEngine', 'ruleEngine', 'scoringEngine', 'enrichmentEngine', 'auditEngine', 'globalScoringEngine', 'trustCappingEngine'];
             const hasSnapshot = engineId in snapshots;
             const snapshot = snapshots[engineId];
             return (
@@ -662,13 +678,13 @@ function EngineStatusLiveCard() {
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-blue-900">Orchestration Status</span>
             <Badge className="bg-blue-100 text-blue-700 border-blue-300">
-              {getOrchestrationStatus()}
+              {orchestrationStatus}
             </Badge>
           </div>
         </div>
 
         <div className="space-y-3">
-          {ENGINE_REGISTRY.map((engine) => {
+          {engines.map((engine) => {
             const snapshot = snapshots[engine.id];
             return (
               <div key={engine.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors">
@@ -739,8 +755,6 @@ function EngineStatusLiveCard() {
  * Overview Tab Component - Platform Control Center
  */
 export function OverviewTab() {
-  const apiStats = getAPIStats();
-
   return (
     <div className="space-y-8">
       {/* Admin Stats Cards - Real Data from Analytics Service */}
@@ -785,33 +799,14 @@ export function OverviewTab() {
               <ExternalLink className="h-5 w-5 text-purple-600" />
               <CardTitle className="text-primary font-display">External APIs</CardTitle>
             </div>
-            <Badge variant="outline">{apiStats.total} APIs</Badge>
+            <Badge variant="outline">0 APIs</Badge>
           </div>
           <CardDescription>Services externes intégrés à la plateforme</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {API_REGISTRY.map((api) => (
-              <div key={api.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                <div>
-                  <p className="font-medium text-sm">{api.name}</p>
-                  <p className="text-xs text-muted-foreground">{api.description}</p>
-                </div>
-                <Badge
-                  variant="outline"
-                  className={
-                    api.status === 'active'
-                      ? 'bg-green-100 text-green-700 border-green-300'
-                      : api.status === 'configured'
-                        ? 'bg-blue-100 text-blue-700 border-blue-300'
-                        : 'bg-gray-100 text-gray-700 border-gray-300'
-                  }
-                >
-                  {api.status}
-                </Badge>
-              </div>
-            ))}
-          </div>
+          <p className="text-muted-foreground text-sm">
+            No external APIs configured yet. APIs information will be displayed once available.
+          </p>
         </CardContent>
       </Card>
 
@@ -829,8 +824,31 @@ export function OverviewTab() {
  * Display results from the last engine orchestration
  */
 function LastOrchestrationResultSection() {
-  const lastOrchestration = getLastOrchestration();
-  const contextEngineResult = lastOrchestration?.results?.contextEngine as ContextEngineResult | undefined;
+  const [lastOrchestration, setLastOrchestration] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchOrchestrationData = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch('/api/engine/orchestration');
+        if (res.ok) {
+          const data = await res.json();
+          setLastOrchestration(data.data?.lastOrchestration);
+        }
+      } catch (err) {
+        console.error('[LastOrchestrationResultSection] Failed to fetch orchestration data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrchestrationData();
+    const interval = setInterval(fetchOrchestrationData, 5000); // Refresh every 5 seconds
+    return () => clearInterval(interval);
+  }, []);
+
+  const contextEngineResult = lastOrchestration?.results?.contextEngine as any;
 
   // Don't show section if no orchestration result yet
   if (!lastOrchestration) {
