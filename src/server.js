@@ -11,6 +11,9 @@ import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { extractObligationsFromChunk } from './engines/obligationExtractionEngine.js';
+import { registerEngineRoutes } from './api/engine.routes.js';
+import { registerSystemRoutes } from './api/system.routes.js';
+import { registerJobRoutes } from './api/jobs.routes.js';
 
 // ============================================================================
 // CONSTANTS & SETUP
@@ -28,6 +31,14 @@ const app = express();
 
 // Middleware
 app.use(express.json());
+
+// ============================================================================
+// REGISTER FACADE ROUTES (DECOUPLING FRONTEND FROM CORE)
+// ============================================================================
+
+registerEngineRoutes(app);
+registerSystemRoutes(app);
+registerJobRoutes(app);
 
 // ============================================================================
 // INITIALIZE SUPABASE & OPENAI CLIENTS
