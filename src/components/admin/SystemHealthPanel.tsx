@@ -44,14 +44,10 @@ export function SystemHealthPanel({ loading = false, refreshInterval = 30000 }: 
       try {
         const response = await fetch('/api/system/health');
         if (!response.ok) throw new Error('Failed to fetch health data');
-        const data = await response.json();
+        const result = await response.json();
+        const payload = result.data;
 
-        setMetrics({
-          apiHealth: data.apiHealth || {},
-          circuitBreakerStatus: data.circuitBreakerStatus || {},
-          cacheStats: data.cacheStats || {},
-          watchdogReport: data.watchdogReport || {},
-        });
+        setMetrics(payload);
 
         setLastRefresh(new Date());
       } catch (error) {
