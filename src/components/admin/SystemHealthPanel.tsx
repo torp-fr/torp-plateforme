@@ -19,10 +19,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { apiResilienceService } from '@/core/infrastructure/apiResilience.service';
-import { apiQuotaMonitorService } from '@/core/infrastructure/apiQuotaMonitor.service';
-import { intelligentCacheService } from '@/core/infrastructure/intelligentCache.service';
-import { engineWatchdogService } from '@/core/infrastructure/engineWatchdog.service';
 
 export interface SystemHealthPanelProps {
   loading?: boolean;
@@ -41,31 +37,20 @@ export function SystemHealthPanel({ loading = false, refreshInterval = 30000 }: 
   const [isLoading, setIsLoading] = useState(loading);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
-  // Load metrics on mount and on interval
+  // Load metrics from API on mount and on interval
   useEffect(() => {
     const loadMetrics = async () => {
       setIsLoading(true);
       try {
-        // Fetch all health metrics in parallel
-        const [quotaStatuses, cbStatus, watchdogReport] = await Promise.all([
-          apiQuotaMonitorService.getQuotaStatus(),
-          Promise.resolve(apiResilienceService.getCircuitBreakerStatus()),
-          engineWatchdogService.generateReport(),
-        ]);
-
-        const cacheStats = intelligentCacheService.getStats();
-
-        // Build API health map
-        const apiHealthMap: Record<string, any> = {};
-        quotaStatuses?.forEach((status) => {
-          apiHealthMap[status.apiName] = status;
-        });
+        const response = await fetch('/api/system/health');
+        if (!response.ok) throw new Error('Failed to fetch health data');
+        const data = await response.json();
 
         setMetrics({
-          apiHealth: apiHealthMap,
-          circuitBreakerStatus: cbStatus,
-          cacheStats,
-          watchdogReport,
+          apiHealth: data.apiHealth || {},
+          circuitBreakerStatus: data.circuitBreakerStatus || {},
+          cacheStats: data.cacheStats || {},
+          watchdogReport: data.watchdogReport || {},
         });
 
         setLastRefresh(new Date());
