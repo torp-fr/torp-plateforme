@@ -29,6 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { analyticsService } from '@/services/api/analytics.service';
 import { supabase } from '@/lib/supabase';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
+import { apiGet } from '@/services/api/client';
 
 type TabType = 'overview' | 'orchestration' | 'kb' | 'doctrine' | 'fraud' | 'adaptive' | 'apis' | 'logs' | 'upload-kb' | 'config';
 
@@ -484,37 +485,26 @@ function EngineStatusLiveCard() {
   useEffect(() => {
     const fetchEngineData = async () => {
       try {
-        const [statsRes, statusRes] = await Promise.all([
-          fetch('/api/engine/stats'),
-          fetch('/api/engine/status'),
+        const [statsData, statusData] = await Promise.all([
+          apiGet<any>('/api/engine/stats'),
+          apiGet<any>('/api/engine/status'),
         ]);
 
-        if (statsRes.ok) {
-          const statsData = await statsRes.json();
-          setEngineStats(statsData.data);
-        }
+        setEngineStats(statsData);
+        setOrchestrationStatus(statusData.status);
 
-        if (statusRes.ok) {
-          const statusData = await statusRes.json();
-          setOrchestrationStatus(statusData.data.status);
-        }
-
-        // Create mock engine list based on stats
-        if (statsRes.ok) {
-          const stats = await statsRes.json();
-          // Create a default engine list (in production, this might come from the API)
-          const defaultEngines = [
-            { id: 'contextEngine', name: 'Context Engine', description: 'Extraction et gestion du contexte projet', status: 'inactive' },
-            { id: 'lotEngine', name: 'Lot Engine', description: 'Analyse et décomposition des lots', status: 'inactive' },
-            { id: 'ruleEngine', name: 'Rule Engine', description: 'Évaluation des règles métier', status: 'inactive' },
-            { id: 'scoringEngine', name: 'Scoring Engine', description: 'Calcul des scores de risque', status: 'inactive' },
-            { id: 'enrichmentEngine', name: 'Enrichment Engine', description: 'Orchestration d\'enrichissement de données', status: 'inactive' },
-            { id: 'auditEngine', name: 'Audit Engine', description: 'Audit et conformité des données', status: 'inactive' },
-            { id: 'globalScoringEngine', name: 'Global Scoring Engine', description: 'Consolidation des scores globaux', status: 'inactive' },
-            { id: 'trustCappingEngine', name: 'Trust Capping Engine', description: 'Limitation intelligente des grades', status: 'inactive' },
-          ];
-          setEngines(defaultEngines);
-        }
+        // Create a default engine list (in production, this might come from the API)
+        const defaultEngines = [
+          { id: 'contextEngine', name: 'Context Engine', description: 'Extraction et gestion du contexte projet', status: 'inactive' },
+          { id: 'lotEngine', name: 'Lot Engine', description: 'Analyse et décomposition des lots', status: 'inactive' },
+          { id: 'ruleEngine', name: 'Rule Engine', description: 'Évaluation des règles métier', status: 'inactive' },
+          { id: 'scoringEngine', name: 'Scoring Engine', description: 'Calcul des scores de risque', status: 'inactive' },
+          { id: 'enrichmentEngine', name: 'Enrichment Engine', description: 'Orchestration d\'enrichissement de données', status: 'inactive' },
+          { id: 'auditEngine', name: 'Audit Engine', description: 'Audit et conformité des données', status: 'inactive' },
+          { id: 'globalScoringEngine', name: 'Global Scoring Engine', description: 'Consolidation des scores globaux', status: 'inactive' },
+          { id: 'trustCappingEngine', name: 'Trust Capping Engine', description: 'Limitation intelligente des grades', status: 'inactive' },
+        ];
+        setEngines(defaultEngines);
       } catch (err) {
         console.error('[EngineStatusLiveCard] Failed to fetch engine data:', err);
       }
@@ -831,11 +821,8 @@ function LastOrchestrationResultSection() {
     const fetchOrchestrationData = async () => {
       try {
         setLoading(true);
-        const res = await fetch('/api/engine/orchestration');
-        if (res.ok) {
-          const data = await res.json();
-          setLastOrchestration(data.data?.lastOrchestration);
-        }
+        const data = await apiGet<any>('/api/engine/orchestration');
+        setLastOrchestration(data?.lastOrchestration);
       } catch (err) {
         console.error('[LastOrchestrationResultSection] Failed to fetch orchestration data:', err);
       } finally {

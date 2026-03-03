@@ -24,7 +24,7 @@ import {
   RecentOrchestrationTable,
 } from './DashboardMetrics';
 import { SystemHealthPanel } from './SystemHealthPanel';
-import { ENGINE_REGISTRY } from '@/core/platform/engineRegistry';
+import { apiGet } from '@/services/api/client';
 
 interface CockpitMetrics {
   totalAnalyses: number;
@@ -66,16 +66,16 @@ export function CockpitOrchestration({ metrics, loading = false }: CockpitProps)
   const [engines, setEngines] = useState<any[]>([]);
 
   useEffect(() => {
-    // Load engine status from registry
-    const engineList = ENGINE_REGISTRY.map((engine) => ({
-      id: engine.id,
-      name: engine.name,
-      status: engine.status || 'idle',
-      lastExecution: new Date().toLocaleTimeString('fr-FR'),
-      averageTime: Math.random() * 500 + 100, // Placeholder
-      successRate: 95 + Math.random() * 5, // Placeholder
-    }));
-    setEngines(engineList);
+    const loadEngines = async () => {
+      try {
+        const payload = await apiGet<any>('/api/engine/stats');
+        setEngines(payload.engines);
+      } catch (error) {
+        console.error('[CockpitOrchestration] Error loading engines:', error);
+      }
+    };
+
+    loadEngines();
   }, []);
 
   // Default metrics if not provided

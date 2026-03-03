@@ -19,10 +19,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { apiResilienceService } from '@/core/infrastructure/apiResilience.service';
-import { apiQuotaMonitorService } from '@/core/infrastructure/apiQuotaMonitor.service';
-import { intelligentCacheService } from '@/core/infrastructure/intelligentCache.service';
-import { engineWatchdogService } from '@/core/infrastructure/engineWatchdog.service';
+import { apiGet } from '@/services/api/client';
 
 export interface SystemHealthPanelProps {
   loading?: boolean;
@@ -41,33 +38,13 @@ export function SystemHealthPanel({ loading = false, refreshInterval = 30000 }: 
   const [isLoading, setIsLoading] = useState(loading);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
-  // Load metrics on mount and on interval
+  // Load metrics from API on mount and on interval
   useEffect(() => {
     const loadMetrics = async () => {
       setIsLoading(true);
       try {
-        // Fetch all health metrics in parallel
-        const [quotaStatuses, cbStatus, watchdogReport] = await Promise.all([
-          apiQuotaMonitorService.getQuotaStatus(),
-          Promise.resolve(apiResilienceService.getCircuitBreakerStatus()),
-          engineWatchdogService.generateReport(),
-        ]);
-
-        const cacheStats = intelligentCacheService.getStats();
-
-        // Build API health map
-        const apiHealthMap: Record<string, any> = {};
-        quotaStatuses?.forEach((status) => {
-          apiHealthMap[status.apiName] = status;
-        });
-
-        setMetrics({
-          apiHealth: apiHealthMap,
-          circuitBreakerStatus: cbStatus,
-          cacheStats,
-          watchdogReport,
-        });
-
+        const payload = await apiGet<Partial<HealthMetrics>>('/api/system/health');
+        setMetrics(payload);
         setLastRefresh(new Date());
       } catch (error) {
         console.error('[SystemHealthPanel] Error loading metrics:', error);

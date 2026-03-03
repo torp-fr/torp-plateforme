@@ -9,7 +9,7 @@ import { ENGINE_REGISTRY, getEngineStats } from '@/core/platform/engineRegistry'
 import { getOrchestrationStatus, getLastOrchestration } from '@/core/platform/engineOrchestrator';
 
 /**
- * GET /api/engine/stats
+ * GET /api/v1/engine/stats
  * Retourne les statistiques des engines + registry complète
  * Évite la duplication métier côté frontend
  */
@@ -35,7 +35,7 @@ function handleEngineStats(req: any, res: any) {
 }
 
 /**
- * GET /api/engine/status
+ * GET /api/v1/engine/status
  * Retourne le statut actuel de l'orchestrateur
  */
 function handleEngineStatus(req: any, res: any) {
@@ -59,7 +59,7 @@ function handleEngineStatus(req: any, res: any) {
 }
 
 /**
- * GET /api/engine/orchestration
+ * GET /api/v1/engine/orchestration
  * Retourne status + flow + dernière orchestration
  * Évite la duplication métier côté frontend
  */
@@ -93,7 +93,7 @@ function handleEngineOrchestration(req: any, res: any) {
  * Enregistre les routes engine sur l'app Express
  */
 export function registerEngineRoutes(app: Express) {
-  app.get('/api/engine/stats', handleEngineStats);
-  app.get('/api/engine/status', handleEngineStatus);
-  app.get('/api/engine/orchestration', handleEngineOrchestration);
+  app.get('/api/v1/engine/stats', handleEngineStats);
+  app.get('/api/v1/engine/status', handleEngineStatus);
+  app.get('/api/v1/engine/orchestration', handleEngineOrchestration);
 }
