@@ -68,7 +68,7 @@ export function CockpitOrchestration({ metrics, loading = false }: CockpitProps)
   useEffect(() => {
     const loadEngines = async () => {
       try {
-        const payload = await apiGet<any>('/api/engine/stats');
+        const payload = await apiGet<any>('/api/v1/engine/stats');
         setEngines(payload.engines);
       } catch (error) {
         console.error('[CockpitOrchestration] Error loading engines:', error);
