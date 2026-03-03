@@ -4,12 +4,12 @@
  * This layer ONLY receives validated aggregates after policy checks
  */
 
-import { ValidatedDevisAggregate } from "../ingestion/contracts"
+import { ValidatedKnowledgeAggregate } from "../knowledge/contracts"
 
 export class BrainRepository {
-  async persist(validated: ValidatedDevisAggregate): Promise<void> {
+  async persist(validated: ValidatedKnowledgeAggregate): Promise<void> {
     // TODO: Implement Supabase write logic
     // This layer must ONLY receive validated aggregates
-    console.log("Persisting validated devis:", validated.aggregate.id)
+    console.log("Persisting knowledge asset:", validated.aggregate.id)
   }
 }
