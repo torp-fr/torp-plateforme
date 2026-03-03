@@ -1057,6 +1057,15 @@ class KnowledgeBrainService {
           throw new Error('Security violation: Retrieved document has integrity_checked=false');
         }
 
+        // GOVERNANCE: Verify document is publishable (integrity_score >= 0.7)
+        if (item.is_publishable !== true) {
+          warn(
+            '[KNOWLEDGE BRAIN] ⚠️ Filtered: Document is not publishable (integrity governance)',
+            item.id
+          );
+          return null; // Filter out unpublishable documents
+        }
+
         return {
           id: item.id,
           source: item.doc_source,
@@ -1068,7 +1077,7 @@ class KnowledgeBrainService {
           relevance_score: item.embedding_similarity || 0,
           embedding_similarity: item.embedding_similarity || 0,
         };
-      });
+      }).filter((result) => result !== null) as SearchResult[];
 
       // PHASE 36.10.5: Log successful search metric
       await this.healthService.logRpcMetric(
@@ -1131,8 +1140,20 @@ class KnowledgeBrainService {
 
       log('[KNOWLEDGE BRAIN] ✅ Keyword search found', data.length, 'verified chunks');
 
+      // GOVERNANCE: Apply publishability filter (integrity governance)
+      const publishableResults = data.filter((item: any) => {
+        if (item.is_publishable !== true) {
+          warn(
+            '[KNOWLEDGE BRAIN] ⚠️ Filtered: Document is not publishable (integrity governance)',
+            item.id
+          );
+          return false;
+        }
+        return true;
+      });
+
       // Map RPC results to SearchResult format
-      return data.map((item: any) => ({
+      return publishableResults.map((item: any) => ({
         id: item.id,
         source: item.doc_source,
         category: item.doc_category,
