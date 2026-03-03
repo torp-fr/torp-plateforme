@@ -6,7 +6,7 @@
 
 import type { Express } from 'express';
 import { ENGINE_REGISTRY, getEngineStats } from '@/core/platform/engineRegistry';
-import { getOrchestrationStatus, getOrchestrationStats, getLastOrchestration } from '@/core/platform/engineOrchestrator';
+import { getOrchestrationStatus, getLastOrchestration } from '@/core/platform/engineOrchestrator';
 
 /**
  * GET /api/engine/stats
@@ -68,17 +68,8 @@ function handleEngineOrchestration(req: any, res: any) {
     const status = getOrchestrationStatus();
     const lastOrchestration = getLastOrchestration();
 
-    // Engine flow defines the orchestration pipeline sequence
-    const flow = [
-      'contextEngine',
-      'lotEngine',
-      'ruleEngine',
-      'scoringEngine',
-      'enrichmentEngine',
-      'auditEngine',
-      'globalScoringEngine',
-      'trustCappingEngine',
-    ];
+    // Engine flow derives from ENGINE_REGISTRY - no hardcoded metadata
+    const flow = ENGINE_REGISTRY.map(engine => engine.id);
 
     res.status(200).json({
       success: true,
