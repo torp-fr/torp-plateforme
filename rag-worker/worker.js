@@ -1,4 +1,18 @@
 import fs from "fs";
+
+// ===============================
+// 📂 TEMPORARY: FILE SYSTEM DEBUG
+// ===============================
+console.log("📂 FILE SYSTEM DEBUG START");
+console.log("Current working directory:", process.cwd());
+console.log("Root directory contents:", fs.readdirSync("./"));
+console.log("Scripts exists?", fs.existsSync("./scripts"));
+if (fs.existsSync("./scripts")) {
+  console.log("Scripts directory contents:", fs.readdirSync("./scripts"));
+}
+console.log("📂 FILE SYSTEM DEBUG END");
+// ===============================
+
 import path from "path";
 import { fileURLToPath } from "url";
 import { supabase } from "./core/supabaseClient.js";
