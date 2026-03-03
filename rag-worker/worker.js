@@ -17,7 +17,7 @@ import { generateBatchEmbeddings } from "./core/embeddingService.js";
 // Remove this import after testing is complete
 // ===============================
 try {
-  await import("../scripts/testObligationExtraction.js");
+  await import("./scripts/testObligationExtraction.js");
   console.log("⚠️ TEST OBLIGATION EXTRACTION MODE ACTIVE - Test script executed");
 } catch (testError) {
   console.warn("⚠️ TEST OBLIGATION EXTRACTION: Test import failed (non-critical)", testError.message);
