@@ -6,6 +6,10 @@
 
 import { supabase } from '@/lib/supabase';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
+import { normalizeText } from './textNormalizer.service';
+import { classifyDocument } from './documentClassifier.service';
+import { extractDocumentContent } from './documentExtractor.service';
+import { chunkSmart } from './smartChunker.service';
 
 /**
  * Knowledge document metadata
@@ -99,14 +103,29 @@ export async function ingestKnowledgeDocument(
     log('[KnowledgeIngestion] Starting ingestion for:', filename);
 
 
-    // Step 1: Extract text
-    const text = extractTextFromBuffer(fileBuffer, filename);
-    log('[KnowledgeIngestion] Text extracted:', text.length, 'characters');
+    // Step 1: Extract text (format-aware: PDF, DOCX, XLSX, CSV, TXT, MD)
+    const rawText = await extractDocumentContent(fileBuffer, filename);
+    log('[KnowledgeIngestion] Text extracted:', rawText.length, 'characters');
 
-    // Step 2: Import chunking service
-    const { chunkDocument } = await import('./knowledgeChunker.service');
-    const chunks = chunkDocument(text);
-    log('[KnowledgeIngestion] Document chunked into', chunks.length, 'chunks');
+    // Step 1b: Normalize text (remove noise before chunking)
+    const normalizedText = normalizeText(rawText);
+    log('[KnowledgeIngestion] Text normalized:', normalizedText.length, 'characters');
+
+    // Step 1c: Classify document type (used by future specialized chunking)
+    const docType = classifyDocument(normalizedText);
+    log('[KnowledgeIngestion] Document classified as:', docType);
+
+    // Step 2: Chunk document using strategy matched to document type
+    const smartChunks = chunkSmart(normalizedText, docType);
+    log('[KnowledgeIngestion] Document chunked into', smartChunks.length, 'chunks');
+
+    // Map to the shape expected by indexChunks (adds positional fields)
+    const chunks = smartChunks.map((c) => ({
+      content: c.content,
+      tokenCount: c.tokenCount,
+      startIndex: 0,
+      endIndex: c.content.length,
+    }));
 
     // Step 3: Create document record
     const { data: docData, error: docError } = await supabase
