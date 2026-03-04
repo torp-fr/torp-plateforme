@@ -38,16 +38,25 @@ export interface EmbeddingResult {
 // ---------------------------------------------------------------------------
 
 async function invokeBatchEmbedding(texts: string[]): Promise<number[][]> {
+  // Prefer user session token (browser); fall back to service role key (batch / server scripts).
   const { data: { session } } = await supabase.auth.getSession();
+  const token =
+    session?.access_token ??
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    '';
 
-  if (!session?.access_token) {
-    throw new Error('[KnowledgeEmbedding] No active session — cannot invoke Edge Function');
+  if (!token) {
+    throw new Error(
+      '[KnowledgeEmbedding] No auth token available.\n' +
+      '  Browser : ensure the user is signed in.\n' +
+      '  Server  : set SUPABASE_SERVICE_ROLE_KEY in .env.local'
+    );
   }
 
   const { data, error: fnError } = await supabase.functions.invoke(
     'generate-embedding',
     {
-      headers: { Authorization: `Bearer ${session.access_token}` },
+      headers: { Authorization: `Bearer ${token}` },
       body: {
         texts,
         model: EMBEDDING_MODEL,
