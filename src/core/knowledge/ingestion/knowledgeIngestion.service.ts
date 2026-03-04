@@ -9,6 +9,7 @@ import { log, warn, error, time, timeEnd } from '@/lib/logger';
 import { normalizeText } from './textNormalizer.service';
 import { classifyDocument } from './documentClassifier.service';
 import { extractDocumentContent } from './documentExtractor.service';
+import { chunkSmart } from './smartChunker.service';
 
 /**
  * Knowledge document metadata
@@ -114,10 +115,17 @@ export async function ingestKnowledgeDocument(
     const docType = classifyDocument(normalizedText);
     log('[KnowledgeIngestion] Document classified as:', docType);
 
-    // Step 2: Import chunking service
-    const { chunkDocument } = await import('./knowledgeChunker.service');
-    const chunks = chunkDocument(normalizedText);
-    log('[KnowledgeIngestion] Document chunked into', chunks.length, 'chunks');
+    // Step 2: Chunk document using strategy matched to document type
+    const smartChunks = chunkSmart(normalizedText, docType);
+    log('[KnowledgeIngestion] Document chunked into', smartChunks.length, 'chunks');
+
+    // Map to the shape expected by indexChunks (adds positional fields)
+    const chunks = smartChunks.map((c) => ({
+      content: c.content,
+      tokenCount: c.tokenCount,
+      startIndex: 0,
+      endIndex: c.content.length,
+    }));
 
     // Step 3: Create document record
     const { data: docData, error: docError } = await supabase
