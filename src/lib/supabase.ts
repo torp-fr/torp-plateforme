@@ -31,12 +31,15 @@ import type { Database } from '@/types/supabase';
 import { env } from '@/config/env';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
+// Safe accessor for Vite env (undefined in Node.js/tsx context)
+const _metaEnv = (import.meta.env ?? {}) as Record<string, string | undefined>;
+
 // Get Supabase credentials from environment
 const supabaseUrl = env.app.env === 'production'
-  ? import.meta.env.VITE_SUPABASE_URL
-  : import.meta.env.VITE_SUPABASE_URL || 'http://localhost:54321';
+  ? (_metaEnv.VITE_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? '')
+  : (_metaEnv.VITE_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? 'http://localhost:54321');
 
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseAnonKey = _metaEnv.VITE_SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY ?? '';
 
 log('[Supabase Config] URL:', supabaseUrl);
 log('[Supabase Config] Key exists:', !!supabaseAnonKey);
@@ -64,12 +67,15 @@ let _supabase: ReturnType<typeof createClient<Database>> | null = null;
 
 export function getSupabase() {
   if (!_supabase) {
-    _supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+    // Use a placeholder key when none is configured so createClient doesn't throw.
+    // All DB calls will fail with auth errors, which the test harness handles gracefully.
+    const effectiveKey = supabaseAnonKey || 'placeholder-key-no-db-access';
+    _supabase = createClient<Database>(supabaseUrl, effectiveKey, {
       auth: {
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true,
-        storage: window.localStorage,
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       },
       global: {
         headers: {

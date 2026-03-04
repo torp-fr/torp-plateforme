@@ -5,7 +5,7 @@
  * - PROD: Only errors enabled
  */
 
-export const isDev = import.meta.env.DEV;
+export const isDev = (import.meta.env ?? {}).DEV ?? (process.env.NODE_ENV !== 'production');
 
 /**
  * Development log - visible only in dev mode

@@ -83,15 +83,18 @@ interface EnvConfig {
 /**
  * Get environment variable with fallback
  */
+// Safe accessor: works both in Vite (import.meta.env defined) and Node.js/tsx (undefined)
+const _env = (import.meta.env ?? {}) as Record<string, string | boolean | undefined>;
+
 const getEnv = (key: string, fallback: string = ''): string => {
-  return import.meta.env[key] || fallback;
+  return (_env[key] as string | undefined) || process.env[key] || fallback;
 };
 
 /**
  * Get boolean environment variable
  */
 const getBoolEnv = (key: string, fallback: boolean = false): boolean => {
-  const value = import.meta.env[key];
+  const value = _env[key] ?? process.env[key];
   if (value === undefined) return fallback;
   return value === 'true' || value === true;
 };
@@ -100,9 +103,9 @@ const getBoolEnv = (key: string, fallback: boolean = false): boolean => {
  * Get number environment variable
  */
 const getNumEnv = (key: string, fallback: number = 0): number => {
-  const value = import.meta.env[key];
+  const value = _env[key] ?? process.env[key];
   if (value === undefined) return fallback;
-  const num = parseInt(value, 10);
+  const num = parseInt(value as string, 10);
   return isNaN(num) ? fallback : num;
 };
 
