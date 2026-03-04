@@ -10,6 +10,8 @@ import { normalizeText } from './textNormalizer.service';
 import { classifyDocument } from './documentClassifier.service';
 import { extractDocumentContent } from './documentExtractor.service';
 import { chunkSmart } from './smartChunker.service';
+import { filterChunks } from './chunkQualityFilter.service';
+import { deduplicateChunks } from './semanticDeduplication.service';
 
 /**
  * Knowledge document metadata
@@ -116,13 +118,22 @@ export async function ingestKnowledgeDocument(
     log('[KnowledgeIngestion] Document classified as:', docType);
 
     // Step 2: Chunk document using strategy matched to document type
-    const smartChunks = chunkSmart(normalizedText, docType);
-    log('[KnowledgeIngestion] Document chunked into', smartChunks.length, 'chunks');
+    const rawChunks = chunkSmart(normalizedText, docType);
+    log('[KnowledgeIngestion] Document chunked into', rawChunks.length, 'chunks');
+
+    // Step 2b: Filter out low-quality chunks before embedding generation
+    const qualityChunks = filterChunks(rawChunks);
+    log('[KnowledgeIngestion] Chunks after quality filter:', qualityChunks.length);
+
+    // Step 2c: Drop near-duplicate chunks already present in the vector index
+    const smartChunks = await deduplicateChunks(qualityChunks);
+    log('[KnowledgeIngestion] Chunks after deduplication:', smartChunks.length);
 
     // Map to the shape expected by indexChunks (adds positional fields)
     const chunks = smartChunks.map((c) => ({
       content: c.content,
       tokenCount: c.tokenCount,
+      metadata: c.metadata ?? {},
       startIndex: 0,
       endIndex: c.content.length,
     }));
