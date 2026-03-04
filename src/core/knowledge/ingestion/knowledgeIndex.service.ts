@@ -6,6 +6,7 @@
 import type { KnowledgeChunk as ChunkerChunk } from './knowledgeChunker.service';
 import { generateEmbeddingsForChunks } from './knowledgeEmbedding.service';
 import { verifyAndPersistIntegrity } from '../integrity/knowledgeIntegrity.service';
+import { getKnowledgeConflictService } from '../conflicts/knowledgeConflict.service';
 import { supabase } from '@/lib/supabase';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
@@ -67,6 +68,24 @@ export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): P
       log('[KnowledgeIndex] Document publishable:', integrityResult.report.isPublishable);
     } else {
       warn('[KnowledgeIndex] Integrity verification failed:', integrityResult.error);
+    }
+
+    // Step 4: Detect conflicts (non-blocking, fire-and-forget)
+    // This runs after embeddings and integrity checks complete
+    // Errors are caught and logged, not thrown (non-blocking)
+    try {
+      const conflictService = getKnowledgeConflictService();
+      const conflictResult = await conflictService.detectKnowledgeConflicts(documentId);
+      if (conflictResult.conflictsDetected > 0) {
+        log('[KnowledgeIndex] ⚠️ Conflicts detected:', {
+          documentId,
+          count: conflictResult.conflictsDetected,
+          timeMs: conflictResult.processingTimeMs,
+        });
+      }
+    } catch (conflictError) {
+      // Non-blocking: log error but don't fail indexing
+      warn('[KnowledgeIndex] ⚠️ Conflict detection failed (non-blocking):', conflictError);
     }
 
     log('[KnowledgeIndex] Indexing complete for document:', documentId);
