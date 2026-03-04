@@ -1,18 +1,25 @@
 /**
- * Knowledge Index Service v1.0
- * Indexes chunks for fast semantic search (RAG preparation)
+ * Knowledge Index Service v2.0 (Phase 30)
+ * Indexes chunks into pgvector and provides SQL-level semantic search.
+ *
+ * Key changes from v1.0:
+ *  - Bug fix: getSupabaseClient() did not exist — replaced with supabase import
+ *  - Embeddings written to `embedding_vector` (vector(384)) via single bulk upsert
+ *  - semanticSearch() uses supabase.rpc('match_knowledge_chunks') — no in-memory scan
+ *  - Backward-compat: existing rows with the old `embedding` column are not touched
  */
 
 import type { KnowledgeChunk as ChunkerChunk } from './knowledgeChunker.service';
-import { generateEmbeddingsForChunks } from './knowledgeEmbedding.service';
+import { generateEmbeddingsForChunks, generateEmbedding } from './knowledgeEmbedding.service';
 import { verifyAndPersistIntegrity } from '../integrity/knowledgeIntegrity.service';
 import { getKnowledgeConflictService } from '../conflicts/knowledgeConflict.service';
 import { supabase } from '@/lib/supabase';
-import { log, warn, error, time, timeEnd } from '@/lib/logger';
+import { log, warn, error } from '@/lib/logger';
 
-/**
- * Index statistics
- */
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
 export interface IndexStats {
   chunksIndexed: number;
   embeddingsGenerated: number;
@@ -20,168 +27,185 @@ export interface IndexStats {
   lastUpdated: string;
 }
 
+// ---------------------------------------------------------------------------
+// indexChunks
+// ---------------------------------------------------------------------------
 
 /**
- * Index chunks by generating embeddings
+ * Generate embeddings for document chunks and persist them in a single bulk
+ * upsert to the `embedding_vector` column, then run integrity verification
+ * and (non-blocking) conflict detection.
  */
 export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): Promise<boolean> {
   try {
     log('[KnowledgeIndex] Indexing', chunks.length, 'chunks for document:', documentId);
 
-    // Step 1: Generate embeddings
+    // Step 1: Generate embeddings in batches (real OpenAI calls via Edge Function)
     const embeddings = await generateEmbeddingsForChunks(chunks);
     log('[KnowledgeIndex] Generated', embeddings.length, 'embeddings');
 
     if (embeddings.length === 0) {
-      warn('[KnowledgeIndex] No embeddings generated');
+      warn('[KnowledgeIndex] No embeddings generated — aborting index');
       return false;
     }
 
-    // Step 2: Update chunk records with embeddings
-    // Note: Supabase pgvector extension would be used here for vector storage
-    // For now, store embeddings as JSON
-    for (let i = 0; i < chunks.length; i++) {
-      const embedding = embeddings[i];
-      if (embedding) {
-        const { error } = await supabase
-          .from('knowledge_chunks')
-          .update({
-            embedding: embedding.embedding,
-          })
-          .eq('document_id', documentId)
-          .eq('chunk_index', i);
+    // Step 2: Fetch chunk IDs for this document (one query, ordered by chunk_index)
+    const { data: chunkRows, error: fetchError } = await supabase
+      .from('knowledge_chunks')
+      .select('id, chunk_index')
+      .eq('document_id', documentId)
+      .order('chunk_index', { ascending: true });
 
-        if (error) {
-          warn(`[KnowledgeIndex] Failed to update chunk ${i}:`, error);
-        }
-      }
+    if (fetchError || !chunkRows) {
+      warn('[KnowledgeIndex] Failed to fetch chunk IDs:', fetchError?.message);
+      return false;
     }
 
-    // Step 3: Verify and persist integrity report
-    // Called AFTER all embeddings are generated and updated in DB
+    // Step 3: Build bulk upsert payload — match embedding[i] to chunk by chunk_index
+    //         New writes go to `embedding_vector` (pgvector); `embedding` is left intact
+    //         for backward compatibility with any existing rows.
+    const updates = chunkRows
+      .map((row) => {
+        const match = embeddings[row.chunk_index];
+        if (!match) return null;
+        return {
+          id: row.id,
+          embedding_vector: match.embedding,
+        };
+      })
+      .filter((u): u is { id: string; embedding_vector: number[] } => u !== null);
+
+    if (updates.length === 0) {
+      warn('[KnowledgeIndex] No embedding updates to apply');
+      return false;
+    }
+
+    // Step 4: Single bulk upsert — one round-trip regardless of chunk count
+    const { error: upsertError } = await supabase
+      .from('knowledge_chunks')
+      .upsert(updates, { onConflict: 'id' });
+
+    if (upsertError) {
+      warn('[KnowledgeIndex] Bulk upsert failed:', upsertError.message);
+      return false;
+    }
+
+    log('[KnowledgeIndex] Bulk upsert complete —', updates.length, 'chunks updated');
+
+    // Step 5: Integrity verification (blocking — result feeds is_publishable flag)
     log('[KnowledgeIndex] Starting integrity verification for document:', documentId);
     const integrityResult = await verifyAndPersistIntegrity(documentId);
 
     if (integrityResult.success) {
-      log('[KnowledgeIndex] Integrity verification completed with score:',
-          integrityResult.report.integrityScore);
-      log('[KnowledgeIndex] Document publishable:', integrityResult.report.isPublishable);
+      log('[KnowledgeIndex] Integrity score:', integrityResult.report.integrityScore);
+      log('[KnowledgeIndex] Publishable:', integrityResult.report.isPublishable);
     } else {
       warn('[KnowledgeIndex] Integrity verification failed:', integrityResult.error);
     }
 
-    // Step 4: Detect conflicts (non-blocking, fire-and-forget)
-    // This runs after embeddings and integrity checks complete
-    // Errors are caught and logged, not thrown (non-blocking)
+    // Step 6: Conflict detection (non-blocking — errors must not fail ingestion)
     try {
       const conflictService = getKnowledgeConflictService();
       const conflictResult = await conflictService.detectKnowledgeConflicts(documentId);
       if (conflictResult.conflictsDetected > 0) {
-        log('[KnowledgeIndex] ⚠️ Conflicts detected:', {
+        log('[KnowledgeIndex] Conflicts detected:', {
           documentId,
           count: conflictResult.conflictsDetected,
           timeMs: conflictResult.processingTimeMs,
         });
       }
     } catch (conflictError) {
-      // Non-blocking: log error but don't fail indexing
-      warn('[KnowledgeIndex] ⚠️ Conflict detection failed (non-blocking):', conflictError);
+      warn('[KnowledgeIndex] Conflict detection failed (non-blocking):', conflictError);
     }
 
     log('[KnowledgeIndex] Indexing complete for document:', documentId);
     return true;
-  } catch (error) {
-    console.error('[KnowledgeIndex] Indexing failed:', error);
+  } catch (err) {
+    error('[KnowledgeIndex] Indexing failed:', err);
     return false;
   }
 }
 
+// ---------------------------------------------------------------------------
+// semanticSearch
+// ---------------------------------------------------------------------------
+
 /**
- * Search index using semantic similarity
+ * Search for the most relevant chunks using SQL-level vector similarity.
+ * Delegates to the `match_knowledge_chunks` PostgreSQL function which uses
+ * the HNSW index on `embedding_vector` — no in-memory similarity scan.
+ *
+ * Requires migration 20260304000001_phase30_pgvector_embeddings.sql to be applied.
  */
 export async function semanticSearch(
   query: string,
-  limit: number = 5
-): Promise<
-  {
-    chunkId: string;
-    content: string;
-    similarity: number;
-    documentId: string;
-  }[]
-> {
+  limit: number = 10
+): Promise<{ chunkId: string; content: string; similarity: number; documentId: string }[]> {
   try {
     log('[KnowledgeIndex] Semantic search for:', query);
 
-    const { generateEmbedding } = await import('./knowledgeEmbedding.service');
-
-    // Generate query embedding
+    // Generate query embedding (single call)
     const queryEmbeddingResult = await generateEmbedding('query', query);
     if (!queryEmbeddingResult) {
       throw new Error('Failed to generate query embedding');
     }
 
-    const queryEmbedding = queryEmbeddingResult.embedding;
+    // SQL vector search via pgvector — ORDER BY embedding_vector <=> query_embedding
+    const { data, error: rpcError } = await supabase.rpc('match_knowledge_chunks', {
+      query_embedding: queryEmbeddingResult.embedding,
+      match_count: limit,
+    });
 
-    const supabase = getSupabaseClient();
-
-    // Fetch all chunks with embeddings
-    const { data: chunks, error } = await supabase
-      .from('knowledge_chunks')
-      .select('id, document_id, content, embedding');
-
-    if (error || !chunks) {
-      throw new Error(`Failed to fetch chunks: ${error?.message}`);
+    if (rpcError) {
+      throw new Error(`Vector search RPC failed: ${rpcError.message}`);
     }
 
-    // Calculate similarity scores
-    const { cosineSimilarity } = await import('./knowledgeEmbedding.service');
-
-    const results = chunks
-      .filter((chunk: any) => chunk.embedding && chunk.embedding.length > 0)
-      .map((chunk: any) => ({
-        chunkId: chunk.id,
-        documentId: chunk.document_id,
-        content: chunk.content,
-        similarity: cosineSimilarity(queryEmbedding, chunk.embedding),
-      }))
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, limit);
+    const results = (data || []).map((row: {
+      id: string;
+      document_id: string;
+      content: string;
+      similarity: number;
+    }) => ({
+      chunkId: row.id,
+      documentId: row.document_id,
+      content: row.content,
+      similarity: row.similarity,
+    }));
 
     log('[KnowledgeIndex] Found', results.length, 'relevant chunks');
     return results;
-  } catch (error) {
-    console.error('[KnowledgeIndex] Search failed:', error);
+  } catch (err) {
+    error('[KnowledgeIndex] Search failed:', err);
     return [];
   }
 }
 
-/**
- * Get index statistics
- */
+// ---------------------------------------------------------------------------
+// getIndexStats
+// ---------------------------------------------------------------------------
+
 export async function getIndexStats(): Promise<IndexStats> {
   try {
-    const supabase = getSupabaseClient();
-
-    const { data: chunks, error } = await supabase
+    const { data: chunks, error: fetchError } = await supabase
       .from('knowledge_chunks')
-      .select('embedding');
+      .select('embedding_vector');
 
-    if (error) {
-      throw new Error(`Failed to get stats: ${error.message}`);
+    if (fetchError) {
+      throw new Error(`Failed to get stats: ${fetchError.message}`);
     }
 
-    const indexedChunks = (chunks || []).filter((chunk: any) => chunk.embedding).length;
+    const indexedChunks = (chunks || []).filter((c: any) => c.embedding_vector !== null).length;
     const totalChunks = chunks?.length || 0;
 
     return {
       chunksIndexed: indexedChunks,
       embeddingsGenerated: indexedChunks,
-      indexSize: totalChunks * 384 * 4, // Rough estimate: 384 dims * 4 bytes each
+      // 384 dimensions × 4 bytes per float
+      indexSize: totalChunks * 384 * 4,
       lastUpdated: new Date().toISOString(),
     };
-  } catch (error) {
-    console.error('[KnowledgeIndex] Failed to get stats:', error);
+  } catch (err) {
+    error('[KnowledgeIndex] Failed to get stats:', err);
     return {
       chunksIndexed: 0,
       embeddingsGenerated: 0,
@@ -191,26 +215,23 @@ export async function getIndexStats(): Promise<IndexStats> {
   }
 }
 
-/**
- * Rebuild index for document
- */
+// ---------------------------------------------------------------------------
+// rebuildIndex
+// ---------------------------------------------------------------------------
+
 export async function rebuildIndex(documentId: string): Promise<boolean> {
   try {
     log('[KnowledgeIndex] Rebuilding index for document:', documentId);
 
-    const supabase = getSupabaseClient();
-
-    // Fetch chunks
-    const { data: chunks, error } = await supabase
+    const { data: chunks, error: fetchError } = await supabase
       .from('knowledge_chunks')
       .select('*')
       .eq('document_id', documentId);
 
-    if (error || !chunks) {
-      throw new Error(`Failed to fetch chunks: ${error?.message}`);
+    if (fetchError || !chunks) {
+      throw new Error(`Failed to fetch chunks: ${fetchError?.message}`);
     }
 
-    // Convert to chunker format
     const chunkerChunks = chunks.map((chunk: any) => ({
       content: chunk.content,
       tokenCount: chunk.token_count,
@@ -218,36 +239,27 @@ export async function rebuildIndex(documentId: string): Promise<boolean> {
       endIndex: chunk.content.length,
     }));
 
-    // Re-index
     return await indexChunks(documentId, chunkerChunks);
-  } catch (error) {
-    console.error('[KnowledgeIndex] Rebuild failed:', error);
+  } catch (err) {
+    error('[KnowledgeIndex] Rebuild failed:', err);
     return false;
   }
 }
 
-/**
- * Optimize index
- * Removes duplicate chunks, consolidates similar content
- */
+// ---------------------------------------------------------------------------
+// optimizeIndex
+// ---------------------------------------------------------------------------
+
 export async function optimizeIndex(): Promise<{
   duplicatesRemoved: number;
   consolidatedChunks: number;
 }> {
   try {
     log('[KnowledgeIndex] Starting index optimization');
-
-    // This would implement deduplication and consolidation
-    // For now, return statistics
-    return {
-      duplicatesRemoved: 0,
-      consolidatedChunks: 0,
-    };
-  } catch (error) {
-    console.error('[KnowledgeIndex] Optimization failed:', error);
-    return {
-      duplicatesRemoved: 0,
-      consolidatedChunks: 0,
-    };
+    // Deduplication and consolidation logic — reserved for future implementation
+    return { duplicatesRemoved: 0, consolidatedChunks: 0 };
+  } catch (err) {
+    error('[KnowledgeIndex] Optimization failed:', err);
+    return { duplicatesRemoved: 0, consolidatedChunks: 0 };
   }
 }
