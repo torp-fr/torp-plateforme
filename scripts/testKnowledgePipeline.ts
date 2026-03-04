@@ -1,116 +1,201 @@
 #!/usr/bin/env node
 /**
- * Knowledge Brain — Manual Pipeline Test Harness
+ * Knowledge Brain — Manual Pipeline Test Harness v2
  *
- * Runs the full ingestion pipeline on a single local file and logs every
- * stage so each service can be inspected in isolation without deploying.
+ * Runs the full 10-step ingestion pipeline on a single local file, creates a
+ * real Supabase document record, and logs detailed metrics for every stage.
  *
  * Usage:
- *   pnpm tsx scripts/testKnowledgePipeline.ts <path-to-file>
+ *   pnpm tsx --tsconfig tsconfig.json scripts/testKnowledgePipeline.ts <file> [--cleanup]
  *
- * Example:
- *   pnpm tsx scripts/testKnowledgePipeline.ts ./test_corpus/sample.pdf
+ * Examples:
+ *   pnpm test:pipeline ./test_corpus/regulation_sample.txt
+ *   pnpm test:pipeline ./test_corpus/pricing_sample.csv --cleanup
+ *
+ * Flags:
+ *   --cleanup   Delete the test document and its chunks from Supabase after the run
  *
  * Env:
- *   Expects VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env (or .env.local).
- *   Steps 7-10 also require an authenticated Supabase session — they degrade
- *   gracefully when auth is unavailable (error logged, pipeline continues).
+ *   VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env / .env.local
+ *   Steps 6-10 degrade gracefully when Supabase is unreachable.
  */
 
-import fs from 'node:fs';
+import fs   from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
 // ---------------------------------------------------------------------------
-// Bootstrap: load .env before any service import resolves env vars
+// 1. Bootstrap: load .env BEFORE any service import resolves env vars
 // ---------------------------------------------------------------------------
 
 const require = createRequire(import.meta.url);
 
-// Attempt to load dotenv — tolerate missing package so the script also works
-// when dotenv is not installed (env vars already set in shell)
 try {
-  const dotenv = require('dotenv');
+  const dotenv  = require('dotenv');
   const envFile = ['.env.local', '.env'].find((f) =>
     fs.existsSync(path.resolve(process.cwd(), f))
   );
   if (envFile) {
     dotenv.config({ path: path.resolve(process.cwd(), envFile) });
-    pipelineLog('Bootstrap', `Loaded env from ${envFile}`);
   }
 } catch {
-  // dotenv not available — rely on ambient env
+  // dotenv not installed — env vars must already be in the shell environment
 }
 
 // ---------------------------------------------------------------------------
-// Imports (after env bootstrap)
+// 2. Service imports (resolved after env is ready)
 // ---------------------------------------------------------------------------
 
-import { extractDocumentContent } from '@/core/knowledge/ingestion/documentExtractor.service';
-import { normalizeText }          from '@/core/knowledge/ingestion/textNormalizer.service';
-import { classifyDocument }        from '@/core/knowledge/ingestion/documentClassifier.service';
-import { chunkSmart }              from '@/core/knowledge/ingestion/smartChunker.service';
-import { filterChunks }            from '@/core/knowledge/ingestion/chunkQualityFilter.service';
-import { deduplicateChunks }       from '@/core/knowledge/ingestion/semanticDeduplication.service';
-import {
-  generateEmbeddingsForChunks,
-}                                  from '@/core/knowledge/ingestion/knowledgeEmbedding.service';
-import {
-  indexChunks,
-}                                  from '@/core/knowledge/ingestion/knowledgeIndex.service';
-import {
-  verifyDocumentIntegrity,
-}                                  from '@/core/knowledge/integrity/knowledgeIntegrity.service';
-import {
-  getKnowledgeConflictService,
-}                                  from '@/core/knowledge/conflicts/knowledgeConflict.service';
+import { extractDocumentContent }    from '@/core/knowledge/ingestion/documentExtractor.service';
+import { normalizeText }              from '@/core/knowledge/ingestion/textNormalizer.service';
+import { classifyDocument }           from '@/core/knowledge/ingestion/documentClassifier.service';
+import { chunkSmart }                 from '@/core/knowledge/ingestion/smartChunker.service';
+import { filterChunks }               from '@/core/knowledge/ingestion/chunkQualityFilter.service';
+import { deduplicateChunks }          from '@/core/knowledge/ingestion/semanticDeduplication.service';
+import { generateEmbeddingsForChunks } from '@/core/knowledge/ingestion/knowledgeEmbedding.service';
+import { indexChunks }                from '@/core/knowledge/ingestion/knowledgeIndex.service';
+import { verifyDocumentIntegrity }    from '@/core/knowledge/integrity/knowledgeIntegrity.service';
+import { getKnowledgeConflictService } from '@/core/knowledge/conflicts/knowledgeConflict.service';
+import { supabase }                   from '@/lib/supabase';
+
+import type { DocumentType } from '@/core/knowledge/ingestion/documentClassifier.service';
 
 // ---------------------------------------------------------------------------
-// Helpers
+// 3. Logging helpers
 // ---------------------------------------------------------------------------
 
-/** Pipeline stage label width — keeps columns aligned */
-const LABEL_WIDTH = 22;
+const SEP = '─'.repeat(72);
 
-function pipelineLog(stage: string, message: string): void {
-  const label = `[Pipeline:${stage}]`.padEnd(LABEL_WIDTH + 10);
+function log(stage: string, message: string): void {
+  const label = `[Pipeline:${stage}]`.padEnd(32);
   console.log(`${label} ${message}`);
 }
 
-function pipelineError(stage: string, err: unknown): void {
-  const message = err instanceof Error ? err.message : String(err);
-  console.error(`[Pipeline ERROR:${stage}] ${message}`);
+function err(stage: string, e: unknown): void {
+  const msg = e instanceof Error ? e.message : String(e);
+  console.error(`[Pipeline ERROR:${stage}] ${msg}`);
 }
 
-function separator(): void {
-  console.log('─'.repeat(72));
-}
+function sep(): void { console.log(SEP); }
 
 function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024)        return `${n} B`;
+  if (n < 1024 ** 2)   return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / 1024 ** 2).toFixed(2)} MB`;
 }
 
-function elapsed(startMs: number): string {
-  return `${Date.now() - startMs}ms`;
+function ms(start: number): string { return `${Date.now() - start}ms`; }
+
+// ---------------------------------------------------------------------------
+// 4. Map DocumentType → valid knowledge_documents.category value
+// ---------------------------------------------------------------------------
+
+const DOC_TYPE_TO_CATEGORY: Record<DocumentType, string> = {
+  regulation:        'REGULATION',
+  technical_guide:   'TECHNICAL_GUIDE',
+  pricing_reference: 'PRICING_REFERENCE',
+  jurisprudence:     'LEGAL',
+  generic:           'MANUAL',
+};
+
+// ---------------------------------------------------------------------------
+// 5. DB helpers: create document, insert chunks, cleanup
+// ---------------------------------------------------------------------------
+
+async function createTestDocument(
+  filename:   string,
+  fileSize:   number,
+  docType:    DocumentType,
+  chunkCount: number,
+): Promise<string | null> {
+  // Attempt to get the current user so created_by can be populated.
+  // Falls back to null — nullable in the schema after migration 053.
+  const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+
+  const { data: doc, error: docError } = await supabase
+    .from('knowledge_documents')
+    .insert({
+      title:       `[TEST] ${filename} — ${new Date().toISOString()}`,
+      category:    DOC_TYPE_TO_CATEGORY[docType],
+      source:      'internal',
+      file_size:   fileSize > 0 ? fileSize : 1,   // satisfies file_size > 0 CHECK
+      chunk_count: chunkCount,
+      is_publishable: false,
+      created_by:  user?.id ?? null,
+    })
+    .select('id')
+    .single();
+
+  if (docError || !doc) {
+    err('DB:CreateDoc', docError?.message ?? 'No data returned');
+    return null;
+  }
+
+  return doc.id as string;
+}
+
+async function insertChunkRecords(
+  documentId: string,
+  chunks: { content: string; tokenCount: number; metadata?: Record<string, unknown> }[],
+): Promise<boolean> {
+  const records = chunks.map((c, i) => ({
+    document_id: documentId,
+    content:     c.content,
+    chunk_index: i,
+    token_count: c.tokenCount,
+    metadata:    c.metadata ?? {},
+  }));
+
+  const { error: chunkError } = await supabase
+    .from('knowledge_chunks')
+    .insert(records);
+
+  if (chunkError) {
+    err('DB:InsertChunks', chunkError.message);
+    return false;
+  }
+
+  return true;
+}
+
+async function cleanupTestDocument(documentId: string): Promise<void> {
+  await supabase.from('knowledge_chunks').delete().eq('document_id', documentId);
+  await supabase.from('knowledge_documents').delete().eq('id', documentId);
+  log('Cleanup', `Deleted document ${documentId} and its chunks`);
 }
 
 // ---------------------------------------------------------------------------
-// Main
+// 6. Token distribution helper
+// ---------------------------------------------------------------------------
+
+function tokenStats(tokens: number[]): { avg: number; min: number; max: number } {
+  if (tokens.length === 0) return { avg: 0, min: 0, max: 0 };
+  const sum = tokens.reduce((a, b) => a + b, 0);
+  return {
+    avg: Math.round(sum / tokens.length),
+    min: Math.min(...tokens),
+    max: Math.max(...tokens),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 7. Main
 // ---------------------------------------------------------------------------
 
 async function run(): Promise<void> {
-  // ── CLI argument ──────────────────────────────────────────────────────────
-  const filePath = process.argv[2];
+  // ── CLI args ──────────────────────────────────────────────────────────────
+  const args       = process.argv.slice(2);
+  const filePath   = args.find((a) => !a.startsWith('--'));
+  const doCleanup  = args.includes('--cleanup');
 
   if (!filePath) {
-    console.error('Usage: pnpm tsx scripts/testKnowledgePipeline.ts <file>');
+    console.error(
+      'Usage: pnpm tsx --tsconfig tsconfig.json scripts/testKnowledgePipeline.ts <file> [--cleanup]'
+    );
     process.exit(1);
   }
 
   const absolutePath = path.resolve(process.cwd(), filePath);
-
   if (!fs.existsSync(absolutePath)) {
     console.error(`[Pipeline ERROR] File not found: ${absolutePath}`);
     process.exit(1);
@@ -119,202 +204,272 @@ async function run(): Promise<void> {
   const fileBuffer = fs.readFileSync(absolutePath);
   const filename   = path.basename(absolutePath);
 
-  separator();
-  console.log('  Knowledge Brain — Ingestion Pipeline Test Harness');
-  separator();
-  pipelineLog('Init', `File : ${filename}`);
-  pipelineLog('Init', `Size : ${formatBytes(fileBuffer.length)}`);
-  pipelineLog('Init', `Path : ${absolutePath}`);
-  separator();
+  // Summary accumulators
+  let integrityScore   = 0;
+  let conflictsFound   = 0;
+  let embeddingsCount  = 0;
+  let documentId: string | null = null;
+
+  sep();
+  console.log('  Knowledge Brain — Ingestion Pipeline Test Harness v2');
+  sep();
+  log('Init', `File    : ${filename}`);
+  log('Init', `Size    : ${formatBytes(fileBuffer.length)}`);
+  log('Init', `Cleanup : ${doCleanup ? 'yes (--cleanup)' : 'no'}`);
+  sep();
 
   const globalStart = Date.now();
 
-  // ── Step 1: Document extraction ───────────────────────────────────────────
+  // ── Step 1: Extract ───────────────────────────────────────────────────────
   let rawText = '';
   {
     const t = Date.now();
     try {
       rawText = await extractDocumentContent(fileBuffer, filename);
-      pipelineLog('1 Extract',
-        `Extracted ${rawText.length.toLocaleString()} characters  (${elapsed(t)})`);
-    } catch (err) {
-      pipelineError('1 Extract', err);
-      process.exit(1);           // Cannot continue without text
+      log('1 Extract', `${rawText.length.toLocaleString()} characters extracted  (${ms(t)})`);
+    } catch (e) {
+      err('1 Extract', e);
+      process.exit(1);
     }
   }
 
-  // ── Step 2: Normalisation ─────────────────────────────────────────────────
+  // ── Step 2: Normalize ─────────────────────────────────────────────────────
   let normalizedText = '';
   {
     const t = Date.now();
-    normalizedText = normalizeText(rawText);
-    const delta = rawText.length - normalizedText.length;
-    pipelineLog('2 Normalize',
-      `${normalizedText.length.toLocaleString()} characters after normalisation` +
-      (delta > 0 ? `  (removed ${delta})` : '') +
-      `  (${elapsed(t)})`);
+    normalizedText  = normalizeText(rawText);
+    const removed   = rawText.length - normalizedText.length;
+    log('2 Normalize',
+      `${normalizedText.length.toLocaleString()} characters` +
+      (removed > 0 ? `  (noise removed: ${removed} chars)` : '') +
+      `  (${ms(t)})`
+    );
   }
 
-  // ── Step 3: Classification ────────────────────────────────────────────────
+  // ── Step 3: Classify ──────────────────────────────────────────────────────
   const docType = classifyDocument(normalizedText);
-  pipelineLog('3 Classify', `Document classified as: ${docType}`);
+  log('3 Classify', `Document type → ${docType}`);
 
   // ── Step 4: Smart chunking ────────────────────────────────────────────────
   let smartChunks;
   {
-    const t = Date.now();
+    const t   = Date.now();
     smartChunks = chunkSmart(normalizedText, docType);
-    pipelineLog('4 SmartChunker',
-      `Produced ${smartChunks.length} chunks  (${elapsed(t)})`);
 
-    separator();
-    console.log('  First 3 chunks (raw — before filter):');
-    separator();
+    const toks  = smartChunks.map((c) => c.tokenCount);
+    const stats = tokenStats(toks);
+
+    log('4 SmartChunker', `${smartChunks.length} chunks produced  (${ms(t)})`);
+    log('4 SmartChunker', `  Tokens avg: ${stats.avg}  min: ${stats.min}  max: ${stats.max}`);
+
+    // ── Visual inspection: first 3 raw chunks ──────────────────────────────
+    sep();
+    console.log('  First 3 chunks (raw — before quality filter):');
+    sep();
     smartChunks.slice(0, 3).forEach((c, i) => {
-      console.log(`  Chunk ${i + 1}  tokens=${c.tokenCount}  strategy=${c.metadata?.strategy ?? 'n/a'}`);
-      console.log(`  ${c.content.slice(0, 200).replace(/\n/g, '↵')}${c.content.length > 200 ? '…' : ''}`);
+      const preview = c.content.slice(0, 200).replace(/\n/g, '↵');
+      console.log(
+        `  [${i + 1}] tokens=${c.tokenCount}` +
+        `  strategy=${c.metadata?.strategy ?? 'n/a'}` +
+        (c.metadata?.articleHeader  ? `  article="${c.metadata.articleHeader}"` : '') +
+        (c.metadata?.sectionHeader  ? `  section="${c.metadata.sectionHeader}"` : '')
+      );
+      console.log(`       ${preview}${c.content.length > 200 ? '…' : ''}`);
       console.log();
     });
-    separator();
+    sep();
   }
 
   // ── Step 5: Quality filter ────────────────────────────────────────────────
   let qualityChunks;
   {
     const t = Date.now();
-    qualityChunks = filterChunks(smartChunks);
-    const removed = smartChunks.length - qualityChunks.length;
-    pipelineLog('5 QualityFilter',
-      `Removed ${removed} chunks — ${qualityChunks.length} remaining  (${elapsed(t)})`);
+    qualityChunks   = filterChunks(smartChunks);
+    const removed   = smartChunks.length - qualityChunks.length;
 
-    // Show quality score distribution
+    log('5 QualityFilter',
+      `${removed} chunk(s) removed — ${qualityChunks.length} remaining  (${ms(t)})`
+    );
+
     const scores = qualityChunks
       .map((c) => c.metadata?.qualityScore as number | undefined)
       .filter((s): s is number => typeof s === 'number');
+
     if (scores.length > 0) {
-      const avg = (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(3);
-      const min = Math.min(...scores).toFixed(3);
-      const max = Math.max(...scores).toFixed(3);
-      pipelineLog('5 QualityFilter', `  qualityScore  avg=${avg}  min=${min}  max=${max}`);
+      const s = tokenStats(scores.map((x) => Math.round(x * 1000)));
+      log('5 QualityFilter',
+        `  qualityScore  avg: ${(s.avg / 1000).toFixed(3)}` +
+        `  min: ${(s.min / 1000).toFixed(3)}` +
+        `  max: ${(s.max / 1000).toFixed(3)}`
+      );
     }
   }
 
-  // ── Step 6: Semantic deduplication ───────────────────────────────────────
+  // ── Step 6: Semantic deduplication ────────────────────────────────────────
   let dedupedChunks;
   {
     const t = Date.now();
     try {
-      dedupedChunks = await deduplicateChunks(qualityChunks);
-      const removed = qualityChunks.length - dedupedChunks.length;
-      pipelineLog('6 Dedup',
-        `Removed ${removed} duplicates — ${dedupedChunks.length} remaining  (${elapsed(t)})`);
-    } catch (err) {
-      pipelineError('6 Dedup', err);
-      pipelineLog('6 Dedup', 'Skipping dedup — using quality-filtered chunks');
+      dedupedChunks       = await deduplicateChunks(qualityChunks);
+      const removed       = qualityChunks.length - dedupedChunks.length;
+      log('6 Dedup',
+        `${removed} near-duplicate(s) removed — ${dedupedChunks.length} remaining  (${ms(t)})`
+      );
+    } catch (e) {
+      err('6 Dedup', e);
+      log('6 Dedup', 'Dedup skipped — using quality-filtered chunks');
       dedupedChunks = qualityChunks;
     }
   }
 
-  pipelineLog('Progress', `Remaining chunks entering embedding: ${dedupedChunks.length}`);
-  separator();
+  log('Progress', `→ ${dedupedChunks.length} chunks entering DB + embedding pipeline`);
+  sep();
 
-  // ── Step 7: Embedding generation ─────────────────────────────────────────
-  // Convert to the shape expected by generateEmbeddingsForChunks
-  const chunksForEmbed = dedupedChunks.map((c) => ({
+  // ── 6b: Create real Supabase document record ──────────────────────────────
+  // Must happen before indexChunks(), which fetches chunk rows by document_id.
+  {
+    const t = Date.now();
+    log('DB:CreateDoc', 'Inserting test document into knowledge_documents…');
+    documentId = await createTestDocument(filename, fileBuffer.length, docType, dedupedChunks.length);
+
+    if (!documentId) {
+      log('DB:CreateDoc', 'Insert failed — steps 7-10 will be skipped');
+    } else {
+      log('DB:CreateDoc', `Document created: ${documentId}  (${ms(t)})`);
+
+      // Insert chunk records so indexChunks() can update them with embeddings
+      const t2 = Date.now();
+      log('DB:InsertChunks', `Inserting ${dedupedChunks.length} chunk records…`);
+      const ok = await insertChunkRecords(documentId, dedupedChunks);
+      if (ok) {
+        log('DB:InsertChunks', `${dedupedChunks.length} chunk records inserted  (${ms(t2)})`);
+      }
+    }
+  }
+
+  // Convert to shape expected by generateEmbeddingsForChunks / indexChunks
+  const chunksForPipeline = dedupedChunks.map((c) => ({
     content:    c.content,
     tokenCount: c.tokenCount,
     startIndex: 0,
     endIndex:   c.content.length,
   }));
 
-  let embeddings;
+  // ── Step 7: Generate embeddings ───────────────────────────────────────────
   {
     const t = Date.now();
-    pipelineLog('7 Embeddings', `Generating embeddings for ${chunksForEmbed.length} chunks…`);
+    log('7 Embeddings', `Generating embeddings for ${chunksForPipeline.length} chunks…`);
     try {
-      embeddings = await generateEmbeddingsForChunks(chunksForEmbed);
-      pipelineLog('7 Embeddings',
-        `Generated ${embeddings.length} embeddings  dims=${embeddings[0]?.embedding.length ?? 'n/a'}  (${elapsed(t)})`);
-    } catch (err) {
-      pipelineError('7 Embeddings', err);
-      embeddings = [];
-      pipelineLog('7 Embeddings', 'Embedding failed — steps 8-10 will use a synthetic document ID');
+      const results    = await generateEmbeddingsForChunks(chunksForPipeline);
+      embeddingsCount  = results.length;
+      log('7 Embeddings',
+        `${embeddingsCount} embeddings generated` +
+        `  dims=${results[0]?.embedding.length ?? 'n/a'}` +
+        `  (${ms(t)})`
+      );
+    } catch (e) {
+      err('7 Embeddings', e);
+      log('7 Embeddings', 'Embedding failed — index step may be incomplete');
     }
   }
 
-  // ── Steps 8-10: DB-dependent — use a synthetic document ID ───────────────
-  // A real run writes to Supabase; this harness uses a fixed test UUID so that
-  // the DB steps can be exercised when credentials are available, and degrade
-  // cleanly when they are not.
-  const SYNTHETIC_DOC_ID = '00000000-0000-0000-0000-000000000001';
-
-  // ── Step 8: Index ─────────────────────────────────────────────────────────
-  {
-    const t = Date.now();
-    pipelineLog('8 Index', `Indexing ${chunksForEmbed.length} chunks (docId=${SYNTHETIC_DOC_ID})…`);
-    try {
-      const ok = await indexChunks(SYNTHETIC_DOC_ID, chunksForEmbed);
-      pipelineLog('8 Index',
-        ok
-          ? `Indexed ${chunksForEmbed.length} chunks  (${elapsed(t)})`
-          : `indexChunks returned false  (${elapsed(t)})`);
-    } catch (err) {
-      pipelineError('8 Index', err);
-    }
-  }
-
-  // ── Step 9: Integrity check ───────────────────────────────────────────────
-  {
-    const t = Date.now();
-    pipelineLog('9 Integrity', `Verifying document integrity…`);
-    try {
-      const report = await verifyDocumentIntegrity(SYNTHETIC_DOC_ID);
-      pipelineLog('9 Integrity',
-        `Score: ${report.integrityScore.toFixed(4)}` +
-        `  publishable: ${report.isPublishable}` +
-        `  validChunks: ${report.validChunks}/${report.totalChunks}` +
-        `  (${elapsed(t)})`);
-      if (report.issues.length > 0) {
-        pipelineLog('9 Integrity', `  Issues: ${report.issues.join(' | ')}`);
+  // ── Steps 8-10 require a valid documentId ────────────────────────────────
+  if (!documentId) {
+    log('Skip', 'No document ID — skipping index, integrity, and conflict steps');
+  } else {
+    // ── Step 8: Index ────────────────────────────────────────────────────────
+    {
+      const t = Date.now();
+      log('8 Index', `Indexing into embedding_vector column (docId: ${documentId})…`);
+      try {
+        const ok = await indexChunks(documentId, chunksForPipeline);
+        log('8 Index',
+          ok
+            ? `${chunksForPipeline.length} chunks indexed  (${ms(t)})`
+            : `indexChunks returned false — check logs  (${ms(t)})`
+        );
+      } catch (e) {
+        err('8 Index', e);
       }
-    } catch (err) {
-      pipelineError('9 Integrity', err);
     }
-  }
 
-  // ── Step 10: Conflict detection ───────────────────────────────────────────
-  {
-    const t = Date.now();
-    pipelineLog('10 Conflicts', `Running conflict detection…`);
-    try {
-      const svc    = getKnowledgeConflictService();
-      const result = await svc.detectKnowledgeConflicts(SYNTHETIC_DOC_ID);
-      pipelineLog('10 Conflicts',
-        `Detected ${result.conflictsDetected} conflict(s)  (${elapsed(t)})`);
-      if (result.conflictsDetected > 0) {
-        result.conflicts.slice(0, 3).forEach((c, i) => {
-          pipelineLog('10 Conflicts',
-            `  #${i + 1}  type=${c.conflictType}  similarity=${c.similarityScore}`);
-        });
+    // ── Step 9: Integrity check ───────────────────────────────────────────────
+    {
+      const t = Date.now();
+      log('9 Integrity', 'Verifying document integrity…');
+      try {
+        const report   = await verifyDocumentIntegrity(documentId);
+        integrityScore = report.integrityScore;
+        log('9 Integrity',
+          `Score: ${report.integrityScore.toFixed(4)}` +
+          `  publishable: ${report.isPublishable}` +
+          `  valid chunks: ${report.validChunks}/${report.totalChunks}` +
+          `  embedding coverage: ${report.chunksWithEmbeddings}/${report.totalChunks}` +
+          `  (${ms(t)})`
+        );
+        if (report.issues.length > 0) {
+          log('9 Integrity', `  Issues: ${report.issues.slice(0, 5).join(' | ')}`);
+        }
+      } catch (e) {
+        err('9 Integrity', e);
       }
-    } catch (err) {
-      pipelineError('10 Conflicts', err);
+    }
+
+    // ── Step 10: Conflict detection ───────────────────────────────────────────
+    {
+      const t = Date.now();
+      log('10 Conflicts', 'Running conflict detection…');
+      try {
+        const svc    = getKnowledgeConflictService();
+        const result = await svc.detectKnowledgeConflicts(documentId);
+        conflictsFound = result.conflictsDetected;
+        log('10 Conflicts', `${conflictsFound} conflict(s) detected  (${ms(t)})`);
+        if (conflictsFound > 0) {
+          result.conflicts.slice(0, 3).forEach((c, i) => {
+            log('10 Conflicts',
+              `  #${i + 1}  type: ${c.conflictType}` +
+              `  similarity: ${c.similarityScore.toFixed(4)}`
+            );
+          });
+        }
+      } catch (e) {
+        err('10 Conflicts', e);
+      }
+    }
+
+    // ── Optional cleanup ──────────────────────────────────────────────────────
+    if (doCleanup) {
+      sep();
+      log('Cleanup', `--cleanup flag set — removing test data…`);
+      try {
+        await cleanupTestDocument(documentId);
+      } catch (e) {
+        err('Cleanup', e);
+      }
+    } else {
+      log('Info', `Test document retained in DB: ${documentId}`);
+      log('Info', 'Re-run with --cleanup to delete it after inspection');
     }
   }
 
   // ── Summary ───────────────────────────────────────────────────────────────
-  separator();
-  pipelineLog('Summary', `Total elapsed: ${elapsed(globalStart)}`);
-  pipelineLog('Summary', `Input:         ${rawText.length.toLocaleString()} chars`);
-  pipelineLog('Summary', `DocType:       ${docType}`);
-  pipelineLog('Summary', `After chunk:   ${smartChunks.length} chunks`);
-  pipelineLog('Summary', `After filter:  ${qualityChunks.length} chunks`);
-  pipelineLog('Summary', `After dedup:   ${dedupedChunks.length} chunks`);
-  pipelineLog('Summary', `Embeddings:    ${embeddings.length}`);
-  separator();
+  sep();
+  console.log('  PIPELINE SUMMARY');
+  sep();
+  log('Summary', `Total elapsed      : ${ms(globalStart)}`);
+  log('Summary', `Input characters   : ${rawText.length.toLocaleString()}`);
+  log('Summary', `Document type      : ${docType}`);
+  log('Summary', `Chunks generated   : ${smartChunks.length}`);
+  log('Summary', `Chunks after filter: ${qualityChunks.length}`);
+  log('Summary', `Chunks after dedup : ${dedupedChunks.length}`);
+  log('Summary', `Embeddings generated: ${embeddingsCount}`);
+  log('Summary', `Integrity score    : ${integrityScore > 0 ? integrityScore.toFixed(4) : 'n/a'}`);
+  log('Summary', `Conflicts detected : ${conflictsFound}`);
+  log('Summary', `Document ID        : ${documentId ?? 'none (DB unavailable)'}`);
+  sep();
 }
 
-run().catch((err) => {
-  console.error('[Pipeline FATAL]', err);
+run().catch((e) => {
+  console.error('[Pipeline FATAL]', e instanceof Error ? e.message : e);
   process.exit(1);
 });

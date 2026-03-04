@@ -12,8 +12,8 @@
  * ✓ Health metrics tracking (detect quality issues)
  */
 
-import { createClient } from '@supabase/supabase-js';
-import { log, warn, error as errorLog } from '../../../services/logging';
+import { supabase as _supabaseClient } from '@/lib/supabase';
+import { log, warn, error as errorLog } from '@/lib/logger';
 import {
   KnowledgeConflict,
   ConflictDetectionResult,
@@ -66,10 +66,7 @@ function cosineSimilarity(a: number[], b: number[]): number {
  * Knowledge Conflict Detection Service
  */
 export class KnowledgeConflictService {
-  private supabase = createClient(
-    process.env.SUPABASE_URL || '',
-    process.env.SUPABASE_ANON_KEY || ''
-  );
+  private supabase = _supabaseClient;
 
   private readonly DEFAULT_SIMILARITY_THRESHOLD = 0.92;
   private readonly DEFAULT_MAX_COMPARISONS = 500;

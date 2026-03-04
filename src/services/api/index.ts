@@ -5,8 +5,7 @@
 
 import { env } from '@/config/env';
 
-export { apiClient, ApiClient } from './client';
-export type { ApiError, ApiResponse } from './client';
+export { apiGet, apiPost } from './client';
 
 // Export external API services
 export { gpuService } from './gpu.service';

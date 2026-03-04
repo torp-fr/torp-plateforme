@@ -13,7 +13,7 @@
  *  - Logged at entry and exit with byte / character counts
  */
 
-import pdfParse from 'pdf-parse';
+import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
 import ExcelJS from 'exceljs';
 
@@ -31,19 +31,15 @@ import { log, warn } from '@/lib/logger';
  * does not merge content from adjacent pages.
  */
 async function extractPdf(buffer: Buffer): Promise<string> {
-  const result = await pdfParse(buffer, {
-    // Custom page render: emit text then a separator so page breaks survive
-    pagerender(pageData: any) {
-      return pageData.getTextContent().then((content: any) => {
-        return content.items.map((item: any) => item.str).join(' ');
-      });
-    },
-  });
+  const parser = new PDFParse({ data: buffer });
+  const result = await parser.getText();
 
-  // result.text already concatenates all pages; we return it directly.
-  // pdf-parse inserts form-feed characters (\f) between pages — convert to
-  // double newlines so the normalizer can detect paragraph boundaries.
-  return result.text.replace(/\f/g, '\n\n');
+  // Join pages with double newlines so paragraph-boundary chunking works
+  // across page breaks. Use per-page text if available, else the full text.
+  if (result.pages && result.pages.length > 0) {
+    return result.pages.map((p: any) => p.text ?? '').join('\n\n');
+  }
+  return (result.text ?? '').replace(/\f/g, '\n\n');
 }
 
 /**

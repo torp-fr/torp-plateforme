@@ -40,39 +40,46 @@ const CLASSIFICATION_RULES: ReadonlyArray<{
 }> = [
   {
     // Legal decisions — highly specific vocabulary, checked first
+    // NOTE: generic "\barrêt\b" removed — false-positive on "robinets d'arrêt",
+    // "arrêt de rive", etc. Use contextualised phrases only.
     type: 'jurisprudence',
     patterns: [
       /cour de cassation/i,
+      /cour d'appel/i,
       /\bjugement\b/i,
-      /\barrêt\b/i,
       /\btribunal\b/i,
       /\bjuridiction\b/i,
+      /attendu que/i,         // opening formula of French legal rulings
+      /considérant que/i,     // reasoning clause in French legal decisions
+      /arrêt\s+n°/i,          // "arrêt n° 123" — unambiguous case reference
     ],
   },
   {
-    // Regulatory texts — numbered articles and formal obligation language
+    // Regulatory texts — numbered articles and formal obligation language.
+    // Checked before pricing because regulation texts can mention prices (penalty clauses).
+    // NOTE: "\bsection\s+\d+" removed — too broad; technical guides also use "Section N.M".
+    //        French regulations are reliably identified by "Article N" / "Art. N" / "Chapitre".
     type: 'regulation',
     patterns: [
-      /\barticle\s+\d+/i,   // "Article 1", "Article 12"
-      /\bart\.\s*\d+/i,     // "Art. 3"
-      /\bsection\s+\d+/i,
-      /\bchapitre\b/i,
+      /\barticle\s+\d+/i,   // "Article 1", "Article 12" — canonical French regulation structure
+      /\bart\.\s*\d+/i,     // "Art. 3", "Art. 2.1"
+      /\bchapitre\b/i,      // "Chapitre II" — regulation chapter divisions
       /\bobligation\b/i,
       /\bdécret\b/i,
-      /\barrêté\b/i,
+      /\barrêté\b/i,        // "arrêté ministériel" — regulatory instrument (not court ruling)
     ],
   },
   {
-    // Pricing documents — currency symbols, price columns, price vocabulary
+    // Pricing documents — checked after regulation (reg texts can mention € in penalty clauses).
+    // Use only high-precision pricing signals that don't appear in regulatory language.
     type: 'pricing_reference',
     patterns: [
       /€/,
       /\bEUR\b/,
-      /\bprix\b/i,
+      /prix\s+unitaire/i,   // specific column header in DPGF / BPU
+      /\bttc\b/i,           // TTC (toutes taxes comprises) — pricing context
       /\btarif\b/i,
       /\bdevis\b/i,
-      /\bhtva?\b/i,         // HT / HTA / TVA
-      /\bttc\b/i,
     ],
   },
   {
