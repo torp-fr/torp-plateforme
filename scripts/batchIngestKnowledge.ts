@@ -457,9 +457,9 @@ async function ingestDocument(
     if (documentId) {
       const t               = Date.now();
       const report          = await verifyDocumentIntegrity(documentId);
-      result.integrityScore = report.integrityScore;
+      result.integrityScore = report.integrityScore ?? 0;
       info('9 Integrity',
-        `score: ${report.integrityScore.toFixed(4)}` +
+        `score: ${(report.integrityScore ?? 0).toFixed(4)}` +
         `  publishable: ${report.isPublishable}` +
         `  valid: ${report.validChunks}/${report.totalChunks}` +
         `  embeddings: ${report.chunksWithEmbeddings}/${report.totalChunks}` +
@@ -609,6 +609,27 @@ async function run(): Promise<void> {
   info('Summary', `Total chunks created : ${totalChunks}`);
   info('Summary', `Total embeddings     : ${totalEmb}`);
   info('Summary', `Total elapsed        : ${elapsed}ms`);
+
+  // ── Post-ingestion embedding count validation ──────────────────────────────
+  if (!dryRun && succeeded.length > 0) {
+    try {
+      const { count: dbEmbCount, error: embErr } = await getSupabase()
+        .from('knowledge_chunks')
+        .select('*', { count: 'exact', head: true })
+        .not('embedding_vector', 'is', null);
+      if (embErr) {
+        warn('Summary', `Embedding count validation failed: ${embErr.message}`);
+      } else {
+        info('Summary', `DB embeddings (all docs)  : ${dbEmbCount ?? 'unknown'}`);
+        if (typeof dbEmbCount === 'number' && dbEmbCount < totalEmb) {
+          warn('Summary', `⚠ DB embedding count (${dbEmbCount}) < pipeline count (${totalEmb}) — some vectors may be missing`);
+        }
+      }
+    } catch (e) {
+      warn('Summary', `Embedding count check error: ${e instanceof Error ? e.message : e}`);
+    }
+  }
+
   sep2();
 
   // ── Per-document results table ────────────────────────────────────────────

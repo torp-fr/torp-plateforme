@@ -26,13 +26,16 @@ Deno.serve(async (req) => {
 
   const body = await req.json();
 
-  // Support both single-text (legacy) and batch requests:
-  //   Single : { text: string, model?, dimensions? }
-  //   Batch  : { texts: string[], model?, dimensions? }
-  const { text, texts, model, dimensions } = body;
+  // Support all request shapes:
+  //   Batch (preferred) : { inputs: string[], model?, dimensions? }
+  //   Batch (legacy)    : { texts: string[], model?, dimensions? }
+  //   Single (legacy)   : { text: string, model?, dimensions? }
+  const { inputs, text, texts, model, dimensions } = body;
 
-  // Resolve input array — prefer explicit batch field, fall back to single
-  const inputArray: string[] = Array.isArray(texts)
+  // Resolve input array — inputs > texts > text (single)
+  const inputArray: string[] = Array.isArray(inputs)
+    ? inputs
+    : Array.isArray(texts)
     ? texts
     : typeof text === "string" && text.length > 0
     ? [text]
@@ -96,9 +99,9 @@ Deno.serve(async (req) => {
     (item: { embedding: number[] }) => item.embedding
   );
 
-  // Backward compatibility: if the caller sent a single `text` (not `texts`),
-  // return the legacy { embedding } shape so existing callers are not broken.
-  if (Array.isArray(texts)) {
+  // Batch callers (inputs or texts) get { embeddings: number[][] }.
+  // Single-text legacy callers get { embedding: number[] }.
+  if (Array.isArray(inputs) || Array.isArray(texts)) {
     return new Response(JSON.stringify({ embeddings }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
