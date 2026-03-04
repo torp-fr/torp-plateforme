@@ -90,6 +90,22 @@ export async function deduplicateChunks(chunks: Chunk[]): Promise<Chunk[]> {
     return chunks;
   }
 
+  // Guard: if the vector index is empty, no duplicate can exist.
+  // Skip all embedding probes and return immediately — avoids unnecessary
+  // Edge Function calls on a fresh database (first ingestion batch).
+  try {
+    const { count, error: countError } = await supabase
+      .from('knowledge_chunks')
+      .select('*', { count: 'exact', head: true });
+
+    if (!countError && count === 0) {
+      log('[SemanticDedup] Index is empty — skipping embedding probes, returning all', chunks.length, 'chunks');
+      return chunks.map((c) => withDedupMeta(c, true, null));
+    }
+  } catch {
+    // Cannot reach DB — proceed with full dedup (safe default: keep all on error)
+  }
+
   log('[SemanticDedup] Probing', chunks.length, 'chunks against vector index');
 
   const kept: Chunk[] = [];

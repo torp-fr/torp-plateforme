@@ -362,6 +362,12 @@ export function chunkSmart(text: string, documentType: DocumentType): Chunk[] {
       chunks = chunkRegulation(text);
       break;
 
+    case 'normes':
+      // Standards (NF EN, ISO, Eurocode) follow the same article/section structure
+      // as regulations — split on article boundaries, sub-chunk oversized sections.
+      chunks = chunkRegulation(text);
+      break;
+
     case 'technical_guide':
       chunks = chunkTechnicalGuide(text);
       break;

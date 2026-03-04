@@ -113,6 +113,7 @@ function collectFiles(dir: string): string[] {
 /** Maps pipeline DocumentType → valid knowledge_documents.category enum value */
 const DOC_TYPE_TO_CATEGORY: Record<DocumentType, string> = {
   regulation:        'REGULATION',
+  normes:            'REGULATION',   // NF/EN/ISO standards are regulatory in nature
   technical_guide:   'TECHNICAL_GUIDE',
   pricing_reference: 'PRICING_REFERENCE',
   jurisprudence:     'LEGAL',
@@ -373,8 +374,14 @@ async function ingestDocument(
     }
 
     // ── Step 6: Semantic deduplication ────────────────────────────────────
+    // Skipped in --dry-run: dedup requires live embedding probes against the
+    // vector index (Edge Function + DB round-trips). In dry-run all chunks pass.
     let dedupedChunks;
-    {
+    if (dryRun) {
+      dedupedChunks = qualityChunks;
+      result.chunksDeduped = qualityChunks.length;
+      info('6 Dedup', `skipped (--dry-run)  ${qualityChunks.length} chunks kept`);
+    } else {
       const t       = Date.now();
       dedupedChunks = await deduplicateChunks(qualityChunks);
       result.chunksDeduped  = dedupedChunks.length;
@@ -419,7 +426,10 @@ async function ingestDocument(
     }
 
     // ── Step 7: Generate embeddings ───────────────────────────────────────
-    {
+    // Skipped in --dry-run: embeddings require the Edge Function (OpenAI + Supabase).
+    if (dryRun) {
+      info('7 Embeddings', 'skipped (--dry-run)');
+    } else {
       const t             = Date.now();
       const embedResults  = await generateEmbeddingsForChunks(pipelineChunks);
       result.embeddings   = embedResults.length;
