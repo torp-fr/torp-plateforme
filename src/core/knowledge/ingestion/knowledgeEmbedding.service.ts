@@ -1,15 +1,31 @@
 /**
- * Knowledge Embedding Service v1.0
- * Generates embeddings for semantic search (placeholder)
- * Will be enhanced in Phase 30 with actual embedding models
+ * Knowledge Embedding Service v2.0 (Phase 30)
+ * Generates real embeddings via OpenAI text-embedding-3-small through the
+ * Supabase Edge Function `generate-embedding`.
+ *
+ * Key changes from v1.0:
+ *  - Placeholder hash-based generator replaced with real OpenAI calls
+ *  - True batch support: chunks are sent in groups of BATCH_SIZE per API call
+ *  - Dimension is fixed at 384 (OpenAI dimensions param)
+ *  - Auth token retrieved from the existing supabase singleton (no new client)
  */
 
 import type { KnowledgeChunk } from './knowledgeChunker.service';
-import { log, warn, error, time, timeEnd } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
+import { log, warn, error } from '@/lib/logger';
 
-/**
- * Embedding result
- */
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const EMBEDDING_MODEL = 'text-embedding-3-small';
+const EMBEDDING_DIMENSIONS = 384; // Enforced via OpenAI `dimensions` param
+const BATCH_SIZE = 100;           // Edge Function cap; OpenAI allows up to 2048
+
+// ---------------------------------------------------------------------------
+// Public types
+// ---------------------------------------------------------------------------
+
 export interface EmbeddingResult {
   chunkId: string;
   embedding: number[];
@@ -17,97 +33,117 @@ export interface EmbeddingResult {
   confidence: number;
 }
 
-/**
- * Generate placeholder embedding
- * Will be replaced with actual model (OpenAI, Cohere, local model) in Phase 30
- */
-export function generatePlaceholderEmbedding(text: string): number[] {
-  // Create deterministic hash-based embedding
-  // This is NOT a real embedding - just a placeholder
-  const seed = 42;
-  let hash = seed;
+// ---------------------------------------------------------------------------
+// Internal: invoke the generate-embedding Edge Function for a batch of texts
+// ---------------------------------------------------------------------------
 
-  for (let i = 0; i < text.length; i++) {
-    hash = ((hash << 5) - hash) + text.charCodeAt(i);
-    hash = hash & hash; // Convert to 32bit integer
+async function invokeBatchEmbedding(texts: string[]): Promise<number[][]> {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new Error('[KnowledgeEmbedding] No active session — cannot invoke Edge Function');
   }
 
-  // Generate 384-dimensional pseudo-embedding
-  const embedding: number[] = [];
-  for (let i = 0; i < 384; i++) {
-    hash = (hash * 9301 + 49297) % 233280;
-    embedding.push((hash / 233280) * 2 - 1); // Range: -1 to 1
+  const { data, error: fnError } = await supabase.functions.invoke(
+    'generate-embedding',
+    {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      body: {
+        texts,
+        model: EMBEDDING_MODEL,
+        dimensions: EMBEDDING_DIMENSIONS,
+      },
+    }
+  );
+
+  if (fnError) {
+    throw new Error(`[KnowledgeEmbedding] Edge Function error: ${fnError.message}`);
   }
 
-  return embedding;
+  if (!data?.embeddings || !Array.isArray(data.embeddings)) {
+    throw new Error('[KnowledgeEmbedding] Invalid response from Edge Function — missing embeddings array');
+  }
+
+  return data.embeddings as number[][];
 }
 
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
 /**
- * Generate embedding for chunk
+ * Generate embedding for a single chunk of text.
+ * Internally uses a one-item batch call to the Edge Function.
  */
 export async function generateEmbedding(
   chunkId: string,
-  text: string,
-  model: string = 'placeholder'
+  text: string
 ): Promise<EmbeddingResult | null> {
   try {
     log('[KnowledgeEmbedding] Generating embedding for:', chunkId);
 
-    let embedding: number[] = [];
-
-    if (model === 'placeholder') {
-      // Phase 28-29: Use placeholder
-      embedding = generatePlaceholderEmbedding(text);
-    } else if (model === 'openai') {
-      // Phase 30: Use OpenAI embeddings
-      // embedding = await getOpenAIEmbedding(text);
-      embedding = generatePlaceholderEmbedding(text);
-    } else if (model === 'local') {
-      // Phase 30: Use local embedding model
-      // embedding = await getLocalEmbedding(text);
-      embedding = generatePlaceholderEmbedding(text);
-    }
+    const [embedding] = await invokeBatchEmbedding([text]);
 
     return {
       chunkId,
       embedding,
-      model,
-      confidence: 0.95, // Placeholder confidence
+      model: EMBEDDING_MODEL,
+      confidence: 1.0,
     };
-  } catch (error) {
-    console.error('[KnowledgeEmbedding] Embedding generation failed:', error);
+  } catch (err) {
+    error('[KnowledgeEmbedding] Single embedding failed:', err);
     return null;
   }
 }
 
 /**
- * Generate embeddings for multiple chunks
+ * Generate embeddings for multiple chunks in batches.
+ * Sends up to BATCH_SIZE texts per Edge Function call, respecting the
+ * server-side limit of 100 inputs per request.
  */
 export async function generateEmbeddingsForChunks(
   chunks: KnowledgeChunk[]
 ): Promise<EmbeddingResult[]> {
-  try {
-    log('[KnowledgeEmbedding] Generating embeddings for', chunks.length, 'chunks');
-
-    const results: EmbeddingResult[] = [];
-
-    for (let i = 0; i < chunks.length; i++) {
-      const result = await generateEmbedding(`chunk_${i}`, chunks[i].content);
-      if (result) {
-        results.push(result);
-      }
-    }
-
-    log('[KnowledgeEmbedding] Generated', results.length, 'embeddings');
-    return results;
-  } catch (error) {
-    console.error('[KnowledgeEmbedding] Batch embedding failed:', error);
+  if (chunks.length === 0) {
     return [];
   }
+
+  log('[KnowledgeEmbedding] Generating embeddings for', chunks.length, 'chunks in batches of', BATCH_SIZE);
+
+  const results: EmbeddingResult[] = [];
+
+  for (let offset = 0; offset < chunks.length; offset += BATCH_SIZE) {
+    const batch = chunks.slice(offset, offset + BATCH_SIZE);
+    const texts = batch.map((c) => c.content);
+
+    try {
+      const embeddings = await invokeBatchEmbedding(texts);
+
+      batch.forEach((chunk, i) => {
+        if (embeddings[i]) {
+          results.push({
+            chunkId: `chunk_${offset + i}`,
+            embedding: embeddings[i],
+            model: EMBEDDING_MODEL,
+            confidence: 1.0,
+          });
+        }
+      });
+
+      log('[KnowledgeEmbedding] Batch', Math.floor(offset / BATCH_SIZE) + 1, 'complete —', batch.length, 'embeddings');
+    } catch (err) {
+      warn('[KnowledgeEmbedding] Batch failed (offset', offset, '):', err);
+      // Continue with next batch rather than aborting entirely
+    }
+  }
+
+  log('[KnowledgeEmbedding] Generated', results.length, '/', chunks.length, 'embeddings');
+  return results;
 }
 
 /**
- * Cosine similarity between two embeddings
+ * Cosine similarity between two embeddings.
+ * Retained for use by the conflict detection service.
  */
 export function cosineSimilarity(embedding1: number[], embedding2: number[]): number {
   if (embedding1.length !== embedding2.length) {
@@ -129,7 +165,8 @@ export function cosineSimilarity(embedding1: number[], embedding2: number[]): nu
 }
 
 /**
- * Find similar embeddings
+ * Find similar embeddings from a candidate list (in-memory).
+ * Used by the conflict detection service for chunk-level comparisons.
  */
 export function findSimilarEmbeddings(
   queryEmbedding: number[],
@@ -137,7 +174,7 @@ export function findSimilarEmbeddings(
   threshold: number = 0.7,
   limit: number = 5
 ): { id: string; similarity: number }[] {
-  const results = candidates
+  return candidates
     .map((candidate) => ({
       id: candidate.id,
       similarity: cosineSimilarity(queryEmbedding, candidate.embedding),
@@ -145,46 +182,23 @@ export function findSimilarEmbeddings(
     .filter((result) => result.similarity >= threshold)
     .sort((a, b) => b.similarity - a.similarity)
     .slice(0, limit);
-
-  return results;
 }
 
-/**
- * Embedding model info (for Phase 30)
- */
+// ---------------------------------------------------------------------------
+// Model metadata (updated for Phase 30)
+// ---------------------------------------------------------------------------
+
 export const EMBEDDING_MODELS = {
-  placeholder: {
-    name: 'Placeholder (Testing)',
-    dimensions: 384,
-    provider: 'internal',
-    description: 'Placeholder embedding for development',
-  },
   openai: {
     name: 'OpenAI text-embedding-3-small',
-    dimensions: 1536,
+    dimensions: EMBEDDING_DIMENSIONS,
     provider: 'OpenAI',
-    description: 'High-quality embeddings from OpenAI (Phase 30)',
+    description: 'Production embeddings via Supabase Edge Function (dimensions=384)',
   },
   local: {
     name: 'MiniLM-L6-v2',
     dimensions: 384,
     provider: 'Sentence Transformers',
-    description: 'Local embedding model for privacy (Phase 30)',
+    description: 'Local embedding model for privacy use-cases',
   },
 } as const;
-
-/**
- * Get recommended model for use case
- */
-export function getRecommendedEmbeddingModel(useCase: 'testing' | 'production' | 'privacy'): string {
-  switch (useCase) {
-    case 'testing':
-      return 'placeholder';
-    case 'production':
-      return 'openai';
-    case 'privacy':
-      return 'local';
-    default:
-      return 'placeholder';
-  }
-}
