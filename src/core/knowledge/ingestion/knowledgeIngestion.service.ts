@@ -6,6 +6,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
+import { normalizeText } from './textNormalizer.service';
 
 /**
  * Knowledge document metadata
@@ -100,12 +101,16 @@ export async function ingestKnowledgeDocument(
 
 
     // Step 1: Extract text
-    const text = extractTextFromBuffer(fileBuffer, filename);
-    log('[KnowledgeIngestion] Text extracted:', text.length, 'characters');
+    const rawText = extractTextFromBuffer(fileBuffer, filename);
+    log('[KnowledgeIngestion] Text extracted:', rawText.length, 'characters');
+
+    // Step 1b: Normalize text (remove noise before chunking)
+    const normalizedText = normalizeText(rawText);
+    log('[KnowledgeIngestion] Text normalized:', normalizedText.length, 'characters');
 
     // Step 2: Import chunking service
     const { chunkDocument } = await import('./knowledgeChunker.service');
-    const chunks = chunkDocument(text);
+    const chunks = chunkDocument(normalizedText);
     log('[KnowledgeIngestion] Document chunked into', chunks.length, 'chunks');
 
     // Step 3: Create document record
