@@ -128,6 +128,7 @@ export async function ingestKnowledgeDocument(
     const chunks = smartChunks.map((c) => ({
       content: c.content,
       tokenCount: c.tokenCount,
+      metadata: c.metadata ?? {},
       startIndex: 0,
       endIndex: c.content.length,
     }));

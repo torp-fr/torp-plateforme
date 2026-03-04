@@ -16,6 +16,8 @@
 import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
 import ExcelJS from 'exceljs';
+
+const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024; // 25 MB
 import Papa from 'papaparse';
 import { log, warn } from '@/lib/logger';
 
@@ -163,6 +165,12 @@ export async function extractDocumentContent(
   fileBuffer: Buffer,
   filename: string
 ): Promise<string> {
+  if (fileBuffer.length > MAX_DOCUMENT_SIZE) {
+    throw new Error(
+      `Document too large for ingestion: ${fileBuffer.length} bytes (limit: ${MAX_DOCUMENT_SIZE} bytes)`
+    );
+  }
+
   const ext = filename.split('.').pop()?.toLowerCase() ?? '';
 
   log(`[Extractor] Detected file type: .${ext} (${fileBuffer.length} bytes)`);
