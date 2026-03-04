@@ -42,10 +42,10 @@ Deno.serve(async (req) => {
     : [];
 
   if (inputArray.length === 0) {
-    return new Response(JSON.stringify({ error: "No text provided" }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: "inputs must be an array of strings" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   // OpenAI allows up to 2048 inputs per request; enforce a safe server-side cap

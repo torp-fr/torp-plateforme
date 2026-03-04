@@ -145,14 +145,14 @@ export async function semanticSearch(
     log('[KnowledgeIndex] Semantic search for:', query);
 
     // Generate query embedding (single call)
-    const queryEmbeddingResult = await generateEmbedding('query', query);
-    if (!queryEmbeddingResult) {
+    const queryEmbedding = await generateEmbedding(query);
+    if (!queryEmbedding) {
       throw new Error('Failed to generate query embedding');
     }
 
     // SQL vector search via pgvector — ORDER BY embedding_vector <=> query_embedding
     const { data, error: rpcError } = await supabase.rpc('match_knowledge_chunks', {
-      query_embedding: queryEmbeddingResult.embedding,
+      query_embedding: queryEmbedding,
       match_count: limit,
     });
 

@@ -118,9 +118,9 @@ export async function deduplicateChunks(chunks: Chunk[]): Promise<Chunk[]> {
 
     try {
       // Step 1: Generate a temporary embedding for this chunk
-      const result = await generateEmbedding(`dedup_probe_${i}`, chunk.content);
+      const embedding = await generateEmbedding(chunk.content);
 
-      if (!result) {
+      if (!embedding) {
         // Embedding failed — keep the chunk (safe default)
         warn(`[SemanticDedup] Embedding failed for chunk ${i} — keeping`);
         kept.push(withDedupMeta(chunk, false, null));
@@ -128,7 +128,7 @@ export async function deduplicateChunks(chunks: Chunk[]): Promise<Chunk[]> {
       }
 
       // Step 2: Find the nearest existing chunk in the vector index
-      similarity = await nearestSimilarity(result.embedding);
+      similarity = await nearestSimilarity(embedding);
 
     } catch (err) {
       warn(`[SemanticDedup] Probe error for chunk ${i} — keeping:`, err);
