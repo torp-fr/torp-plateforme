@@ -19,6 +19,7 @@
     "test:jest:watch": "jest --watch",
     "test:pipeline": "tsx --tsconfig tsconfig.json scripts/testKnowledgePipeline.ts",
     "ingest:batch": "tsx --tsconfig tsconfig.json scripts/batchIngestKnowledge.ts",
+    "validate:supabase": "tsx --tsconfig tsconfig.json scripts/validateSupabase.ts",
     "test:jest:verbose": "jest --verbose",
     "test:engines": "jest tests/thematicScoring.test.js tests/bonusSystem.test.js tests/narrativeEngine.test.js",
     "test:e2e": "playwright test",
