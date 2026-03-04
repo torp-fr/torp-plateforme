@@ -58,3 +58,18 @@ export interface ConflictStatistics {
   avgConflictScore: number;
   highSeverityCount: number;  // score > 0.8
 }
+
+/**
+ * Configuration for threshold tuning per conflict type
+ * Used to reduce false positives by allowing per-type sensitivity adjustment
+ */
+export interface ThresholdConfiguration {
+  id: string;
+  conflictType: ConflictType;
+  similarity_threshold: number;  // 0.0-1.0
+  confidence_weight: number;     // 0.0-1.0 (importance weight)
+  enabled: boolean;
+  description?: string;
+  created_at?: string;
+  updated_at?: string;
+}
