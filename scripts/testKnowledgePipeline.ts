@@ -92,6 +92,7 @@ function ms(start: number): string { return `${Date.now() - start}ms`; }
 
 const DOC_TYPE_TO_CATEGORY: Record<DocumentType, string> = {
   regulation:        'REGULATION',
+  normes:            'REGULATION',   // NF/EN/ISO standards are regulatory in nature
   technical_guide:   'TECHNICAL_GUIDE',
   pricing_reference: 'PRICING_REFERENCE',
   jurisprudence:     'LEGAL',
