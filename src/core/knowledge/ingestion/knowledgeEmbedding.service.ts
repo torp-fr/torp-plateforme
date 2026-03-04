@@ -37,7 +37,7 @@ export interface EmbeddingResult {
 // Internal: invoke the generate-embedding Edge Function for a batch of texts
 // ---------------------------------------------------------------------------
 
-async function invokeBatchEmbedding(texts: string[]): Promise<number[][]> {
+async function invokeBatchEmbedding(inputs: string[]): Promise<number[][]> {
   // Prefer user session token (browser); fall back to service role key (batch / server scripts).
   const { data: { session } } = await supabase.auth.getSession();
   const token =
@@ -58,7 +58,7 @@ async function invokeBatchEmbedding(texts: string[]): Promise<number[][]> {
     {
       headers: { Authorization: `Bearer ${token}` },
       body: {
-        texts,
+        inputs,
         model: EMBEDDING_MODEL,
         dimensions: EMBEDDING_DIMENSIONS,
       },
@@ -66,11 +66,17 @@ async function invokeBatchEmbedding(texts: string[]): Promise<number[][]> {
   );
 
   if (fnError) {
-    throw new Error(`[KnowledgeEmbedding] Edge Function error: ${fnError.message}`);
+    throw new Error(
+      `[KnowledgeEmbedding] Edge Function error: ${fnError.message}` +
+      (fnError.context ? ` (status ${(fnError.context as { status?: number }).status ?? '?'})` : '')
+    );
   }
 
   if (!data?.embeddings || !Array.isArray(data.embeddings)) {
-    throw new Error('[KnowledgeEmbedding] Invalid response from Edge Function — missing embeddings array');
+    const preview = JSON.stringify(data).slice(0, 200);
+    throw new Error(
+      `[KnowledgeEmbedding] Invalid response from Edge Function — missing embeddings array. Got: ${preview}`
+    );
   }
 
   return data.embeddings as number[][];
