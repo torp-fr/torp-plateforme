@@ -13,6 +13,11 @@
  * Flags:
  *   --dry-run   Run local pipeline steps only (no DB writes, no embeddings)
  *
+ * Safety guards:
+ *   - Duplicate detection  : skips documents already present in knowledge_documents
+ *   - Chunk explosion      : aborts if a document produces > MAX_CHUNKS_PER_DOCUMENT chunks
+ *   - File size            : logs and skips files exceeding 25 MB before extraction
+ *
  * Env:
  *   VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env / .env.local
  *
@@ -63,7 +68,9 @@ import type { DocumentType } from '@/core/knowledge/ingestion/documentClassifier
 // 3. Constants
 // ---------------------------------------------------------------------------
 
-const MAX_BATCH = 10;
+const MAX_BATCH              = 10;
+const MAX_CHUNKS_PER_DOCUMENT = 500;
+const MAX_DOCUMENT_SIZE      = 25 * 1024 * 1024; // 25 MB — mirrors documentExtractor guard
 
 const SUPPORTED_EXTENSIONS = new Set(['.pdf', '.docx', '.xlsx', '.csv', '.txt', '.md']);
 
@@ -106,27 +113,45 @@ function formatBytes(n: number): string {
 // 5. DB helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Guard: returns the existing document ID if a document with the same title
+ * already exists in knowledge_documents, or null if it is new.
+ */
+async function findExistingDocument(filename: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('knowledge_documents')
+    .select('id')
+    .eq('title', filename)
+    .maybeSingle();
+
+  if (error) {
+    // On DB error fall through — safer to attempt ingestion than to silently skip
+    return null;
+  }
+  return (data as { id: string } | null)?.id ?? null;
+}
+
 async function createDocument(
-  filename:      string,
+  filename:       string,
   normalizedText: string,
-  fileSize:      number,
-  docType:       DocumentType,
+  fileSize:       number,
+  docType:        DocumentType,
 ): Promise<string | null> {
   const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
 
   const { data: doc, error } = await supabase
     .from('knowledge_documents')
     .insert({
-      title:              filename,
-      content:            normalizedText,          // NOT NULL — use normalized text
-      category:           DOC_TYPE_TO_CATEGORY[docType],
-      source:             'internal',
-      file_size:          fileSize > 0 ? fileSize : 1,
-      chunk_count:        0,                       // updated after chunking completes
-      is_publishable:     false,                   // set by integrity service post-index
-      ingestion_status:   'processing',
+      title:               filename,
+      content:             normalizedText,        // NOT NULL — use normalized text
+      category:            DOC_TYPE_TO_CATEGORY[docType],
+      source:              'internal',
+      file_size:           fileSize > 0 ? fileSize : 1,
+      chunk_count:         0,                     // updated after chunking completes
+      is_publishable:      false,                 // set by integrity service post-index
+      ingestion_status:    'processing',
       ingestion_started_at: new Date().toISOString(),
-      created_by:         user?.id ?? null,
+      created_by:          user?.id ?? null,
     })
     .select('id')
     .single();
@@ -164,15 +189,11 @@ async function updateDocumentStatus(
   status: 'complete' | 'failed',
   extras: Record<string, unknown> = {},
 ): Promise<void> {
-  const patch: Record<string, unknown> = {
-    ingestion_status: status,
-    ...extras,
-  };
+  const patch: Record<string, unknown> = { ingestion_status: status, ...extras };
   if (status === 'complete') {
     patch.ingestion_completed_at = new Date().toISOString();
     patch.ingestion_progress     = 100;
   }
-
   await supabase.from('knowledge_documents').update(patch).eq('id', documentId);
 }
 
@@ -184,8 +205,11 @@ async function updateChunkCount(documentId: string, count: number): Promise<void
 // 6. Per-document result type
 // ---------------------------------------------------------------------------
 
+type DocOutcome = 'success' | 'failed' | 'skipped' | 'aborted';
+
 interface DocResult {
   filename:        string;
+  outcome:         DocOutcome;
   docType:         DocumentType;
   chunksGenerated: number;
   chunksFiltered:  number;
@@ -194,7 +218,7 @@ interface DocResult {
   integrityScore:  number;
   conflicts:       number;
   durationMs:      number;
-  error:           string | null;
+  note:            string | null;   // reason for skip / abort / failure
 }
 
 // ---------------------------------------------------------------------------
@@ -205,12 +229,12 @@ async function ingestDocument(
   filePath: string,
   dryRun:   boolean,
 ): Promise<DocResult> {
-  const filename   = path.basename(filePath);
-  const fileBuffer = fs.readFileSync(filePath);
-  const docStart   = Date.now();
+  const filename = path.basename(filePath);
+  const docStart = Date.now();
 
   const result: DocResult = {
     filename,
+    outcome:         'success',
     docType:         'generic',
     chunksGenerated: 0,
     chunksFiltered:  0,
@@ -219,14 +243,38 @@ async function ingestDocument(
     integrityScore:  0,
     conflicts:       0,
     durationMs:      0,
-    error:           null,
+    note:            null,
   };
 
   let documentId: string | null = null;
 
   try {
+    // ── Guard 1: File size ────────────────────────────────────────────────
+    const fileStat = fs.statSync(filePath);
+    if (fileStat.size > MAX_DOCUMENT_SIZE) {
+      warn('Doc', `SKIPPED (file too large): ${filename}  (${formatBytes(fileStat.size)} > ${formatBytes(MAX_DOCUMENT_SIZE)})`);
+      result.outcome = 'skipped';
+      result.note    = `file too large (${formatBytes(fileStat.size)})`;
+      result.durationMs = Date.now() - docStart;
+      return result;
+    }
+
+    const fileBuffer = fs.readFileSync(filePath);
+
     sep();
     info('Doc', `▶ ${filename}  (${formatBytes(fileBuffer.length)})`);
+
+    // ── Guard 2: Duplicate detection ──────────────────────────────────────
+    if (!dryRun) {
+      const existingId = await findExistingDocument(filename);
+      if (existingId) {
+        warn('Doc', `SKIPPED (already ingested): ${filename}  → existing id: ${existingId}`);
+        result.outcome = 'skipped';
+        result.note    = `already ingested (id: ${existingId})`;
+        result.durationMs = Date.now() - docStart;
+        return result;
+      }
+    }
 
     // ── Step 1: Extract ───────────────────────────────────────────────────
     let rawText: string;
@@ -239,7 +287,7 @@ async function ingestDocument(
     // ── Step 2: Normalize ─────────────────────────────────────────────────
     let normalizedText: string;
     {
-      const t = Date.now();
+      const t        = Date.now();
       normalizedText = normalizeText(rawText);
       const noise    = rawText.length - normalizedText.length;
       info('2 Normalize',
@@ -265,25 +313,39 @@ async function ingestDocument(
     // ── Step 5: Quality filter ────────────────────────────────────────────
     let qualityChunks;
     {
-      const t    = Date.now();
-      qualityChunks           = filterChunks(rawChunks);
-      result.chunksFiltered   = qualityChunks.length;
-      const removed           = rawChunks.length - qualityChunks.length;
+      const t       = Date.now();
+      qualityChunks = filterChunks(rawChunks);
+      result.chunksFiltered = qualityChunks.length;
+      const removed = rawChunks.length - qualityChunks.length;
       info('5 Filter', `${removed} removed → ${qualityChunks.length} remaining  (${ms(t)})`);
+    }
+
+    // ── Guard 3: Chunk explosion ──────────────────────────────────────────
+    if (qualityChunks.length > MAX_CHUNKS_PER_DOCUMENT) {
+      warn('Doc',
+        `ABORTED (too many chunks): ${filename}` +
+        `  ${qualityChunks.length} chunks > MAX_CHUNKS_PER_DOCUMENT=${MAX_CHUNKS_PER_DOCUMENT}`
+      );
+      result.outcome = 'aborted';
+      result.note    = `chunk explosion (${qualityChunks.length} chunks after filter)`;
+      result.durationMs = Date.now() - docStart;
+      return result;
     }
 
     // ── Step 6: Semantic deduplication ────────────────────────────────────
     let dedupedChunks;
     {
-      const t = Date.now();
-      dedupedChunks         = await deduplicateChunks(qualityChunks);
+      const t       = Date.now();
+      dedupedChunks = await deduplicateChunks(qualityChunks);
       result.chunksDeduped  = dedupedChunks.length;
-      const removed         = qualityChunks.length - dedupedChunks.length;
+      const removed = qualityChunks.length - dedupedChunks.length;
       info('6 Dedup', `${removed} duplicates removed → ${dedupedChunks.length} remaining  (${ms(t)})`);
     }
 
     if (dedupedChunks.length === 0) {
       warn('Doc', 'No chunks survived — document has no indexable content; skipping DB write');
+      result.outcome = 'skipped';
+      result.note    = 'no indexable content survived pipeline';
       result.durationMs = Date.now() - docStart;
       return result;
     }
@@ -305,8 +367,7 @@ async function ingestDocument(
       }
       ok('DB:Doc', `document created: ${documentId}  (${ms(t)})`);
 
-      // Insert chunk rows so indexChunks() can update them with embeddings
-      const t2 = Date.now();
+      const t2       = Date.now();
       const inserted = await insertChunks(documentId, dedupedChunks);
       if (!inserted) {
         throw new Error('Failed to insert chunk records');
@@ -319,7 +380,7 @@ async function ingestDocument(
 
     // ── Step 7: Generate embeddings ───────────────────────────────────────
     {
-      const t = Date.now();
+      const t             = Date.now();
       const embedResults  = await generateEmbeddingsForChunks(pipelineChunks);
       result.embeddings   = embedResults.length;
       info('7 Embeddings',
@@ -331,7 +392,7 @@ async function ingestDocument(
 
     // ── Step 8: Index (write embedding_vector column) ─────────────────────
     if (documentId) {
-      const t = Date.now();
+      const t       = Date.now();
       const indexed = await indexChunks(documentId, pipelineChunks);
       info('8 Index',
         indexed
@@ -344,8 +405,8 @@ async function ingestDocument(
 
     // ── Step 9: Integrity check ───────────────────────────────────────────
     if (documentId) {
-      const t = Date.now();
-      const report         = await verifyDocumentIntegrity(documentId);
+      const t               = Date.now();
+      const report          = await verifyDocumentIntegrity(documentId);
       result.integrityScore = report.integrityScore;
       info('9 Integrity',
         `score: ${report.integrityScore.toFixed(4)}` +
@@ -361,10 +422,10 @@ async function ingestDocument(
 
     // ── Step 10: Conflict detection ───────────────────────────────────────
     if (documentId) {
-      const t = Date.now();
-      const svc          = getKnowledgeConflictService();
-      const cResult      = await svc.detectKnowledgeConflicts(documentId);
-      result.conflicts   = cResult.conflictsDetected;
+      const t        = Date.now();
+      const svc      = getKnowledgeConflictService();
+      const cResult  = await svc.detectKnowledgeConflicts(documentId);
+      result.conflicts = cResult.conflictsDetected;
       info('10 Conflicts', `${result.conflicts} conflict(s) detected  (${ms(t)})`);
       if (result.conflicts > 0) {
         cResult.conflicts.slice(0, 2).forEach((c, i) => {
@@ -378,15 +439,16 @@ async function ingestDocument(
     // ── Mark complete ─────────────────────────────────────────────────────
     if (documentId) {
       await updateDocumentStatus(documentId, 'complete', {
-        is_publishable:  result.integrityScore >= 0.7,
+        is_publishable:     result.integrityScore >= 0.7,
         ingestion_progress: 100,
       });
       ok('DB', `status → complete`);
     }
 
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    result.error = msg;
+    const msg   = e instanceof Error ? e.message : String(e);
+    result.outcome = 'failed';
+    result.note    = msg;
     fail('Doc', msg);
 
     if (documentId) {
@@ -407,9 +469,9 @@ async function ingestDocument(
 
 async function run(): Promise<void> {
   // ── CLI args ──────────────────────────────────────────────────────────────
-  const args    = process.argv.slice(2);
-  const folder  = args.find((a) => !a.startsWith('--'));
-  const dryRun  = args.includes('--dry-run');
+  const args   = process.argv.slice(2);
+  const folder = args.find((a) => !a.startsWith('--'));
+  const dryRun = args.includes('--dry-run');
 
   if (!folder) {
     console.error('Usage: pnpm ingest:batch <folder> [--dry-run]');
@@ -426,16 +488,17 @@ async function run(): Promise<void> {
   const allFiles = fs.readdirSync(folderAbs)
     .filter((f) => SUPPORTED_EXTENSIONS.has(path.extname(f).toLowerCase()))
     .map((f) => path.join(folderAbs, f))
-    .sort();                                     // deterministic order
+    .sort();   // deterministic order
 
   const batch = allFiles.slice(0, MAX_BATCH);
 
   sep2();
   console.log('  Knowledge Brain — Batch Ingestion');
   sep2();
-  info('Init', `Folder    : ${folderAbs}`);
+  info('Init', `Folder     : ${folderAbs}`);
   info('Init', `Files found: ${allFiles.length}  (processing ${batch.length}/${MAX_BATCH} max)`);
-  info('Init', `Dry run   : ${dryRun ? 'yes (--dry-run)' : 'no'}`);
+  info('Init', `Dry run    : ${dryRun ? 'yes (--dry-run)' : 'no'}`);
+  info('Init', `Guards     : duplicate-check  chunk-limit=${MAX_CHUNKS_PER_DOCUMENT}  size-limit=${formatBytes(MAX_DOCUMENT_SIZE)}`);
   sep2();
 
   if (batch.length === 0) {
@@ -444,9 +507,7 @@ async function run(): Promise<void> {
   }
 
   if (allFiles.length > MAX_BATCH) {
-    warn('Init',
-      `${allFiles.length - MAX_BATCH} file(s) skipped (exceeded MAX_BATCH=${MAX_BATCH})`
-    );
+    warn('Init', `${allFiles.length - MAX_BATCH} file(s) skipped (exceeded MAX_BATCH=${MAX_BATCH})`);
   }
 
   // ── Batch accumulators ────────────────────────────────────────────────────
@@ -461,26 +522,32 @@ async function run(): Promise<void> {
     const docResult = await ingestDocument(filePath, dryRun);
     results.push(docResult);
 
-    // Per-document summary line
-    const status = docResult.error ? '✗ FAILED' : '✓ OK    ';
+    // Per-document one-liner
+    const statusIcon = {
+      success: '✓ OK     ',
+      failed:  '✗ FAILED ',
+      skipped: '— SKIPPED',
+      aborted: '⚠ ABORTED',
+    }[docResult.outcome];
+
     info('Result',
-      `${status}  type=${docResult.docType}` +
+      `${statusIcon}  type=${docResult.docType}` +
       `  chunks=${docResult.chunksDeduped}` +
       `  emb=${docResult.embeddings}` +
       `  integrity=${docResult.integrityScore > 0 ? docResult.integrityScore.toFixed(3) : 'n/a'}` +
-      `  ${docResult.durationMs}ms`
+      `  ${docResult.durationMs}ms` +
+      (docResult.note ? `  [${docResult.note}]` : '')
     );
-    if (docResult.error) {
-      fail('Error', docResult.error.slice(0, 120));
-    }
   }
 
   // ── Batch summary ─────────────────────────────────────────────────────────
-  const succeeded     = results.filter((r) => !r.error);
-  const failed        = results.filter((r) =>  r.error);
-  const totalChunks   = results.reduce((a, r) => a + r.chunksDeduped, 0);
-  const totalEmb      = results.reduce((a, r) => a + r.embeddings, 0);
-  const totalDuration = Date.now() - globalStart;
+  const succeeded   = results.filter((r) => r.outcome === 'success');
+  const failed      = results.filter((r) => r.outcome === 'failed');
+  const skipped     = results.filter((r) => r.outcome === 'skipped');
+  const aborted     = results.filter((r) => r.outcome === 'aborted');
+  const totalChunks = results.reduce((a, r) => a + r.chunksDeduped, 0);
+  const totalEmb    = results.reduce((a, r) => a + r.embeddings, 0);
+  const elapsed     = Date.now() - globalStart;
 
   sep2();
   console.log('  BATCH SUMMARY');
@@ -488,15 +555,19 @@ async function run(): Promise<void> {
   info('Summary', `Documents processed  : ${results.length}`);
   info('Summary', `Documents succeeded  : ${succeeded.length}`);
   info('Summary', `Documents failed     : ${failed.length}`);
+  info('Summary', `Documents skipped    : ${skipped.length}` +
+    (skipped.length > 0 ? `  (${skipped.map((r) => r.note).join('; ')})` : ''));
+  info('Summary', `Documents aborted    : ${aborted.length}` +
+    (aborted.length > 0 ? `  (${aborted.map((r) => r.note).join('; ')})` : ''));
   info('Summary', `Total chunks created : ${totalChunks}`);
   info('Summary', `Total embeddings     : ${totalEmb}`);
-  info('Summary', `Total elapsed        : ${totalDuration}ms`);
+  info('Summary', `Total elapsed        : ${elapsed}ms`);
   sep2();
 
-  // ── Per-document table ────────────────────────────────────────────────────
+  // ── Per-document results table ────────────────────────────────────────────
   console.log('');
-  console.log('  Document                         Type               Chks  Emb   Integrity  Time');
-  console.log('  ' + '─'.repeat(70));
+  console.log('  Document                         Type               Chks  Emb   Integrity  Time      Status');
+  console.log('  ' + '─'.repeat(85));
   for (const r of results) {
     const name   = r.filename.padEnd(32).slice(0, 32);
     const type   = r.docType.padEnd(18).slice(0, 18);
@@ -504,8 +575,13 @@ async function run(): Promise<void> {
     const emb    = String(r.embeddings).padStart(4);
     const score  = r.integrityScore > 0 ? r.integrityScore.toFixed(3) : '  n/a';
     const dur    = `${r.durationMs}ms`.padStart(7);
-    const err    = r.error ? '  ← FAILED' : '';
-    console.log(`  ${name} ${type} ${chunks} ${emb}    ${score}  ${dur}${err}`);
+    const status = {
+      success: 'OK',
+      failed:  'FAILED',
+      skipped: 'SKIPPED',
+      aborted: 'ABORTED',
+    }[r.outcome];
+    console.log(`  ${name} ${type} ${chunks} ${emb}    ${score}  ${dur}   ${status}`);
   }
   console.log('');
 
