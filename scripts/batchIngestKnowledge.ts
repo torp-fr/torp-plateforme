@@ -2,8 +2,8 @@
 /**
  * Knowledge Brain — Batch Ingestion Script
  *
- * Ingests up to MAX_BATCH=10 documents from a folder through the full
- * 10-step Knowledge Brain ingestion pipeline, writing real records to
+ * Ingests up to MAX_BATCH=10 documents from a folder (recursively) through the
+ * full 10-step Knowledge Brain ingestion pipeline, writing real records to
  * Supabase (knowledge_documents + knowledge_chunks + embedding_vector).
  *
  * Usage:
@@ -17,11 +17,15 @@
  *   - Duplicate detection  : skips documents already present in knowledge_documents
  *   - Chunk explosion      : aborts if a document produces > MAX_CHUNKS_PER_DOCUMENT chunks
  *   - File size            : logs and skips files exceeding 25 MB before extraction
+ *   - README filter        : README.md / README.txt files are always ignored
  *
  * Env:
- *   VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env / .env.local
+ *   SUPABASE_SERVICE_ROLE_KEY  (preferred — allows server-side Edge Function calls)
+ *   VITE_SUPABASE_URL          (or SUPABASE_URL)
+ *   VITE_SUPABASE_ANON_KEY     (fallback if no service role key)
  *
  * Supported formats: .pdf  .docx  .xlsx  .csv  .txt  .md
+ * Scanning         : recursive — all matching files in subdirectories are collected
  */
 
 import fs   from 'node:fs';
@@ -60,7 +64,7 @@ import { generateEmbeddingsForChunks } from '@/core/knowledge/ingestion/knowledg
 import { indexChunks }                 from '@/core/knowledge/ingestion/knowledgeIndex.service';
 import { verifyDocumentIntegrity }     from '@/core/knowledge/integrity/knowledgeIntegrity.service';
 import { getKnowledgeConflictService } from '@/core/knowledge/conflicts/knowledgeConflict.service';
-import { supabase }                    from '@/lib/supabase';
+import { getSupabase }                 from '@/lib/supabase';
 
 import type { DocumentType } from '@/core/knowledge/ingestion/documentClassifier.service';
 
@@ -73,6 +77,38 @@ const MAX_CHUNKS_PER_DOCUMENT = 500;
 const MAX_DOCUMENT_SIZE      = 25 * 1024 * 1024; // 25 MB — mirrors documentExtractor guard
 
 const SUPPORTED_EXTENSIONS = new Set(['.pdf', '.docx', '.xlsx', '.csv', '.txt', '.md']);
+
+/**
+ * Files that are always skipped regardless of extension.
+ * README files describe the corpus structure — they are not knowledge documents.
+ */
+const IGNORED_FILENAMES = new Set(['README.md', 'README.txt', 'readme.md', 'readme.txt']);
+
+/**
+ * Recursively collects all ingestible files under `dir`.
+ * - Descends into subdirectories
+ * - Filters by SUPPORTED_EXTENSIONS
+ * - Skips IGNORED_FILENAMES
+ * - Returns absolute paths sorted deterministically
+ */
+function collectFiles(dir: string): string[] {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectFiles(fullPath));
+    } else if (
+      SUPPORTED_EXTENSIONS.has(path.extname(entry.name).toLowerCase()) &&
+      !IGNORED_FILENAMES.has(entry.name)
+    ) {
+      files.push(fullPath);
+    }
+  }
+
+  return files.sort();
+}
 
 /** Maps pipeline DocumentType → valid knowledge_documents.category enum value */
 const DOC_TYPE_TO_CATEGORY: Record<DocumentType, string> = {
@@ -118,6 +154,7 @@ function formatBytes(n: number): string {
  * already exists in knowledge_documents, or null if it is new.
  */
 async function findExistingDocument(filename: string): Promise<string | null> {
+  const supabase = getSupabase();
   const { data, error } = await supabase
     .from('knowledge_documents')
     .select('id')
@@ -137,6 +174,7 @@ async function createDocument(
   fileSize:       number,
   docType:        DocumentType,
 ): Promise<string | null> {
+  const supabase = getSupabase();
   const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
 
   const { data: doc, error } = await supabase
@@ -168,6 +206,7 @@ async function insertChunks(
   documentId: string,
   chunks: { content: string; tokenCount: number; metadata?: Record<string, unknown> }[],
 ): Promise<boolean> {
+  const supabase = getSupabase();
   const records = chunks.map((c, i) => ({
     document_id: documentId,
     content:     c.content,
@@ -189,6 +228,7 @@ async function updateDocumentStatus(
   status: 'complete' | 'failed',
   extras: Record<string, unknown> = {},
 ): Promise<void> {
+  const supabase = getSupabase();
   const patch: Record<string, unknown> = { ingestion_status: status, ...extras };
   if (status === 'complete') {
     patch.ingestion_completed_at = new Date().toISOString();
@@ -198,7 +238,7 @@ async function updateDocumentStatus(
 }
 
 async function updateChunkCount(documentId: string, count: number): Promise<void> {
-  await supabase.from('knowledge_documents').update({ chunk_count: count }).eq('id', documentId);
+  await getSupabase().from('knowledge_documents').update({ chunk_count: count }).eq('id', documentId);
 }
 
 // ---------------------------------------------------------------------------
@@ -484,18 +524,15 @@ async function run(): Promise<void> {
     process.exit(1);
   }
 
-  // ── Discover files ────────────────────────────────────────────────────────
-  const allFiles = fs.readdirSync(folderAbs)
-    .filter((f) => SUPPORTED_EXTENSIONS.has(path.extname(f).toLowerCase()))
-    .map((f) => path.join(folderAbs, f))
-    .sort();   // deterministic order
-
-  const batch = allFiles.slice(0, MAX_BATCH);
+  // ── Discover files (recursive) ────────────────────────────────────────────
+  const allFiles = collectFiles(folderAbs);   // recursive, README-filtered, sorted
+  const batch    = allFiles.slice(0, MAX_BATCH);
 
   sep2();
   console.log('  Knowledge Brain — Batch Ingestion');
   sep2();
   info('Init', `Folder     : ${folderAbs}`);
+  info('Init', `Scan       : recursive (subdirectories included, README files skipped)`);
   info('Init', `Files found: ${allFiles.length}  (processing ${batch.length}/${MAX_BATCH} max)`);
   info('Init', `Dry run    : ${dryRun ? 'yes (--dry-run)' : 'no'}`);
   info('Init', `Guards     : duplicate-check  chunk-limit=${MAX_CHUNKS_PER_DOCUMENT}  size-limit=${formatBytes(MAX_DOCUMENT_SIZE)}`);

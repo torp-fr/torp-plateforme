@@ -24,53 +24,77 @@
  *   ❌ Real-time subscription conflicts
  *
  * If you need to use Supabase, import from here. Period.
+ *
+ * INITIALIZATION:
+ *   The client is initialized LAZILY on first access (not at module import time).
+ *   This allows Node.js scripts (batch ingestion, migrations) to load the module
+ *   before environment variables are available, and to supply credentials via
+ *   dotenv at startup.
+ *
+ *   Credential resolution order:
+ *     URL  : VITE_SUPABASE_URL → SUPABASE_URL
+ *     KEY  : SUPABASE_SERVICE_ROLE_KEY → VITE_SUPABASE_ANON_KEY
+ *
+ *   Batch / server scripts should set SUPABASE_SERVICE_ROLE_KEY so they can
+ *   invoke Edge Functions and write to DB without a user session.
  */
 
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 import { env } from '@/config/env';
-import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
-// Safe accessor for Vite env (undefined in Node.js/tsx context)
-const _metaEnv = (import.meta.env ?? {}) as Record<string, string | undefined>;
+// ---------------------------------------------------------------------------
+// Lazy singleton
+// ---------------------------------------------------------------------------
 
-// Get Supabase credentials from environment
-const supabaseUrl = env.app.env === 'production'
-  ? (_metaEnv.VITE_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? '')
-  : (_metaEnv.VITE_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? 'http://localhost:54321');
-
-const supabaseAnonKey = _metaEnv.VITE_SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY ?? '';
-
-log('[Supabase Config] URL:', supabaseUrl);
-log('[Supabase Config] Key exists:', !!supabaseAnonKey);
-log('[Supabase Config] Key length:', supabaseAnonKey ? supabaseAnonKey.length : 0);
-log('[Supabase Config] env.app.env:', env.app.env);
-log('[Supabase Config] env.api.useMock:', env.api.useMock);
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  warn(
-    '⚠️  Supabase credentials not found. Using mock services.\n' +
-    'To use real Supabase, set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env'
-  );
-}
-
-// DEBUG: Detect duplicate Supabase client instantiation
-if (!supabaseUrl) {
-  console.error('🔥 CRITICAL: supabaseUrl is EMPTY - This indicates a duplicate Supabase client initialization outside /src/lib/supabase.ts');
-}
-
-/**
- * Supabase client instance
- * Typed with Database schema for full TypeScript support
- */
 let _supabase: ReturnType<typeof createClient<Database>> | null = null;
 
-export function getSupabase() {
+/**
+ * Returns the shared Supabase client, creating it on first call.
+ *
+ * Credential resolution (first non-empty value wins):
+ *   URL : import.meta.env.VITE_SUPABASE_URL → process.env.VITE_SUPABASE_URL → process.env.SUPABASE_URL
+ *   KEY : process.env.SUPABASE_SERVICE_ROLE_KEY → import.meta.env.VITE_SUPABASE_ANON_KEY → process.env.VITE_SUPABASE_ANON_KEY
+ *
+ * Throws with a clear message if the URL or key is missing, so callers fail
+ * fast with an actionable error rather than a cryptic network failure later.
+ */
+export function getSupabase(): ReturnType<typeof createClient<Database>> {
   if (!_supabase) {
-    // Use a placeholder key when none is configured so createClient doesn't throw.
-    // All DB calls will fail with auth errors, which the test harness handles gracefully.
-    const effectiveKey = supabaseAnonKey || 'placeholder-key-no-db-access';
-    _supabase = createClient<Database>(supabaseUrl, effectiveKey, {
+    // Safe accessor for Vite env (undefined in Node.js / tsx context)
+    const _metaEnv = (import.meta.env ?? {}) as Record<string, string | undefined>;
+
+    const url =
+      _metaEnv.VITE_SUPABASE_URL ??
+      process.env.VITE_SUPABASE_URL ??
+      process.env.SUPABASE_URL ??
+      '';
+
+    // Prefer the service role key (batch scripts / server) over the anon key (browser).
+    const key =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ??
+      _metaEnv.VITE_SUPABASE_ANON_KEY ??
+      process.env.VITE_SUPABASE_ANON_KEY ??
+      '';
+
+    if (!url) {
+      throw new Error(
+        '[Supabase] Missing Supabase URL.\n' +
+        'Set VITE_SUPABASE_URL (or SUPABASE_URL) in .env.local before running this script.\n' +
+        'Get the value from: Supabase Dashboard → Project → Settings → API → Project URL'
+      );
+    }
+
+    if (!key) {
+      throw new Error(
+        '[Supabase] Missing Supabase credentials.\n' +
+        'For batch / server scripts : set SUPABASE_SERVICE_ROLE_KEY in .env.local\n' +
+        'For browser / frontend     : set VITE_SUPABASE_ANON_KEY in .env.local\n' +
+        'Get the values from: Supabase Dashboard → Project → Settings → API'
+      );
+    }
+
+    _supabase = createClient<Database>(url, key, {
       auth: {
         autoRefreshToken: true,
         persistSession: true,
@@ -83,34 +107,54 @@ export function getSupabase() {
         },
       },
     });
-
-    log('🔥 SUPABASE INITIALIZED');
   }
 
   return _supabase;
 }
 
-export const supabase = getSupabase();
+// ---------------------------------------------------------------------------
+// Backward-compatible `supabase` export
+//
+// All existing callers that do `import { supabase } from '@/lib/supabase'`
+// continue to work without changes.  The Proxy defers the `getSupabase()`
+// call (and thus `createClient()`) until the first property access, which
+// happens well after dotenv has loaded the environment variables.
+// ---------------------------------------------------------------------------
 
-// DEBUG: Verify supabase client URL for Edge Function invoke debugging
-log('[SUPABASE CLIENT INIT]', {
-  supabaseUrl,
-  hasAnonKey: !!supabaseAnonKey,
-  clientUrl: supabase.supabaseUrl,
+type SupabaseClient = ReturnType<typeof createClient<Database>>;
+
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_target, prop: string | symbol) {
+    const client = getSupabase();
+    const val = (client as unknown as Record<string | symbol, unknown>)[prop];
+    // Bind methods so `this` inside Supabase SDK code resolves correctly.
+    return typeof val === 'function' ? (val as (...a: unknown[]) => unknown).bind(client) : val;
+  },
 });
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 /**
- * Check if Supabase is configured
+ * Returns true if Supabase is fully configured and mock mode is off.
  */
 export const isSupabaseConfigured = (): boolean => {
-  return Boolean(supabaseUrl && supabaseAnonKey && !env.api.useMock);
+  const _metaEnv = (import.meta.env ?? {}) as Record<string, string | undefined>;
+  const url = _metaEnv.VITE_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '';
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    _metaEnv.VITE_SUPABASE_ANON_KEY ??
+    process.env.VITE_SUPABASE_ANON_KEY ??
+    '';
+  return Boolean(url && key && !env.api.useMock);
 };
 
 /**
  * Get current authenticated user
  */
 export const getCurrentUser = async () => {
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const { data: { user }, error } = await getSupabase().auth.getUser();
   if (error) throw error;
   return user;
 };
@@ -119,7 +163,7 @@ export const getCurrentUser = async () => {
  * Get current session
  */
 export const getSession = async () => {
-  const { data: { session }, error } = await supabase.auth.getSession();
+  const { data: { session }, error } = await getSupabase().auth.getSession();
   if (error) throw error;
   return session;
 };
@@ -128,7 +172,7 @@ export const getSession = async () => {
  * Sign out
  */
 export const signOut = async () => {
-  const { error } = await supabase.auth.signOut();
+  const { error } = await getSupabase().auth.signOut();
   if (error) throw error;
 };
 
@@ -141,7 +185,7 @@ export const uploadFile = async (
   file: File,
   options?: { upsert?: boolean }
 ) => {
-  const { data, error } = await supabase.storage
+  const { data, error } = await getSupabase().storage
     .from(bucket)
     .upload(path, file, options);
 
@@ -153,7 +197,7 @@ export const uploadFile = async (
  * Get public URL for a file
  */
 export const getPublicUrl = (bucket: string, path: string) => {
-  const { data } = supabase.storage
+  const { data } = getSupabase().storage
     .from(bucket)
     .getPublicUrl(path);
 
@@ -168,7 +212,7 @@ export const getSignedUrl = async (
   path: string,
   expiresIn: number = 3600
 ) => {
-  const { data, error } = await supabase.storage
+  const { data, error } = await getSupabase().storage
     .from(bucket)
     .createSignedUrl(path, expiresIn);
 
@@ -180,7 +224,7 @@ export const getSignedUrl = async (
  * Delete file from storage
  */
 export const deleteFile = async (bucket: string, path: string) => {
-  const { error } = await supabase.storage
+  const { error } = await getSupabase().storage
     .from(bucket)
     .remove([path]);
 
@@ -190,12 +234,13 @@ export const deleteFile = async (bucket: string, path: string) => {
 /**
  * Real-time subscription helper
  */
-export const subscribeToTable = <T = any>(
+export const subscribeToTable = <T = unknown>(
   table: string,
   callback: (payload: T) => void,
   filter?: string
 ) => {
-  const channel = supabase
+  const client = getSupabase();
+  const channel = client
     .channel(`${table}_changes`)
     .on(
       'postgres_changes',
@@ -210,7 +255,7 @@ export const subscribeToTable = <T = any>(
     .subscribe();
 
   return () => {
-    supabase.removeChannel(channel);
+    client.removeChannel(channel);
   };
 };
 
