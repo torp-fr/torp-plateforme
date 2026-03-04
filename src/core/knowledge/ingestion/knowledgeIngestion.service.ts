@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
 import { normalizeText } from './textNormalizer.service';
 import { classifyDocument } from './documentClassifier.service';
+import { extractDocumentContent } from './documentExtractor.service';
 
 /**
  * Knowledge document metadata
@@ -101,8 +102,8 @@ export async function ingestKnowledgeDocument(
     log('[KnowledgeIngestion] Starting ingestion for:', filename);
 
 
-    // Step 1: Extract text
-    const rawText = extractTextFromBuffer(fileBuffer, filename);
+    // Step 1: Extract text (format-aware: PDF, DOCX, XLSX, CSV, TXT, MD)
+    const rawText = await extractDocumentContent(fileBuffer, filename);
     log('[KnowledgeIngestion] Text extracted:', rawText.length, 'characters');
 
     // Step 1b: Normalize text (remove noise before chunking)
