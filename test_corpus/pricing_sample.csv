@@ -1,0 +1,60 @@
+Lot,Code article,Désignation,Unité,Quantité,Prix unitaire HT (€),Montant HT (€),TVA (%),Montant TTC (€)
+LOT 01 - GROS ŒUVRE,,,,,,,,,
+,GO-001,Terrassement général et fouilles en terrain ordinaire,m³,450,18.50,8325.00,10,9157.50
+,GO-002,Béton de propreté dosé à 150 kg/m³,m³,12,95.00,1140.00,10,1254.00
+,GO-003,Béton armé pour semelles filantes - dosé à 350 kg/m³,m³,38,185.00,7030.00,10,7733.00
+,GO-004,Béton armé pour voiles de sous-sol ép. 20 cm,m³,65,210.00,13650.00,10,15015.00
+,GO-005,Maçonnerie en parpaings creux 20x20x50 cm,m²,320,42.00,13440.00,10,14784.00
+,GO-006,Plancher dalle pleine ép. 20 cm - béton armé,m²,180,95.00,17100.00,10,18810.00
+,GO-007,Chaînages horizontaux et verticaux,ml,240,28.00,6720.00,10,7392.00
+,GO-008,Enduit de façade monocouche hydrofuge,m²,480,22.00,10560.00,10,11616.00
+,GO-TOTAL,TOTAL LOT 01 - GROS ŒUVRE,,,,,77965.00,,85761.50
+LOT 02 - CHARPENTE / COUVERTURE,,,,,,,,,
+,CC-001,Charpente industrielle fermettes bois,m²,220,38.00,8360.00,10,9196.00
+,CC-002,Contreventement OSB 18 mm,m²,220,14.50,3190.00,10,3509.00
+,CC-003,Tuiles terre cuite 20x30 teinte traditionnelle,m²,240,32.00,7680.00,10,8448.00
+,CC-004,Faîtières et arêtiers assortis,ml,42,18.00,756.00,10,831.60
+,CC-005,Gouttières zinc développé 333 demi-ronde,ml,88,48.00,4224.00,10,4646.40
+,CC-006,Descentes EP zinc Ø 100 mm,ml,36,42.00,1512.00,10,1663.20
+,CC-007,Isolation combles perdus laine de verre R=7,m²,210,28.00,5880.00,10,6468.00
+,CC-008,Trappe d'accès combles isolée 60x80,U,2,185.00,370.00,10,407.00
+,CC-TOTAL,TOTAL LOT 02 - CHARPENTE / COUVERTURE,,,,,31972.00,,35169.20
+LOT 03 - MENUISERIES EXTÉRIEURES,,,,,,,,,
+,ME-001,Fenêtre PVC 2 vantaux 120x120 double vitrage 4/16/4 Uw≤1.3,U,12,480.00,5760.00,10,6336.00
+,ME-002,Porte-fenêtre PVC 2 vantaux 140x215,U,4,680.00,2720.00,10,2992.00
+,ME-003,Porte d'entrée acier isolée 90x215 - serrure 3 points,U,1,1250.00,1250.00,10,1375.00
+,ME-004,Porte de garage sectionnelle motorisée 3000x2200,U,1,2400.00,2400.00,10,2640.00
+,ME-005,Volets battants PVC blancs - y/c ferrures,U,12,195.00,2340.00,10,2574.00
+,ME-006,Seuils et appuis béton pour fenêtres,U,12,65.00,780.00,10,858.00
+,ME-TOTAL,TOTAL LOT 03 - MENUISERIES EXTÉRIEURES,,,,,15250.00,,16775.00
+LOT 04 - PLOMBERIE / SANITAIRE,,,,,,,,,
+,PL-001,Réseau alimentation cuivre Ø 12/14 et 16/18,ml,120,28.00,3360.00,10,3696.00
+,PL-002,Réseau évacuation PVC Ø 32 à 100 mm,ml,85,18.00,1530.00,10,1683.00
+,PL-003,Chauffe-eau thermodynamique 200 L COP 3.5,U,1,1650.00,1650.00,10,1815.00
+,PL-004,WC suspendu complet avec bâti-support,U,2,580.00,1160.00,10,1276.00
+,PL-005,Lavabo simple vasque 60 cm avec mitigeur,U,3,280.00,840.00,10,924.00
+,PL-006,Douche 90x90 receveur extra-plat avec paroi,U,2,650.00,1300.00,10,1430.00
+,PL-007,Baignoire acrylique 170x70 avec mitigeur bain-douche,U,1,480.00,480.00,10,528.00
+,PL-008,Évier inox 2 bacs 80 cm avec mitigeur cuisine,U,1,320.00,320.00,10,352.00
+,PL-009,Nourrice de distribution cuivre 6 départs,U,2,125.00,250.00,10,275.00
+,PL-010,Robinets d'arrêt équerre et vannes de sectionnement,Fft,1,380.00,380.00,10,418.00
+,PL-TOTAL,TOTAL LOT 04 - PLOMBERIE / SANITAIRE,,,,,11270.00,,12397.00
+LOT 05 - ELECTRICITÉ,,,,,,,,,
+,EL-001,Tableau général basse tension 3x400V - 63A,U,1,850.00,850.00,10,935.00
+,EL-002,Câblage circuits lumière VVT 1.5 mm²,ml,350,3.20,1120.00,10,1232.00
+,EL-003,Câblage circuits prises VVT 2.5 mm²,ml,280,4.50,1260.00,10,1386.00
+,EL-004,Câblage circuits spécialisés (cuisinière four lave-linge),ml,60,5.80,348.00,10,382.80
+,EL-005,Interrupteurs et prises de courant 2P+T,U,45,18.00,810.00,10,891.00
+,EL-006,Éclairage LED encastré 10W - plaques 60x60,U,28,65.00,1820.00,10,2002.00
+,EL-007,Détecteur de fumée NF EN 14604,U,3,45.00,135.00,10,148.50
+,EL-008,Tableau de communication VDI grade 3,U,1,420.00,420.00,10,462.00
+,EL-009,VMC double flux - rendement ≥ 85 %,U,1,1850.00,1850.00,10,2035.00
+,EL-010,Mise à la terre et équipotentielle générale,Fft,1,480.00,480.00,10,528.00
+,EL-TOTAL,TOTAL LOT 05 - ELECTRICITÉ,,,,,9093.00,,10002.30
+RÉCAPITULATIF GÉNÉRAL,,,,,,,,,
+,REC-01,Total LOT 01 - Gros Œuvre,Fft,1,77965.00,77965.00,10,85761.50
+,REC-02,Total LOT 02 - Charpente / Couverture,Fft,1,31972.00,31972.00,10,35169.20
+,REC-03,Total LOT 03 - Menuiseries Extérieures,Fft,1,15250.00,15250.00,10,16775.00
+,REC-04,Total LOT 04 - Plomberie / Sanitaire,Fft,1,11270.00,11270.00,10,12397.00
+,REC-05,Total LOT 05 - Electricité,Fft,1,9093.00,9093.00,10,10002.30
+,REC-TOTAL,TOTAL GÉNÉRAL MARCHÉ HT,,,,,145550.00,,160105.00
