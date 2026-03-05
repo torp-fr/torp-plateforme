@@ -37,62 +37,51 @@ export interface IndexStats {
  * and (non-blocking) conflict detection.
  */
 export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): Promise<boolean> {
+  if (!documentId) {
+    throw new Error('indexChunks: documentId required');
+  }
+
   try {
     log('[KnowledgeIndex] Indexing', chunks.length, 'chunks for document:', documentId);
 
     // Step 1: Generate embeddings in batches (real OpenAI calls via Edge Function)
     const embeddings = await generateEmbeddingsForChunks(chunks);
-    log('[KnowledgeIndex] Generated', embeddings.length, 'embeddings');
 
     if (embeddings.length === 0) {
       warn('[KnowledgeIndex] No embeddings generated — aborting index');
       return false;
     }
 
-    // Step 2: Fetch chunk IDs for this document (one query, ordered by chunk_index)
-    const { data: chunkRows, error: fetchError } = await supabase
-      .from('knowledge_chunks')
-      .select('id, chunk_index')
-      .eq('document_id', documentId)
-      .order('chunk_index', { ascending: true });
+    console.log(`[KnowledgeIndex] updating ${embeddings.length} vectors for document ${documentId}`);
 
-    if (fetchError || !chunkRows) {
-      warn('[KnowledgeIndex] Failed to fetch chunk IDs:', fetchError?.message);
-      return false;
-    }
-
-    // Step 3: Build bulk upsert payload — match embedding[i] to chunk by chunk_index
-    //         New writes go to `embedding_vector` (pgvector); `embedding` is left intact
-    //         for backward compatibility with any existing rows.
-    const updates = chunkRows
-      .map((row) => {
-        const match = embeddings[row.chunk_index];
-        if (!match) return null;
-        return {
-          id: row.id,
-          embedding_vector: match.embedding,
-        };
+    // Step 2: UPDATE embedding_vector on existing rows — never insert new rows.
+    // chunkId is "chunk_N" where N is the 0-based position in the chunks array,
+    // which equals the chunk_index assigned by insertChunks().
+    const updateResults = await Promise.all(
+      embeddings.map(({ chunkId, embedding }) => {
+        const chunkIndex = parseInt(chunkId.replace('chunk_', ''), 10);
+        return supabase
+          .from('knowledge_chunks')
+          .update({ embedding_vector: embedding })
+          .eq('document_id', documentId)
+          .eq('chunk_index', chunkIndex);
       })
-      .filter((u): u is { id: string; embedding_vector: number[] } => u !== null);
+    );
 
-    if (updates.length === 0) {
-      warn('[KnowledgeIndex] No embedding updates to apply');
+    const failed = updateResults.filter((r) => r.error);
+    if (failed.length > 0) {
+      failed.forEach((r) => warn('[KnowledgeIndex] Update failed:', r.error?.message));
+    }
+
+    const successCount = updateResults.length - failed.length;
+    log('[KnowledgeIndex] Updated', successCount, '/', embeddings.length, 'embedding vectors');
+
+    if (successCount === 0) {
+      warn('[KnowledgeIndex] All embedding updates failed');
       return false;
     }
 
-    // Step 4: Single bulk upsert — one round-trip regardless of chunk count
-    const { error: upsertError } = await supabase
-      .from('knowledge_chunks')
-      .upsert(updates, { onConflict: 'id' });
-
-    if (upsertError) {
-      warn('[KnowledgeIndex] Bulk upsert failed:', upsertError.message);
-      return false;
-    }
-
-    log('[KnowledgeIndex] Bulk upsert complete —', updates.length, 'chunks updated');
-
-    // Step 5: Integrity verification (blocking — result feeds is_publishable flag)
+    // Step 3: Integrity verification (blocking — result feeds is_publishable flag)
     log('[KnowledgeIndex] Starting integrity verification for document:', documentId);
     const integrityResult = await verifyAndPersistIntegrity(documentId);
 
@@ -103,7 +92,7 @@ export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): P
       warn('[KnowledgeIndex] Integrity verification failed:', integrityResult.error);
     }
 
-    // Step 6: Conflict detection (non-blocking — errors must not fail ingestion)
+    // Step 4: Conflict detection (non-blocking — errors must not fail ingestion)
     try {
       const conflictService = getKnowledgeConflictService();
       const conflictResult = await conflictService.detectKnowledgeConflicts(documentId);
