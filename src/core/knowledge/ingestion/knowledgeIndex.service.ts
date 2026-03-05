@@ -4,7 +4,7 @@
  *
  * Key changes from v1.0:
  *  - Bug fix: getSupabaseClient() did not exist — replaced with supabase import
- *  - Embeddings written to `embedding_vector` (vector(384)) via single bulk upsert
+ *  - Embeddings written to `embedding_vector` (vector(384)) via targeted UPDATE per chunk
  *  - semanticSearch() uses supabase.rpc('match_knowledge_chunks') — no in-memory scan
  *  - Backward-compat: existing rows with the old `embedding` column are not touched
  */
@@ -32,9 +32,9 @@ export interface IndexStats {
 // ---------------------------------------------------------------------------
 
 /**
- * Generate embeddings for document chunks and persist them in a single bulk
- * upsert to the `embedding_vector` column, then run integrity verification
- * and (non-blocking) conflict detection.
+ * Generate embeddings for document chunks and update the embedding_vector
+ * column on existing rows, then run integrity verification and (non-blocking)
+ * conflict detection.
  */
 export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): Promise<boolean> {
   if (!documentId) {
