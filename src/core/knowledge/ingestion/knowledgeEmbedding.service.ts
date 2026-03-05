@@ -38,45 +38,25 @@ export interface EmbeddingResult {
 // ---------------------------------------------------------------------------
 
 async function invokeBatchEmbedding(inputs: string[]): Promise<number[][]> {
-  // Prefer user session token (browser); fall back to service role key (batch / server scripts).
-  const { data: { session } } = await supabase.auth.getSession();
-  const token =
-    session?.access_token ??
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    '';
-
-  if (!token) {
-    throw new Error(
-      '[KnowledgeEmbedding] No auth token available.\n' +
-      '  Browser : ensure the user is signed in.\n' +
-      '  Server  : set SUPABASE_SERVICE_ROLE_KEY in .env.local'
-    );
-  }
-
   const { data, error: fnError } = await supabase.functions.invoke(
     'generate-embedding',
     {
-      headers: { Authorization: `Bearer ${token}` },
-      body: {
-        inputs,
-        model: EMBEDDING_MODEL,
-        dimensions: EMBEDDING_DIMENSIONS,
-      },
+      body: { inputs, model: EMBEDDING_MODEL, dimensions: EMBEDDING_DIMENSIONS },
     }
   );
 
   if (fnError) {
-    throw new Error(
-      `[KnowledgeEmbedding] Edge Function error: ${fnError.message}` +
-      (fnError.context ? ` (status ${(fnError.context as { status?: number }).status ?? '?'})` : '')
-    );
+    console.error('[KnowledgeEmbedding] Edge Function response:', JSON.stringify(data, null, 2));
+    throw new Error(`[KnowledgeEmbedding] Edge Function error: ${fnError.message}`);
   }
 
   if (!data?.embeddings || !Array.isArray(data.embeddings)) {
-    const preview = JSON.stringify(data).slice(0, 200);
-    throw new Error(
-      `[KnowledgeEmbedding] Invalid response from Edge Function — missing embeddings array. Got: ${preview}`
-    );
+    console.error('[KnowledgeEmbedding] Edge Function response:', JSON.stringify(data, null, 2));
+    throw new Error('[KnowledgeEmbedding] Invalid response from Edge Function — missing embeddings array');
+  }
+
+  if (data.embeddings.length === 0) {
+    throw new Error('[KnowledgeEmbedding] No embeddings returned');
   }
 
   return data.embeddings as number[][];
@@ -87,24 +67,13 @@ async function invokeBatchEmbedding(inputs: string[]): Promise<number[][]> {
 // ---------------------------------------------------------------------------
 
 /**
- * Generate embedding for a single chunk of text.
- * Internally uses a one-item batch call to the Edge Function.
+ * Generate embedding for a single text.
+ * Returns the raw embedding vector, or null on failure.
  */
-export async function generateEmbedding(
-  chunkId: string,
-  text: string
-): Promise<EmbeddingResult | null> {
+export async function generateEmbedding(text: string): Promise<number[] | null> {
   try {
-    log('[KnowledgeEmbedding] Generating embedding for:', chunkId);
-
-    const [embedding] = await invokeBatchEmbedding([text]);
-
-    return {
-      chunkId,
-      embedding,
-      model: EMBEDDING_MODEL,
-      confidence: 1.0,
-    };
+    const embeddings = await invokeBatchEmbedding([text]);
+    return embeddings[0] ?? null;
   } catch (err) {
     error('[KnowledgeEmbedding] Single embedding failed:', err);
     return null;
@@ -129,10 +98,10 @@ export async function generateEmbeddingsForChunks(
 
   for (let offset = 0; offset < chunks.length; offset += BATCH_SIZE) {
     const batch = chunks.slice(offset, offset + BATCH_SIZE);
-    const texts = batch.map((c) => c.content);
+    const inputs = batch.map((c) => c.content);
 
     try {
-      const embeddings = await invokeBatchEmbedding(texts);
+      const embeddings = await invokeBatchEmbedding(inputs);
 
       batch.forEach((chunk, i) => {
         if (embeddings[i]) {
