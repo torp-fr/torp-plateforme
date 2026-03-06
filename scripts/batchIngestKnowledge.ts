@@ -62,7 +62,6 @@ import { filterChunks }                from '@/core/knowledge/ingestion/chunkQua
 import { deduplicateChunks }           from '@/core/knowledge/ingestion/semanticDeduplication.service';
 import { generateEmbeddingsForChunks } from '@/core/knowledge/ingestion/knowledgeEmbedding.service';
 import type { EmbeddingResult }        from '@/core/knowledge/ingestion/knowledgeEmbedding.service';
-import { indexChunks }                 from '@/core/knowledge/ingestion/knowledgeIndex.service';
 import { verifyDocumentIntegrity }     from '@/core/knowledge/integrity/knowledgeIntegrity.service';
 import { getKnowledgeConflictService } from '@/core/knowledge/conflicts/knowledgeConflict.service';
 import { getSupabase }                 from '@/lib/supabase';
@@ -514,18 +513,8 @@ async function ingestDocument(
       }
     }
 
-    // ── Step 8: Index (integrity + conflict detection) ────────────────────
-    if (documentId) {
-      const t       = Date.now();
-      const indexed = await indexChunks(documentId, pipelineChunks);
-      info('8 Index',
-        indexed
-          ? `${pipelineChunks.length} chunks indexed  (${ms(t)})`
-          : `indexChunks returned false — check logs  (${ms(t)})`
-      );
-    } else if (!dryRun) {
-      warn('8 Index', 'No document ID — skipping index');
-    }
+    // ── Step 8: Index ─────────────────────────────────────────────────────
+    info('8 Index', 'skipped (pgvector indexes automatically)');
 
     // ── Step 9: Integrity check ───────────────────────────────────────────
     if (documentId) {
