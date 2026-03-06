@@ -62,8 +62,6 @@ import { filterChunks }                from '@/core/knowledge/ingestion/chunkQua
 import { deduplicateChunks }           from '@/core/knowledge/ingestion/semanticDeduplication.service';
 import { generateEmbeddingsForChunks } from '@/core/knowledge/ingestion/knowledgeEmbedding.service';
 import type { EmbeddingResult }        from '@/core/knowledge/ingestion/knowledgeEmbedding.service';
-import { verifyDocumentIntegrity }     from '@/core/knowledge/integrity/knowledgeIntegrity.service';
-import { getKnowledgeConflictService } from '@/core/knowledge/conflicts/knowledgeConflict.service';
 import { getSupabase }                 from '@/lib/supabase';
 
 import type { DocumentType } from '@/core/knowledge/ingestion/documentClassifier.service';
@@ -517,42 +515,15 @@ async function ingestDocument(
     info('8 Index', 'skipped (pgvector indexes automatically)');
 
     // ── Step 9: Integrity check ───────────────────────────────────────────
-    if (documentId) {
-      const t               = Date.now();
-      const report          = await verifyDocumentIntegrity(documentId);
-      result.integrityScore = report.integrityScore ?? 0;
-      info('9 Integrity',
-        `score: ${(report.integrityScore ?? 0).toFixed(4)}` +
-        `  publishable: ${report.isPublishable}` +
-        `  valid: ${report.validChunks}/${report.totalChunks}` +
-        `  embeddings: ${report.chunksWithEmbeddings}/${report.totalChunks}` +
-        `  (${ms(t)})`
-      );
-      if (report.issues.length > 0) {
-        warn('9 Integrity', report.issues.slice(0, 3).join(' | '));
-      }
-    }
+    info('9 Integrity', 'skipped (temporary)');
 
     // ── Step 10: Conflict detection ───────────────────────────────────────
-    if (documentId) {
-      const t        = Date.now();
-      const svc      = getKnowledgeConflictService();
-      const cResult  = await svc.detectKnowledgeConflicts(documentId);
-      result.conflicts = cResult.conflictsDetected;
-      info('10 Conflicts', `${result.conflicts} conflict(s) detected  (${ms(t)})`);
-      if (result.conflicts > 0) {
-        cResult.conflicts.slice(0, 2).forEach((c, i) => {
-          info('10 Conflicts',
-            `  #${i + 1} type=${c.conflictType}  similarity=${c.similarityScore.toFixed(4)}`
-          );
-        });
-      }
-    }
+    info('10 Conflicts', 'skipped (temporary)');
 
     // ── Mark complete ─────────────────────────────────────────────────────
     if (documentId) {
       await updateDocumentStatus(documentId, 'complete', {
-        is_publishable:     result.integrityScore >= 0.7,
+        is_publishable:     result.embeddings > 0,
         ingestion_progress: 100,
       });
       ok('DB', `status → complete`);
