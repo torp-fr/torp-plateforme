@@ -193,7 +193,7 @@ async function generateEmbeddingBatch(documentId: string, batch: Chunk[]) {
     .map((r, idx) => ({
       document_id: documentId,
       content: r.chunk.content,
-      embedding_vector: r.embedding || null,
+      embedding_vector: r.embedding ? `[${r.embedding.join(",")}]` : null,
       token_count: r.chunk.tokenCount,
       metadata: r.chunk.metadata ?? {},
       chunk_index: idx,
