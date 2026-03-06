@@ -4,10 +4,16 @@
 // =======================================================
 
 import { supabase } from "@/lib/supabase";
-import { knowledgeBrainService } from '@/services/ai/knowledge-brain.service';
 import { log, warn, error as logError } from '@/lib/logger';
 import { chunkSmart, type Chunk } from '@/core/knowledge/ingestion/smartChunker.service';
 import { classifyDocument } from '@/core/knowledge/ingestion/documentClassifier.service';
+
+// ---------------------------------------------------------------------------
+// Embedding constants
+// ---------------------------------------------------------------------------
+
+const EMBEDDING_BATCH_SIZE = 100; // texts per Edge Function call (server cap)
+const INSERT_BATCH_SIZE    = 100; // rows per Supabase insert call
 
 // PHASE 40: Server-side hash computation via Supabase Edge Function or RLS trigger
 // Browser code cannot use crypto module
@@ -144,76 +150,84 @@ async function processDocument(doc: any) {
 }
 
 // =======================================================
+// Embedding helpers
+// =======================================================
+
+/**
+ * Call the generate-embedding Edge Function with a batch of texts.
+ * Returns one embedding vector per input, preserving order.
+ * Throws on network / Edge Function failure — caller handles per-batch fallback.
+ */
+async function generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
+  const { data, error: fnError } = await supabase.functions.invoke(
+    'generate-embedding',
+    {
+      body: { inputs: texts, model: 'text-embedding-3-small', dimensions: 384 },
+    }
+  );
+
+  if (fnError) {
+    throw new Error(`Edge Function error: ${fnError.message}`);
+  }
+
+  if (!data?.embeddings || !Array.isArray(data.embeddings)) {
+    throw new Error('Invalid Edge Function response — missing embeddings array');
+  }
+
+  return data.embeddings as number[][];
+}
+
+// =======================================================
 // Embedding Batch Processor
 // =======================================================
 
 async function processEmbeddingsInBatches(documentId: string, chunks: Chunk[]) {
-  const batchSize = 20;
-
-  for (let i = 0; i < chunks.length; i += batchSize) {
+  for (let i = 0; i < chunks.length; i += EMBEDDING_BATCH_SIZE) {
     await ensureStillProcessing(documentId);
 
-    const batch = chunks.slice(i, i + batchSize);
+    const batch      = chunks.slice(i, i + EMBEDDING_BATCH_SIZE);
+    const texts      = batch.map(c => c.content);
+    const batchLabel = `batch ${Math.floor(i / EMBEDDING_BATCH_SIZE) + 1}`;
 
-    await generateEmbeddingBatch(documentId, batch);
-  }
-}
-
-async function generateEmbeddingBatch(documentId: string, batch: Chunk[]) {
-  log(`[EMBEDDING] Processing batch of ${batch.length} chunks for document ${documentId}`);
-
-  // Sequential processing with concurrency limit (max 3 parallel)
-  const results: { chunk: Chunk; embedding: number[] | null }[] = [];
-
-  for (let i = 0; i < batch.length; i += 3) {
-    const slice = batch.slice(i, i + 3);
-    const embeddings = await Promise.all(
-      slice.map(async (chunk) => {
-        try {
-          const embedding = await knowledgeBrainService.generateEmbedding(chunk.content);
-          return embedding;
-        } catch (err: any) {
-          logError(`[EMBEDDING] Failed for chunk: ${err.message}`);
-          return null;
-        }
-      })
-    );
-
-    for (let j = 0; j < slice.length; j++) {
-      results.push({
-        chunk: slice[j],
-        embedding: embeddings[j],
-      });
+    // Generate all embeddings for this batch in a single Edge Function call.
+    // On failure, insert chunks with null embeddings rather than aborting the document.
+    let embeddings: (number[] | null)[] = new Array(batch.length).fill(null);
+    try {
+      const result = await generateEmbeddingBatch(texts);
+      embeddings = result.map(e => (Array.isArray(e) && e.length > 0 ? e : null));
+    } catch (err: any) {
+      warn(`[EMBEDDING] ${batchLabel} embedding call failed: ${err.message} — chunks will be stored without vectors`);
     }
+
+    // Build insert records (skip empty-content chunks)
+    const records = batch
+      .filter(c => c.content && c.content.trim().length > 0)
+      .map((chunk, idx) => ({
+        document_id:      documentId,
+        content:          chunk.content,
+        chunk_index:      i + idx,
+        token_count:      chunk.tokenCount,
+        metadata:         chunk.metadata ?? {},
+        embedding_vector: embeddings[idx] ? `[${embeddings[idx]!.join(',')}]` : null,
+      }));
+
+    if (records.length === 0) {
+      warn(`[EMBEDDING] ${batchLabel} produced no valid records — skipping`);
+      continue;
+    }
+
+    // Insert in sub-batches of INSERT_BATCH_SIZE
+    for (let j = 0; j < records.length; j += INSERT_BATCH_SIZE) {
+      const insertSlice = records.slice(j, j + INSERT_BATCH_SIZE);
+      const { error } = await supabase.from('knowledge_chunks').insert(insertSlice);
+      if (error) {
+        throw new Error(`[EMBEDDING] Failed to persist chunks (${batchLabel}): ${error.message}`);
+      }
+    }
+
+    const successCount = records.filter(r => r.embedding_vector !== null).length;
+    log(`[EMBEDDING] ${batchLabel} complete — ${successCount}/${records.length} chunks embedded`);
   }
-
-  // Persist chunks and embeddings
-  const embeddingData = results
-    .filter(r => r.chunk.content && r.chunk.content.trim().length > 0)
-    .map((r, idx) => ({
-      document_id: documentId,
-      content: r.chunk.content,
-      embedding_vector: r.embedding ? `[${r.embedding.join(",")}]` : null,
-      token_count: r.chunk.tokenCount,
-      metadata: r.chunk.metadata ?? {},
-      chunk_index: idx,
-    }));
-
-  if (embeddingData.length === 0) {
-    throw new Error("No valid chunks to persist");
-  }
-
-  const { error } = await supabase
-    .from("knowledge_chunks")
-    .insert(embeddingData);
-
-  if (error) {
-    logError(`[EMBEDDING] Failed to persist embeddings:`, error.message);
-    throw new Error(`Embedding persistence failed: ${error.message}`);
-  }
-
-  const successCount = embeddingData.filter(e => e.embedding_vector).length;
-  log(`[EMBEDDING] Batch complete - ${successCount}/${embeddingData.length} chunks embedded`);
 }
 
 // =======================================================
