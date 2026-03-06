@@ -1,60 +1,89 @@
-#!/usr/bin/env node
+console.log("Backfill embeddings started")
 
-import 'dotenv/config';
-import { getSupabase } from '../src/lib/supabase.js';
-import { generateEmbeddingsForChunks } from '../src/core/knowledge/ingestion/knowledgeEmbedding.service.js';
+import { createClient } from '@supabase/supabase-js'
+import dotenv from 'dotenv'
+dotenv.config()
+
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
+const PAGE_SIZE = 100
+
+async function generateEmbeddings(texts: string[]) {
+  const response = await supabase.functions.invoke(
+    "generate-embedding",
+    {
+      body: {
+        inputs: texts,
+        model: "text-embedding-3-small",
+        dimensions: 1536
+      }
+    }
+  )
+  console.log("EDGE FUNCTION RAW RESPONSE:", JSON.stringify(response).slice(0,1000))
+  if (response.error) {
+    throw response.error
+  }
+  return response.data
+}
 
 async function run() {
-  const supabase = getSupabase();
+  let from = 0
+  let totalProcessed = 0
+  let totalWritten = 0
 
-  const { data: chunks, error } = await supabase
-    .from('knowledge_chunks')
-    .select('id, content')
-    .is('embedding_vector', null);
-
-  if (error) throw error;
-
-  if (!chunks || chunks.length === 0) {
-    console.log('BACKFILL COMPLETE — nothing to repair');
-    return;
-  }
-
-  console.log('BACKFILL START', chunks.length);
-
-  const pipelineChunks = chunks.map(c => ({
-    content: c.content,
-    tokenCount: Math.ceil(c.content.length / 4),
-    startIndex: 0,
-    endIndex: c.content.length,
-  }));
-
-  const embeddings = await generateEmbeddingsForChunks(pipelineChunks);
-
-  if (!embeddings || embeddings.length === 0) {
-    throw new Error('Embedding service returned zero results');
-  }
-
-  let written = 0;
-
-  for (let i = 0; i < embeddings.length; i++) {
-    const chunkId = chunks[i].id;
-    const embedding = embeddings[i].embedding;
-
-    const { error: updErr } = await supabase
+  while (true) {
+    const { data, error } = await supabase
       .from('knowledge_chunks')
-      .update({ embedding_vector: embedding })
-      .eq('id', chunkId);
+      .select('id, content')
+      .is('embedding_vector', null)
+      .range(from, from + PAGE_SIZE - 1)
 
-    if (updErr) throw updErr;
+    if (error) throw error
+    if (!data || data.length === 0) {
+      console.log("No more chunks to process.")
+      break
+    }
 
-    console.log('EMBEDDING WRITTEN', chunkId);
-    written++;
+    totalProcessed += data.length
+    console.log(`Processing ${data.length} chunks (total so far: ${totalProcessed})`)
+
+    const texts = data.map(d => d.content)
+    console.log("TEXTS SENT TO EDGE:", texts.length)
+    const embeddings = await generateEmbeddings(texts)
+
+    console.log("EDGE FUNCTION RESPONSE:", JSON.stringify(embeddings).slice(0,1000))
+
+    console.log("RAW EMBEDDING RESPONSE:", JSON.stringify(embeddings).slice(0,500))
+
+    console.log("Embeddings returned:", embeddings.data.length)
+
+    for (let i = 0; i < data.length; i++) {
+      const vec = embeddings.data[i].embedding
+      if (!vec || vec.length === 0) continue
+
+      const { error: updErr } = await supabase
+        .from('knowledge_chunks')
+        .update({ embedding_vector: vec })
+        .eq('id', data[i].id)
+
+      if (updErr) {
+        console.error("Update error:", updErr)
+      } else {
+        totalWritten++
+      }
+    }
+
+    from += PAGE_SIZE
   }
 
-  console.log(`BACKFILL COMPLETE — ${written}/${chunks.length}`);
+  console.log(`Chunks processed: ${totalProcessed}`)
+  console.log(`Embeddings written: ${totalWritten}`)
 }
 
 run().catch(err => {
-  console.error('BACKFILL FAILED', err);
-  process.exit(1);
-});
+  console.error(err)
+  process.exit(1)
+})
