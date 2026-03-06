@@ -4,6 +4,59 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// Mock supabase before importing the service
+vi.mock('@/lib/supabase', () => {
+  function makeChain(finalValue = { data: null, error: null }) {
+    const chain: any = {};
+    const methods = ['select', 'insert', 'update', 'delete', 'upsert', 'eq', 'neq', 'gt', 'gte',
+      'lt', 'lte', 'in', 'is', 'not', 'or', 'and', 'order', 'limit', 'range', 'match', 'filter',
+      'contains', 'containedBy', 'overlaps', 'textSearch', 'ilike', 'like'];
+    for (const method of methods) {
+      chain[method] = function() { return chain; };
+    }
+    chain.insert = function() { return Promise.resolve({ data: null, error: null }); };
+    chain.single = function() {
+      return Promise.resolve({
+        data: { id: 'test-doc-id', ingestion_status: 'pending', embedding_integrity_checked: false },
+        error: null,
+      });
+    };
+    chain.then = function(resolve: any, reject: any) {
+      return Promise.resolve(finalValue).then(resolve, reject);
+    };
+    return chain;
+  }
+  return {
+    supabase: {
+      from: function() { return makeChain(); },
+      rpc: function() { return Promise.resolve({ data: [], error: null }); },
+      functions: {
+        invoke: function() { return Promise.resolve({ data: null, error: null }); },
+      },
+      storage: {
+        from: function() {
+          return { upload: function() { return Promise.resolve({ data: { path: 'test/path' }, error: null }); } };
+        },
+      },
+    },
+  };
+});
+
+vi.mock('@/services/ai/knowledge-health.service', () => {
+  function MockKnowledgeHealthService() {}
+  MockKnowledgeHealthService.prototype.validateSystemHealthBeforeSearch = function() {
+    return Promise.resolve({ healthy: true });
+  };
+  MockKnowledgeHealthService.prototype.logRpcMetric = function() {
+    return Promise.resolve(undefined);
+  };
+  MockKnowledgeHealthService.prototype.getSystemHealth = function() {
+    return Promise.resolve({ vector_dimension_valid: true, documents_missing_embeddings: 0, ingestion_stalled_documents: 0 });
+  };
+  return { KnowledgeHealthService: MockKnowledgeHealthService };
+});
+
 import { knowledgeBrainService } from '../knowledge-brain.service';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
@@ -27,9 +80,6 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       expect(doc).toBeDefined();
       expect(doc?.id).toBeDefined();
       expect(doc?.ingestion_status || 'pending').toBe('pending');
-
-      // Wait for background processing
-      await new Promise((resolve) => setTimeout(resolve, 5000));
 
       const metrics = knowledgeBrainService.getIngestionMetrics();
       expect(metrics.total_documents_processed).toBeGreaterThan(0);
@@ -206,9 +256,6 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
 
       expect(doc).toBeDefined();
       expect(doc?.id).toBeDefined();
-
-      // Wait for processing
-      await new Promise((resolve) => setTimeout(resolve, 5000));
 
       // Verify no integrity violations
       const violations = await knowledgeBrainService.verifySystemIntegrity();
