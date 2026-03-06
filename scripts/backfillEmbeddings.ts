@@ -1,8 +1,9 @@
-console.log("Backfill embeddings started")
-
 import { createClient } from '@supabase/supabase-js'
 import dotenv from 'dotenv'
+
 dotenv.config()
+
+console.log("Backfill embeddings started")
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -12,27 +13,34 @@ const supabase = createClient(
 const PAGE_SIZE = 100
 
 async function generateEmbeddings(texts: string[]) {
-  const response = await supabase.functions.invoke(
-    "generate-embedding",
+  const { data, error } = await supabase.functions.invoke(
+    'generate-embedding',
     {
       body: {
-        inputs: texts,
-        model: "text-embedding-3-small",
-        dimensions: 1536
+        inputs: texts
       }
     }
   )
-  console.log("EDGE FUNCTION RAW RESPONSE:", JSON.stringify(response).slice(0,1000))
-  if (response.error) {
-    throw response.error
+
+  if (error) {
+    console.error("Edge function error:", error)
+    throw error
   }
-  return response.data
+
+  if (!data || !data.embeddings) {
+    console.error("Unexpected response:", data)
+    return []
+  }
+
+  console.log("Embeddings returned:", data.embeddings.length)
+
+  return data.embeddings
 }
 
 async function run() {
   let from = 0
-  let totalProcessed = 0
-  let totalWritten = 0
+  let processed = 0
+  let written = 0
 
   while (true) {
     const { data, error } = await supabase
@@ -42,56 +50,38 @@ async function run() {
       .range(from, from + PAGE_SIZE - 1)
 
     if (error) throw error
-    if (!data || data.length === 0) {
-      console.log("No more chunks to process.")
-      break
-    }
+    if (!data || data.length === 0) break
 
-    totalProcessed += data.length
-    console.log(`Processing ${data.length} chunks (total so far: ${totalProcessed})`)
+    console.log(`Processing ${data.length} chunks`)
 
     const texts = data.map(d => d.content)
-    console.log("TEXTS SENT TO EDGE:", texts.length)
     const embeddings = await generateEmbeddings(texts)
 
-    console.log("EDGE FUNCTION RESPONSE:", JSON.stringify(embeddings).slice(0,1000))
-
-    console.log("RAW EMBEDDING RESPONSE:", JSON.stringify(embeddings).slice(0,500))
-
     for (let i = 0; i < data.length; i++) {
-      const payload = embeddings?.data ?? embeddings
-      let vec = null
-      if (Array.isArray(payload?.embeddings)) {
-        vec = payload.embeddings[i]
-      }
-      else if (Array.isArray(payload?.data) && payload.data[i]?.embedding) {
-        vec = payload.data[i].embedding
-      }
-      else if (Array.isArray(payload?.data)) {
-        vec = payload.data[i]
-      }
-      if (!vec || !Array.isArray(vec) || vec.length === 0) {
-        console.warn("Invalid embedding payload for chunk", i)
-        continue
-      }
+      const vec = embeddings[i]
+      if (!vec || vec.length === 0) continue
+
+      const literal = `[${vec.join(',')}]`
 
       const { error: updErr } = await supabase
         .from('knowledge_chunks')
-        .update({ embedding_vector: vec })
+        .update({ embedding_vector: literal })
         .eq('id', data[i].id)
 
       if (updErr) {
-        console.error("Update error:", updErr)
-      } else {
-        totalWritten++
+        console.warn("Update failed:", updErr)
+        continue
       }
+
+      written++
     }
 
+    processed += data.length
     from += PAGE_SIZE
   }
 
-  console.log(`Chunks processed: ${totalProcessed}`)
-  console.log(`Embeddings written: ${totalWritten}`)
+  console.log("Chunks processed:", processed)
+  console.log("Embeddings written:", written)
 }
 
 run().catch(err => {
