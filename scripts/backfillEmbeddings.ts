@@ -50,6 +50,8 @@ async function run() {
     const texts = data.map(d => d.content)
     const embeddings = await generateEmbeddings(texts)
 
+    console.log("EDGE FUNCTION RESPONSE:", JSON.stringify(embeddings).slice(0,1000))
+
     console.log("RAW EMBEDDING RESPONSE:", JSON.stringify(embeddings).slice(0,500))
 
     console.log("Embeddings returned:", embeddings.data.length)
