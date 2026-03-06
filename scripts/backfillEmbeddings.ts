@@ -51,6 +51,7 @@ async function run() {
     console.log(`Processing ${data.length} chunks (total so far: ${totalProcessed})`)
 
     const texts = data.map(d => d.content)
+    console.log("TEXTS SENT TO EDGE:", texts.length)
     const embeddings = await generateEmbeddings(texts)
 
     console.log("EDGE FUNCTION RESPONSE:", JSON.stringify(embeddings).slice(0,1000))
