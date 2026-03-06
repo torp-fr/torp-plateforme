@@ -202,7 +202,7 @@ export class KnowledgeConflictService {
       // Step 1: Get chunks for target document
       const { data: targetChunks, error: targetError } = await this.supabase
         .from('knowledge_chunks')
-        .select('id, embedding, document_id')
+        .select('id, embedding_vector, document_id')
         .eq('document_id', documentId);
 
       if (targetError || !targetChunks) {
@@ -230,7 +230,7 @@ export class KnowledgeConflictService {
       // Step 2: Get other chunks (with safety limit)
       const { data: otherChunks, error: otherError } = await this.supabase
         .from('knowledge_chunks')
-        .select('id, embedding, document_id')
+        .select('id, embedding_vector, document_id')
         .neq('document_id', documentId)
         .limit(maxComparisons);
 
@@ -255,20 +255,20 @@ export class KnowledgeConflictService {
       const configMap = await this.loadThresholdConfig();
 
       for (const targetChunk of targetChunks) {
-        if (!targetChunk.embedding) continue;
+        if (!targetChunk.embedding_vector) continue;
 
-        const targetEmbedding = Array.isArray(targetChunk.embedding)
-          ? targetChunk.embedding
-          : JSON.parse(targetChunk.embedding);
+        const targetEmbedding = Array.isArray(targetChunk.embedding_vector)
+          ? targetChunk.embedding_vector
+          : JSON.parse(targetChunk.embedding_vector);
 
         for (const otherChunk of otherChunks) {
-          if (!otherChunk.embedding) continue;
+          if (!otherChunk.embedding_vector) continue;
 
           comparisonCount++;
 
-          const otherEmbedding = Array.isArray(otherChunk.embedding)
-            ? otherChunk.embedding
-            : JSON.parse(otherChunk.embedding);
+          const otherEmbedding = Array.isArray(otherChunk.embedding_vector)
+            ? otherChunk.embedding_vector
+            : JSON.parse(otherChunk.embedding_vector);
 
           const similarity = cosineSimilarity(targetEmbedding, otherEmbedding);
 

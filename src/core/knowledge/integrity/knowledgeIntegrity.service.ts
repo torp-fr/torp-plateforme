@@ -62,7 +62,7 @@ export async function verifyDocumentIntegrity(
     // Fetch all chunks for this document
     const { data: chunksData, error: chunksError } = await supabase
       .from('knowledge_chunks')
-      .select('id, document_id, content, chunk_index, token_count, embedding')
+      .select('id, document_id, content, chunk_index, token_count, embedding_vector')
       .eq('document_id', documentId)
       .order('chunk_index', { ascending: true });
 
@@ -171,8 +171,8 @@ function verifyChunkIntegrity(
   const issues: string[] = [];
   const contentLength = chunk.content?.length || 0;
   const tokenCount = chunk.token_count || 0;
-  const hasEmbedding = !!chunk.embedding && chunk.embedding.length > 0;
-  const embeddingDimension = hasEmbedding ? chunk.embedding!.length : undefined;
+  const hasEmbedding = !!chunk.embedding_vector && chunk.embedding_vector.length > 0;
+  const embeddingDimension = hasEmbedding ? chunk.embedding_vector!.length : undefined;
 
   // Check content length
   if (contentLength < (config.minChunkContentLength || 50)) {
