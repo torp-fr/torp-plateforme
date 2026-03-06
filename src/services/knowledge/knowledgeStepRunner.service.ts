@@ -201,7 +201,7 @@ async function generateEmbeddingBatch(documentId: string, batch: string[]) {
     .map((r, idx) => ({
       document_id: documentId,
       content: r.chunk,
-      embedding: r.embedding || null, // pgvector expects array<float> or null
+      embedding_vector: r.embedding || null, // pgvector expects array<float> or null
       token_count: Math.ceil(r.chunk.length / 4), // Estimate: 1 token ≈ 4 chars
       chunk_index: idx,
     }));
@@ -219,7 +219,7 @@ async function generateEmbeddingBatch(documentId: string, batch: string[]) {
     throw new Error(`Embedding persistence failed: ${error.message}`);
   }
 
-  const successCount = embeddingData.filter(e => e.embedding).length;
+  const successCount = embeddingData.filter(e => e.embedding_vector).length;
   log(`[EMBEDDING] Batch complete - ${successCount}/${embeddingData.length} chunks embedded`);
 }
 
