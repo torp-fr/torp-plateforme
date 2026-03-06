@@ -519,7 +519,7 @@ async function ingestDocument(
     }
 
     // ── Step 8: Index ─────────────────────────────────────────────────────
-    info('8 Index', 'skipped (pgvector handles indexing automatically)');
+    info('8 Index', 'skipped (pgvector HNSW index handles retrieval automatically)');
 
     // ── Step 9: Integrity check ───────────────────────────────────────────
     info('9 Integrity', 'skipped (temporary)');
