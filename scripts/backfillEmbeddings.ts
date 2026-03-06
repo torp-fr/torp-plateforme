@@ -1,87 +1,67 @@
-console.log("Backfill script booting...");
-
-import { createClient } from "@supabase/supabase-js";
-import dotenv from "dotenv";
-
-dotenv.config();
-
+import { createClient } from '@supabase/supabase-js'
+import dotenv from 'dotenv'
+dotenv.config()
+console.log("BACKFILL EMBEDDINGS SCRIPT STARTED")
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-const PAGE_SIZE = 100;
-
-async function generateEmbeddings(texts: string[]): Promise<number[][]> {
-  const { data, error } = await supabase.functions.invoke("generate-embedding", {
-    body: {
-      inputs: texts,
-      model: "text-embedding-3-small"
+)
+const PAGE_SIZE = 100
+async function generateEmbeddings(texts: string[]) {
+  const { data, error } = await supabase.functions.invoke(
+    'generate-embedding',
+    {
+      body: {
+        inputs: texts,
+        model: "text-embedding-3-small",
+        dimensions: 1536
+      }
     }
-  });
+  )
   if (error) {
-    console.error("Embedding generation failed:", error);
-    throw error;
+    console.error("Embedding generation failed", error)
+    throw error
   }
-  return data.embeddings;
+  return data
 }
-
-async function main() {
-  let from = 0;
-  let written = 0;
-
+async function run() {
+  let from = 0
+  let total = 0
   while (true) {
     const { data, error } = await supabase
-      .from("knowledge_chunks")
-      .select("id, content")
-      .is("embedding_vector", null)
-      .range(from, from + PAGE_SIZE - 1);
-
-    if (error) {
-      console.error("DB fetch failed:", error);
-      throw error;
+      .from('knowledge_chunks')
+      .select('id,content')
+      .is('embedding_vector', null)
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data || data.length === 0) {
+      console.log("No more chunks")
+      break
     }
-    if (!data || data.length === 0) break;
-
-    console.log(`Found ${data.length} chunks without embeddings`);
-    console.log("Generating embeddings...");
-
-    let embeddings: number[][];
-    try {
-      embeddings = await generateEmbeddings(data.map(c => c.content));
-    } catch (err) {
-      console.warn("Batch embedding failed, skipping batch");
-      from += PAGE_SIZE;
-      continue;
-    }
-
+    console.log(`Processing ${data.length} chunks`)
+    const texts = data.map(d => d.content)
+    const embeddings = await generateEmbeddings(texts)
     for (let i = 0; i < data.length; i++) {
-      const vec = embeddings[i];
-      if (!vec || vec.length === 0) {
-        console.warn("Empty embedding for chunk:", data[i].id);
-        continue;
-      }
-      const vectorLiteral = `[${vec.join(",")}]`;
+      const vec = embeddings[i]
+      if (!vec) continue
+      const literal = `[${vec.join(',')}]`
       const { error: updErr } = await supabase
-        .from("knowledge_chunks")
-        .update({ embedding_vector: vectorLiteral })
-        .eq("id", data[i].id);
+        .from('knowledge_chunks')
+        .update({
+          embedding_vector: literal
+        })
+        .eq('id', data[i].id)
       if (updErr) {
-        console.warn("Update failed:", data[i].id, updErr.message);
-        continue;
+        console.warn("Update failed", updErr)
+      } else {
+        total++
       }
-      written++;
     }
-
-    from += PAGE_SIZE;
-    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE
   }
-
-  console.log("Embeddings written:", written);
-  console.log("Done.");
+  console.log("Embeddings written:", total)
 }
-
-main().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+run().catch(err => {
+  console.error(err)
+  process.exit(1)
+})
