@@ -5,18 +5,24 @@ import path from 'path';
 export default defineConfig({
   plugins: [react()],
   test: {
+    root: './src',
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    css: true,
     include: [
-      'src/**/*.test.ts',
-      'src/**/*.test.tsx',
-      'src/**/*.spec.ts',
+      '**/*.test.ts',
+      '**/*.test.tsx',
+      '**/*.spec.ts',
     ],
     exclude: [
-      'node_modules',
-      'dist',
+      'node_modules/**',
+      'dist/**',
+      'e2e/**',
+      'tests/**',
+      '**/*.spec.ts',
+      '**/*.e2e.ts',
+    ],
+    watchExclude: [
       'e2e/**',
       'tests/**',
     ],
