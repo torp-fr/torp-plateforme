@@ -70,7 +70,7 @@ export interface ChunkDataForIntegrity {
   content: string;
   chunk_index: number;
   token_count: number;
-  embedding?: number[];
+  embedding_vector?: number[];
 }
 
 /**

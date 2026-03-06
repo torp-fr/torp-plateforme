@@ -47,7 +47,7 @@ export interface KnowledgeChunk {
   content: string;
   chunk_index: number;
   token_count: number;
-  embedding?: number[];
+  embedding_vector?: number[];
   created_at: string;
 }
 
@@ -167,6 +167,8 @@ export async function ingestKnowledgeDocument(
       content: chunk.content,
       chunk_index: index,
       token_count: chunk.tokenCount,
+      embedding_vector: null,
+      metadata: chunk.metadata ?? {},
     }));
 
     const { error: chunkError } = await supabase

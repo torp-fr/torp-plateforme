@@ -154,7 +154,7 @@ async function storeNormalizedDocument(
         }),
         chunk_index: 0,
         token_count: Math.ceil(normalizedJson.length / 4),
-        embedding: null,
+        embedding_vector: null,
       });
 
     if (chunkError) {
