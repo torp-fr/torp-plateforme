@@ -120,7 +120,6 @@ async function storeNormalizedDocument(
         version: '1.0',
         file_size: metadata.fileSize,
         created_by: metadata.uploadedBy,
-        chunk_count: 1, // Will store normalized as single record
       })
       .select('id')
       .single();

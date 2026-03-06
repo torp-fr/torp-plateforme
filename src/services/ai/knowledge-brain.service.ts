@@ -19,6 +19,7 @@ import { KnowledgeHealthService } from './knowledge-health.service';
 // PHASE 36.11: PDF text extraction (using centralized PDF.js wrapper)
 import { extractPdfText, isPdfFile, validatePdfSize } from '@/lib/pdfExtract';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
+import { triggerStepRunner } from '@/api/knowledge-step-trigger';
 
 export interface KnowledgeDocument {
   id: string;
@@ -143,17 +144,10 @@ class KnowledgeBrainService {
 
       log('[KNOWLEDGE BRAIN] ✅ Document created in DB:', doc.id);
 
-      // Trigger Edge Function for ingestion
-      console.log("DOC ID BEFORE INVOKE:", doc?.id);
-      console.log("ABOUT TO CALL EDGE...");
-      try {
-        const result = await supabase.functions.invoke('rag-ingestion', {
-          body: { documentId: doc.id },
-        });
-        console.log("EDGE RESULT:", result);
-      } catch (err) {
-        console.error("EDGE ERROR:", err);
-      }
+      // Trigger ingestion pipeline (non-blocking)
+      triggerStepRunner(doc.id).catch((err: any) => {
+        console.error('[KNOWLEDGE BRAIN] Failed to trigger ingestion:', err);
+      });
 
       return doc;
     } catch (error) {
@@ -597,27 +591,13 @@ class KnowledgeBrainService {
         ingestion_progress: 0,
       };
 
-      // Trigger Edge Function for ingestion
-      console.log("DOC ID BEFORE INVOKE:", doc?.id);
-      console.log("ABOUT TO CALL EDGE...");
-      try {
-        const result = await supabase.functions.invoke('rag-ingestion', {
-          body: { documentId: doc.id },
-        });
-        console.log("EDGE RESULT:", result);
-      } catch (err) {
-        console.error("EDGE ERROR:", err);
-      }
+      // Trigger ingestion pipeline (non-blocking)
+      triggerStepRunner(doc.id).catch((err: any) => {
+        console.error('[KNOWLEDGE BRAIN] Failed to trigger ingestion:', err);
+      });
 
-      // ✅ PHASE 36.9 STEP 5: RETURN IMMEDIATELY TO UI
       log('[KNOWLEDGE BRAIN] 🚀 Document returned to UI');
-
-      // PHASE 19.2: Brain is now PURE PASSIVE BOOTSTRAPPER
-      // No background async pipeline
-      // No document chunking
-      // No embedding generation
-      // Edge Function owns all ingestion responsibility
-      log('[KNOWLEDGE BRAIN] 🔒 Passive mode active - Edge Function owns ingestion (PHASE 19.2)');
+      log('[KNOWLEDGE BRAIN] 🔒 Ingestion triggered via step runner (non-blocking)');
 
       // Track metrics for the created document
       this.metrics.total_documents_processed++;

@@ -149,7 +149,6 @@ export async function ingestKnowledgeDocument(
           version: metadata.version || '1.0',
           file_size: fileBuffer.length,
           created_by: userId,
-          chunk_count: chunks.length,
         },
       ])
       .select('id')
