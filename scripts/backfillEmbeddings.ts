@@ -11,19 +11,22 @@ const supabase = createClient(
 
 const PAGE_SIZE = 100
 
-async function generateEmbeddings(texts: string[]): Promise<{ data: { embedding: number[] }[] }> {
-  const { data, error } = await supabase.functions.invoke('generate-embedding', {
-    body: {
-      inputs: texts,
-      model: "text-embedding-3-small",
-      dimensions: 1536
+async function generateEmbeddings(texts: string[]) {
+  const response = await supabase.functions.invoke(
+    "generate-embedding",
+    {
+      body: {
+        inputs: texts,
+        model: "text-embedding-3-small",
+        dimensions: 1536
+      }
     }
-  })
-  if (error) {
-    console.error("Embedding generation failed:", error)
-    throw error
+  )
+  console.log("EDGE FUNCTION RAW RESPONSE:", JSON.stringify(response).slice(0,1000))
+  if (response.error) {
+    throw response.error
   }
-  return data
+  return response.data
 }
 
 async function run() {
