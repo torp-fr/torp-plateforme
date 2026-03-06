@@ -182,7 +182,11 @@ async function findExistingDocument(filename: string): Promise<string | null> {
     .eq('document_id', documentId);
 
   if (countError || !count || count === 0) {
-    return null; // No chunks → not truly ingested
+    // Stale document row exists but has no chunks (previous ingestion failed).
+    // Delete it so re-ingestion can insert a fresh record without hitting the
+    // unique-title constraint.
+    await supabase.from('knowledge_documents').delete().eq('id', documentId);
+    return null;
   }
 
   return documentId;
