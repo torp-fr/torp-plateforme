@@ -3,12 +3,21 @@
  * Analyse les devis en tenant compte du contexte projet et de la Knowledge Base
  */
 
-import { ragService } from '@/services/knowledge-base';
+import { semanticSearch } from '@/core/knowledge/ingestion/knowledgeIndex.service';
 import { projectContextService } from '@/services/project';
 import { claudeService } from '@/services/ai';
 import type { ProjectContext } from '@/types/ProjectContext';
 import type { KBChunk } from '@/services/knowledge-base/types';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
+function mapSearchResults(results: { chunkId: string; content: string; similarity: number; documentId: string }[]): KBChunk[] {
+  return results.map(r => ({
+    id: r.chunkId,
+    documentId: r.documentId,
+    content: r.content,
+    similarity: r.similarity,
+  }));
+}
 
 export interface ExtractedQuote {
   id?: string;
@@ -153,21 +162,19 @@ export class ContextualScoringService {
 
       // Récupérer docs pour chaque type de travail
       for (const workType of [...new Set(workTypes)]) {
-        const docs = await ragService.searchByWorkType(workType, 5);
+        const docs = mapSearchResults(await semanticSearch(workType, 5));
         workTypeDocs[workType] = docs;
       }
 
       // Récupérer docs régionaux
       const regionDocs = projectContext.region
-        ? await ragService.searchByRegion(projectContext.region, undefined, 5)
+        ? mapSearchResults(await semanticSearch(projectContext.region, 5))
         : [];
 
       // Récupérer docs pour le type de projet
-      const projectTypeDocs = await ragService.retrieveRelevant(
-        projectContext.projectType,
-        undefined,
-        5
-      ).then(r => r.chunks);
+      const projectTypeDocs = mapSearchResults(
+        await semanticSearch(projectContext.projectType, 5)
+      );
 
       const totalChunksUsed = Object.values(workTypeDocs).flat().length
         + regionDocs.length

@@ -281,6 +281,26 @@ export interface DocumentIngestionConfig {
 }
 
 /**
+ * Knowledge Base Chunk (search result from pgvector semantic search)
+ */
+export interface KBChunk {
+  id: string;
+  documentId: string;
+  content: string;
+  similarity?: number;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Knowledge Base Search Result
+ */
+export interface KBSearchResult {
+  chunks: KBChunk[];
+  distances: number[];
+  totalResults: number;
+}
+
+/**
  * RAG Source Configuration
  */
 export interface RAGSourceConfig {
