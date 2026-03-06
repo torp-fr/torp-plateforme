@@ -208,7 +208,7 @@ async function processEmbeddingsInBatches(documentId: string, chunks: Chunk[]) {
         chunk_index:      i + idx,
         token_count:      chunk.tokenCount,
         metadata:         chunk.metadata ?? {},
-        embedding_vector: embeddings[idx] ? `[${embeddings[idx]!.join(',')}]` : null,
+        embedding_vector: embeddings[idx] ?? null,
       }));
 
     if (records.length === 0) {
