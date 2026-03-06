@@ -3,94 +3,65 @@ import dotenv from 'dotenv'
 
 dotenv.config()
 
-console.log("Backfill embeddings started")
+console.log("NUCLEAR EMBEDDING BACKFILL STARTED")
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const PAGE_SIZE = 100
+async function run() {
+  const { data: chunks, error } = await supabase
+    .from('knowledge_chunks')
+    .select('id, content')
+    .is('embedding_vector', null)
 
-async function generateEmbeddings(texts: string[]) {
-  const { data, error } = await supabase.functions.invoke(
+  if (error) throw error
+
+  if (!chunks || chunks.length === 0) {
+    console.log("No chunks require embeddings")
+    return
+  }
+
+  console.log(`Chunks needing embeddings: ${chunks.length}`)
+
+  const texts = chunks.map(c => c.content)
+
+  const { data, error: fnErr } = await supabase.functions.invoke(
     'generate-embedding',
     {
-      body: {
-        inputs: texts
-      }
+      body: { inputs: texts }
     }
   )
 
-  if (error) {
-    console.error("Edge function error:", error)
-    throw error
+  if (fnErr) throw fnErr
+
+  if (!data || !data.embeddings) {
+    throw new Error("Edge function did not return embeddings")
   }
 
-  console.log("EDGE RAW RESPONSE:", JSON.stringify(data).slice(0,200))
+  const embeddings = data.embeddings
 
-  let embeddings = null
+  console.log(`Embeddings generated: ${embeddings.length}`)
 
-  if (data?.embeddings) {
-    embeddings = data.embeddings
-  } else if (data?.data?.embeddings) {
-    embeddings = data.data.embeddings
-  }
-
-  if (!embeddings) {
-    console.error("Embeddings missing in response")
-    return []
-  }
-
-  console.log("Embeddings returned:", embeddings.length)
-
-  return embeddings
-}
-
-async function run() {
-  let from = 0
-  let processed = 0
   let written = 0
 
-  while (true) {
-    const { data, error } = await supabase
+  for (let i = 0; i < chunks.length; i++) {
+    const vec = embeddings[i]
+    if (!vec) continue
+
+    const literal = `[${vec.join(',')}]`
+
+    const { error: updErr } = await supabase
       .from('knowledge_chunks')
-      .select('id, content')
-      .is('embedding_vector', null)
-      .range(from, from + PAGE_SIZE - 1)
+      .update({
+        embedding_vector: literal
+      })
+      .eq('id', chunks[i].id)
 
-    if (error) throw error
-    if (!data || data.length === 0) break
-
-    console.log(`Processing ${data.length} chunks`)
-
-    const texts = data.map(d => d.content)
-    const embeddings = await generateEmbeddings(texts)
-
-    for (let i = 0; i < data.length; i++) {
-      const vec = embeddings[i]
-      if (!vec || vec.length === 0) continue
-
-      const literal = `[${vec.join(',')}]`
-
-      const { error: updErr } = await supabase
-        .from('knowledge_chunks')
-        .update({ embedding_vector: literal })
-        .eq('id', data[i].id)
-
-      if (updErr) {
-        console.warn("Update failed:", updErr)
-        continue
-      }
-
-      written++
-    }
-
-    processed += data.length
-    from += PAGE_SIZE
+    if (!updErr) written++
   }
 
-  console.log("Chunks processed:", processed)
   console.log("Embeddings written:", written)
 }
 
