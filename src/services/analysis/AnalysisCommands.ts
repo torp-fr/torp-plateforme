@@ -4,13 +4,22 @@
  */
 
 import { contextualScoringService } from '@/services/scoring';
-import { ragService } from '@/services/knowledge-base';
+import { semanticSearch } from '@/core/knowledge/ingestion/knowledgeIndex.service';
 import { projectContextService } from '@/services/project';
 import { supabase } from '@/lib/supabase';
 import type { ExtractedQuote, ContextualScoreResult } from '@/services/scoring/contextual-scoring.service';
 import type { WorkType } from '@/types/ProjectContext';
 import type { KBChunk } from '@/services/knowledge-base/types';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
+function mapSearchResults(results: { chunkId: string; content: string; similarity: number; documentId: string }[]): KBChunk[] {
+  return results.map(r => ({
+    id: r.chunkId,
+    documentId: r.documentId,
+    content: r.content,
+    similarity: r.similarity,
+  }));
+}
 
 export interface AnalysisResult {
   id: string;
@@ -75,7 +84,7 @@ export class AnalysisCommands {
     try {
       log(`🔍 Searching for work type: ${workType}`);
 
-      const results = await ragService.searchByWorkType(workType, 10);
+      const results = mapSearchResults(await semanticSearch(workType, 10));
       log(`✅ Found ${results.length} documents`);
 
       return results;
@@ -95,7 +104,8 @@ export class AnalysisCommands {
     try {
       log(`💰 Getting pricing for region: ${region}${workType ? ` / ${workType}` : ''}`);
 
-      const results = await ragService.searchByRegion(region, workType, 10);
+      const query = workType ? `${region} ${workType}` : region;
+      const results = mapSearchResults(await semanticSearch(query, 10));
       log(`✅ Found ${results.length} pricing references`);
 
       return results;
@@ -121,7 +131,7 @@ export class AnalysisCommands {
       log(`✓ Validating quote against norms for: ${workType}`);
 
       // Récupérer les normes
-      const norms = await ragService.searchByWorkType(workType, 5);
+      const norms = mapSearchResults(await semanticSearch(workType, 5));
 
       // Analyser avec Claude pour validation
       const validation = await this.validateWithNorms(quote, norms);
@@ -199,11 +209,7 @@ export class AnalysisCommands {
         projectContext = await projectContextService.getProjectContext(projectContextId);
       }
 
-      const results = await ragService.complexSearch(query, {
-        workTypes: projectContext?.rooms.flatMap(r => r.works.map(w => w.type)),
-        region: projectContext?.region,
-        projectType: projectContext?.projectType,
-      });
+      const results = mapSearchResults(await semanticSearch(query, 10));
 
       log(`✅ Found ${results.length} relevant documents`);
       return results;
