@@ -684,6 +684,7 @@ class KnowledgeBrainService {
           chunk_index: i + batchIndex,
           content: chunk.content,
           token_count: chunk.tokenCount,
+          metadata: {},
         }));
 
         const { error } = await supabase.from('knowledge_chunks').insert(payload);
@@ -814,7 +815,7 @@ class KnowledgeBrainService {
           const { error: embError } = await supabase
             .from('knowledge_chunks')
             .update({
-              embedding,
+              embedding_vector: embedding,
               embedding_generated_at: new Date().toISOString(),
             })
             .eq('document_id', document_id)

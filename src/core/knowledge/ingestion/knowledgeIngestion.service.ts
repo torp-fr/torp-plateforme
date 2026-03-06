@@ -167,7 +167,6 @@ export async function ingestKnowledgeDocument(
       content: chunk.content,
       chunk_index: index,
       token_count: chunk.tokenCount,
-      embedding_vector: null,
       metadata: chunk.metadata ?? {},
     }));
 
