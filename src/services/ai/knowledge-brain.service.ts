@@ -67,7 +67,7 @@ interface IngestionMetrics {
 
 class KnowledgeBrainService {
   private readonly ENABLE_VECTOR_SEARCH = true;
-  private readonly EMBEDDING_DIMENSION = 1536;
+  private readonly EMBEDDING_DIMENSION = 384;
   private readonly SIMILARITY_THRESHOLD = 0.5;
   // PHASE 36.10.5: Health monitoring service
   private readonly healthService = new KnowledgeHealthService();
@@ -643,6 +643,12 @@ class KnowledgeBrainService {
     region: string | undefined,
     originalContent: string
   ): Promise<void> {
+    // ZOMBIE SERVICE DISABLED
+    // This method duplicated the ingestion pipeline of batchIngestKnowledge.ts.
+    // Chunk insertion and embedding generation are handled exclusively by:
+    //   scripts/batchIngestKnowledge.ts → knowledgeEmbedding.service.ts
+    console.warn("ZOMBIE SERVICE DISABLED — processChunksAsync: use batchIngestKnowledge.ts instead");
+    return;
     try {
       // PHASE 36.13: MULTI-UPLOAD FIX - Remove global locks
       // Each document process independently, no global blocking
@@ -766,6 +772,12 @@ class KnowledgeBrainService {
    * Updates document state on error
    */
   private async generateChunkEmbeddingsAsync(document_id: string, chunks: any[]): Promise<void> {
+    // ZOMBIE SERVICE DISABLED
+    // Embedding generation is handled exclusively by:
+    //   src/core/knowledge/ingestion/knowledgeEmbedding.service.ts (called from batchIngestKnowledge.ts)
+    // This method generated embeddings with wrong EMBEDDING_DIMENSION (was 1536, correct is 384).
+    console.warn("ZOMBIE SERVICE DISABLED — generateChunkEmbeddingsAsync: use knowledgeEmbedding.service.ts instead");
+    return;
     try {
       // PHASE 36.13: Remove global pipeline locks - each document processes independently
       log('[EMBEDDING] 🔢 Starting chunk embedding generation async...', {

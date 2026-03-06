@@ -54,13 +54,12 @@ Deno.serve(async (req) => {
       return new Response("Skipped", { status: 200 });
     }
 
-    await new Promise((r) => setTimeout(r, 1500));
-
-    await supabase.from("knowledge_chunks").insert({
-      document_id: documentId,
-      content: "Test chunk from ingestion",
-      embedding: Array(1536).fill(0),
-    });
+    // ZOMBIE SERVICE DISABLED
+    // The chunk insert below used the wrong column ("embedding" instead of
+    // "embedding_vector") and a hardcoded zero-vector of dimension 1536.
+    // Real chunk ingestion and embedding generation are handled exclusively
+    // by the batch pipeline: scripts/batchIngestKnowledge.ts
+    console.warn("ZOMBIE SERVICE DISABLED — rag-ingestion does not generate chunks or embeddings");
 
     await supabase
       .from("knowledge_documents")
