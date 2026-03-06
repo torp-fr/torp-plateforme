@@ -1,5 +1,8 @@
+console.log("Backfill script booting...");
+
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
+
 dotenv.config();
 
 const supabase = createClient(
@@ -9,16 +12,13 @@ const supabase = createClient(
 
 const PAGE_SIZE = 100;
 
-async function generateEmbeddings(texts: string[]) {
-  const { data, error } = await supabase.functions.invoke(
-    "generate-embedding",
-    {
-      body: {
-        inputs: texts,
-        model: "text-embedding-3-small"
-      }
+async function generateEmbeddings(texts: string[]): Promise<number[][]> {
+  const { data, error } = await supabase.functions.invoke("generate-embedding", {
+    body: {
+      inputs: texts,
+      model: "text-embedding-3-small"
     }
-  );
+  });
   if (error) {
     console.error("Embedding generation failed:", error);
     throw error;
@@ -26,8 +26,7 @@ async function generateEmbeddings(texts: string[]) {
   return data.embeddings;
 }
 
-async function run() {
-  console.log("Starting embedding backfill");
+async function main() {
   let from = 0;
   let written = 0;
 
@@ -44,10 +43,12 @@ async function run() {
     }
     if (!data || data.length === 0) break;
 
-    const texts = data.map(c => c.content);
-    let embeddings;
+    console.log(`Found ${data.length} chunks without embeddings`);
+    console.log("Generating embeddings...");
+
+    let embeddings: number[][];
     try {
-      embeddings = await generateEmbeddings(texts);
+      embeddings = await generateEmbeddings(data.map(c => c.content));
     } catch (err) {
       console.warn("Batch embedding failed, skipping batch");
       from += PAGE_SIZE;
@@ -63,9 +64,7 @@ async function run() {
       const vectorLiteral = `[${vec.join(",")}]`;
       const { error: updErr } = await supabase
         .from("knowledge_chunks")
-        .update({
-          embedding_vector: vectorLiteral
-        })
+        .update({ embedding_vector: vectorLiteral })
         .eq("id", data[i].id);
       if (updErr) {
         console.warn("Update failed:", data[i].id, updErr.message);
@@ -78,11 +77,11 @@ async function run() {
     if (data.length < PAGE_SIZE) break;
   }
 
-  console.log("Backfill complete");
   console.log("Embeddings written:", written);
+  console.log("Done.");
 }
 
-run().catch(err => {
+main().catch(err => {
   console.error("Fatal error:", err);
   process.exit(1);
 });
