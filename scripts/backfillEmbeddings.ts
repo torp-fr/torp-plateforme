@@ -27,14 +27,24 @@ async function generateEmbeddings(texts: string[]) {
     throw error
   }
 
-  if (!data || !data.embeddings) {
-    console.error("Unexpected response:", data)
+  console.log("EDGE RAW RESPONSE:", JSON.stringify(data).slice(0,200))
+
+  let embeddings = null
+
+  if (data?.embeddings) {
+    embeddings = data.embeddings
+  } else if (data?.data?.embeddings) {
+    embeddings = data.data.embeddings
+  }
+
+  if (!embeddings) {
+    console.error("Embeddings missing in response")
     return []
   }
 
-  console.log("Embeddings returned:", data.embeddings.length)
+  console.log("Embeddings returned:", embeddings.length)
 
-  return data.embeddings
+  return embeddings
 }
 
 async function run() {
