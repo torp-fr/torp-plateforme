@@ -58,11 +58,22 @@ async function run() {
 
     console.log("RAW EMBEDDING RESPONSE:", JSON.stringify(embeddings).slice(0,500))
 
-    console.log("Embeddings returned:", embeddings.data.length)
-
     for (let i = 0; i < data.length; i++) {
-      const vec = embeddings.data[i].embedding
-      if (!vec || vec.length === 0) continue
+      const payload = embeddings?.data ?? embeddings
+      let vec = null
+      if (Array.isArray(payload?.embeddings)) {
+        vec = payload.embeddings[i]
+      }
+      else if (Array.isArray(payload?.data) && payload.data[i]?.embedding) {
+        vec = payload.data[i].embedding
+      }
+      else if (Array.isArray(payload?.data)) {
+        vec = payload.data[i]
+      }
+      if (!vec || !Array.isArray(vec) || vec.length === 0) {
+        console.warn("Invalid embedding payload for chunk", i)
+        continue
+      }
 
       const { error: updErr } = await supabase
         .from('knowledge_chunks')
