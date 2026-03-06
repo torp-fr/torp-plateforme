@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 import 'dotenv/config';
-import { getSupabase } from '@/lib/supabase';
-import { generateEmbeddingsForChunks } from '@/core/knowledge/ingestion/knowledgeEmbedding.service';
+import { getSupabase } from '../src/lib/supabase.js';
+import { generateEmbeddingsForChunks } from '../src/core/knowledge/ingestion/knowledgeEmbedding.service.js';
 
-async function run(): Promise<void> {
+async function run() {
   const supabase = getSupabase();
 
   const { data: chunks, error } = await supabase
@@ -12,59 +12,49 @@ async function run(): Promise<void> {
     .select('id, content')
     .is('embedding_vector', null);
 
-  if (error) {
-    throw new Error(`Failed to fetch chunks: ${error.message}`);
-  }
+  if (error) throw error;
 
   if (!chunks || chunks.length === 0) {
-    console.log('BACKFILL COMPLETE — no chunks missing embeddings');
+    console.log('BACKFILL COMPLETE — nothing to repair');
     return;
   }
 
   console.log('BACKFILL START', chunks.length);
 
-  const knowledgeChunks = chunks.map((c) => ({
+  const pipelineChunks = chunks.map(c => ({
     content: c.content,
     tokenCount: Math.ceil(c.content.length / 4),
     startIndex: 0,
     endIndex: c.content.length,
   }));
 
-  const embedResults = await generateEmbeddingsForChunks(knowledgeChunks);
+  const embeddings = await generateEmbeddingsForChunks(pipelineChunks);
 
-  if (!embedResults || embedResults.length === 0) {
+  if (!embeddings || embeddings.length === 0) {
     throw new Error('Embedding service returned zero results');
   }
 
-  const limit = Math.min(chunks.length, embedResults.length);
-  let persisted = 0;
+  let written = 0;
 
-  for (let i = 0; i < limit; i++) {
+  for (let i = 0; i < embeddings.length; i++) {
     const chunkId = chunks[i].id;
-    const embedding = embedResults[i].embedding;
+    const embedding = embeddings[i].embedding;
 
-    const { data, error: updErr } = await supabase
+    const { error: updErr } = await supabase
       .from('knowledge_chunks')
       .update({ embedding_vector: embedding })
-      .eq('id', chunkId)
-      .select('id');
+      .eq('id', chunkId);
 
-    if (updErr) {
-      throw new Error(`Embedding persist error for ${chunkId}: ${updErr.message}`);
-    }
-
-    if (!data || data.length === 0) {
-      throw new Error(`Embedding update affected 0 rows for ${chunkId}`);
-    }
+    if (updErr) throw updErr;
 
     console.log('EMBEDDING WRITTEN', chunkId);
-    persisted++;
+    written++;
   }
 
-  console.log(`BACKFILL COMPLETE — ${persisted}/${chunks.length} embeddings written`);
+  console.log(`BACKFILL COMPLETE — ${written}/${chunks.length}`);
 }
 
-run().catch((e) => {
-  console.error('[BACKFILL FATAL]', e);
+run().catch(err => {
+  console.error('BACKFILL FAILED', err);
   process.exit(1);
 });
