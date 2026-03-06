@@ -281,10 +281,19 @@ async function persistEmbeddings(
 
   for (let i = 0; i < limit; i++) {
     const chunkId = insertedChunks[i].id;
+    const vec = embedResults[i].embedding;
+
+    if (!vec || vec.length === 0) {
+      warn('7b Embed', `Empty embedding for chunk ${chunkId} — skipping`);
+      continue;
+    }
+
+    // pgvector requires the vector as a Postgres literal string '[x,y,z,...]'
+    const vectorString = `[${vec.join(',')}]`;
 
     const { data, error } = await supabase
       .from('knowledge_chunks')
-      .update({ embedding_vector: embedResults[i].embedding })
+      .update({ embedding_vector: vectorString })
       .eq('id', chunkId)
       .select('id');
 
@@ -298,7 +307,6 @@ async function persistEmbeddings(
       continue;
     }
 
-    console.log("EMBEDDING WRITTEN", chunkId);
     persisted++;
   }
 
