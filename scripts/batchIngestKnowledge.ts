@@ -152,8 +152,13 @@ function formatBytes(n: number): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Guard: returns the existing document ID if a document with the same title
- * already exists in knowledge_documents, or null if it is new.
+ * Guard: returns the existing document ID only when the document already has
+ * rows in knowledge_chunks (i.e., ingestion actually completed).
+ *
+ * A document record with no corresponding chunks is NOT considered ingested —
+ * this prevents silently skipping documents whose previous ingestion failed
+ * before chunks were written.  chunk_count on knowledge_documents is NOT used
+ * as the source of truth here; we query knowledge_chunks directly.
  */
 async function findExistingDocument(filename: string): Promise<string | null> {
   const supabase = getSupabase();
@@ -163,11 +168,24 @@ async function findExistingDocument(filename: string): Promise<string | null> {
     .eq('title', filename)
     .maybeSingle();
 
-  if (error) {
-    // On DB error fall through — safer to attempt ingestion than to silently skip
+  if (error || !data) {
+    // On DB error or no record, fall through — safer to attempt ingestion than to silently skip
     return null;
   }
-  return (data as { id: string } | null)?.id ?? null;
+
+  const documentId = (data as { id: string }).id;
+
+  // Confirm chunks actually exist — chunk_count column is not authoritative
+  const { count, error: countError } = await supabase
+    .from('knowledge_chunks')
+    .select('*', { count: 'exact', head: true })
+    .eq('document_id', documentId);
+
+  if (countError || !count || count === 0) {
+    return null; // No chunks → not truly ingested
+  }
+
+  return documentId;
 }
 
 async function createDocument(
@@ -241,10 +259,6 @@ async function updateDocumentStatus(
     patch.ingestion_progress     = 100;
   }
   await supabase.from('knowledge_documents').update(patch).eq('id', documentId);
-}
-
-async function updateChunkCount(documentId: string, count: number): Promise<void> {
-  await getSupabase().from('knowledge_documents').update({ chunk_count: count }).eq('id', documentId);
 }
 
 /**
@@ -467,7 +481,6 @@ async function ingestDocument(
       if (!insertedChunks) {
         throw new Error('Failed to insert chunk records');
       }
-      await updateChunkCount(documentId, insertedChunks.length);
       ok('DB:Chunks', `${insertedChunks.length} chunk records inserted  (${ms(t2)})`);
     } else {
       info('DryRun', 'Skipping DB writes (--dry-run)');
