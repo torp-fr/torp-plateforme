@@ -11,7 +11,7 @@ const supabase = createClient(
 
 const PAGE_SIZE = 100
 
-async function generateEmbeddings(texts: string[]): Promise<number[][]> {
+async function generateEmbeddings(texts: string[]): Promise<{ data: { embedding: number[] }[] }> {
   const { data, error } = await supabase.functions.invoke('generate-embedding', {
     body: {
       inputs: texts,
@@ -50,12 +50,11 @@ async function run() {
     const texts = data.map(d => d.content)
     const embeddings = await generateEmbeddings(texts)
 
+    console.log("Embeddings returned:", embeddings.data.length)
+
     for (let i = 0; i < data.length; i++) {
-      const vec = embeddings[i]
-      if (!vec) {
-        console.warn(`No embedding returned for chunk id=${data[i].id}, skipping.`)
-        continue
-      }
+      const vec = embeddings.data[i].embedding
+      if (!vec || vec.length === 0) continue
 
       const literal = `[${vec.join(',')}]`
 
