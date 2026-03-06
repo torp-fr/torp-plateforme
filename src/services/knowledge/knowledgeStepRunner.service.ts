@@ -6,6 +6,8 @@
 import { supabase } from "@/lib/supabase";
 import { knowledgeBrainService } from '@/services/ai/knowledge-brain.service';
 import { log, warn, error as logError } from '@/lib/logger';
+import { chunkSmart, type Chunk } from '@/core/knowledge/ingestion/smartChunker.service';
+import { classifyDocument } from '@/core/knowledge/ingestion/documentClassifier.service';
 
 // PHASE 40: Server-side hash computation via Supabase Edge Function or RLS trigger
 // Browser code cannot use crypto module
@@ -118,8 +120,11 @@ async function processDocument(doc: any) {
 
     log(`[PROCESS] Document size: ${(sanitized.length / 1024).toFixed(2)}KB`);
 
-    // Step 2: Chunk the document
-    const chunks = chunkText(sanitized);
+    // Step 2: Classify and chunk the document
+    const docType = classifyDocument(sanitized);
+    log(`[PROCESS] Document type: ${docType}`);
+
+    const chunks = chunkSmart(sanitized, docType);
     if (!chunks.length) {
       throw new Error("No chunks generated from content");
     }
@@ -139,23 +144,10 @@ async function processDocument(doc: any) {
 }
 
 // =======================================================
-// Chunking
-// =======================================================
-
-function chunkText(text: string, size = 3000) {
-  const chunks: string[] = [];
-  for (let i = 0; i < text.length; i += size) {
-    const chunk = text.slice(i, i + size).trim();
-    if (chunk.length > 30) chunks.push(chunk);
-  }
-  return chunks;
-}
-
-// =======================================================
 // Embedding Batch Processor
 // =======================================================
 
-async function processEmbeddingsInBatches(documentId: string, chunks: string[]) {
+async function processEmbeddingsInBatches(documentId: string, chunks: Chunk[]) {
   const batchSize = 20;
 
   for (let i = 0; i < chunks.length; i += batchSize) {
@@ -167,18 +159,18 @@ async function processEmbeddingsInBatches(documentId: string, chunks: string[]) 
   }
 }
 
-async function generateEmbeddingBatch(documentId: string, batch: string[]) {
+async function generateEmbeddingBatch(documentId: string, batch: Chunk[]) {
   log(`[EMBEDDING] Processing batch of ${batch.length} chunks for document ${documentId}`);
 
   // Sequential processing with concurrency limit (max 3 parallel)
-  const results: { chunk: string; embedding: number[] | null; error?: string }[] = [];
+  const results: { chunk: Chunk; embedding: number[] | null }[] = [];
 
   for (let i = 0; i < batch.length; i += 3) {
-    const chunk = batch.slice(i, i + 3);
+    const slice = batch.slice(i, i + 3);
     const embeddings = await Promise.all(
-      chunk.map(async (text) => {
+      slice.map(async (chunk) => {
         try {
-          const embedding = await knowledgeBrainService.generateEmbedding(text);
+          const embedding = await knowledgeBrainService.generateEmbedding(chunk.content);
           return embedding;
         } catch (err: any) {
           logError(`[EMBEDDING] Failed for chunk: ${err.message}`);
@@ -187,9 +179,9 @@ async function generateEmbeddingBatch(documentId: string, batch: string[]) {
       })
     );
 
-    for (let j = 0; j < chunk.length; j++) {
+    for (let j = 0; j < slice.length; j++) {
       results.push({
-        chunk: chunk[j],
+        chunk: slice[j],
         embedding: embeddings[j],
       });
     }
@@ -197,12 +189,13 @@ async function generateEmbeddingBatch(documentId: string, batch: string[]) {
 
   // Persist chunks and embeddings
   const embeddingData = results
-    .filter(r => r.chunk && r.chunk.trim().length > 0) // Skip empty chunks
+    .filter(r => r.chunk.content && r.chunk.content.trim().length > 0)
     .map((r, idx) => ({
       document_id: documentId,
-      content: r.chunk,
-      embedding_vector: r.embedding || null, // pgvector expects array<float> or null
-      token_count: Math.ceil(r.chunk.length / 4), // Estimate: 1 token ≈ 4 chars
+      content: r.chunk.content,
+      embedding_vector: r.embedding || null,
+      token_count: r.chunk.tokenCount,
+      metadata: r.chunk.metadata ?? {},
       chunk_index: idx,
     }));
 
