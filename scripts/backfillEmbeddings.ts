@@ -56,15 +56,13 @@ async function run() {
       const vec = embeddings.data[i].embedding
       if (!vec || vec.length === 0) continue
 
-      const literal = `[${vec.join(',')}]`
-
       const { error: updErr } = await supabase
         .from('knowledge_chunks')
-        .update({ embedding_vector: literal })
+        .update({ embedding_vector: vec })
         .eq('id', data[i].id)
 
       if (updErr) {
-        console.warn(`Update failed for chunk id=${data[i].id}:`, updErr)
+        console.error("Update error:", updErr)
       } else {
         totalWritten++
       }
