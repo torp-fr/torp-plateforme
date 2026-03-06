@@ -250,12 +250,12 @@ async function insertChunks(
 
 async function updateDocumentStatus(
   documentId: string,
-  status: 'complete' | 'failed',
+  status: 'completed' | 'failed',
   extras: Record<string, unknown> = {},
 ): Promise<void> {
   const supabase = getSupabase();
   const patch: Record<string, unknown> = { ingestion_status: status, ...extras };
-  if (status === 'complete') {
+  if (status === 'completed') {
     patch.ingestion_completed_at = new Date().toISOString();
     patch.ingestion_progress     = 100;
   }
@@ -289,12 +289,13 @@ async function persistEmbeddings(
       .select('id');
 
     if (error) {
-      warn('7b Embed', `Embedding persist error for chunk ${chunkId}: ${error.message}`);
-      throw error;
+      warn('7b Embed', `Embedding persist error for chunk ${chunkId}: ${error.message} — skipping`);
+      continue;
     }
 
     if (!data || data.length === 0) {
-      throw new Error(`Embedding update affected 0 rows for chunk ${chunkId}`);
+      warn('7b Embed', `Embedding update affected 0 rows for chunk ${chunkId} — skipping`);
+      continue;
     }
 
     console.log("EMBEDDING WRITTEN", chunkId);
@@ -511,8 +512,14 @@ async function ingestDocument(
       }
     }
 
+    // ── Resolve outcome: success = chunks inserted + embeddings generated ──
+    // Optional steps (index, integrity, conflict) cannot cause failure.
+    if (!dryRun) {
+      result.outcome = (result.chunksDeduped > 0 && result.embeddings > 0) ? 'success' : result.outcome;
+    }
+
     // ── Step 8: Index ─────────────────────────────────────────────────────
-    info('8 Index', 'skipped (pgvector indexes automatically)');
+    info('8 Index', 'skipped (pgvector handles indexing automatically)');
 
     // ── Step 9: Integrity check ───────────────────────────────────────────
     info('9 Integrity', 'skipped (temporary)');
@@ -520,13 +527,13 @@ async function ingestDocument(
     // ── Step 10: Conflict detection ───────────────────────────────────────
     info('10 Conflicts', 'skipped (temporary)');
 
-    // ── Mark complete ─────────────────────────────────────────────────────
-    if (documentId) {
-      await updateDocumentStatus(documentId, 'complete', {
+    // ── Mark completed ────────────────────────────────────────────────────
+    if (documentId && result.outcome === 'success') {
+      await updateDocumentStatus(documentId, 'completed', {
         is_publishable:     result.embeddings > 0,
         ingestion_progress: 100,
       });
-      ok('DB', `status → complete`);
+      ok('DB', `status → completed`);
     }
 
   } catch (e) {
