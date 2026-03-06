@@ -410,6 +410,23 @@ class KnowledgeBrainService {
     }
   }
 
+  // PHASE 36.10.1: Public metrics accessors for testing
+  resetIngestionMetrics(): void {
+    this.metrics = {
+      total_documents_processed: 0,
+      successful_ingestions: 0,
+      failed_ingestions: 0,
+      avg_chunks_per_document: 0,
+      avg_embedding_time_per_chunk: 0,
+      integrity_check_failures: 0,
+      retry_success_rate: 0,
+    };
+  }
+
+  getIngestionMetrics(): IngestionMetrics {
+    return { ...this.metrics };
+  }
+
   /**
    * PHASE 36.8: Add a knowledge document with intelligent chunking
    * New pipeline: sanitize → chunk → insert document + chunks → async embeddings
@@ -576,6 +593,8 @@ class KnowledgeBrainService {
         title: safeTitle,
         category,
         source,
+        ingestion_status: 'pending' as const,
+        ingestion_progress: 0,
       };
 
       // Trigger Edge Function for ingestion
@@ -599,6 +618,10 @@ class KnowledgeBrainService {
       // No embedding generation
       // Edge Function owns all ingestion responsibility
       log('[KNOWLEDGE BRAIN] 🔒 Passive mode active - Edge Function owns ingestion (PHASE 19.2)');
+
+      // Track metrics for the created document
+      this.metrics.total_documents_processed++;
+      this.metrics.successful_ingestions++;
 
       return doc;
     } catch (error) {
