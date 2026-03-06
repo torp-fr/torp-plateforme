@@ -8,7 +8,7 @@
  *
  * Rejection rules (any one condition is enough to discard a chunk):
  *  R1  tokenCount < 20          — too short to carry useful semantics
- *  R2  tokenCount > 1000        — too large; integrity engine would also flag it
+ *  R2  tokenCount > 4000        — too large; integrity engine would also flag it
  *  R3  alphabetic ratio < 0.2   — mostly numbers, symbols, or whitespace
  *  R4  pure numeric/symbol      — no prose content at all
  *
@@ -28,7 +28,7 @@ import { log } from '@/lib/logger';
 // ---------------------------------------------------------------------------
 
 const MIN_TOKENS = 20;
-const MAX_TOKENS = 1000;
+const MAX_TOKENS = 4000;
 
 /** Ideal token range — full lengthScore within these bounds */
 const IDEAL_MIN_TOKENS = 50;
