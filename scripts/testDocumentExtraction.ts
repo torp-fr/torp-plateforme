@@ -14,6 +14,7 @@ console.log("DOCUMENT EXTRACTION TEST LOADED")
 import { createClient } from "@supabase/supabase-js"
 import dotenv from "dotenv"
 import { Buffer } from "buffer"
+import { extractDocumentContent } from "../src/core/knowledge/ingestion/documentExtractor.service"
 
 dotenv.config()
 
@@ -23,55 +24,6 @@ const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
-
-// ---------------------------------------------------------------------------
-// Inline extractors (mirrors documentExtractor.service.ts without TS aliases)
-// ---------------------------------------------------------------------------
-
-async function extractPdf(buffer: Buffer): Promise<string> {
-  // Dynamic import to handle ESM/CJS interop at runtime
-  const pdfParse = (await import("pdf-parse")).default
-  const data = await pdfParse(buffer)
-  return (data.text ?? "").replace(/\f/g, "\n\n")
-}
-
-async function extractDocx(buffer: Buffer): Promise<string> {
-  const mammoth = (await import("mammoth")).default
-  const result = await mammoth.extractRawText({ buffer })
-  return result.value
-}
-
-async function extractXlsx(buffer: Buffer): Promise<string> {
-  const ExcelJS = (await import("exceljs")).default
-  const workbook = new ExcelJS.Workbook()
-  await workbook.xlsx.load(buffer)
-
-  const sections: string[] = []
-  workbook.eachSheet((ws) => {
-    const rows: string[] = []
-    ws.eachRow((row) => {
-      const cells = (row.values as any[])
-        .slice(1)
-        .map((c: any) => (c === null || c === undefined ? "" : String(c)))
-      if (cells.some((c: string) => c.trim().length > 0)) rows.push(cells.join(" | "))
-    })
-    if (rows.length > 0) sections.push(`Sheet: ${ws.name}\n${rows.join("\n")}`)
-  })
-  return sections.join("\n\n")
-}
-
-async function extractText(buffer: Buffer, filename: string): Promise<string> {
-  const ext = filename.split(".").pop()?.toLowerCase() ?? ""
-  switch (ext) {
-    case "pdf":  return extractPdf(buffer)
-    case "docx": return extractDocx(buffer)
-    case "xlsx": return extractXlsx(buffer)
-    case "txt":
-    case "md":   return buffer.toString("utf-8")
-    default:
-      throw new Error(`Unsupported file format: .${ext}`)
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Main
@@ -152,7 +104,7 @@ async function main() {
 
   let rawText: string
   try {
-    rawText = await extractText(buffer, filename)
+    rawText = await extractDocumentContent(buffer, filename)
   } catch (err: any) {
     console.error("Extraction failed:", err.message)
     return

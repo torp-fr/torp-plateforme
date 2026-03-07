@@ -1,18 +1,28 @@
-import pdf from "pdf-parse";
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.js";
 
 export async function extractPdfText(arrayBuffer) {
   try {
     const buffer = Buffer.from(arrayBuffer);
-    const pdfData = await pdf(buffer);
-    const text = pdfData.text || "";
+    const loadingTask = pdfjs.getDocument({ data: buffer });
+    const pdf = await loadingTask.promise;
 
-    if (!text || text.trim().length === 0) {
+    let text = "";
+    for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex++) {
+      const page = await pdf.getPage(pageIndex);
+      const content = await page.getTextContent();
+      const pageText = content.items.map((item) => item.str).join(" ");
+      text += pageText + "\n\n";
+    }
+
+    const trimmed = text.replace(/\s+\n/g, "\n").trim();
+
+    if (!trimmed) {
       throw new Error("PDF extraction returned empty text");
     }
 
     return {
-      text: text.trim(),
-      pageCount: pdfData.numpages,
+      text: trimmed,
+      pageCount: pdf.numPages,
       confidence: "native",
     };
   } catch (error) {
