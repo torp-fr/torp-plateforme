@@ -269,14 +269,60 @@ function isTableRow(line: string): boolean {
 }
 
 /**
- * Split a pricing document so that each coherent table block stays together.
+ * Parsed fields from a construction price line.
+ */
+interface PriceLineFields {
+  code: string;
+  description: string;
+  unit: string;
+  price: string;
+}
+
+/**
+ * Matches a 4-column pipe-delimited price row of the form:
+ *   | <code> | <description> | <unit> | <price> |
+ *
+ * Where:
+ *   code        — dotted numeric reference, e.g. "3.2.2"
+ *   description — free text (poteau béton, …)
+ *   unit        — short unit label, e.g. "ml", "m2", "u", "m²"
+ *   price       — decimal number with comma or dot, e.g. "225,00"
+ *
+ * Separator rows (---|---) and header rows that don't match the numeric code
+ * pattern are intentionally rejected.
+ */
+const PRICE_LINE_RE =
+  /^\|\s*([\d]+(?:\.[\d]+)*)\s*\|\s*([^|]+?)\s*\|\s*([^|]{1,15}?)\s*\|\s*([\d][\d\s.,]*)\s*\|/;
+
+/**
+ * Try to parse a table row as a construction price line.
+ * Returns the parsed fields or null if the line does not match.
+ */
+function parsePriceLine(line: string): PriceLineFields | null {
+  const m = PRICE_LINE_RE.exec(line.trim());
+  if (!m) return null;
+  return {
+    code: m[1].trim(),
+    description: m[2].trim(),
+    unit: m[3].trim(),
+    price: m[4].trim(),
+  };
+}
+
+/**
+ * Split a pricing document so that:
+ *  - Each row matching the construction price format becomes its own chunk
+ *    with structured metadata (type, code, unit, price).
+ *  - Non-price table rows (headers, separators, multi-column aggregates) are
+ *    packed together up to MAX_TOKENS, never splitting a row.
+ *  - Prose between tables is delegated to the paragraph chunker.
  *
  * Algorithm:
- *  1. Walk the lines and group them into "runs": consecutive table rows form
- *     a table run; everything else forms a prose run.
- *  2. Each run is emitted as chunk(s):
- *     - Table runs: pack rows into chunks up to MAX_TOKENS; never split a row.
- *     - Prose runs: delegate to paragraph chunker.
+ *  1. Walk lines and group into "runs": consecutive table rows → table run;
+ *     everything else → prose run.
+ *  2. Within table runs, check each row against PRICE_LINE_RE:
+ *     - Match  → flush any pending non-price buffer, emit single-row chunk.
+ *     - No match → accumulate in buffer; flush when MAX_TOKENS would overflow.
  */
 function chunkPricingReference(text: string): Chunk[] {
   const lines = text.split('\n');
@@ -299,36 +345,50 @@ function chunkPricingReference(text: string): Chunk[] {
 
   for (const run of runs) {
     if (run.kind === 'table') {
-      // Pack table rows into chunks without splitting a row
+      // Buffer for non-price table rows (headers, separators, etc.)
       let rowBuffer: string[] = [];
       let bufferTokens = 0;
 
-      for (const row of run.lines) {
-        const rowTokens = estimateTokens(row);
-
-        if (bufferTokens + rowTokens > MAX_TOKENS && rowBuffer.length > 0) {
-          chunks.push(
-            makeChunk(rowBuffer.join('\n'), {
-              strategy: 'pricing_reference',
-              splitMode: 'table',
-            })
-          );
-          rowBuffer = [];
-          bufferTokens = 0;
-        }
-
-        rowBuffer.push(row);
-        bufferTokens += rowTokens;
-      }
-
-      if (rowBuffer.length > 0) {
+      const flushBuffer = () => {
+        if (rowBuffer.length === 0) return;
         chunks.push(
           makeChunk(rowBuffer.join('\n'), {
             strategy: 'pricing_reference',
             splitMode: 'table',
           })
         );
+        rowBuffer = [];
+        bufferTokens = 0;
+      };
+
+      for (const row of run.lines) {
+        const priceFields = parsePriceLine(row);
+
+        if (priceFields) {
+          // Flush any accumulated non-price rows before emitting a price line
+          flushBuffer();
+          chunks.push(
+            makeChunk(row, {
+              strategy: 'pricing_reference',
+              splitMode: 'price_line',
+              type: 'price_line',
+              code: priceFields.code,
+              unit: priceFields.unit,
+              price: priceFields.price,
+            })
+          );
+        } else {
+          // Non-price row: pack until MAX_TOKENS
+          const rowTokens = estimateTokens(row);
+          if (bufferTokens + rowTokens > MAX_TOKENS && rowBuffer.length > 0) {
+            flushBuffer();
+          }
+          rowBuffer.push(row);
+          bufferTokens += rowTokens;
+        }
       }
+
+      flushBuffer();
     } else {
       // Prose between tables — use paragraph chunker
       const proseText = run.lines.join('\n');
