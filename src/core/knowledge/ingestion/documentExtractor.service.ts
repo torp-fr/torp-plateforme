@@ -34,7 +34,8 @@ async function extractPdf(buffer: Buffer): Promise<string> {
   const pdfParse = pdfParseModule.default || pdfParseModule;
 
   console.log('[PDF] parsing started');
-  const result = await pdfParse(buffer);
+  const uint8 = new Uint8Array(buffer);
+  const result = await pdfParse(uint8);
   console.log('[PDF] parsing completed');
   return result.text
     .replace(/\f/g, '\n\n')
