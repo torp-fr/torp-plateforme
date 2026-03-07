@@ -13,9 +13,6 @@
  *  - Logged at entry and exit with byte / character counts
  */
 
-import pdfParse from 'pdf-parse';
-import mammoth from 'mammoth';
-import ExcelJS from 'exceljs';
 import Papa from 'papaparse';
 import { log, warn } from '@/lib/logger';
 
@@ -31,10 +28,10 @@ const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024; // 25 MB
  * does not merge content from adjacent pages.
  */
 async function extractPdf(buffer: Buffer): Promise<string> {
-  // pdf-parse returns a promise that resolves to { text, numpages, ... }
+  // Dynamic import keeps pdf-parse (Node.js-only) out of the Vite browser bundle.
+  // /* @vite-ignore */ tells Rollup not to analyse or bundle this import.
+  const { default: pdfParse } = await import(/* @vite-ignore */ 'pdf-parse');
   const result = await pdfParse(buffer);
-  // Replace form-feed page separators with double newlines so that
-  // paragraph-boundary chunking does not merge content across pages.
   return (result.text ?? '')
     .replace(/\f/g, '\n\n')
     .replace(/\s+\n/g, '\n')
@@ -47,6 +44,7 @@ async function extractPdf(buffer: Buffer): Promise<string> {
  * which is what we want for embedding (style noise removed).
  */
 async function extractDocx(buffer: Buffer): Promise<string> {
+  const { default: mammoth } = await import(/* @vite-ignore */ 'mammoth');
   const result = await mammoth.extractRawText({ buffer });
 
   if (result.messages.length > 0) {
@@ -69,6 +67,7 @@ async function extractDocx(buffer: Buffer): Promise<string> {
  * Empty sheets are skipped.
  */
 async function extractXlsx(buffer: Buffer): Promise<string> {
+  const { default: ExcelJS } = await import(/* @vite-ignore */ 'exceljs');
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
 
