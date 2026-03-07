@@ -24,6 +24,9 @@ export default defineConfig(({ mode }) => ({
     // Un bundle unique est plus gros mais garantit le bon ordre de chargement
     outDir: "dist",
     chunkSizeWarningLimit: 5000,
+    rollupOptions: {
+      external: ['pdfjs-dist'],
+    },
   },
   base: '/',
 }));
