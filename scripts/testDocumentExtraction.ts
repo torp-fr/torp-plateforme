@@ -1,14 +1,3 @@
-/**
- * Test: Document Text Extraction
- *
- * Downloads the most recently uploaded knowledge document from Supabase
- * Storage, extracts its text, and prints the first 500 characters.
- *
- * Usage:
- *   npx tsx scripts/testDocumentExtraction.ts
- *   npx tsx scripts/testDocumentExtraction.ts <document_id>
- */
-
 console.log("DOCUMENT EXTRACTION TEST LOADED")
 
 import { createClient } from "@supabase/supabase-js"
@@ -25,24 +14,17 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
-
 async function main() {
   console.log("MAIN FUNCTION RUNNING")
 
-  // If a document ID was passed as CLI arg, fetch that document.
-  // Otherwise, pick the most recently uploaded pending/failed document.
   const targetId = process.argv[2] ?? null
-
   let doc: any
 
   if (targetId) {
-    console.log(`Looking up document: ${targetId}`)
+    console.log("Fetching specific document:", targetId)
     const { data, error } = await supabase
       .from("knowledge_documents")
-      .select("id, title, file_path, mime_type, ingestion_status")
+      .select("id,title,file_path,mime_type,ingestion_status")
       .eq("id", targetId)
       .single()
 
@@ -50,12 +32,13 @@ async function main() {
       console.error("Document not found:", error?.message)
       return
     }
+
     doc = data
   } else {
-    console.log("Fetching most recent document with a file_path…")
+    console.log("Fetching most recent document with file_path")
     const { data, error } = await supabase
       .from("knowledge_documents")
-      .select("id, title, file_path, mime_type, ingestion_status")
+      .select("id,title,file_path,mime_type,ingestion_status")
       .not("file_path", "is", null)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -65,59 +48,68 @@ async function main() {
       console.error("No document found:", error?.message)
       return
     }
+
     doc = data
   }
 
-  console.log("\n==============================")
-  console.log("  DOCUMENT")
+  console.log("")
   console.log("==============================")
-  console.log("id:      ", doc.id)
-  console.log("title:   ", doc.title)
-  console.log("status:  ", doc.ingestion_status)
-  console.log("path:    ", doc.file_path)
-  console.log("mime:    ", doc.mime_type)
-  console.log("==============================\n")
+  console.log("DOCUMENT")
+  console.log("==============================")
+
+  console.log("id:", doc.id)
+  console.log("title:", doc.title)
+  console.log("status:", doc.ingestion_status)
+  console.log("path:", doc.file_path)
+  console.log("mime:", doc.mime_type)
+
+  console.log("==============================")
+  console.log("")
 
   if (!doc.file_path) {
-    console.error("Document has no file_path — cannot download")
+    console.error("Document has no file_path")
     return
   }
 
-  // ── Step 1: Download from Supabase Storage ──────────────────────────────
   console.log("STEP 1: downloading file from storage")
+
   const { data: fileBlob, error: downloadError } = await supabase.storage
     .from("knowledge-files")
     .download(doc.file_path)
 
   if (downloadError || !fileBlob) {
-    console.error("Download failed:", downloadError?.message ?? "no data")
+    console.error("Download failed:", downloadError?.message)
     return
   }
 
   const arrayBuffer = await fileBlob.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
-  console.log(`Downloaded ${buffer.length} bytes`)
 
-  // ── Step 2: Extract text ────────────────────────────────────────────────
+  console.log("Downloaded", buffer.length, "bytes")
+
   console.log("STEP 2: extracting text")
-  const filename = doc.file_path.split("/").pop() ?? doc.title ?? "document"
 
-  let rawText: string
+  const filename = doc.file_path.split("/").pop() ?? "document"
+  let text: string
+
   try {
-    rawText = await extractDocumentContent(buffer, filename)
+    text = await extractDocumentContent(buffer, filename)
   } catch (err: any) {
     console.error("Extraction failed:", err.message)
     return
   }
 
-  console.log(`Extracted ${rawText.length} characters`)
+  console.log("Extracted", text.length, "characters")
 
-  // ── Step 3: Print first 500 chars ──────────────────────────────────────
-  console.log("\n==============================")
-  console.log("  EXTRACTED TEXT (first 500 chars)")
+  console.log("")
   console.log("==============================")
-  console.log(rawText.slice(0, 500))
-  console.log("==============================\n")
+  console.log("EXTRACTED TEXT (first 500 chars)")
+  console.log("==============================")
+
+  console.log(text.slice(0, 500))
+
+  console.log("==============================")
+  console.log("")
 
   console.log("SCRIPT COMPLETED")
 }
