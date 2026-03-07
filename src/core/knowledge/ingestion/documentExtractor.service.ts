@@ -15,7 +15,6 @@
 
 import Papa from 'papaparse';
 import { log, warn } from '@/lib/logger';
-import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.js';
 
 const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024; // 25 MB
 
@@ -30,6 +29,7 @@ const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024; // 25 MB
  */
 async function extractPdf(buffer: Buffer): Promise<string> {
   console.log('[PDF] parsing started');
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.js');
   const loadingTask = pdfjs.getDocument({ data: buffer });
   const pdf = await loadingTask.promise;
   let text = '';
