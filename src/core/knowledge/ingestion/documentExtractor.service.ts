@@ -1,9 +1,3 @@
-import { createRequire } from "module"
-
-const require = createRequire(import.meta.url)
-
-const pdfParse = require("pdf-parse")
-
 async function extractPdf(buffer: Buffer): Promise<string> {
 
   console.log("[PDF] parsing started")
