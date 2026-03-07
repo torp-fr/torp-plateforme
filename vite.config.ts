@@ -25,7 +25,13 @@ export default defineConfig(({ mode }) => ({
     outDir: "dist",
     chunkSizeWarningLimit: 5000,
     rollupOptions: {
-      external: ['pdfjs-dist'],
+      external: ['pdfjs-dist', /^pdfjs-dist\//],
+      onwarn(warning, warn) {
+        if (warning.code === 'UNRESOLVED_IMPORT' && warning.source?.includes('pdfjs-dist')) {
+          return;
+        }
+        warn(warning);
+      },
     },
   },
   base: '/',
