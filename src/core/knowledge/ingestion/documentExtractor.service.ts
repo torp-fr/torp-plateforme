@@ -30,9 +30,10 @@ const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024; // 25 MB
 async function extractPdf(buffer: Buffer): Promise<string> {
   // Dynamic import keeps pdf-parse (Node.js-only) out of the Vite browser bundle.
   // /* @vite-ignore */ tells Rollup not to analyse or bundle this import.
-  const { default: pdfParse } = await import(/* @vite-ignore */ 'pdf-parse');
+  const pdfParseModule = await import(/* @vite-ignore */ 'pdf-parse');
+  const pdfParse = (pdfParseModule as any).default || pdfParseModule;
   const result = await pdfParse(buffer);
-  return (result.text ?? '')
+  return result.text
     .replace(/\f/g, '\n\n')
     .replace(/\s+\n/g, '\n')
     .trim();
