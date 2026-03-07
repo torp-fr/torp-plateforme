@@ -13,13 +13,10 @@
  *  - Logged at entry and exit with byte / character counts
  */
 
-import { PDFParse } from 'pdf-parse';
-import mammoth from 'mammoth';
-import ExcelJS from 'exceljs';
-
-const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024; // 25 MB
 import Papa from 'papaparse';
 import { log, warn } from '@/lib/logger';
+
+const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024; // 25 MB
 
 // ---------------------------------------------------------------------------
 // Internal: format-specific extractors
@@ -31,15 +28,14 @@ import { log, warn } from '@/lib/logger';
  * does not merge content from adjacent pages.
  */
 async function extractPdf(buffer: Buffer): Promise<string> {
-  const parser = new PDFParse({ data: buffer });
-  const result = await parser.getText();
-
-  // Join pages with double newlines so paragraph-boundary chunking works
-  // across page breaks. Use per-page text if available, else the full text.
-  if (result.pages && result.pages.length > 0) {
-    return result.pages.map((p: any) => p.text ?? '').join('\n\n');
-  }
-  return (result.text ?? '').replace(/\f/g, '\n\n');
+  // Dynamic import keeps pdf-parse (Node.js-only) out of the Vite browser bundle.
+  // /* @vite-ignore */ tells Rollup not to analyse or bundle this import.
+  const { default: pdfParse } = await import(/* @vite-ignore */ 'pdf-parse');
+  const result = await pdfParse(buffer);
+  return (result.text ?? '')
+    .replace(/\f/g, '\n\n')
+    .replace(/\s+\n/g, '\n')
+    .trim();
 }
 
 /**
@@ -48,6 +44,7 @@ async function extractPdf(buffer: Buffer): Promise<string> {
  * which is what we want for embedding (style noise removed).
  */
 async function extractDocx(buffer: Buffer): Promise<string> {
+  const { default: mammoth } = await import(/* @vite-ignore */ 'mammoth');
   const result = await mammoth.extractRawText({ buffer });
 
   if (result.messages.length > 0) {
@@ -70,6 +67,7 @@ async function extractDocx(buffer: Buffer): Promise<string> {
  * Empty sheets are skipped.
  */
 async function extractXlsx(buffer: Buffer): Promise<string> {
+  const { default: ExcelJS } = await import(/* @vite-ignore */ 'exceljs');
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
 
