@@ -35,7 +35,10 @@ async function extractPdf(buffer: Buffer): Promise<string> {
   const result = await pdfParse(buffer);
   // Replace form-feed page separators with double newlines so that
   // paragraph-boundary chunking does not merge content across pages.
-  return (result.text ?? '').replace(/\f/g, '\n\n');
+  return (result.text ?? '')
+    .replace(/\f/g, '\n\n')
+    .replace(/\s+\n/g, '\n')
+    .trim();
 }
 
 /**
