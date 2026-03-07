@@ -1,9 +1,13 @@
+console.log("TEST RAG FILE LOADED")
+console.log("Running file:", import.meta.url)
+
 import { createClient } from '@supabase/supabase-js'
 import dotenv from 'dotenv'
 
 dotenv.config()
 
 console.log("RAG TEST SCRIPT STARTED")
+console.log("SUPABASE_URL:", process.env.SUPABASE_URL)
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -13,9 +17,10 @@ const supabase = createClient(
 const question = "Quel est le prix d'un poteau béton 30x30 ?"
 
 async function main() {
+  console.log("MAIN FUNCTION RUNNING")
   console.log("Question:", question)
-  console.log("Generating embedding...")
 
+  console.log("STEP 1: generating embedding")
   const { data, error: fnErr } = await supabase.functions.invoke('generate-embedding', {
     body: { inputs: [question] }
   })
@@ -33,8 +38,7 @@ async function main() {
   const embedding: number[] = data.embeddings[0]
   console.log("Embedding length:", embedding.length)
 
-  console.log("Calling vector search...")
-
+  console.log("STEP 2: calling vector search")
   const { data: chunks, error: rpcErr } = await supabase.rpc('match_knowledge_chunks', {
     query_embedding: embedding,
     match_count: 5
@@ -45,7 +49,7 @@ async function main() {
     return
   }
 
-  console.log("Printing results...")
+  console.log("STEP 3: printing results")
   console.log("\n=== RESULTS ===\n")
 
   if (!chunks || chunks.length === 0) {
@@ -61,4 +65,8 @@ async function main() {
   })
 }
 
-main().catch(console.error)
+main().catch(err => {
+  console.error("SCRIPT FAILED:", err)
+})
+
+console.log("SCRIPT COMPLETED")
