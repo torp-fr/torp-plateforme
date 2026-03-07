@@ -14,9 +14,9 @@
  */
 
 import { Buffer } from 'buffer';
-import path from 'path';
 import mammoth from 'mammoth';
 import ExcelJS from 'exceljs';
+import pdfParse from 'pdf-parse';
 
 const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024; // 25 MB
 
@@ -58,7 +58,7 @@ export async function extractDocumentContent(
   }
 
   // ── Detect file type from extension ────────────────────────────────────
-  const ext = path.extname(filename).toLowerCase();
+  const ext = filename.slice(filename.lastIndexOf('.')).toLowerCase();
 
   if (!ext) {
     throw new Error(`No file extension for: ${filename}`);
@@ -66,7 +66,6 @@ export async function extractDocumentContent(
 
   // ── PDF extraction ────────────────────────────────────────────────────
   if (ext === '.pdf') {
-    const pdfParse = require('pdf-parse');
     const result = await pdfParse(buffer);
     return cleanText(result.text);
   }
