@@ -13,13 +13,13 @@
  *  - Logged at entry and exit with byte / character counts
  */
 
-import { PDFParse } from 'pdf-parse';
+import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
 import ExcelJS from 'exceljs';
-
-const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024; // 25 MB
 import Papa from 'papaparse';
 import { log, warn } from '@/lib/logger';
+
+const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024; // 25 MB
 
 // ---------------------------------------------------------------------------
 // Internal: format-specific extractors
@@ -31,14 +31,10 @@ import { log, warn } from '@/lib/logger';
  * does not merge content from adjacent pages.
  */
 async function extractPdf(buffer: Buffer): Promise<string> {
-  const parser = new PDFParse({ data: buffer });
-  const result = await parser.getText();
-
-  // Join pages with double newlines so paragraph-boundary chunking works
-  // across page breaks. Use per-page text if available, else the full text.
-  if (result.pages && result.pages.length > 0) {
-    return result.pages.map((p: any) => p.text ?? '').join('\n\n');
-  }
+  // pdf-parse returns a promise that resolves to { text, numpages, ... }
+  const result = await pdfParse(buffer);
+  // Replace form-feed page separators with double newlines so that
+  // paragraph-boundary chunking does not merge content across pages.
   return (result.text ?? '').replace(/\f/g, '\n\n');
 }
 

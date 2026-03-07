@@ -7,6 +7,9 @@ import { supabase } from "@/lib/supabase";
 import { log, warn, error as logError } from '@/lib/logger';
 import { chunkSmart, type Chunk } from '@/core/knowledge/ingestion/smartChunker.service';
 import { classifyDocument } from '@/core/knowledge/ingestion/documentClassifier.service';
+import { extractDocumentContent } from '@/core/knowledge/ingestion/documentExtractor.service';
+import { normalizeText } from '@/core/knowledge/ingestion/textNormalizer.service';
+import { sanitizeText } from '@/utils/text-sanitizer';
 
 // ---------------------------------------------------------------------------
 // Embedding constants
@@ -15,12 +18,11 @@ import { classifyDocument } from '@/core/knowledge/ingestion/documentClassifier.
 const EMBEDDING_BATCH_SIZE = 100; // texts per Edge Function call (server cap)
 const INSERT_BATCH_SIZE    = 100; // rows per Supabase insert call
 
-// PHASE 40: Server-side hash computation via Supabase Edge Function or RLS trigger
-// Browser code cannot use crypto module
-// Hash will be computed by server when inserting/updating documents
-
 const MAX_ATTEMPTS = 3;
 const PIPELINE_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
+
+// Storage bucket used by uploadDocumentForServerIngestion
+const KNOWLEDGE_STORAGE_BUCKET = 'knowledge-files';
 
 // =======================================================
 // Public Entry Point
@@ -45,7 +47,7 @@ export async function runKnowledgeIngestion(documentId: string) {
     const errorMsg = err?.message || "Unknown error";
     logError(`[INGESTION] ❌ Ingestion failed for document ${documentId}:`, errorMsg);
 
-    // Mark as failed in database
+    // Mark as failed in database, preserving the error message
     await markFailed(documentId, errorMsg);
   }
 }
@@ -80,6 +82,7 @@ async function claimDocument(documentId: string) {
     }
 
     // Atomic update: claim document for processing
+    // .select() returns all columns including file_path, mime_type, title
     const { data, error } = await supabase
       .from("knowledge_documents")
       .update({
@@ -118,15 +121,104 @@ async function processDocument(doc: any) {
     await ensureStillProcessing(doc.id);
     checkTimeout(doc);
 
-    // Step 1: Validate content
+    // ── Step 0: Extract text from file if content not yet extracted ──────────
+    //
+    // The upload path stores the file in Supabase Storage and creates the DB
+    // row with content = NULL. This step downloads the file, extracts plain
+    // text, sanitizes it and persists both raw and sanitized forms to the DB.
+    //
+    if (!doc.sanitized_content && !doc.content) {
+      log('[INGESTION] content is missing — starting text extraction');
+
+      if (!doc.file_path) {
+        throw new Error(
+          'TEXT_EXTRACTION_FAILED: document has no file_path and no pre-extracted content'
+        );
+      }
+
+      // Transition to EXTRACTING state
+      await supabase
+        .from('knowledge_documents')
+        .update({ ingestion_status: 'extracting', ingestion_progress: 20 })
+        .eq('id', doc.id);
+
+      // ── 0a: Download file from Supabase Storage ──
+      log(`[INGESTION] downloading file from storage: ${doc.file_path}`);
+      const { data: fileBlob, error: downloadError } = await supabase.storage
+        .from(KNOWLEDGE_STORAGE_BUCKET)
+        .download(doc.file_path);
+
+      if (downloadError || !fileBlob) {
+        throw new Error(
+          `TEXT_EXTRACTION_FAILED: storage download failed: ${downloadError?.message ?? 'no data returned'}`
+        );
+      }
+
+      // ── 0b: Convert Blob → Node Buffer ──
+      const arrayBuffer = await fileBlob.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      // Derive the filename from the storage path for extension detection
+      const filename = doc.file_path.split('/').pop() || doc.title || 'document';
+
+      // ── 0c: Extract plain text (pdf-parse / mammoth / exceljs / plain UTF-8) ──
+      log(`[INGESTION] extracting text from: ${filename}`);
+      const rawText = await extractDocumentContent(buffer, filename);
+
+      if (!rawText || rawText.trim().length === 0) {
+        throw new Error(
+          'TEXT_EXTRACTION_FAILED: no text could be extracted from document'
+        );
+      }
+
+      // ── 0d: Normalize then sanitize ──
+      log(`[INGESTION] sanitizing text (raw chars: ${rawText.length})`);
+      const normalizedText = normalizeText(rawText);
+      const sanitizedText  = sanitizeText(normalizedText);
+
+      if (!sanitizedText || sanitizedText.trim().length === 0) {
+        throw new Error(
+          'TEXT_EXTRACTION_FAILED: sanitized text is empty after normalization'
+        );
+      }
+
+      // ── 0e: Persist extracted content ──
+      const { error: updateError } = await supabase
+        .from('knowledge_documents')
+        .update({
+          content:           rawText,
+          sanitized_content: sanitizedText,
+        })
+        .eq('id', doc.id);
+
+      if (updateError) {
+        throw new Error(
+          `TEXT_EXTRACTION_FAILED: failed to store extracted content: ${updateError.message}`
+        );
+      }
+
+      // Propagate extracted content so the rest of this function can use it
+      doc.content           = rawText;
+      doc.sanitized_content = sanitizedText;
+
+      log(`[INGESTION] text extraction complete (sanitized chars: ${sanitizedText.length})`);
+    }
+
+    // ── Step 1: Validate content ─────────────────────────────────────────────
     const sanitized = doc.sanitized_content || doc.content;
     if (!sanitized || sanitized.trim().length === 0) {
-      throw new Error("Missing sanitized content");
+      throw new Error('TEXT_EXTRACTION_FAILED: no content available after extraction');
     }
 
     log(`[PROCESS] Document size: ${(sanitized.length / 1024).toFixed(2)}KB`);
 
-    // Step 2: Classify and chunk the document
+    // ── Step 2: Classify and chunk ───────────────────────────────────────────
+    await supabase
+      .from('knowledge_documents')
+      .update({ ingestion_status: 'chunking', ingestion_progress: 40 })
+      .eq('id', doc.id);
+
+    log('[INGESTION] chunking document');
     const docType = classifyDocument(sanitized);
     log(`[PROCESS] Document type: ${docType}`);
 
@@ -137,11 +229,17 @@ async function processDocument(doc: any) {
 
     log(`[PROCESS] Generated ${chunks.length} chunks`);
 
-    // Step 3: Generate embeddings
+    // ── Step 3: Generate embeddings ──────────────────────────────────────────
+    await supabase
+      .from('knowledge_documents')
+      .update({ ingestion_status: 'embedding', ingestion_progress: 75 })
+      .eq('id', doc.id);
+
+    log('[INGESTION] generating embeddings');
     await processEmbeddingsInBatches(doc.id, chunks);
 
-    // Step 4: Mark as completed
-    await markCompleted(doc.id);
+    // ── Step 4: Mark as completed ────────────────────────────────────────────
+    await markCompleted(doc.id, chunks.length);
     log(`[PROCESS] Ingestion complete for document ${doc.id}`);
   } catch (err: any) {
     logError(`[PROCESS] Error processing document ${doc.id}:`, err.message);
@@ -241,7 +339,9 @@ async function ensureStillProcessing(documentId: string) {
     .eq("id", documentId)
     .single();
 
-  if (!data || data.ingestion_status !== "processing") {
+  // Accept any intermediate processing state (processing, extracting, chunking, embedding)
+  const activeStatuses = ['processing', 'extracting', 'chunking', 'embedding'];
+  if (!data || !activeStatuses.includes(data.ingestion_status)) {
     throw new Error("Document no longer in processing state");
   }
 
@@ -260,7 +360,7 @@ function checkTimeout(doc: any) {
 // Final States
 // =======================================================
 
-async function markCompleted(documentId: string) {
+async function markCompleted(documentId: string, chunkCount?: number) {
   const { error: updateError } = await supabase
     .from("knowledge_documents")
     .update({
@@ -268,6 +368,7 @@ async function markCompleted(documentId: string) {
       ingestion_completed_at: new Date().toISOString(),
       pipeline_timeout_at: null,
       ingestion_progress: 100,
+      ...(chunkCount !== undefined && { chunk_count: chunkCount }),
     })
     .eq("id", documentId);
 
