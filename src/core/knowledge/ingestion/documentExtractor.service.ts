@@ -18,7 +18,8 @@ import Papa from 'papaparse';
 import { log, warn } from '@/lib/logger';
 
 const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse');
+const pdfParseModule = require('pdf-parse');
+const pdfParse = pdfParseModule.default || pdfParseModule;
 
 const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024; // 25 MB
 
