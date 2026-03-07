@@ -13,8 +13,12 @@
  *  - Logged at entry and exit with byte / character counts
  */
 
+import { createRequire } from 'module';
 import Papa from 'papaparse';
 import { log, warn } from '@/lib/logger';
+
+const require = createRequire(import.meta.url);
+const pdfParse = require('pdf-parse');
 
 const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024; // 25 MB
 
@@ -28,10 +32,6 @@ const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024; // 25 MB
  * does not merge content from adjacent pages.
  */
 async function extractPdf(buffer: Buffer): Promise<string> {
-  // Dynamic import keeps pdf-parse (Node.js-only) out of the Vite browser bundle.
-  // /* @vite-ignore */ tells Rollup not to analyse or bundle this import.
-  const pdfParseModule = await import(/* @vite-ignore */ 'pdf-parse');
-  const pdfParse = (pdfParseModule as any).default || pdfParseModule;
   const result = await pdfParse(buffer);
   return result.text
     .replace(/\f/g, '\n\n')
