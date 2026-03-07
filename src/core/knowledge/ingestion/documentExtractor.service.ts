@@ -15,6 +15,7 @@
 
 import Papa from 'papaparse';
 import { log, warn } from '@/lib/logger';
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.js';
 
 const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024; // 25 MB
 
@@ -23,21 +24,25 @@ const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024; // 25 MB
 // ---------------------------------------------------------------------------
 
 /**
- * PDF — extract text page by page using pdf-parse.
+ * PDF — extract text page by page using pdfjs-dist.
  * Pages are separated by a blank line so that paragraph-boundary chunking
  * does not merge content from adjacent pages.
  */
 async function extractPdf(buffer: Buffer): Promise<string> {
-  const { createRequire } = await import('module');
-  const require = createRequire(import.meta.url);
-  const pdfParseModule = require('pdf-parse');
-  const pdfParse = pdfParseModule.default || pdfParseModule;
-
   console.log('[PDF] parsing started');
-  const result = await pdfParse({ data: buffer });
+  const loadingTask = pdfjs.getDocument({ data: buffer });
+  const pdf = await loadingTask.promise;
+  let text = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items
+      .map((item: any) => item.str)
+      .join(' ');
+    text += pageText + '\n\n';
+  }
   console.log('[PDF] parsing completed');
-  return result.text
-    .replace(/\f/g, '\n\n')
+  return text
     .replace(/\s+\n/g, '\n')
     .trim();
 }
