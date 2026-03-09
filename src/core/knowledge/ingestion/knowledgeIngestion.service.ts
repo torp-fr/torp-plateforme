@@ -169,16 +169,29 @@ export async function ingestKnowledgeDocument({
       .insert(chunkRecords);
 
     if (chunkError) {
-      console.error('[KnowledgeIngestion] Chunk insert error:', chunkError);
-      return { success: false, errors: [`Failed to insert chunks: ${chunkError.message}`] };
+      console.error('[KnowledgeIngestion] ❌ DATABASE ERROR - Chunk insertion failed');
+      console.error('[KnowledgeIngestion] Error message:', chunkError.message);
+      console.error('[KnowledgeIngestion] Error code:', (chunkError as any).code);
+      console.error('[KnowledgeIngestion] Error details:', chunkError);
+      console.error('[KnowledgeIngestion] Document ID:', documentId);
+      console.error('[KnowledgeIngestion] Chunks attempted:', chunkRecords.length);
+      console.error('[KnowledgeIngestion] First chunk sample:', JSON.stringify(chunkRecords[0], null, 2));
+      return { success: false, errors: [`Database error during chunk insertion: ${chunkError.message}`] };
     }
 
     insertedCount = chunkRecords.length;
-    log('[KnowledgeIngestion] Chunks inserted successfully:', insertedCount);
+    log('[KnowledgeIngestion] ✅ Chunks inserted successfully:', insertedCount);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[KnowledgeIngestion] Chunk insert exception:', msg);
-    return { success: false, errors: [`Failed to insert chunks: ${msg}`] };
+    const stack = err instanceof Error ? err.stack : 'No stack trace';
+    console.error('[KnowledgeIngestion] ❌ EXCEPTION - Chunk insertion threw error');
+    console.error('[KnowledgeIngestion] Exception message:', msg);
+    console.error('[KnowledgeIngestion] Exception type:', err?.constructor?.name);
+    console.error('[KnowledgeIngestion] Stack trace:', stack);
+    console.error('[KnowledgeIngestion] Full exception object:', err);
+    console.error('[KnowledgeIngestion] Document ID:', documentId);
+    console.error('[KnowledgeIngestion] Chunks attempted:', chunkRecords.length);
+    return { success: false, errors: [`Exception during chunk insertion: ${msg}`] };
   }
 
   if (insertedCount === 0) {
