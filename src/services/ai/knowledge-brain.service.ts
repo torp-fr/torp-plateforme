@@ -275,7 +275,7 @@ class KnowledgeBrainService {
       log('[KNOWLEDGE BRAIN] 🔒 Attempting atomic claim for document:', documentId);
 
       // Note: Document state management moved to testFullIngestion.ts
-      log('[KNOWLEDGE BRAIN'] ℹ️ Atomic claim moved to testFullIngestion.ts');
+      log('[KNOWLEDGE BRAIN] ℹ️ Atomic claim moved to testFullIngestion.ts');
       return true;
     } catch (error) {
       console.error('[KNOWLEDGE BRAIN] 💥 Atomic claim error:', error);
