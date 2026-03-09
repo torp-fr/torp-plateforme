@@ -52,11 +52,22 @@ export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): P
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
       const embedding = await generateEmbedding(chunk.content);
-      await supabase
+      if (!embedding) {
+        console.warn("Embedding generation failed for chunk", i);
+        continue;
+      }
+
+      console.log("Embedding generated length:", embedding?.length);
+
+      const { error } = await supabase
         .from('knowledge_chunks')
         .update({ embedding_vector: embedding })
         .eq('document_id', documentId)
         .eq('chunk_index', i);
+
+      if (error) {
+        console.error("Embedding write failed:", error);
+      }
     }
 
     log('[KnowledgeIndex] Embeddings generated for', chunks.length, 'chunks');

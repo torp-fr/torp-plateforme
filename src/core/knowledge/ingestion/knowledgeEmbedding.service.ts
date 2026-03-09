@@ -68,15 +68,18 @@ async function invokeBatchEmbedding(inputs: string[]): Promise<number[][]> {
 
 /**
  * Generate embedding for a single text.
- * Returns the raw embedding vector, or null on failure.
+ * Throws error if generation fails (instead of returning null).
  */
-export async function generateEmbedding(text: string): Promise<number[] | null> {
+export async function generateEmbedding(text: string): Promise<number[]> {
   try {
     const embeddings = await invokeBatchEmbedding([text]);
-    return embeddings[0] ?? null;
+    if (!embeddings[0]) {
+      throw new Error('[KnowledgeEmbedding] No embedding returned for text');
+    }
+    return embeddings[0];
   } catch (err) {
     error('[KnowledgeEmbedding] Single embedding failed:', err);
-    return null;
+    throw err;
   }
 }
 
