@@ -68,15 +68,45 @@ async function invokeBatchEmbedding(inputs: string[]): Promise<number[][]> {
 
 /**
  * Generate embedding for a single text.
- * Returns the raw embedding vector, or null on failure.
+ * Throws error if generation fails (instead of returning null).
  */
-export async function generateEmbedding(text: string): Promise<number[] | null> {
+export async function generateEmbedding(text: string): Promise<number[]> {
   try {
     const embeddings = await invokeBatchEmbedding([text]);
-    return embeddings[0] ?? null;
+    if (!embeddings[0]) {
+      throw new Error('[KnowledgeEmbedding] No embedding returned for text');
+    }
+    return embeddings[0];
   } catch (err) {
     error('[KnowledgeEmbedding] Single embedding failed:', err);
-    return null;
+    throw err;
+  }
+}
+
+/**
+ * Generate embeddings for multiple texts in a single batch.
+ * Throws error if generation fails or returns inconsistent size.
+ */
+export async function embedBatch(texts: string[]): Promise<number[][]> {
+  try {
+    if (texts.length === 0) {
+      return [];
+    }
+
+    log('[KnowledgeEmbedding] Generating embeddings for', texts.length, 'texts');
+
+    const embeddings = await invokeBatchEmbedding(texts);
+
+    if (!embeddings || embeddings.length !== texts.length) {
+      throw new Error('[KnowledgeEmbedding] Batch returned inconsistent size');
+    }
+
+    log('[KnowledgeEmbedding] Batch complete —', embeddings.length, 'embeddings generated');
+
+    return embeddings;
+  } catch (err) {
+    error('[KnowledgeEmbedding] Batch embedding failed:', err);
+    throw err;
   }
 }
 
