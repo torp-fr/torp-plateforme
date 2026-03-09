@@ -142,7 +142,7 @@ export async function ingestKnowledgeDocument(
     const documentPayload = {
       title: metadata.title,
       category: metadata.category,
-      source: 'ingestion'.trim().toLowerCase(),
+      source: metadata.source ?? 'ingestion',
       version: metadata.version || '1.0',
       file_size: fileBuffer.length,
       created_by: userId,
