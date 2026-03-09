@@ -410,6 +410,27 @@ class KnowledgeBrainService {
     // Note: Document creation is now handled exclusively by testFullIngestion.ts
     log('[KNOWLEDGE BRAIN] ℹ️ Document creation moved to testFullIngestion.ts');
     throw new Error('Document creation is now managed by testFullIngestion.ts. Please use that script instead.');
+  }
+
+  /**
+   * PHASE 36.10.1: Vector search (VERIFIED)
+   * CRITICAL: Uses ONLY search_knowledge_by_embedding RPC (secure views enforced at DB level)
+   */
+  private async searchByEmbedding(
+    query: string,
+    limit: number,
+    options?: {
+      category?: string;
+      region?: string;
+      min_reliability?: number;
+    }
+  ): Promise<SearchResult[]> {
+    try {
+      log('[KNOWLEDGE BRAIN] 🔍 Vector search starting (verified docs only)...');
+
+      const searchStartTime = Date.now();
+      const queryEmbedding = await generateEmbedding(query);
+
       if (!queryEmbedding) {
         warn('[KNOWLEDGE BRAIN] ⚠️ Could not generate embedding for query');
         // PHASE 36.10.5: Log failed search metric
