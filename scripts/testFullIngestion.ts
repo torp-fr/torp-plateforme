@@ -192,7 +192,7 @@ async function insertDocumentMetadata(
       const insertPayload = {
         title: testDoc.title,
         category: 'GUIDELINE',
-        source: 'ingestion',
+        source: 'ingestion'.trim().toLowerCase(),
         version: '1.0',
         file_size: 0,
         created_by: null,
@@ -267,7 +267,7 @@ async function runIngestionPipeline(
       const result = await ingestKnowledgeDocument(buffer, testDoc.name, {
         title: testDoc.title,
         category: 'GUIDELINE',
-        source: 'ingestion',
+        source: 'ingestion'.trim().toLowerCase(),
         version: '1.0',
       }, null);
 

@@ -145,7 +145,7 @@ export async function ingestKnowledgeDocument(
         {
           title: metadata.title,
           category: metadata.category,
-          source: metadata.source,
+          source: 'ingestion'.trim().toLowerCase(),
           version: metadata.version || '1.0',
           file_size: fileBuffer.length,
           created_by: userId,
