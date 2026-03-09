@@ -4,6 +4,7 @@
  * Prepares knowledge base for RAG (Phase 30)
  */
 
+import crypto from 'crypto';
 import { supabase } from '@/lib/supabase';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
 import { normalizeText } from './textNormalizer.service';
@@ -62,6 +63,17 @@ export interface IngestionResult {
   errors?: string[];
 }
 
+/**
+ * Hash a chunk's content using SHA256
+ * Used for deduplication to prevent re-embedding identical chunks
+ */
+function hashChunk(text: string): string {
+  return crypto
+    .createHash('sha256')
+    .update(text)
+    .digest('hex');
+}
+
 
 /**
  * Extract text from document buffer
@@ -97,6 +109,16 @@ export function extractTextFromBuffer(
  * SUCCESS is determined solely by chunk insertion.
  * All other steps (dedup, indexing) are non-blocking.
  */
+/**
+ * Runtime guard: intercepts any Supabase write to knowledge_documents.
+ * Throws immediately to prevent FK violations from ingestion services.
+ */
+function assertNotKnowledgeDocumentsWrite(table: string): void {
+  if (table === 'knowledge_documents') {
+    throw new Error('Runtime write to knowledge_documents is forbidden from ingestion services');
+  }
+}
+
 export async function ingestKnowledgeDocument(
   fileBuffer: Buffer,
   filename: string,

@@ -92,33 +92,36 @@ export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): P
 // ---------------------------------------------------------------------------
 
 /**
- * Search for the most relevant chunks using SQL-level vector similarity.
- * Delegates to the `match_knowledge_chunks` PostgreSQL function which uses
- * the HNSW index on `embedding_vector` — no in-memory similarity scan.
+ * Search for the most relevant chunks using hybrid search.
+ * Combines pgvector cosine similarity (0.7 weight) with PostgreSQL full-text search (0.3 weight).
+ * Delegates to the `match_knowledge_chunks` PostgreSQL function which computes hybrid scores.
  *
- * Requires migration 20260304000001_phase30_pgvector_embeddings.sql to be applied.
+ * Requires migration 20260307000002_hybrid_rag_search.sql to be applied.
+ * Function signature: match_knowledge_chunks(query_embedding vector(1536), query_text text, match_count int)
  */
 export async function semanticSearch(
   query: string,
   limit: number = 10
 ): Promise<{ chunkId: string; content: string; similarity: number; documentId: string }[]> {
   try {
-    log('[KnowledgeIndex] Semantic search for:', query);
+    log('[KnowledgeIndex] Hybrid search for:', query);
 
-    // Generate query embedding (single call)
+    // Generate query embedding for vector similarity
     const queryEmbedding = await generateEmbedding(query);
     if (!queryEmbedding) {
       throw new Error('Failed to generate query embedding');
     }
 
-    // SQL vector search via pgvector — ORDER BY embedding_vector <=> query_embedding
+    // Hybrid search via pgvector + full-text search
+    // Combines vector similarity (0.7) and BM25 FTS (0.3)
     const { data, error: rpcError } = await supabase.rpc('match_knowledge_chunks', {
       query_embedding: queryEmbedding,
+      query_text: query,
       match_count: limit,
     });
 
     if (rpcError) {
-      throw new Error(`Vector search RPC failed: ${rpcError.message}`);
+      throw new Error(`Hybrid search RPC failed: ${rpcError.message}`);
     }
 
     const results = (data || []).map((row: {
@@ -133,7 +136,7 @@ export async function semanticSearch(
       similarity: row.similarity,
     }));
 
-    log('[KnowledgeIndex] Found', results.length, 'relevant chunks');
+    log('[KnowledgeIndex] Found', results.length, 'relevant chunks (hybrid search)');
     return results;
   } catch (err) {
     error('[KnowledgeIndex] Search failed:', err);
