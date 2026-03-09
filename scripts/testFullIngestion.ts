@@ -184,7 +184,7 @@ async function insertDocumentMetadata(
   divider('INSERT DOCUMENT METADATA');
 
   const documentIds = new Map<string, string>();
-  const testUserId = randomUUID();
+  const userId = randomUUID();
 
   for (const testDoc of TEST_DOCUMENTS) {
     if (!uploads.has(testDoc.name)) continue;
@@ -199,7 +199,7 @@ async function insertDocumentMetadata(
             source: 'test-ingestion',
             version: '1.0',
             file_size: 0,
-            created_by: testUserId,
+            created_by: userId,
           },
         ])
         .select('id')
@@ -240,7 +240,7 @@ async function runIngestionPipeline(
   } = await import('@/core/knowledge/ingestion/knowledgeIngestion.service');
 
   const results = new Map<string, { chunkCount: number; tokens: number; errors?: string[] }>();
-  const testUserId = randomUUID();
+  const userId = randomUUID();
 
   for (const testDoc of TEST_DOCUMENTS) {
     if (!documents.has(testDoc.name) || !documentIds.has(testDoc.name)) {
@@ -258,7 +258,7 @@ async function runIngestionPipeline(
         category: testDoc.category,
         source: 'test-ingestion',
         version: '1.0',
-      }, testUserId);
+      }, userId);
 
       const duration = Date.now() - startTime;
 
