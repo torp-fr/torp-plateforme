@@ -53,8 +53,7 @@ export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): P
       const chunk = chunks[i];
       const embedding = await generateEmbedding(chunk.content);
       if (!embedding) {
-        console.warn("Embedding generation failed for chunk", i);
-        continue;
+        throw new Error("Embedding generation failed");
       }
 
       console.log("Embedding generated length:", embedding?.length);
@@ -63,7 +62,8 @@ export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): P
         .from('knowledge_chunks')
         .update({ embedding_vector: embedding })
         .eq('document_id', documentId)
-        .eq('chunk_index', i);
+        .eq('chunk_index', i)
+        .is('embedding_vector', null);
 
       if (error) {
         console.error("Embedding write failed:", error);
