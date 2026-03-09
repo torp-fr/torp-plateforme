@@ -60,11 +60,15 @@ export function KnowledgeBaseUpload() {
 
     const file = files[0];
 
-    // Validate file type
-    if (file.type !== 'application/pdf' && !file.name.endsWith('.txt')) {
+    // Validate file type - accept all supported formats
+    const supportedExtensions = ['.pdf', '.txt', '.md', '.docx', '.xlsx', '.csv'];
+    const fileName = file.name.toLowerCase();
+    const hasValidExtension = supportedExtensions.some(ext => fileName.endsWith(ext));
+
+    if (!hasValidExtension) {
       setState(prev => ({
         ...prev,
-        error: 'Seuls les fichiers PDF et TXT sont acceptés',
+        error: 'Formats acceptés: PDF, TXT, MD, DOCX, XLSX, CSV',
       }));
       return;
     }
@@ -192,7 +196,7 @@ export function KnowledgeBaseUpload() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.txt"
+              accept=".pdf,.txt,.md,.docx,.xlsx,.csv"
               onChange={handleFileSelect}
               style={{ display: 'none' }}
             />
@@ -214,11 +218,11 @@ export function KnowledgeBaseUpload() {
             ) : (
               <div>
                 <Upload className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm">Cliquez pour sélectionner un fichier PDF ou TXT</p>
+                <p className="text-sm">Cliquez pour sélectionner un document (PDF, TXT, MD, DOCX, XLSX, CSV)</p>
               </div>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">Max {(env.upload.maxFileSize / (1024 * 1024)).toFixed(0)}MB. PDF ou TXT uniquement.</p>
+          <p className="text-xs text-muted-foreground">Max {(env.upload.maxFileSize / (1024 * 1024)).toFixed(0)}MB. Formats: PDF, TXT, MD, DOCX, XLSX, CSV</p>
         </div>
 
         {/* Category - PHASE 36.2: Display French labels */}
