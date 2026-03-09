@@ -13,8 +13,14 @@
  * REPORTING:
  *   Success = chunks were created, regardless of non-blocking failures (indexing, dedup)
  *
+ * REQUIREMENT:
+ *   Set SYSTEM_USER_ID to a valid UUID from auth.users before running this script.
+ *   The FK constraint fk_created_by requires a valid user UUID.
+ *
  * Usage:
- *   npx tsx scripts/testFullIngestion.ts
+ *   1. Get a valid user UUID from your Supabase auth.users table
+ *   2. Update SYSTEM_USER_ID below
+ *   3. Run: npx tsx scripts/testFullIngestion.ts
  *
  * Requirements:
  *   SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env
@@ -40,6 +46,25 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
+
+// ============================================================================
+// CRITICAL CONFIGURATION
+// ============================================================================
+// Set this to a valid UUID from your auth.users table.
+// The FK constraint fk_created_by requires this to be a real user UUID.
+// If you don't have users in auth, create one via Supabase Dashboard:
+// Auth > Users > Add User > copy the UUID and paste here.
+const SYSTEM_USER_ID = '<TO_BE_FILLED>';
+
+if (SYSTEM_USER_ID === '<TO_BE_FILLED>') {
+  console.error('❌ CONFIGURATION ERROR');
+  console.error('   SYSTEM_USER_ID must be set to a valid UUID from auth.users');
+  console.error('   Steps to fix:');
+  console.error('   1. Go to Supabase Dashboard > Authentication > Users');
+  console.error('   2. Create a user or copy an existing user UUID');
+  console.error('   3. Paste the UUID here: const SYSTEM_USER_ID = "your-uuid-here"');
+  process.exit(1);
+}
 
 // ============================================================================
 // Test Configuration
@@ -96,31 +121,6 @@ function fail(message: string, err?: any) {
 function divider(title?: string) {
   console.log('\n' + '='.repeat(80));
   if (title) { console.log(`  ${title}`); console.log('='.repeat(80)); }
-}
-
-// ============================================================================
-// Stage 0: Resolve a valid user ID for created_by
-// ============================================================================
-
-/**
- * Fetch the first user from auth.users so we can satisfy the fk_created_by
- * foreign key constraint.  Returns null if no users exist (the FK column is
- * nullable so null is a valid value and will NOT trigger the constraint).
- */
-async function getSystemUserId(): Promise<string | null> {
-  try {
-    const { data, error } = await supabase.auth.admin.listUsers({ perPage: 1, page: 1 });
-    if (error || !data?.users?.length) {
-      console.warn('[SYSTEM_USER] No users found in auth.users — using null for created_by');
-      return null;
-    }
-    const userId = data.users[0].id;
-    log('SYSTEM_USER', `Using user ID for created_by: ${userId}`);
-    return userId;
-  } catch (err) {
-    console.warn('[SYSTEM_USER] Could not query auth.users:', err);
-    return null;
-  }
 }
 
 // ============================================================================
@@ -198,12 +198,13 @@ async function uploadToStorage(
 // ARCHITECTURE RULE: ONLY the caller (this script or the API) may INSERT into
 // knowledge_documents.  The ingestion service is strictly READ-ONLY for this
 // table.
+//
+// STRICT ERROR CHECKING: Document creation MUST succeed before proceeding.
 // ============================================================================
 
 async function insertDocumentMetadata(
   uploads: Map<string, string>,
-  documents: Map<string, Buffer>,
-  systemUserId: string | null
+  documents: Map<string, Buffer>
 ): Promise<Map<string, string>> {
   divider('STAGE 3 — CREATE DOCUMENT RECORDS');
 
@@ -223,11 +224,16 @@ async function insertDocumentMetadata(
         version: '1.0',
         file_path: storagePath,
         file_size: buffer?.length ?? 0,
-        // created_by: use a real auth.users UUID to satisfy fk_created_by.
-        // NULL is also valid (nullable FK column, null bypasses FK check).
-        created_by: systemUserId,
+        // created_by: use valid auth.users UUID to satisfy fk_created_by FK constraint
+        created_by: SYSTEM_USER_ID,
         ingestion_status: 'pending', // starts the step-runner state machine
       };
+
+      log('METADATA', `Creating document: ${testDoc.name}`, {
+        title: testDoc.title,
+        category: testDoc.category,
+        created_by: SYSTEM_USER_ID,
+      });
 
       const { data, error: insertError } = await supabase
         .from('knowledge_documents')
@@ -235,19 +241,42 @@ async function insertDocumentMetadata(
         .select('id')
         .single();
 
-      if (insertError || !data) {
+      // ── STRICT ERROR CHECKING ──────────────────────────────────────────────
+      if (insertError) {
+        console.error('🚨 CRITICAL: Document insert failed with error:', insertError);
         fail(`Insert failed for ${testDoc.name}`, insertError);
-        continue;
+        throw new Error(`Failed to create document record for ${testDoc.name}: ${insertError.message}`);
       }
 
-      documentIds.set(testDoc.name, data.id);
-      log('METADATA', `Created document record: ${data.id}`, {
+      if (!data) {
+        console.error('🚨 CRITICAL: Document insert succeeded but returned no data');
+        fail(`Insert returned no data for ${testDoc.name}`);
+        throw new Error(`Document insert succeeded but no ID returned for ${testDoc.name}`);
+      }
+
+      if (!data.id) {
+        console.error('🚨 CRITICAL: Document insert returned data but no ID field');
+        fail(`Insert returned data without ID for ${testDoc.name}`);
+        throw new Error(`Document created but ID field missing for ${testDoc.name}`);
+      }
+
+      const documentId = data.id as string;
+
+      documentIds.set(testDoc.name, documentId);
+      log('METADATA', `✅ Document created successfully`, {
+        documentId: documentId,
         title: testDoc.title,
         category: testDoc.category,
-        created_by: systemUserId ?? 'null (no FK violation for nullable column)',
+        created_by: SYSTEM_USER_ID,
       });
+
+      // Print documentId prominently for verification
+      console.log(`   ✨ Document ID: ${documentId}`);
     } catch (err) {
+      console.error('🚨 CRITICAL ERROR in insertDocumentMetadata:');
+      console.error(err);
       fail(`Failed to insert metadata for ${testDoc.name}`, err);
+      throw err; // Re-throw to stop the pipeline
     }
   }
 
@@ -286,6 +315,11 @@ async function runIngestionPipeline(
 
     const buffer = documents.get(testDoc.name)!;
     const documentId = documentIds.get(testDoc.name)!;
+
+    // ── VALIDATION: documentId must exist ──────────────────────────────────
+    if (!documentId) {
+      throw new Error(`Document creation failed: no documentId for ${testDoc.name}`);
+    }
 
     try {
       log('INGESTION', `Processing: ${testDoc.name}`, { documentId });
@@ -506,9 +540,6 @@ async function main() {
   console.log('╚═══════════════════════════════════════════════════════════════════════╝\n');
 
   try {
-    // Stage 0: Resolve system user for created_by
-    const systemUserId = await getSystemUserId();
-
     // Stage 1: Load documents
     const documents = await loadTestDocuments();
     if (documents.size === 0) { fail('No documents loaded. Aborting.'); process.exit(1); }
@@ -518,7 +549,8 @@ async function main() {
     if (uploads.size === 0) { fail('No documents uploaded. Aborting.'); process.exit(1); }
 
     // Stage 3: Create document records (caller's responsibility — NOT the ingestion service)
-    const documentIds = await insertDocumentMetadata(uploads, documents, systemUserId);
+    // This WILL THROW if document creation fails (strict error checking)
+    const documentIds = await insertDocumentMetadata(uploads, documents);
     if (documentIds.size === 0) { fail('No document records created. Aborting.'); process.exit(1); }
 
     // Stage 4: Run ingestion (chunks only — no document creation inside service)
