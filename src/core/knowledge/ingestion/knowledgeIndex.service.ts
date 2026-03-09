@@ -11,6 +11,7 @@
 
 import type { KnowledgeChunk as ChunkerChunk } from './knowledgeChunker.service';
 import { generateEmbedding } from './knowledgeEmbedding.service';
+import { compressContext } from '../compression/contextCompression.service';
 import { verifyAndPersistIntegrity } from '../integrity/knowledgeIntegrity.service';
 import { getKnowledgeConflictService } from '../conflicts/knowledgeConflict.service';
 import { supabase } from '@/lib/supabase';
@@ -59,8 +60,6 @@ export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): P
     }
 
     for (let i = 0; i < embeddings.length; i++) {
-      console.log("Embedding generated length:", embeddings[i]?.length);
-
       const { error } = await supabase
         .from("knowledge_chunks")
         .update({ embedding_vector: embeddings[i] })
@@ -69,7 +68,7 @@ export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): P
         .is("embedding_vector", null);
 
       if (error) {
-        console.error("Embedding write failed:", error);
+        error(`[KnowledgeIndex] Failed to write embedding for chunk ${i}: ${error.message}`);
       }
     }
 
@@ -110,13 +109,81 @@ export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): P
 }
 
 // ---------------------------------------------------------------------------
+// Cosine similarity helper
+// ---------------------------------------------------------------------------
+
+function cosineSimilarity(vecA: number[], vecB: number[]): number {
+  if (vecA.length !== vecB.length) {
+    throw new Error('Vectors must have same dimensions for cosine similarity');
+  }
+
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+
+  for (let i = 0; i < vecA.length; i++) {
+    dotProduct += vecA[i] * vecB[i];
+    normA += vecA[i] * vecA[i];
+    normB += vecB[i] * vecB[i];
+  }
+
+  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+  return denominator === 0 ? 0 : dotProduct / denominator;
+}
+
+// ---------------------------------------------------------------------------
+// Reranking helper
+// ---------------------------------------------------------------------------
+
+async function rerankChunks(
+  query: string,
+  chunks: { chunkId: string; content: string; similarity: number; documentId: string }[]
+): Promise<Array<{ chunkId: string; content: string; similarity: number; documentId: string; rerankScore: number }>> {
+  try {
+    // Generate query embedding once
+    const queryEmbedding = await generateEmbedding(query);
+    if (!queryEmbedding) {
+      throw new Error('Failed to generate query embedding for reranking');
+    }
+
+    // Batch embed all chunk contents
+    const { embedBatch } = await import('./knowledgeEmbedding.service');
+    const texts = chunks.map(c => c.content);
+    const embeddings = await embedBatch(texts);
+
+    if (!embeddings || embeddings.length !== chunks.length) {
+      throw new Error('[KnowledgeIndex] Reranking batch size mismatch');
+    }
+
+    // Calculate rerank scores and sort
+    return chunks
+      .map((chunk, i) => ({
+        ...chunk,
+        rerankScore: cosineSimilarity(queryEmbedding, embeddings[i]),
+      }))
+      .sort((a, b) => b.rerankScore - a.rerankScore);
+  } catch (err) {
+    error('[KnowledgeIndex] Reranking failed:', err);
+    // Return chunks with synthetic rerank scores if reranking fails
+    return chunks.map(chunk => ({
+      ...chunk,
+      rerankScore: chunk.similarity,
+    }));
+  }
+}
+
+// ---------------------------------------------------------------------------
 // semanticSearch
 // ---------------------------------------------------------------------------
 
 /**
- * Search for the most relevant chunks using hybrid search.
- * Combines pgvector cosine similarity (0.7 weight) with PostgreSQL full-text search (0.3 weight).
- * Delegates to the `match_knowledge_chunks` PostgreSQL function which computes hybrid scores.
+ * Search for the most relevant chunks using hybrid search with reranking.
+ * 1. Retrieves candidate chunks using hybrid search (pgvector + FTS)
+ * 2. Reranks candidates using semantic similarity
+ * 3. Returns top limit results
+ *
+ * Combines pgvector cosine similarity (0.7 weight) with PostgreSQL full-text search (0.3 weight)
+ * at retrieval stage, then applies cosine similarity reranking at post-processing stage.
  *
  * Requires migration 20260307000002_hybrid_rag_search.sql to be applied.
  * Function signature: match_knowledge_chunks(query_embedding vector(1536), query_text text, match_count int)
@@ -127,6 +194,9 @@ export async function semanticSearch(
 ): Promise<{ chunkId: string; content: string; similarity: number; documentId: string }[]> {
   try {
     log('[KnowledgeIndex] Hybrid search for:', query);
+
+    // Retrieve more candidates for reranking
+    const retrievalLimit = limit * 4;
 
     // Generate query embedding for vector similarity
     const queryEmbedding = await generateEmbedding(query);
@@ -139,14 +209,14 @@ export async function semanticSearch(
     const { data, error: rpcError } = await supabase.rpc('match_knowledge_chunks', {
       query_embedding: queryEmbedding,
       query_text: query,
-      match_count: limit,
+      match_count: retrievalLimit,
     });
 
     if (rpcError) {
       throw new Error(`Hybrid search RPC failed: ${rpcError.message}`);
     }
 
-    const results = (data || []).map((row: {
+    const retrieved = (data || []).map((row: {
       id: string;
       document_id: string;
       content: string;
@@ -158,8 +228,25 @@ export async function semanticSearch(
       similarity: row.similarity,
     }));
 
-    log('[KnowledgeIndex] Found', results.length, 'relevant chunks (hybrid search)');
-    return results;
+    log('[KnowledgeIndex] Retrieved', retrieved.length, 'candidates for reranking');
+
+    // Rerank and return top limit results
+    const reranked = await rerankChunks(query, retrieved);
+    const results = reranked.slice(0, limit);
+
+    log('[KnowledgeIndex] Found', results.length, 'relevant chunks (after reranking)');
+
+    // Compress context (optional, via ENABLE_CONTEXT_COMPRESSION flag)
+    const compressed = await compressContext(
+      query,
+      results.map(({ rerankScore, ...rest }) => rest)
+    );
+
+    // Return chunks with compressed content
+    return results.map((chunk, i) => ({
+      ...chunk,
+      content: compressed[i] || chunk.content,
+    })).map(({ rerankScore, ...rest }) => rest);
   } catch (err) {
     error('[KnowledgeIndex] Search failed:', err);
     return [];
