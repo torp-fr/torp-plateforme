@@ -99,7 +99,8 @@ export async function ingestKnowledgeDocument(
   fileBuffer: Buffer,
   filename: string,
   metadata: KnowledgeDocumentMetadata,
-  userId: string
+  userId: string | null,
+  documentId?: string
 ): Promise<IngestionResult> {
   try {
     log('[KnowledgeIngestion] Starting ingestion for:', filename);
@@ -138,48 +139,15 @@ export async function ingestKnowledgeDocument(
       endIndex: c.content.length,
     }));
 
-    // Step 3: Create document record (will be done after chunks)
-    const documentPayload = {
-      title: metadata.title,
-      category: metadata.category,
-      source: 'ingestion'.trim().toLowerCase(),
-      version: metadata.version || '1.0',
-      file_size: fileBuffer.length,
-      created_by: userId,
-    };
-
-    console.log("SUPABASE INSERT TABLE:", "knowledge_documents");
-    console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(documentPayload, null, 2));
-
-    let docData: any;
-    let docError: any;
-
-    try {
-      const result = await supabase
-        .from('knowledge_documents')
-        .insert([documentPayload])
-        .select('id')
-        .single();
-      docData = result.data;
-      docError = result.error;
-
-      if (docError) {
-        console.error("SUPABASE INSERT ERROR:", docError);
-      }
-    } catch (e) {
-      console.error("SUPABASE INSERT EXCEPTION:", e);
-      docError = e;
+    if (!documentId) {
+      throw new Error('documentId is required for ingestion');
     }
 
-    if (docError || !docData) {
-      throw new Error(`Failed to create document record: ${docError?.message}`);
-    }
+    log('[KnowledgeIngestion] Using provided document ID:', documentId);
 
-    log('[KnowledgeIngestion] Document created:', docData.id);
-
-    // Step 4: Create chunk records
+    // Step 3: Create chunk records
     const chunkRecords = chunks.map((chunk, index) => ({
-      document_id: docData.id,
+      document_id: documentId,
       content: chunk.content,
       chunk_index: index,
       token_count: chunk.tokenCount,
@@ -211,13 +179,13 @@ export async function ingestKnowledgeDocument(
 
     log('[KnowledgeIngestion] Chunks inserted:', chunks.length);
 
-    // Step 5: Index chunks (for Phase 30 - RAG)
+    // Step 4: Index chunks (for Phase 30 - RAG)
     const { indexChunks } = await import('./knowledgeIndex.service');
-    await indexChunks(docData.id, chunks);
+    await indexChunks(documentId, chunks);
 
     return {
       success: true,
-      documentId: docData.id,
+      documentId: documentId,
       chunksCreated: chunks.length,
       totalTokens: chunks.reduce((sum, c) => sum + c.tokenCount, 0),
     };
@@ -260,85 +228,3 @@ export async function searchKnowledge(query: string, limit: number = 10): Promis
   }
 }
 
-/**
- * Get knowledge base stats
- */
-export async function getKnowledgeStats(): Promise<{
-  documentCount: number;
-  chunkCount: number;
-  totalSize: number;
-}> {
-  try {
-
-    const { data: docs, error: docsError } = await supabase
-      .from('knowledge_documents')
-      .select('file_size');
-
-    const { data: chunks, error: chunksError } = await supabase
-      .from('knowledge_chunks')
-      .select('id');
-
-    if (docsError || chunksError) {
-      throw new Error('Failed to fetch stats');
-    }
-
-    return {
-      documentCount: docs?.length || 0,
-      chunkCount: chunks?.length || 0,
-      totalSize: (docs || []).reduce((sum, d: any) => sum + (d.file_size || 0), 0),
-    };
-  } catch (error) {
-    warn('[KnowledgeIngestion] Failed to get stats:', error);
-    return { documentCount: 0, chunkCount: 0, totalSize: 0 };
-  }
-}
-
-/**
- * Get recent documents
- */
-export async function getRecentDocuments(limit: number = 10): Promise<KnowledgeDocument[]> {
-  try {
-
-    const { data, error } = await supabase
-      .from('knowledge_documents')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (error) {
-      throw new Error(`Failed to fetch documents: ${error.message}`);
-    }
-
-    return data || [];
-  } catch (error) {
-    warn('[KnowledgeIngestion] Failed to fetch documents:', error);
-    return [];
-  }
-}
-
-/**
- * Delete document and its chunks
- */
-export async function deleteKnowledgeDocument(documentId: string): Promise<boolean> {
-  try {
-
-    // Delete chunks first (cascade)
-    await supabase.from('knowledge_chunks').delete().eq('document_id', documentId);
-
-    // Delete document
-    const { error } = await supabase
-      .from('knowledge_documents')
-      .delete()
-      .eq('id', documentId);
-
-    if (error) {
-      throw new Error(`Failed to delete document: ${error.message}`);
-    }
-
-    log('[KnowledgeIngestion] Document deleted:', documentId);
-    return true;
-  } catch (error) {
-    console.error('[KnowledgeIngestion] Delete failed:', error);
-    return false;
-  }
-}
