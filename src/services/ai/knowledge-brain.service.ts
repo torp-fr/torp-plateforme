@@ -117,7 +117,7 @@ class KnowledgeBrainService {
         throw new Error(`Storage upload failed: ${uploadError.message}`);
       }
 
-      log('[KNOWLEDGE BRAIN'] ✅ File uploaded to Storage:', storagePath);
+      log('[KNOWLEDGE BRAIN] ✅ File uploaded to Storage:', storagePath);
 
       // Note: Document creation is now handled by testFullIngestion.ts
       // Return file path and metadata for caller to use
@@ -275,7 +275,7 @@ class KnowledgeBrainService {
       log('[KNOWLEDGE BRAIN] 🔒 Attempting atomic claim for document:', documentId);
 
       // Note: Document state management moved to testFullIngestion.ts
-      log('[KNOWLEDGE BRAIN'] ℹ️ Atomic claim moved to testFullIngestion.ts');
+      log('[KNOWLEDGE BRAIN] ℹ️ Atomic claim moved to testFullIngestion.ts');
       return true;
     } catch (error) {
       console.error('[KNOWLEDGE BRAIN] 💥 Atomic claim error:', error);
@@ -410,119 +410,6 @@ class KnowledgeBrainService {
     // Note: Document creation is now handled exclusively by testFullIngestion.ts
     log('[KNOWLEDGE BRAIN] ℹ️ Document creation moved to testFullIngestion.ts');
     throw new Error('Document creation is now managed by testFullIngestion.ts. Please use that script instead.');
-      if (!queryEmbedding) {
-        warn('[KNOWLEDGE BRAIN] ⚠️ Could not generate embedding for query');
-        // PHASE 36.10.5: Log failed search metric
-        await this.healthService.logRpcMetric(
-          'search_knowledge_by_embedding',
-          Date.now() - searchStartTime,
-          0,
-          true,
-          'Failed to generate embedding'
-        );
-        return [];
-      }
-
-      // CRITICAL: Use VERIFIED RPC function
-      // This RPC is enforced to use knowledge_documents_ready and knowledge_chunks_ready views
-      const rpcStartTime = Date.now();
-      const { data, error } = await supabase.rpc('search_knowledge_by_embedding', {
-        query_embedding: queryEmbedding,
-        match_threshold: this.SIMILARITY_THRESHOLD,
-        match_count: limit,
-      });
-      const rpcTime = Date.now() - rpcStartTime;
-
-      if (error) {
-        console.error('[KNOWLEDGE BRAIN] 🔴 Vector search RPC failed:', error.message);
-        // PHASE 36.10.5: Log failed search metric
-        await this.healthService.logRpcMetric(
-          'search_knowledge_by_embedding',
-          rpcTime,
-          0,
-          true,
-          error.message
-        );
-        // NO FALLBACK - return empty array instead of falling back to unsafe query
-        return [];
-      }
-
-      if (!data || data.length === 0) {
-        log('[KNOWLEDGE BRAIN] ℹ️ Vector search: no results found');
-        // PHASE 36.10.5: Log no results metric
-        await this.healthService.logRpcMetric(
-          'search_knowledge_by_embedding',
-          Date.now() - searchStartTime,
-          0,
-          false
-        );
-        return [];
-      }
-
-      log('[KNOWLEDGE BRAIN] ✅ Vector search found', data.length, 'verified chunks');
-
-      // DEFENSE IN DEPTH: Validate each result at runtime
-      const validatedResults = data.map((item: any) => {
-        // Double-check: ingestion_status must be 'complete'
-        if (item.ingestion_status !== 'complete') {
-          warn(
-            '[KNOWLEDGE BRAIN] 🚨 SECURITY BREACH: Result has invalid status:',
-            item.ingestion_status
-          );
-          throw new Error(`Security violation: Retrieved document has status ${item.ingestion_status}`);
-        }
-
-        // Double-check: embedding_integrity_checked must be true
-        if (item.embedding_integrity_checked !== true) {
-          warn('[KNOWLEDGE BRAIN] 🚨 SECURITY BREACH: Result has integrity_checked=false');
-          throw new Error('Security violation: Retrieved document has integrity_checked=false');
-        }
-
-        // GOVERNANCE: Verify document is publishable (integrity_score >= 0.7)
-        if (item.is_publishable !== true) {
-          warn(
-            '[KNOWLEDGE BRAIN] ⚠️ Filtered: Document is not publishable (integrity governance)',
-            item.id
-          );
-          return null; // Filter out unpublishable documents
-        }
-
-        return {
-          id: item.id,
-          source: item.doc_source,
-          category: item.doc_category,
-          content: item.content,
-          reliability_score: 1.0,
-          created_at: item.doc_created_at,
-          updated_at: item.doc_created_at,
-          relevance_score: item.embedding_similarity || 0,
-          embedding_similarity: item.embedding_similarity || 0,
-        };
-      }).filter((result) => result !== null) as SearchResult[];
-
-      // PHASE 36.10.5: Log successful search metric
-      await this.healthService.logRpcMetric(
-        'search_knowledge_by_embedding',
-        Date.now() - searchStartTime,
-        validatedResults.length,
-        false
-      );
-
-      return validatedResults;
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      console.error('[KNOWLEDGE BRAIN] 💥 Vector search error:', errorMsg);
-      // PHASE 36.10.5: Log error metric
-      await this.healthService.logRpcMetric(
-        'search_knowledge_by_embedding',
-        Date.now() - searchStartTime,
-        0,
-        true,
-        errorMsg
-      );
-      // NO FALLBACK - return empty on error
-      return [];
-    }
   }
 
   /**
