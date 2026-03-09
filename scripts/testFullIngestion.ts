@@ -191,7 +191,7 @@ async function insertDocumentMetadata(
     try {
       const insertPayload = {
         title: testDoc.title,
-        category: testDoc.category,
+        category: 'GUIDELINE',
         source: 'ingestion',
         version: '1.0',
         file_size: 0,
@@ -225,7 +225,7 @@ async function insertDocumentMetadata(
       documentIds.set(testDoc.name, data.id);
       log('METADATA', `Created document record: ${data.id}`, {
         title: testDoc.title,
-        category: testDoc.category,
+        category: 'GUIDELINE',
       });
     } catch (err) {
       error(`Failed to insert metadata for ${testDoc.name}`, err);
@@ -266,7 +266,7 @@ async function runIngestionPipeline(
       const startTime = Date.now();
       const result = await ingestKnowledgeDocument(buffer, testDoc.name, {
         title: testDoc.title,
-        category: testDoc.category,
+        category: 'GUIDELINE',
         source: 'ingestion',
         version: '1.0',
       }, null);
