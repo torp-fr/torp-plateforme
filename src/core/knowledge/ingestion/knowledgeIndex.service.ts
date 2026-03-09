@@ -17,6 +17,13 @@ import { supabase } from '@/lib/supabase';
 import { log, warn, error } from '@/lib/logger';
 
 // ---------------------------------------------------------------------------
+// Query Embedding Cache
+// ---------------------------------------------------------------------------
+
+// Cache query embeddings to avoid repeated OpenAI calls for identical queries during runtime.
+const queryEmbeddingCache = new Map<string, number[]>();
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -197,8 +204,14 @@ export async function semanticSearch(
     // Using limit * 3 balances recall and embedding cost.
     const retrievalLimit = limit * 3;
 
-    // Generate query embedding for vector similarity
-    const queryEmbedding = await generateEmbedding(query);
+    // Generate query embedding for vector similarity (with caching)
+    let queryEmbedding = queryEmbeddingCache.get(query);
+    if (!queryEmbedding) {
+      queryEmbedding = await generateEmbedding(query);
+      if (queryEmbedding) {
+        queryEmbeddingCache.set(query, queryEmbedding);
+      }
+    }
     if (!queryEmbedding) {
       throw new Error('Failed to generate query embedding');
     }
