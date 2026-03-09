@@ -333,15 +333,18 @@ function createEmptyReport(documentId: string): DocumentIntegrityReport {
 
 /**
  * Persist integrity report to database
- * Updates knowledge_documents table with integrity metadata
+ * NOOP: Document updates are not allowed in ingestion services
+ * Only test scripts may modify knowledge_documents
  */
 export async function persistIntegrityReport(
   documentId: string,
   report: DocumentIntegrityReport
 ): Promise<boolean> {
-  // integrity updates disabled in ingestion runtime
-  // knowledge_documents writes are forbidden from ingestion services
-  log('[KnowledgeIntegrity] persistIntegrityReport: NOOP (writes to knowledge_documents disabled)');
+  // ARCHITECTURE RULE: Ingestion services must not write to knowledge_documents
+  // Integrity reports are generated for analysis only, not persisted
+  log('[KnowledgeIntegrity] NOOP: Report persistence skipped (not allowed in ingestion pipeline)');
+  log('[KnowledgeIntegrity] Integrity score:', report.integrityScore);
+  log('[KnowledgeIntegrity] Publishable:', report.isPublishable);
   return true;
 }
 

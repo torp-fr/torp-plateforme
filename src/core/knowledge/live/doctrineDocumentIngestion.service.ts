@@ -102,15 +102,17 @@ function validateDocumentAgainstSource(
 
 /**
  * Store normalized document in Supabase
+ * NOOP: Document creation is only allowed via testFullIngestion.ts
+ * Ingestion services must not write to knowledge_documents table
  */
 async function storeNormalizedDocument(
   sourceId: string,
   normalized: NormalizedDocument,
   metadata: DoctrineDocumentMetadata
 ): Promise<string | null> {
-  // knowledge_documents writes are forbidden from ingestion services
-  // Documents must be created only by external scripts (e.g. testFullIngestion.ts)
-  log('[DoctrineIngestion] storeNormalizedDocument: NOOP (writes to knowledge_documents disabled)');
+  // ARCHITECTURE RULE: Only test scripts may create knowledge_documents
+  // Ingestion services are read-only for knowledge_documents
+  log(`[DoctrineIngestion] NOOP: Document storage skipped (not allowed in ingestion pipeline)`);
   return null;
 }
 
