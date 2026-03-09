@@ -15,6 +15,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
@@ -183,7 +184,7 @@ async function insertDocumentMetadata(
   divider('INSERT DOCUMENT METADATA');
 
   const documentIds = new Map<string, string>();
-  const userId = 'test-user-' + Date.now();
+  const testUserId = randomUUID();
 
   for (const testDoc of TEST_DOCUMENTS) {
     if (!uploads.has(testDoc.name)) continue;
@@ -198,7 +199,7 @@ async function insertDocumentMetadata(
             source: 'test-ingestion',
             version: '1.0',
             file_size: 0,
-            created_by: userId,
+            created_by: testUserId,
           },
         ])
         .select('id')
@@ -239,7 +240,7 @@ async function runIngestionPipeline(
   } = await import('@/core/knowledge/ingestion/knowledgeIngestion.service');
 
   const results = new Map<string, { chunkCount: number; tokens: number; errors?: string[] }>();
-  const userId = 'test-user-' + Date.now();
+  const testUserId = randomUUID();
 
   for (const testDoc of TEST_DOCUMENTS) {
     if (!documents.has(testDoc.name) || !documentIds.has(testDoc.name)) {
@@ -257,7 +258,7 @@ async function runIngestionPipeline(
         category: testDoc.category,
         source: 'test-ingestion',
         version: '1.0',
-      }, userId);
+      }, testUserId);
 
       const duration = Date.now() - startTime;
 
