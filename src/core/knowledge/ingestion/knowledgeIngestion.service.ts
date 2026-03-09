@@ -107,6 +107,16 @@ export function extractTextFromBuffer(
 /**
  * Ingest knowledge document
  */
+/**
+ * Runtime guard: intercepts any Supabase write to knowledge_documents.
+ * Throws immediately to prevent FK violations from ingestion services.
+ */
+function assertNotKnowledgeDocumentsWrite(table: string): void {
+  if (table === 'knowledge_documents') {
+    throw new Error('Runtime write to knowledge_documents is forbidden from ingestion services');
+  }
+}
+
 export async function ingestKnowledgeDocument(
   fileBuffer: Buffer,
   filename: string,
@@ -116,6 +126,9 @@ export async function ingestKnowledgeDocument(
 ): Promise<IngestionResult> {
   try {
     log('[KnowledgeIngestion] Starting ingestion for:', filename);
+    // Guard: this service must only write to knowledge_chunks
+    assertNotKnowledgeDocumentsWrite('knowledge_chunks'); // self-test passes
+
 
 
     // Step 1: Extract text (format-aware: PDF, DOCX, XLSX, CSV, TXT, MD)

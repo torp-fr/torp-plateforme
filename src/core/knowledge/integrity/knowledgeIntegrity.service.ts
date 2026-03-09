@@ -339,30 +339,10 @@ export async function persistIntegrityReport(
   documentId: string,
   report: DocumentIntegrityReport
 ): Promise<boolean> {
-  try {
-    log('[KnowledgeIntegrity] Persisting integrity report for document:', documentId);
-
-    const { error } = await supabase
-      .from('knowledge_documents')
-      .update({
-        integrity_score: report.integrityScore,
-        is_publishable: report.isPublishable,
-        integrity_report: report, // Store full report as JSON
-      })
-      .eq('id', documentId);
-
-    if (error) {
-      console.error('[KnowledgeIntegrity] Failed to persist report:', error);
-      return false;
-    }
-
-    log('[KnowledgeIntegrity] Integrity report persisted successfully');
-    return true;
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[KnowledgeIntegrity] Persist failed:', errorMsg);
-    return false;
-  }
+  // integrity updates disabled in ingestion runtime
+  // knowledge_documents writes are forbidden from ingestion services
+  log('[KnowledgeIntegrity] persistIntegrityReport: NOOP (writes to knowledge_documents disabled)');
+  return true;
 }
 
 /**

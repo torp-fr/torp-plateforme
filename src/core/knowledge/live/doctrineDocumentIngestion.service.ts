@@ -108,65 +108,10 @@ async function storeNormalizedDocument(
   normalized: NormalizedDocument,
   metadata: DoctrineDocumentMetadata
 ): Promise<string | null> {
-  try {
-
-    // Store in knowledge_documents
-    const { data: docData, error: docError } = await supabase
-      .from('knowledge_documents')
-      .insert({
-        title: metadata.filename,
-        category: 'doctrine',
-        source: sourceId,
-        version: '1.0',
-        file_size: metadata.fileSize,
-        created_by: metadata.uploadedBy,
-      })
-      .select('id')
-      .single();
-
-    if (docError) {
-      console.error('[DoctrineIngestion] Failed to store document:', docError);
-      return null;
-    }
-
-    const documentId = docData?.id;
-
-    if (!documentId) {
-      console.error('[DoctrineIngestion] No document ID returned');
-      return null;
-    }
-
-    // Store normalized data as JSON in knowledge_chunks
-    const normalizedJson = JSON.stringify(normalized);
-
-    const { error: chunkError } = await supabase
-      .from('knowledge_chunks')
-      .insert({
-        document_id: documentId,
-        content: JSON.stringify({
-          type: 'doctrine_normalized',
-          sourceId,
-          obligations: normalized.obligations.length,
-          thresholds: normalized.thresholds.length,
-          sanctions: normalized.sanctions.length,
-          summary: `DTU/Norme: ${normalized.keyTerms.join(', ')}`,
-        }),
-        chunk_index: 0,
-        token_count: Math.ceil(normalizedJson.length / 4),
-        embedding_vector: null,
-      });
-
-    if (chunkError) {
-      console.error('[DoctrineIngestion] Failed to store chunk:', chunkError);
-      return null;
-    }
-
-    log(`[DoctrineIngestion] Stored normalized document: ${documentId}`);
-    return documentId;
-  } catch (error) {
-    console.error('[DoctrineIngestion] Storage failed:', error);
-    return null;
-  }
+  // knowledge_documents writes are forbidden from ingestion services
+  // Documents must be created only by external scripts (e.g. testFullIngestion.ts)
+  log('[DoctrineIngestion] storeNormalizedDocument: NOOP (writes to knowledge_documents disabled)');
+  return null;
 }
 
 /**
