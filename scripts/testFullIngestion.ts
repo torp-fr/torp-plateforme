@@ -190,18 +190,19 @@ async function insertDocumentMetadata(
     if (!uploads.has(testDoc.name)) continue;
 
     try {
+      const insertPayload = {
+        title: testDoc.title,
+        category: testDoc.category,
+        source: 'internal',
+        version: '1.0',
+        file_size: 0,
+        created_by: userId,
+      };
+      console.log('INSERT PAYLOAD', insertPayload);
+
       const { data, error: insertError } = await supabase
         .from('knowledge_documents')
-        .insert([
-          {
-            title: testDoc.title,
-            category: testDoc.category,
-            source: 'internal',
-            version: '1.0',
-            file_size: 0,
-            created_by: userId,
-          },
-        ])
+        .insert([insertPayload])
         .select('id')
         .single();
 
