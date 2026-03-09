@@ -117,7 +117,7 @@ class KnowledgeBrainService {
         throw new Error(`Storage upload failed: ${uploadError.message}`);
       }
 
-      log('[KNOWLEDGE BRAIN'] ✅ File uploaded to Storage:', storagePath);
+      log('[KNOWLEDGE BRAIN] ✅ File uploaded to Storage:', storagePath);
 
       // Note: Document creation is now handled by testFullIngestion.ts
       // Return file path and metadata for caller to use
