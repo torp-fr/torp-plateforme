@@ -5,6 +5,9 @@ import ExcelJS from "exceljs";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.js";
 
 const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024;
+const COLUMN_GAP_THRESHOLD = 20; // Gap size threshold for column separator
+const WORD_GAP_THRESHOLD = 5; // Gap size threshold for word space
+const Y_THRESHOLD_DEFAULT = 5; // Default Y-coordinate clustering threshold (pixels)
 
 function cleanText(text: string): string {
   return text
@@ -37,11 +40,13 @@ interface TextItem {
 function extractCoordinates(item: any, index: number): TextItem {
   const x = item.transform?.[4] ?? 0;
   const y = item.transform?.[5] ?? 0;
-  const width = item.width ?? 0;
+  const str = item.str ?? "";
+  // Estimate width from string length if not provided (fallback: 3 pixels per character)
+  const width = item.width ?? (str.length * 3);
   const height = item.height ?? 0;
 
   return {
-    str: item.str ?? "",
+    str,
     x,
     y,
     width,
@@ -51,15 +56,26 @@ function extractCoordinates(item: any, index: number): TextItem {
 }
 
 /**
+ * Compute the average Y coordinate of a line.
+ * Used to ensure lines are ordered top-to-bottom consistently.
+ */
+function averageY(line: TextItem[]): number {
+  if (line.length === 0) return 0;
+  const sum = line.reduce((acc, item) => acc + item.y, 0);
+  return sum / line.length;
+}
+
+/**
  * Group text items by visual line using Y coordinate clustering.
  * Items with similar Y values (within threshold) are grouped together.
  *
  * Algorithm:
  * 1. Sort items by Y descending (top to bottom)
  * 2. Group consecutive items with Y difference < threshold
- * 3. Return groups representing visual lines
+ * 3. Sort lines by average Y to ensure correct top-to-bottom ordering
+ * 4. Return groups representing visual lines
  */
-function groupByLine(items: TextItem[], yThreshold: number = 3): TextItem[][] {
+function groupByLine(items: TextItem[], yThreshold: number = Y_THRESHOLD_DEFAULT): TextItem[][] {
   if (items.length === 0) return [];
 
   // Sort by Y descending (top to bottom in standard PDF coordinates after normalization)
@@ -93,6 +109,9 @@ function groupByLine(items: TextItem[], yThreshold: number = 3): TextItem[][] {
     lines.push(currentLine);
   }
 
+  // Ensure lines are ordered top-to-bottom by average Y coordinate
+  lines.sort((a, b) => averageY(b) - averageY(a));
+
   return lines;
 }
 
@@ -104,7 +123,7 @@ function groupByLine(items: TextItem[], yThreshold: number = 3): TextItem[][] {
  * 1. Sort items in line by X coordinate (left to right)
  * 2. Calculate spacing between consecutive items
  * 3. Use spacing to determine if items form columns (large gap) or continuous text (small gap)
- * 4. Join with space or tab based on gap size
+ * 4. Join with space or pipe separator based on gap size
  */
 function reconstructLine(items: TextItem[]): string {
   if (items.length === 0) return "";
@@ -128,10 +147,10 @@ function reconstructLine(items: TextItem[]): string {
 
     // Add spacing based on gap size
     if (parts.length > 0) {
-      if (gap > 20) {
-        // Large gap (column separator) — use multiple spaces/pipe for clarity
+      if (gap > COLUMN_GAP_THRESHOLD) {
+        // Large gap (column separator) — use pipe for clarity
         parts.push(" | ");
-      } else if (gap > 5) {
+      } else if (gap > WORD_GAP_THRESHOLD) {
         // Medium gap (word separator) — use single space
         parts.push(" ");
       } else if (gap > 0) {
@@ -162,7 +181,7 @@ async function extractPdf(buffer: Buffer): Promise<string> {
     // Extract coordinate information from all items
     const items: TextItem[] = (content.items ?? [])
       .map((item: any, index: number) => extractCoordinates(item, index))
-      .filter((item) => item.str.length > 0); // Skip empty items
+      .filter((item) => item.str.trim().length > 0); // Skip empty and whitespace-only items
 
     if (items.length === 0) {
       // Empty page
@@ -170,8 +189,8 @@ async function extractPdf(buffer: Buffer): Promise<string> {
       continue;
     }
 
-    // Group items by visual line
-    const lines = groupByLine(items, 3); // 3-unit threshold for Y clustering
+    // Group items by visual line (using improved Y threshold)
+    const lines = groupByLine(items, Y_THRESHOLD_DEFAULT);
 
     // Reconstruct each line
     const pageText = lines.map((line) => reconstructLine(line)).join("\n");
