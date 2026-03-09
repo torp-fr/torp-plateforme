@@ -11,6 +11,7 @@
 
 import type { KnowledgeChunk as ChunkerChunk } from './knowledgeChunker.service';
 import { generateEmbedding } from './knowledgeEmbedding.service';
+import { compressContext } from '../compression/contextCompression.service';
 import { verifyAndPersistIntegrity } from '../integrity/knowledgeIntegrity.service';
 import { getKnowledgeConflictService } from '../conflicts/knowledgeConflict.service';
 import { supabase } from '@/lib/supabase';
@@ -234,7 +235,18 @@ export async function semanticSearch(
     const results = reranked.slice(0, limit);
 
     log('[KnowledgeIndex] Found', results.length, 'relevant chunks (after reranking)');
-    return results.map(({ rerankScore, ...rest }) => rest);
+
+    // Compress context (optional, via ENABLE_CONTEXT_COMPRESSION flag)
+    const compressed = await compressContext(
+      query,
+      results.map(({ rerankScore, ...rest }) => rest)
+    );
+
+    // Return chunks with compressed content
+    return results.map((chunk, i) => ({
+      ...chunk,
+      content: compressed[i] || chunk.content,
+    })).map(({ rerankScore, ...rest }) => rest);
   } catch (err) {
     error('[KnowledgeIndex] Search failed:', err);
     return [];
