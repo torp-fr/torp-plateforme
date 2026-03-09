@@ -154,6 +154,12 @@ export async function ingestKnowledgeDocument({
   }
 
   // ── STEP 4 (CRITICAL): Insert chunks ────────────────────────────────────────
+  // First, delete existing chunks for this document to prevent duplicate key errors
+  await supabase
+    .from('knowledge_chunks')
+    .delete()
+    .eq('document_id', documentId);
+
   const chunkRecords = chunks.map((chunk, index) => ({
     document_id: documentId,
     content:     chunk.content,
