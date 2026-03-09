@@ -10,6 +10,9 @@
  *   5. Verify chunks were created
  *   6. Perform RAG semantic search
  *
+ * REPORTING:
+ *   Success = chunks were created, regardless of non-blocking failures (indexing, dedup)
+ *
  * Usage:
  *   npx tsx scripts/testFullIngestion.ts
  *
@@ -257,7 +260,10 @@ async function insertDocumentMetadata(
 //
 // ARCHITECTURE RULE: The ingestion service accepts { documentId, filename, buffer }.
 // It NEVER creates documents.  It only extracts, chunks, and inserts knowledge_chunks.
-// Success is defined solely by chunk insertion.
+//
+// SUCCESS DEFINITION:
+// Success = chunks were created, regardless of non-blocking failures (indexing, dedup)
+// Example: If 30 chunks inserted successfully but indexing failed, that's STILL SUCCESS.
 // ============================================================================
 
 async function runIngestionPipeline(
@@ -297,25 +303,38 @@ async function runIngestionPipeline(
 
       const duration = Date.now() - startTime;
 
-      if (!result.success) {
-        fail(`Ingestion failed: ${testDoc.name}`, { errors: result.errors });
-        results.set(testDoc.name, { chunkCount: 0, tokens: 0, errors: result.errors });
-        continue;
+      // ── SUCCESS LOGIC: based on chunks created, not on result.success ────────
+      // Non-blocking operations (indexing, dedup) might fail, but if chunks
+      // were inserted successfully, the ingestion succeeded.
+      const chunksCreated = result?.chunksCreated ?? 0;
+      const tokensGenerated = result?.totalTokens ?? 0;
+
+      if (chunksCreated > 0) {
+        // SUCCESS: chunks were created
+        log('INGESTION', `✅ Success: ${testDoc.name}`, {
+          documentId: result?.documentId,
+          chunks: chunksCreated,
+          tokens: tokensGenerated,
+          duration: `${duration}ms`,
+        });
+
+        results.set(testDoc.name, {
+          chunkCount: chunksCreated,
+          tokens: tokensGenerated,
+        });
+      } else {
+        // FAILURE: no chunks created
+        const errorMsg = result?.errors?.[0] || 'No chunks created';
+        fail(`Ingestion failed: ${testDoc.name}`, { error: errorMsg });
+
+        results.set(testDoc.name, {
+          chunkCount: 0,
+          tokens: 0,
+          errors: result?.errors || [errorMsg],
+        });
       }
-
-      log('INGESTION', `Complete: ${testDoc.name}`, {
-        documentId: result.documentId,
-        chunks: result.chunksCreated,
-        tokens: result.totalTokens,
-        duration: `${duration}ms`,
-      });
-
-      results.set(testDoc.name, {
-        chunkCount: result.chunksCreated ?? 0,
-        tokens: result.totalTokens ?? 0,
-      });
     } catch (err) {
-      fail(`Ingestion error: ${testDoc.name}`, err);
+      fail(`Ingestion pipeline error: ${testDoc.name}`, err);
       results.set(testDoc.name, {
         chunkCount: 0,
         tokens: 0,
@@ -324,7 +343,9 @@ async function runIngestionPipeline(
     }
   }
 
-  success(`Ingestion complete for ${results.size}/${TEST_DOCUMENTS.length} documents`);
+  // Count successes (documents with chunks created)
+  const successCount = Array.from(results.values()).filter(r => r.chunkCount > 0).length;
+  success(`Ingestion complete: ${successCount}/${TEST_DOCUMENTS.length} documents processed`);
   return results;
 }
 
@@ -425,22 +446,31 @@ function generateSummaryReport(
   let totalChunks = 0;
   let totalTokens = 0;
   let successCount = 0;
+  let failureCount = 0;
 
   ingestionResults.forEach((result, docName) => {
-    const status = result.errors ? '❌' : '✅';
+    // Success = chunks were created
+    const isSuccess = result.chunkCount > 0;
+    const status = isSuccess ? '✅' : '❌';
+
     console.log(`${status} ${docName}`);
     console.log(`   Chunks: ${result.chunkCount} | Tokens: ${result.tokens}`);
-    if (result.errors) {
-      console.log(`   Errors: ${result.errors.join(', ')}`);
-    } else {
+
+    if (isSuccess) {
       successCount++;
       totalChunks += result.chunkCount;
       totalTokens += result.tokens;
+    } else {
+      failureCount++;
+      if (result.errors) {
+        console.log(`   Errors: ${result.errors.join(', ')}`);
+      }
     }
   });
 
   console.log('\n📈 OVERALL STATISTICS\n');
   console.log(`Documents processed: ${successCount}/${TEST_DOCUMENTS.length}`);
+  console.log(`Documents failed: ${failureCount}/${TEST_DOCUMENTS.length}`);
   console.log(`Total chunks created: ${chunkStats.total}`);
   console.log(`Average tokens per chunk: ${chunkStats.avgTokens}`);
 
@@ -472,6 +502,7 @@ async function main() {
   console.log('║          END-TO-END RAG INGESTION PIPELINE TEST                      ║');
   console.log('║                                                                       ║');
   console.log('║  Architecture: Caller creates documents → Ingestion inserts chunks   ║');
+  console.log('║  Success: Based on chunks created, not on non-blocking operations    ║');
   console.log('╚═══════════════════════════════════════════════════════════════════════╝\n');
 
   try {
