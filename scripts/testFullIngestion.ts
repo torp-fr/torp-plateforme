@@ -247,6 +247,12 @@ async function runIngestionPipeline(
     }
 
     const buffer = documents.get(testDoc.name)!;
+    const docId = documentIds.get(testDoc.name);
+
+    if (!docId) {
+      error(`No document ID found for ${testDoc.name}`);
+      continue;
+    }
 
     try {
       log('EXTRACTION', `Processing: ${testDoc.name}`);
@@ -257,7 +263,7 @@ async function runIngestionPipeline(
         category: testDoc.category,
         source: 'ingestion',
         version: '1.0',
-      }, null);
+      }, null, docId);
 
       const duration = Date.now() - startTime;
 

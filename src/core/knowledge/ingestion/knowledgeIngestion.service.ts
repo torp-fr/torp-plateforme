@@ -99,7 +99,8 @@ export async function ingestKnowledgeDocument(
   fileBuffer: Buffer,
   filename: string,
   metadata: KnowledgeDocumentMetadata,
-  userId: string
+  userId: string | null,
+  documentId?: string
 ): Promise<IngestionResult> {
   try {
     log('[KnowledgeIngestion] Starting ingestion for:', filename);
@@ -138,48 +139,15 @@ export async function ingestKnowledgeDocument(
       endIndex: c.content.length,
     }));
 
-    // Step 3: Create document record (will be done after chunks)
-    const documentPayload = {
-      title: metadata.title,
-      category: metadata.category,
-      source: metadata.source ?? 'ingestion',
-      version: metadata.version || '1.0',
-      file_size: fileBuffer.length,
-      created_by: null,
-    };
-
-    console.log("SUPABASE INSERT TABLE:", "knowledge_documents");
-    console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(documentPayload, null, 2));
-
-    let docData: any;
-    let docError: any;
-
-    try {
-      const result = await supabase
-        .from('knowledge_documents')
-        .insert([documentPayload])
-        .select('id')
-        .single();
-      docData = result.data;
-      docError = result.error;
-
-      if (docError) {
-        console.error("SUPABASE INSERT ERROR:", docError);
-      }
-    } catch (e) {
-      console.error("SUPABASE INSERT EXCEPTION:", e);
-      docError = e;
+    if (!documentId) {
+      throw new Error('documentId is required for ingestion');
     }
 
-    if (docError || !docData) {
-      throw new Error(`Failed to create document record: ${docError?.message}`);
-    }
+    log('[KnowledgeIngestion] Using provided document ID:', documentId);
 
-    log('[KnowledgeIngestion] Document created:', docData.id);
-
-    // Step 4: Create chunk records
+    // Step 3: Create chunk records
     const chunkRecords = chunks.map((chunk, index) => ({
-      document_id: docData.id,
+      document_id: documentId,
       content: chunk.content,
       chunk_index: index,
       token_count: chunk.tokenCount,
@@ -211,13 +179,13 @@ export async function ingestKnowledgeDocument(
 
     log('[KnowledgeIngestion] Chunks inserted:', chunks.length);
 
-    // Step 5: Index chunks (for Phase 30 - RAG)
+    // Step 4: Index chunks (for Phase 30 - RAG)
     const { indexChunks } = await import('./knowledgeIndex.service');
-    await indexChunks(docData.id, chunks);
+    await indexChunks(documentId, chunks);
 
     return {
       success: true,
-      documentId: docData.id,
+      documentId: documentId,
       chunksCreated: chunks.length,
       totalTokens: chunks.reduce((sum, c) => sum + c.tokenCount, 0),
     };
