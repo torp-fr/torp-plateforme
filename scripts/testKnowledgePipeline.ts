@@ -100,6 +100,42 @@ const DOC_TYPE_TO_CATEGORY: Record<DocumentType, string> = {
 };
 
 // ---------------------------------------------------------------------------
+// 4a. SYSTEM_USER_ID Configuration (CRITICAL)
+// ---------------------------------------------------------------------------
+// ARCHITECTURE RULE: All document creation requires a valid auth.users UUID.
+// The created_by field has an FK constraint to auth.users(id).
+// This prevents null values and ensures audit trail integrity.
+//
+// To use this script:
+// 1. Get a valid user UUID from Supabase Dashboard > Authentication > Users
+// 2. Set the environment variable: export SYSTEM_USER_ID="your-uuid-here"
+// 3. Re-run the script
+//
+// Example:
+//   export SYSTEM_USER_ID="550e8400-e29b-41d4-a716-446655440000"
+//   pnpm tsx --tsconfig tsconfig.json scripts/testKnowledgePipeline.ts ./test_corpus/sample.txt
+
+const SYSTEM_USER_ID = process.env.SYSTEM_USER_ID;
+
+if (!SYSTEM_USER_ID) {
+  console.error('❌ CONFIGURATION ERROR');
+  console.error('   SYSTEM_USER_ID environment variable is required.');
+  console.error('   It must be set to a valid UUID from auth.users table.');
+  console.error('');
+  console.error('   Steps to fix:');
+  console.error('   1. Go to Supabase Dashboard > Authentication > Users');
+  console.error('   2. Create a user or copy an existing user UUID');
+  console.error('   3. Set environment variable:');
+  console.error('      export SYSTEM_USER_ID="your-uuid-here"');
+  console.error('   4. Re-run this script');
+  console.error('');
+  console.error('   Example:');
+  console.error('      export SYSTEM_USER_ID="550e8400-e29b-41d4-a716-446655440000"');
+  console.error('      pnpm tsx --tsconfig tsconfig.json scripts/testKnowledgePipeline.ts <file>');
+  process.exit(1);
+}
+
+// ---------------------------------------------------------------------------
 // 5. DB helpers: create document, insert chunks, cleanup
 // ---------------------------------------------------------------------------
 
@@ -109,10 +145,9 @@ async function createTestDocument(
   docType:    DocumentType,
   chunkCount: number,
 ): Promise<string | null> {
-  // Attempt to get the current user so created_by can be populated.
-  // Falls back to null — nullable in the schema after migration 053.
-  const { data: { user } } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
-
+  // ARCHITECTURE RULE: created_by is required and must be a valid auth.users UUID.
+  // The FK constraint fk_created_by prevents null values.
+  // SYSTEM_USER_ID is validated at script startup.
   const { data: doc, error: docError } = await supabase
     .from('knowledge_documents')
     .insert({
@@ -122,7 +157,7 @@ async function createTestDocument(
       file_size:   fileSize > 0 ? fileSize : 1,   // satisfies file_size > 0 CHECK
       chunk_count: chunkCount,
       is_publishable: false,
-      created_by:  user?.id ?? null,
+      created_by:  SYSTEM_USER_ID,
     })
     .select('id')
     .single();
