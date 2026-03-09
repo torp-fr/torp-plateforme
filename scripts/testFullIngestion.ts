@@ -197,16 +197,28 @@ async function insertDocumentMetadata(
         file_size: 0,
         created_by: null,
       };
-      console.log('INSERT PAYLOAD', insertPayload);
 
-      const { data, error: insertError } = await supabase
+      // ===== DETAILED DEBUG LOGS =====
+      console.log("SOURCE VALUE:", insertPayload.source);
+      console.log("SOURCE TYPE:", typeof insertPayload.source);
+      console.log("SOURCE LENGTH:", insertPayload.source.length);
+      console.log("INSERT PAYLOAD:", JSON.stringify(insertPayload, null, 2));
+      // ================================
+
+      const { data, error } = await supabase
         .from('knowledge_documents')
         .insert([insertPayload])
         .select('id')
         .single();
 
-      if (insertError || !data) {
-        error(`Insert failed: ${testDoc.name}`, insertError);
+      if (error) {
+        console.error("SUPABASE INSERT ERROR:", error);
+        error(`Insert failed: ${testDoc.name}`, error);
+        continue;
+      }
+
+      if (!data) {
+        error(`Insert failed: no data returned for ${testDoc.name}`);
         continue;
       }
 
