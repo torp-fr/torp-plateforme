@@ -193,8 +193,9 @@ export async function semanticSearch(
   try {
     log('[KnowledgeIndex] Hybrid search for:', query);
 
-    // Retrieve more candidates for reranking
-    const retrievalLimit = limit * 4;
+    // Retrieve additional candidates for reranking.
+    // Using limit * 3 balances recall and embedding cost.
+    const retrievalLimit = limit * 3;
 
     // Generate query embedding for vector similarity
     const queryEmbedding = await generateEmbedding(query);
