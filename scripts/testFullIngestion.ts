@@ -205,15 +205,31 @@ async function insertDocumentMetadata(
       console.log("INSERT PAYLOAD:", JSON.stringify(insertPayload, null, 2));
       // ================================
 
-      const { data, error } = await supabase
-        .from('knowledge_documents')
-        .insert([insertPayload])
-        .select('id')
-        .single();
+      console.log("SUPABASE INSERT TABLE:", "knowledge_documents");
+      console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(insertPayload, null, 2));
 
-      if (error) {
-        console.error("SUPABASE INSERT ERROR:", error);
-        error(`Insert failed: ${testDoc.name}`, error);
+      let data: any;
+      let insertError: any;
+
+      try {
+        const result = await supabase
+          .from('knowledge_documents')
+          .insert([insertPayload])
+          .select('id')
+          .single();
+        data = result.data;
+        insertError = result.error;
+
+        if (insertError) {
+          console.error("SUPABASE INSERT ERROR:", insertError);
+        }
+      } catch (e) {
+        console.error("SUPABASE INSERT EXCEPTION:", e);
+        insertError = e;
+      }
+
+      if (insertError) {
+        error(`Insert failed: ${testDoc.name}`, insertError);
         continue;
       }
 

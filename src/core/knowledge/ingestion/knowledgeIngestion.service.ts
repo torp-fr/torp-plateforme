@@ -138,21 +138,38 @@ export async function ingestKnowledgeDocument(
       endIndex: c.content.length,
     }));
 
-    // Step 3: Create document record
-    const { data: docData, error: docError } = await supabase
-      .from('knowledge_documents')
-      .insert([
-        {
-          title: metadata.title,
-          category: metadata.category,
-          source: 'ingestion'.trim().toLowerCase(),
-          version: metadata.version || '1.0',
-          file_size: fileBuffer.length,
-          created_by: userId,
-        },
-      ])
-      .select('id')
-      .single();
+    // Step 3: Create document record (will be done after chunks)
+    const documentPayload = {
+      title: metadata.title,
+      category: metadata.category,
+      source: 'ingestion'.trim().toLowerCase(),
+      version: metadata.version || '1.0',
+      file_size: fileBuffer.length,
+      created_by: userId,
+    };
+
+    console.log("SUPABASE INSERT TABLE:", "knowledge_documents");
+    console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(documentPayload, null, 2));
+
+    let docData: any;
+    let docError: any;
+
+    try {
+      const result = await supabase
+        .from('knowledge_documents')
+        .insert([documentPayload])
+        .select('id')
+        .single();
+      docData = result.data;
+      docError = result.error;
+
+      if (docError) {
+        console.error("SUPABASE INSERT ERROR:", docError);
+      }
+    } catch (e) {
+      console.error("SUPABASE INSERT EXCEPTION:", e);
+      docError = e;
+    }
 
     if (docError || !docData) {
       throw new Error(`Failed to create document record: ${docError?.message}`);
@@ -169,9 +186,24 @@ export async function ingestKnowledgeDocument(
       metadata: chunk.metadata ?? {},
     }));
 
-    const { error: chunkError } = await supabase
-      .from('knowledge_chunks')
-      .insert(chunkRecords);
+    console.log("SUPABASE INSERT TABLE:", "knowledge_chunks");
+    console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(chunkRecords, null, 2));
+
+    let chunkError: any;
+
+    try {
+      const result = await supabase
+        .from('knowledge_chunks')
+        .insert(chunkRecords);
+      chunkError = result.error;
+
+      if (chunkError) {
+        console.error("SUPABASE INSERT ERROR:", chunkError);
+      }
+    } catch (e) {
+      console.error("SUPABASE INSERT EXCEPTION:", e);
+      chunkError = e;
+    }
 
     if (chunkError) {
       throw new Error(`Failed to create chunks: ${chunkError.message}`);
