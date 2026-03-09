@@ -156,11 +156,24 @@ export async function ingestKnowledgeDocument({
   // ── STEP 4 (CRITICAL): Insert chunks ────────────────────────────────────────
   const chunkRecords = chunks.map((chunk, index) => ({
     document_id: documentId,
-    content: chunk.content,
+    content:     chunk.content,
     chunk_index: index,
     token_count: chunk.tokenCount,
-    metadata: chunk.metadata ?? {},
+    metadata:    chunk.metadata ?? {},
   }));
+
+  // Defensive guard: created_by must NEVER appear in a chunk row.
+  // knowledge_chunks has no created_by column; if it slips in (e.g. via a
+  // spread of a document object), Supabase will reject the insert with an FK
+  // violation on knowledge_documents.fk_created_by.
+  for (const row of chunkRecords) {
+    if ('created_by' in row) {
+      throw new Error(
+        `Invalid chunk payload: created_by must not be present in knowledge_chunks. ` +
+        `Document ID: ${documentId}`
+      );
+    }
+  }
 
   let insertedCount = 0;
   try {
@@ -169,16 +182,29 @@ export async function ingestKnowledgeDocument({
       .insert(chunkRecords);
 
     if (chunkError) {
-      console.error('[KnowledgeIngestion] Chunk insert error:', chunkError);
-      return { success: false, errors: [`Failed to insert chunks: ${chunkError.message}`] };
+      console.error('[KnowledgeIngestion] ❌ DATABASE ERROR - Chunk insertion failed');
+      console.error('[KnowledgeIngestion] Error message:', chunkError.message);
+      console.error('[KnowledgeIngestion] Error code:', (chunkError as any).code);
+      console.error('[KnowledgeIngestion] Error details:', chunkError);
+      console.error('[KnowledgeIngestion] Document ID:', documentId);
+      console.error('[KnowledgeIngestion] Chunks attempted:', chunkRecords.length);
+      console.error('[KnowledgeIngestion] First chunk sample:', JSON.stringify(chunkRecords[0], null, 2));
+      return { success: false, errors: [`Database error during chunk insertion: ${chunkError.message}`] };
     }
 
     insertedCount = chunkRecords.length;
-    log('[KnowledgeIngestion] Chunks inserted successfully:', insertedCount);
+    log('[KnowledgeIngestion] ✅ Chunks inserted successfully:', insertedCount);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[KnowledgeIngestion] Chunk insert exception:', msg);
-    return { success: false, errors: [`Failed to insert chunks: ${msg}`] };
+    const stack = err instanceof Error ? err.stack : 'No stack trace';
+    console.error('[KnowledgeIngestion] ❌ EXCEPTION - Chunk insertion threw error');
+    console.error('[KnowledgeIngestion] Exception message:', msg);
+    console.error('[KnowledgeIngestion] Exception type:', err?.constructor?.name);
+    console.error('[KnowledgeIngestion] Stack trace:', stack);
+    console.error('[KnowledgeIngestion] Full exception object:', err);
+    console.error('[KnowledgeIngestion] Document ID:', documentId);
+    console.error('[KnowledgeIngestion] Chunks attempted:', chunkRecords.length);
+    return { success: false, errors: [`Exception during chunk insertion: ${msg}`] };
   }
 
   if (insertedCount === 0) {

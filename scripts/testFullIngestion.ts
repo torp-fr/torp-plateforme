@@ -235,6 +235,8 @@ async function insertDocumentMetadata(
         created_by: SYSTEM_USER_ID,
       });
 
+      console.log('SYSTEM_USER_ID runtime value:', SYSTEM_USER_ID);
+
       const { data, error: insertError } = await supabase
         .from('knowledge_documents')
         .insert([insertPayload])
