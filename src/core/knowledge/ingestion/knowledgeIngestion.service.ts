@@ -169,7 +169,6 @@ export async function ingestKnowledgeDocument({
   let chunkError: any = null;
 
   try {
-    // Remove existing chunks to ensure idempotent ingestion
     await supabase
       .from("knowledge_chunks")
       .delete()
