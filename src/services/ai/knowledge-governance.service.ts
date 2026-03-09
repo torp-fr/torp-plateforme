@@ -150,14 +150,7 @@ class KnowledgeGovernanceService {
 
       if (issues && issues.length > 0) {
         log('[GOVERNANCE] ⚠️ Found', issues.length, 'potential low quality documents');
-
-        // Flag them
-        for (const issue of issues) {
-          await supabase
-            .from('knowledge_documents')
-            .update({ is_low_quality: true })
-            .eq('id', issue.document_id);
-        }
+        // Note: Document management (flagging low quality) is now handled by testFullIngestion.ts
       }
 
       return issues || [];
@@ -191,32 +184,10 @@ class KnowledgeGovernanceService {
         return null;
       }
 
-      // Create new document
-      const { data: newDoc, error: insertError } = await supabase
-        .from('knowledge_documents')
-        .insert({
-          source: new_source || oldDoc.source,
-          category: oldDoc.category,
-          region: oldDoc.region,
-          content: new_content,
-          reliability_score: new_reliability || oldDoc.reliability_score,
-          metadata: oldDoc.metadata,
-          version_number: (oldDoc.version_number || 1) + 1,
-          parent_document_id: old_document_id,
-        })
-        .select()
-        .single();
-
-      if (insertError || !newDoc) {
-        console.error('[GOVERNANCE] Failed to create new version');
-        return null;
-      }
-
-      // Supersede old document
-      await supabase
-        .from('knowledge_documents')
-        .update({ is_superseded: true })
-        .eq('id', old_document_id);
+      // Note: Document versioning is now handled by testFullIngestion.ts
+      // This function can no longer create new documents
+      console.log('[GOVERNANCE] ℹ️ Document versioning is managed by testFullIngestion.ts');
+      return null;
 
       log('[GOVERNANCE] ✅ New version created:', newDoc.id);
       return newDoc.id;
