@@ -11,7 +11,6 @@
 
 import type { KnowledgeChunk as ChunkerChunk } from './knowledgeChunker.service';
 import { generateEmbedding } from './knowledgeEmbedding.service';
-import { compressContext } from '../compression/contextCompression.service';
 import { verifyAndPersistIntegrity } from '../integrity/knowledgeIntegrity.service';
 import { getKnowledgeConflictService } from '../conflicts/knowledgeConflict.service';
 import { supabase } from '@/lib/supabase';
@@ -178,12 +177,17 @@ async function rerankChunks(
 
 /**
  * Search for the most relevant chunks using hybrid search with reranking.
+ * Pure retrieval and ranking layer - performs NO LLM-based processing.
+ *
+ * Pipeline:
  * 1. Retrieves candidate chunks using hybrid search (pgvector + FTS)
  * 2. Reranks candidates using semantic similarity
  * 3. Returns top limit results
  *
  * Combines pgvector cosine similarity (0.7 weight) with PostgreSQL full-text search (0.3 weight)
  * at retrieval stage, then applies cosine similarity reranking at post-processing stage.
+ *
+ * Context compression is executed in the generation pipeline (outside retrieval layer).
  *
  * Requires migration 20260307000002_hybrid_rag_search.sql to be applied.
  * Function signature: match_knowledge_chunks(query_embedding vector(1536), query_text text, match_count int)
@@ -236,17 +240,8 @@ export async function semanticSearch(
 
     log('[KnowledgeIndex] Found', results.length, 'relevant chunks (after reranking)');
 
-    // Compress context (optional, via ENABLE_CONTEXT_COMPRESSION flag)
-    const compressed = await compressContext(
-      query,
-      results.map(({ rerankScore, ...rest }) => rest)
-    );
-
-    // Return chunks with compressed content
-    return results.map((chunk, i) => ({
-      ...chunk,
-      content: compressed[i] || chunk.content,
-    })).map(({ rerankScore, ...rest }) => rest);
+    // Return reranked chunks (context compression happens in generation pipeline)
+    return results.map(({ rerankScore, ...rest }) => rest);
   } catch (err) {
     error('[KnowledgeIndex] Search failed:', err);
     return [];
