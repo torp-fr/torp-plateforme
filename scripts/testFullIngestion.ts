@@ -40,7 +40,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 interface TestDocument {
   name: string;
   path: string;
-  category: 'norme' | 'fiche_technique' | 'jurisprudence' | 'manuel' | 'autre';
+  category: string;
   title: string;
   description: string;
 }
@@ -192,57 +192,28 @@ async function insertDocumentMetadata(
     try {
       const insertPayload = {
         title: testDoc.title,
-        category: 'GUIDELINE',
-        source: 'ingestion'.trim().toLowerCase(),
+        category: testDoc.category,
+        source: 'ingestion',
         version: '1.0',
         file_size: 0,
         created_by: null,
       };
 
-      // ===== DETAILED DEBUG LOGS =====
-      console.log("SOURCE VALUE:", insertPayload.source);
-      console.log("SOURCE TYPE:", typeof insertPayload.source);
-      console.log("SOURCE LENGTH:", insertPayload.source.length);
-      console.log("INSERT PAYLOAD:", JSON.stringify(insertPayload, null, 2));
-      // ================================
+      const { data, error: insertError } = await supabase
+        .from('knowledge_documents')
+        .insert([insertPayload])
+        .select('id')
+        .single();
 
-      console.log("SUPABASE INSERT TABLE:", "knowledge_documents");
-      console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(insertPayload, null, 2));
-
-      let data: any;
-      let insertError: any;
-
-      try {
-        const result = await supabase
-          .from('knowledge_documents')
-          .insert([insertPayload])
-          .select('id')
-          .single();
-        data = result.data;
-        insertError = result.error;
-
-        if (insertError) {
-          console.error("SUPABASE INSERT ERROR:", insertError);
-        }
-      } catch (e) {
-        console.error("SUPABASE INSERT EXCEPTION:", e);
-        insertError = e;
-      }
-
-      if (insertError) {
+      if (insertError || !data) {
         error(`Insert failed: ${testDoc.name}`, insertError);
-        continue;
-      }
-
-      if (!data) {
-        error(`Insert failed: no data returned for ${testDoc.name}`);
         continue;
       }
 
       documentIds.set(testDoc.name, data.id);
       log('METADATA', `Created document record: ${data.id}`, {
         title: testDoc.title,
-        category: 'GUIDELINE',
+        category: testDoc.category,
       });
     } catch (err) {
       error(`Failed to insert metadata for ${testDoc.name}`, err);
@@ -283,8 +254,8 @@ async function runIngestionPipeline(
       const startTime = Date.now();
       const result = await ingestKnowledgeDocument(buffer, testDoc.name, {
         title: testDoc.title,
-        category: 'GUIDELINE',
-        source: 'ingestion'.trim().toLowerCase(),
+        category: testDoc.category,
+        source: 'ingestion',
         version: '1.0',
       }, null);
 
