@@ -162,37 +162,21 @@ export async function ingestKnowledgeDocument({
     metadata:    chunk.metadata ?? {},
   }));
 
-  // Defensive guard: created_by must NEVER appear in a chunk row.
-  // knowledge_chunks has no created_by column; if it slips in (e.g. via a
-  // spread of a document object), Supabase will reject the insert with an FK
-  // violation on knowledge_documents.fk_created_by.
-  for (const row of chunkRecords) {
-    if ('created_by' in row) {
-      throw new Error(
-        `Invalid chunk payload: created_by must not be present in knowledge_chunks. ` +
-        `Document ID: ${documentId}`
-      );
-    }
-  }
-
   console.log("SUPABASE INSERT TABLE:", "knowledge_chunks");
   console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(chunkRecords, null, 2));
 
-  /* Prevent duplicate chunk index errors */
-  await supabase
-    .from('knowledge_chunks')
-    .delete()
-    .eq('document_id', documentId);
-
   let chunkError: any;
   try {
+    await supabase
+      .from('knowledge_chunks')
+      .delete()
+      .eq('document_id', documentId);
+
     const { error } = await supabase
       .from('knowledge_chunks')
       .insert(chunkRecords);
+
     chunkError = error;
-    if (chunkError) {
-      console.error("SUPABASE INSERT ERROR:", chunkError);
-    }
   } catch (e) {
     console.error("SUPABASE INSERT EXCEPTION:", e);
     chunkError = e;
