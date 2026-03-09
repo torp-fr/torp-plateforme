@@ -63,6 +63,25 @@ async function invokeBatchEmbedding(inputs: string[]): Promise<number[][]> {
 }
 
 // ---------------------------------------------------------------------------
+// Internal: retry helper with exponential backoff
+// ---------------------------------------------------------------------------
+
+async function retryEmbedding<T>(
+  fn: () => Promise<T>,
+  retries = 3
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (retries === 0) throw err;
+    const delay = (4 - retries) * 500;
+    warn('[KnowledgeEmbedding] Attempt failed, retrying...', { remainingRetries: retries, delayMs: delay });
+    await new Promise(r => setTimeout(r, delay));
+    return retryEmbedding(fn, retries - 1);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -72,7 +91,7 @@ async function invokeBatchEmbedding(inputs: string[]): Promise<number[][]> {
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
   try {
-    const embeddings = await invokeBatchEmbedding([text]);
+    const embeddings = await retryEmbedding(() => invokeBatchEmbedding([text]));
     if (!embeddings[0]) {
       throw new Error('[KnowledgeEmbedding] No embedding returned for text');
     }
@@ -95,7 +114,7 @@ export async function embedBatch(texts: string[]): Promise<number[][]> {
 
     log('[KnowledgeEmbedding] Generating embeddings for', texts.length, 'texts');
 
-    const embeddings = await invokeBatchEmbedding(texts);
+    const embeddings = await retryEmbedding(() => invokeBatchEmbedding(texts));
 
     if (!embeddings || embeddings.length !== texts.length) {
       throw new Error('[KnowledgeEmbedding] Batch returned inconsistent size');
@@ -131,7 +150,7 @@ export async function generateEmbeddingsForChunks(
     const inputs = batch.map((c) => c.content);
 
     try {
-      const embeddings = await invokeBatchEmbedding(inputs);
+      const embeddings = await retryEmbedding(() => invokeBatchEmbedding(inputs));
 
       batch.forEach((chunk, i) => {
         if (embeddings[i]) {
