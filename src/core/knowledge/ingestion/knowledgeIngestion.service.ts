@@ -94,6 +94,8 @@ export function extractTextFromBuffer(
 
 /**
  * Ingest knowledge document
+ * SUCCESS is determined solely by chunk insertion.
+ * All other steps (dedup, indexing) are non-blocking.
  */
 export async function ingestKnowledgeDocument(
   fileBuffer: Buffer,
@@ -102,102 +104,99 @@ export async function ingestKnowledgeDocument(
   userId: string | null,
   documentId?: string
 ): Promise<IngestionResult> {
+  log('[KnowledgeIngestion] Starting ingestion for:', filename);
+
+  if (!documentId) {
+    return { success: false, errors: ['documentId is required for ingestion'] };
+  }
+
+  // ── CRITICAL: extract, normalize, chunk ──────────────────────────────────
+  let rawText: string;
   try {
-    log('[KnowledgeIngestion] Starting ingestion for:', filename);
-
-
-    // Step 1: Extract text (format-aware: PDF, DOCX, XLSX, CSV, TXT, MD)
-    const rawText = await extractDocumentContent(fileBuffer, filename);
+    rawText = await extractDocumentContent(fileBuffer, filename);
     log('[KnowledgeIngestion] Text extracted:', rawText.length, 'characters');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[KnowledgeIngestion] Text extraction failed:', msg);
+    return { success: false, errors: [msg] };
+  }
 
-    // Step 1b: Normalize text (remove noise before chunking)
-    const normalizedText = normalizeText(rawText);
-    log('[KnowledgeIngestion] Text normalized:', normalizedText.length, 'characters');
+  const normalizedText = normalizeText(rawText);
+  log('[KnowledgeIngestion] Text normalized:', normalizedText.length, 'characters');
 
-    // Step 1c: Classify document type (used by future specialized chunking)
-    const docType = classifyDocument(normalizedText);
-    log('[KnowledgeIngestion] Document classified as:', docType);
+  const docType = classifyDocument(normalizedText);
+  log('[KnowledgeIngestion] Document classified as:', docType);
 
-    // Step 2: Chunk document using strategy matched to document type
-    const rawChunks = chunkSmart(normalizedText, docType);
-    log('[KnowledgeIngestion] Document chunked into', rawChunks.length, 'chunks');
+  const rawChunks = chunkSmart(normalizedText, docType);
+  log('[KnowledgeIngestion] Document chunked into', rawChunks.length, 'chunks');
 
-    // Step 2b: Filter out low-quality chunks before embedding generation
-    const qualityChunks = filterChunks(rawChunks);
-    log('[KnowledgeIngestion] Chunks after quality filter:', qualityChunks.length);
+  const qualityChunks = filterChunks(rawChunks);
+  log('[KnowledgeIngestion] Chunks after quality filter:', qualityChunks.length);
 
-    // Step 2c: Drop near-duplicate chunks already present in the vector index
-    const smartChunks = await deduplicateChunks(qualityChunks);
-    log('[KnowledgeIngestion] Chunks after deduplication:', smartChunks.length);
+  // ── NON-CRITICAL: deduplication (failure keeps all chunks) ────────────────
+  let dedupedChunks = qualityChunks;
+  try {
+    dedupedChunks = await deduplicateChunks(qualityChunks);
+    log('[KnowledgeIngestion] Chunks after deduplication:', dedupedChunks.length);
+  } catch (err) {
+    warn('[KnowledgeIngestion] Deduplication failed (non-blocking), using all quality chunks:', err);
+  }
 
-    // Map to the shape expected by indexChunks (adds positional fields)
-    const chunks = smartChunks.map((c) => ({
-      content: c.content,
-      tokenCount: c.tokenCount,
-      metadata: c.metadata ?? {},
-      startIndex: 0,
-      endIndex: c.content.length,
-    }));
+  const chunks = dedupedChunks.map((c) => ({
+    content: c.content,
+    tokenCount: c.tokenCount,
+    metadata: c.metadata ?? {},
+    startIndex: 0,
+    endIndex: c.content.length,
+  }));
 
-    if (!documentId) {
-      throw new Error('documentId is required for ingestion');
-    }
+  log('[KnowledgeIngestion] Using provided document ID:', documentId);
 
-    log('[KnowledgeIngestion] Using provided document ID:', documentId);
+  // ── CRITICAL: insert chunks ───────────────────────────────────────────────
+  const chunkRecords = chunks.map((chunk, index) => ({
+    document_id: documentId,
+    content: chunk.content,
+    chunk_index: index,
+    token_count: chunk.tokenCount,
+    metadata: chunk.metadata ?? {},
+  }));
 
-    // Step 3: Create chunk records
-    const chunkRecords = chunks.map((chunk, index) => ({
-      document_id: documentId,
-      content: chunk.content,
-      chunk_index: index,
-      token_count: chunk.tokenCount,
-      metadata: chunk.metadata ?? {},
-    }));
-
-    console.log("SUPABASE INSERT TABLE:", "knowledge_chunks");
-    console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(chunkRecords, null, 2));
-
-    let chunkError: any;
-
-    try {
-      const result = await supabase
-        .from('knowledge_chunks')
-        .insert(chunkRecords);
-      chunkError = result.error;
-
-      if (chunkError) {
-        console.error("SUPABASE INSERT ERROR:", chunkError);
-      }
-    } catch (e) {
-      console.error("SUPABASE INSERT EXCEPTION:", e);
-      chunkError = e;
-    }
+  let insertedCount = 0;
+  try {
+    const { error: chunkError } = await supabase
+      .from('knowledge_chunks')
+      .insert(chunkRecords);
 
     if (chunkError) {
-      throw new Error(`Failed to create chunks: ${chunkError.message}`);
+      console.error('[KnowledgeIngestion] Chunk insert error:', chunkError);
+      return { success: false, errors: [`Failed to create chunks: ${chunkError.message}`] };
     }
+    insertedCount = chunkRecords.length;
+    log('[KnowledgeIngestion] Chunks inserted:', insertedCount);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[KnowledgeIngestion] Chunk insert exception:', msg);
+    return { success: false, errors: [`Failed to create chunks: ${msg}`] };
+  }
 
-    log('[KnowledgeIngestion] Chunks inserted:', chunks.length);
+  if (insertedCount === 0) {
+    return { success: false, chunksCreated: 0, errors: ['No chunks were inserted'] };
+  }
 
-    // Step 4: Index chunks (for Phase 30 - RAG)
+  // ── NON-CRITICAL: indexing (failure does not fail ingestion) ──────────────
+  try {
     const { indexChunks } = await import('./knowledgeIndex.service');
     await indexChunks(documentId, chunks);
-
-    return {
-      success: true,
-      documentId: documentId,
-      chunksCreated: chunks.length,
-      totalTokens: chunks.reduce((sum, c) => sum + c.tokenCount, 0),
-    };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[KnowledgeIngestion] Ingestion failed:', errorMessage);
-
-    return {
-      success: false,
-      errors: [errorMessage],
-    };
+  } catch (err) {
+    warn('[KnowledgeIngestion] Indexing failed (non-blocking), ingestion still successful:', err);
   }
+
+  return {
+    success: true,
+    documentId,
+    chunksCreated: insertedCount,
+    totalTokens: chunks.reduce((sum, c) => sum + c.tokenCount, 0),
+  };
 }
 
 /**
