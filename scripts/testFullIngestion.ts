@@ -1,3 +1,4 @@
+throw new Error("DEBUG SCRIPT LOADED");
 /**
  * End-to-End Ingestion Pipeline Test
  *
