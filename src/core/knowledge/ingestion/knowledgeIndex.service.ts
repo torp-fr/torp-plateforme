@@ -48,22 +48,25 @@ export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): P
   try {
     log('[KnowledgeIndex] Indexing', chunks.length, 'chunks for document:', documentId);
 
-    // Generate embeddings per chunk and update the database
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-      const embedding = await generateEmbedding(chunk.content);
-      if (!embedding) {
-        throw new Error("Embedding generation failed");
-      }
+    // Generate embeddings in batch
+    const texts = chunks.map(c => c.content);
 
-      console.log("Embedding generated length:", embedding?.length);
+    const { embedBatch } = await import('./knowledgeEmbedding.service');
+    const embeddings = await embedBatch(texts);
+
+    if (!embeddings || embeddings.length !== chunks.length) {
+      throw new Error("Embedding batch failed or returned inconsistent size");
+    }
+
+    for (let i = 0; i < embeddings.length; i++) {
+      console.log("Embedding generated length:", embeddings[i]?.length);
 
       const { error } = await supabase
-        .from('knowledge_chunks')
-        .update({ embedding_vector: embedding })
-        .eq('document_id', documentId)
-        .eq('chunk_index', i)
-        .is('embedding_vector', null);
+        .from("knowledge_chunks")
+        .update({ embedding_vector: embeddings[i] })
+        .eq("document_id", documentId)
+        .eq("chunk_index", i)
+        .is("embedding_vector", null);
 
       if (error) {
         console.error("Embedding write failed:", error);

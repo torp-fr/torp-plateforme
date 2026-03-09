@@ -84,6 +84,33 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 /**
+ * Generate embeddings for multiple texts in a single batch.
+ * Throws error if generation fails or returns inconsistent size.
+ */
+export async function embedBatch(texts: string[]): Promise<number[][]> {
+  try {
+    if (texts.length === 0) {
+      return [];
+    }
+
+    log('[KnowledgeEmbedding] Generating embeddings for', texts.length, 'texts');
+
+    const embeddings = await invokeBatchEmbedding(texts);
+
+    if (!embeddings || embeddings.length !== texts.length) {
+      throw new Error('[KnowledgeEmbedding] Batch returned inconsistent size');
+    }
+
+    log('[KnowledgeEmbedding] Batch complete —', embeddings.length, 'embeddings generated');
+
+    return embeddings;
+  } catch (err) {
+    error('[KnowledgeEmbedding] Batch embedding failed:', err);
+    throw err;
+  }
+}
+
+/**
  * Generate embeddings for multiple chunks in batches.
  * Sends up to BATCH_SIZE texts per Edge Function call, respecting the
  * server-side limit of 100 inputs per request.
