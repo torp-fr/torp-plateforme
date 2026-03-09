@@ -246,10 +246,19 @@ export async function ingestKnowledgeDocument(
     const insertedCount = insertedChunks?.length || 0;
     log('[KnowledgeIngestion] Chunks inserted:', insertedCount);
 
-    // Step 4: Index chunks (for Phase 30 - RAG)
-    const { indexChunks } = await import('./knowledgeIndex.service');
-    await indexChunks(documentId, chunks);
+    // Step 4: Index chunks (non-blocking, non-critical)
+    // Chunk insertion is the only critical step. Indexing must not fail ingestion.
+    try {
+      const { indexChunks } = await import('./knowledgeIndex.service');
+      await indexChunks(documentId, chunks);
+      log('[KnowledgeIngestion] Indexing complete');
+    } catch (indexError) {
+      const indexMsg = indexError instanceof Error ? indexError.message : 'Unknown error';
+      console.warn('[KnowledgeIngestion] ⚠️ Indexing failed but chunks were inserted:', indexMsg);
+      // Continue - chunks are already in database and searchable
+    }
 
+    // Return success because chunks are inserted
     return {
       success: true,
       documentId: documentId,
