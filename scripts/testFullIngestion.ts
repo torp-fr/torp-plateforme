@@ -1,21 +1,24 @@
 /**
  * End-to-End Ingestion Pipeline Test
  *
- * Tests the complete RAG document ingestion workflow:
- * 1. Load test documents (PDF, DOCX, XLSX, TXT, MD)
- * 2. Upload to Supabase Storage
- * 3. Insert metadata in knowledge_documents table
- * 4. Run ingestion pipeline
- * 5. Verify chunks created
- * 6. Perform RAG semantic search
+ * ARCHITECTURE:
+ *   1. Load test documents from disk
+ *   2. Upload files to Supabase Storage
+ *   3. Create document records in knowledge_documents (caller owns this step)
+ *   4. Call ingestKnowledgeDocument({ documentId, filename, buffer })
+ *      — the ingestion service NEVER creates documents; it only inserts chunks
+ *   5. Verify chunks were created
+ *   6. Perform RAG semantic search
  *
  * Usage:
  *   npx tsx scripts/testFullIngestion.ts
+ *
+ * Requirements:
+ *   SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
@@ -30,7 +33,10 @@ if (!supabaseUrl || !supabaseKey) {
   process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Service-role client — bypasses RLS but FK constraints still apply
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: { autoRefreshToken: false, persistSession: false },
+});
 
 // ============================================================================
 // Test Configuration
@@ -41,7 +47,6 @@ interface TestDocument {
   path: string;
   category: string;
   title: string;
-  description: string;
 }
 
 const TEST_DOCUMENTS: TestDocument[] = [
@@ -50,21 +55,18 @@ const TEST_DOCUMENTS: TestDocument[] = [
     path: 'test/data/sample.txt',
     category: 'manuel',
     title: 'Guide de Construction - Ouvrages en Béton Armé',
-    description: 'Guide complet pour la construction en béton armé',
   },
   {
     name: 'sample.md',
     path: 'test/data/sample.md',
     category: 'norme',
     title: 'DTU 21 - Charpentes en Acier',
-    description: 'Règles de calcul et exécution des structures en acier',
   },
   {
     name: 'pricing.csv',
     path: 'test/data/pricing.csv',
     category: 'fiche_technique',
     title: 'Prix Unitaires - Éléments de Construction',
-    description: 'Bordereau de prix unitaires pour éléments de construction',
   },
 ];
 
@@ -73,42 +75,57 @@ const TEST_DOCUMENTS: TestDocument[] = [
 // ============================================================================
 
 function log(stage: string, message: string, data?: any) {
-  const timestamp = new Date().toISOString();
-  const prefix = `[${timestamp}] [${stage}]`;
+  const prefix = `[${new Date().toISOString()}] [${stage}]`;
   console.log(`${prefix} ${message}`);
-  if (data) {
-    console.log(`  → ${JSON.stringify(data, null, 2)}`);
-  }
+  if (data !== undefined) console.log(`  → ${JSON.stringify(data, null, 2)}`);
 }
 
 function success(message: string, data?: any) {
   console.log(`✅ ${message}`);
-  if (data) {
-    console.log(`   ${JSON.stringify(data, null, 2)}`);
-  }
+  if (data !== undefined) console.log(`   ${JSON.stringify(data, null, 2)}`);
 }
 
-function error(message: string, err?: any) {
+function fail(message: string, err?: any) {
   console.error(`❌ ${message}`);
-  if (err) {
-    console.error(`   Error: ${err.message || err}`);
-  }
+  if (err) console.error(`   Error: ${err?.message ?? err}`);
 }
 
 function divider(title?: string) {
   console.log('\n' + '='.repeat(80));
-  if (title) {
-    console.log(`  ${title}`);
-    console.log('='.repeat(80));
+  if (title) { console.log(`  ${title}`); console.log('='.repeat(80)); }
+}
+
+// ============================================================================
+// Stage 0: Resolve a valid user ID for created_by
+// ============================================================================
+
+/**
+ * Fetch the first user from auth.users so we can satisfy the fk_created_by
+ * foreign key constraint.  Returns null if no users exist (the FK column is
+ * nullable so null is a valid value and will NOT trigger the constraint).
+ */
+async function getSystemUserId(): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.auth.admin.listUsers({ perPage: 1, page: 1 });
+    if (error || !data?.users?.length) {
+      console.warn('[SYSTEM_USER] No users found in auth.users — using null for created_by');
+      return null;
+    }
+    const userId = data.users[0].id;
+    log('SYSTEM_USER', `Using user ID for created_by: ${userId}`);
+    return userId;
+  } catch (err) {
+    console.warn('[SYSTEM_USER] Could not query auth.users:', err);
+    return null;
   }
 }
 
 // ============================================================================
-// Stage: Load Documents
+// Stage 1: Load Documents from disk
 // ============================================================================
 
 async function loadTestDocuments(): Promise<Map<string, Buffer>> {
-  divider('LOAD TEST DOCUMENTS');
+  divider('STAGE 1 — LOAD TEST DOCUMENTS');
 
   const documents = new Map<string, Buffer>();
 
@@ -117,7 +134,7 @@ async function loadTestDocuments(): Promise<Map<string, Buffer>> {
       const fullPath = path.join(process.cwd(), doc.path);
 
       if (!fs.existsSync(fullPath)) {
-        error(`File not found: ${fullPath}`);
+        fail(`File not found: ${fullPath}`);
         continue;
       }
 
@@ -129,7 +146,7 @@ async function loadTestDocuments(): Promise<Map<string, Buffer>> {
         path: fullPath,
       });
     } catch (err) {
-      error(`Failed to load ${doc.name}`, err);
+      fail(`Failed to load ${doc.name}`, err);
     }
   }
 
@@ -138,13 +155,13 @@ async function loadTestDocuments(): Promise<Map<string, Buffer>> {
 }
 
 // ============================================================================
-// Stage: Upload to Storage
+// Stage 2: Upload files to Storage
 // ============================================================================
 
 async function uploadToStorage(
   documents: Map<string, Buffer>
 ): Promise<Map<string, string>> {
-  divider('UPLOAD TO STORAGE');
+  divider('STAGE 2 — UPLOAD TO STORAGE');
 
   const uploads = new Map<string, string>();
 
@@ -152,21 +169,19 @@ async function uploadToStorage(
     try {
       const fileName = `test/${Date.now()}-${name}`;
 
-      const { data, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('knowledge-files')
         .upload(fileName, buffer);
 
       if (uploadError) {
-        error(`Upload failed: ${name}`, uploadError);
+        fail(`Upload failed: ${name}`, uploadError);
         continue;
       }
 
       uploads.set(name, fileName);
-      log('UPLOAD', `Uploaded to storage: ${fileName}`, {
-        size: `${(buffer.length / 1024).toFixed(2)} KB`,
-      });
+      log('UPLOAD', `Stored at: ${fileName}`, { size: `${(buffer.length / 1024).toFixed(2)} KB` });
     } catch (err) {
-      error(`Failed to upload ${name}`, err);
+      fail(`Failed to upload ${name}`, err);
     }
   }
 
@@ -175,27 +190,40 @@ async function uploadToStorage(
 }
 
 // ============================================================================
-// Stage: Insert Metadata
+// Stage 3: Create document records in knowledge_documents
+//
+// ARCHITECTURE RULE: ONLY the caller (this script or the API) may INSERT into
+// knowledge_documents.  The ingestion service is strictly READ-ONLY for this
+// table.
 // ============================================================================
 
 async function insertDocumentMetadata(
-  uploads: Map<string, string>
+  uploads: Map<string, string>,
+  documents: Map<string, Buffer>,
+  systemUserId: string | null
 ): Promise<Map<string, string>> {
-  divider('INSERT DOCUMENT METADATA');
+  divider('STAGE 3 — CREATE DOCUMENT RECORDS');
 
   const documentIds = new Map<string, string>();
 
   for (const testDoc of TEST_DOCUMENTS) {
     if (!uploads.has(testDoc.name)) continue;
 
+    const buffer = documents.get(testDoc.name);
+    const storagePath = uploads.get(testDoc.name)!;
+
     try {
-      const insertPayload = {
+      const insertPayload: Record<string, any> = {
         title: testDoc.title,
         category: testDoc.category,
-        source: 'ingestion',
+        source: 'internal',          // valid value per schema constraints
         version: '1.0',
-        file_size: 0,
-        created_by: null,
+        file_path: storagePath,
+        file_size: buffer?.length ?? 0,
+        // created_by: use a real auth.users UUID to satisfy fk_created_by.
+        // NULL is also valid (nullable FK column, null bypasses FK check).
+        created_by: systemUserId,
+        ingestion_status: 'pending', // starts the step-runner state machine
       };
 
       const { data, error: insertError } = await supabase
@@ -205,7 +233,7 @@ async function insertDocumentMetadata(
         .single();
 
       if (insertError || !data) {
-        error(`Insert failed: ${testDoc.name}`, insertError);
+        fail(`Insert failed for ${testDoc.name}`, insertError);
         continue;
       }
 
@@ -213,9 +241,10 @@ async function insertDocumentMetadata(
       log('METADATA', `Created document record: ${data.id}`, {
         title: testDoc.title,
         category: testDoc.category,
+        created_by: systemUserId ?? 'null (no FK violation for nullable column)',
       });
     } catch (err) {
-      error(`Failed to insert metadata for ${testDoc.name}`, err);
+      fail(`Failed to insert metadata for ${testDoc.name}`, err);
     }
   }
 
@@ -224,62 +253,57 @@ async function insertDocumentMetadata(
 }
 
 // ============================================================================
-// Stage: Run Ingestion Pipeline
+// Stage 4: Run ingestion pipeline
+//
+// ARCHITECTURE RULE: The ingestion service accepts { documentId, filename, buffer }.
+// It NEVER creates documents.  It only extracts, chunks, and inserts knowledge_chunks.
+// Success is defined solely by chunk insertion.
 // ============================================================================
 
 async function runIngestionPipeline(
   documents: Map<string, Buffer>,
   documentIds: Map<string, string>
 ): Promise<Map<string, { chunkCount: number; tokens: number; errors?: string[] }>> {
-  divider('RUN INGESTION PIPELINE');
+  divider('STAGE 4 — RUN INGESTION PIPELINE');
 
-  // Dynamic import to ensure module resolution
-  const {
-    ingestKnowledgeDocument,
-  } = await import('@/core/knowledge/ingestion/knowledgeIngestion.service');
+  const { ingestKnowledgeDocument } = await import(
+    '@/core/knowledge/ingestion/knowledgeIngestion.service'
+  );
 
   const results = new Map<string, { chunkCount: number; tokens: number; errors?: string[] }>();
 
   for (const testDoc of TEST_DOCUMENTS) {
     if (!documents.has(testDoc.name) || !documentIds.has(testDoc.name)) {
+      fail(`Skipping ${testDoc.name} — missing buffer or document ID`);
       continue;
     }
 
     const buffer = documents.get(testDoc.name)!;
-    const docId = documentIds.get(testDoc.name);
-
-    if (!docId) {
-      error(`No document ID found for ${testDoc.name}`);
-      continue;
-    }
+    const documentId = documentIds.get(testDoc.name)!;
 
     try {
-      log('EXTRACTION', `Processing: ${testDoc.name}`);
+      log('INGESTION', `Processing: ${testDoc.name}`, { documentId });
 
       const startTime = Date.now();
-      const result = await ingestKnowledgeDocument(buffer, testDoc.name, {
-        title: testDoc.title,
-        category: testDoc.category,
-        source: 'ingestion',
-        version: '1.0',
-      }, null, docId);
+
+      // ── CORRECT API: pass { documentId, filename, buffer } ──────────────────
+      // The service NEVER creates a document record.  It reads the pre-existing
+      // document row (identified by documentId) and inserts chunks only.
+      const result = await ingestKnowledgeDocument({
+        documentId,
+        filename: testDoc.name,
+        buffer,
+      });
 
       const duration = Date.now() - startTime;
 
       if (!result.success) {
-        error(`Ingestion failed: ${testDoc.name}`, {
-          errors: result.errors,
-        });
-
-        results.set(testDoc.name, {
-          chunkCount: 0,
-          tokens: 0,
-          errors: result.errors,
-        });
+        fail(`Ingestion failed: ${testDoc.name}`, { errors: result.errors });
+        results.set(testDoc.name, { chunkCount: 0, tokens: 0, errors: result.errors });
         continue;
       }
 
-      log('EXTRACTION', `Complete: ${testDoc.name}`, {
+      log('INGESTION', `Complete: ${testDoc.name}`, {
         documentId: result.documentId,
         chunks: result.chunksCreated,
         tokens: result.totalTokens,
@@ -287,11 +311,11 @@ async function runIngestionPipeline(
       });
 
       results.set(testDoc.name, {
-        chunkCount: result.chunksCreated || 0,
-        tokens: result.totalTokens || 0,
+        chunkCount: result.chunksCreated ?? 0,
+        tokens: result.totalTokens ?? 0,
       });
     } catch (err) {
-      error(`Ingestion error: ${testDoc.name}`, err);
+      fail(`Ingestion error: ${testDoc.name}`, err);
       results.set(testDoc.name, {
         chunkCount: 0,
         tokens: 0,
@@ -305,15 +329,11 @@ async function runIngestionPipeline(
 }
 
 // ============================================================================
-// Stage: Query Chunks
+// Stage 5: Query chunks
 // ============================================================================
 
-async function queryChunks(): Promise<{
-  total: number;
-  avgTokens: number;
-  samples: any[];
-}> {
-  divider('QUERY CHUNKS');
+async function queryChunks(): Promise<{ total: number; avgTokens: number; samples: any[] }> {
+  divider('STAGE 5 — QUERY CHUNKS');
 
   try {
     const { data: chunks, error: queryError } = await supabase
@@ -323,105 +343,74 @@ async function queryChunks(): Promise<{
       .limit(50);
 
     if (queryError) {
-      error('Failed to query chunks', queryError);
+      fail('Failed to query chunks', queryError);
       return { total: 0, avgTokens: 0, samples: [] };
     }
 
-    const totalTokens = chunks?.reduce((sum, c) => sum + (c.token_count || 0), 0) || 0;
-    const avgTokens = chunks && chunks.length > 0 ? totalTokens / chunks.length : 0;
+    const totalTokens = chunks?.reduce((sum, c) => sum + (c.token_count || 0), 0) ?? 0;
+    const avgTokens = chunks?.length ? totalTokens / chunks.length : 0;
 
-    log('CHUNKS', 'Query results', {
-      total: chunks?.length || 0,
-      avgTokens: avgTokens.toFixed(1),
-    });
+    log('CHUNKS', 'Query results', { total: chunks?.length ?? 0, avgTokens: avgTokens.toFixed(1) });
 
-    // Show sample chunks
-    const samples = (chunks || []).slice(0, 3).map(c => ({
+    const samples = (chunks ?? []).slice(0, 3).map((c) => ({
       id: c.id,
       tokens: c.token_count,
       preview: c.content.substring(0, 80).replace(/\n/g, ' ') + '...',
     }));
 
-    samples.forEach((sample, i) => {
-      log('SAMPLE', `[${i + 1}] ${sample.preview}`, {
-        tokens: sample.tokens,
-      });
-    });
+    samples.forEach((s, i) => log('SAMPLE', `[${i + 1}] ${s.preview}`, { tokens: s.tokens }));
 
-    return {
-      total: chunks?.length || 0,
-      avgTokens: Number(avgTokens.toFixed(1)),
-      samples,
-    };
+    return { total: chunks?.length ?? 0, avgTokens: Number(avgTokens.toFixed(1)), samples };
   } catch (err) {
-    error('Query failed', err);
+    fail('Query failed', err);
     return { total: 0, avgTokens: 0, samples: [] };
   }
 }
 
 // ============================================================================
-// Stage: Semantic Search (RAG Test)
+// Stage 6: Semantic Search (RAG Test)
 // ============================================================================
 
 async function performSemanticSearch(): Promise<any[]> {
-  divider('SEMANTIC SEARCH TEST');
+  divider('STAGE 6 — SEMANTIC SEARCH TEST');
 
   try {
-    // Dynamic import for semantic search
     const { semanticSearch } = await import('@/core/knowledge/ingestion/knowledgeIndex.service');
 
-    // Example queries extracted from test documents
     const testQueries = [
       'béton armé fondations',
       'acier structure',
       'prix unitaires construction',
     ];
 
-    const allResults = [];
+    const allResults: any[] = [];
 
     for (const query of testQueries) {
       try {
         log('SEARCH', `Query: "${query}"`);
-
         const results = await semanticSearch(query, 5);
+        log('SEARCH', `Found ${results.length} results`, { query });
 
-        log('SEARCH', `Found ${results.length} results for query`, {
-          query,
-        });
-
-        results.forEach((result, i) => {
-          const contentPreview = result.content
-            .substring(0, 60)
-            .replace(/\n/g, ' ');
-
-          log('RESULT', `[${i + 1}] ${contentPreview}...`, {
-            similarity: result.similarity.toFixed(3),
-            chunkId: result.chunkId.substring(0, 8) + '...',
-          });
-
-          allResults.push({
-            query,
-            rank: i + 1,
-            similarity: result.similarity,
-            contentPreview,
-            chunkId: result.chunkId,
-          });
+        results.forEach((r, i) => {
+          const preview = r.content.substring(0, 60).replace(/\n/g, ' ');
+          log('RESULT', `[${i + 1}] ${preview}...`, { similarity: r.similarity.toFixed(3) });
+          allResults.push({ query, rank: i + 1, similarity: r.similarity, preview });
         });
       } catch (searchErr) {
-        error(`Search failed for query: "${query}"`, searchErr);
+        fail(`Search failed for query: "${query}"`, searchErr);
       }
     }
 
-    success(`Semantic search test complete with ${allResults.length} results`);
+    success(`Semantic search complete with ${allResults.length} results`);
     return allResults;
   } catch (err) {
-    error('Semantic search failed', err);
+    fail('Semantic search failed', err);
     return [];
   }
 }
 
 // ============================================================================
-// Stage: Summary Report
+// Summary Report
 // ============================================================================
 
 function generateSummaryReport(
@@ -454,26 +443,20 @@ function generateSummaryReport(
   console.log(`Documents processed: ${successCount}/${TEST_DOCUMENTS.length}`);
   console.log(`Total chunks created: ${chunkStats.total}`);
   console.log(`Average tokens per chunk: ${chunkStats.avgTokens}`);
-  console.log(`Total embeddings: ${chunkStats.total}`);
 
   console.log('\n🔍 SEMANTIC SEARCH RESULTS\n');
 
   if (searchResults.length === 0) {
-    console.log('⚠️  No semantic search results (embeddings may be pending)');
+    console.log('⚠️  No semantic search results (embeddings may still be pending)');
   } else {
     const byQuery = new Map<string, any[]>();
-    searchResults.forEach(result => {
-      if (!byQuery.has(result.query)) {
-        byQuery.set(result.query, []);
-      }
-      byQuery.get(result.query)!.push(result);
+    searchResults.forEach((r) => {
+      if (!byQuery.has(r.query)) byQuery.set(r.query, []);
+      byQuery.get(r.query)!.push(r);
     });
-
     byQuery.forEach((results, query) => {
       console.log(`Query: "${query}"`);
-      results.forEach(r => {
-        console.log(`  [${r.rank}] similarity: ${(r.similarity * 100).toFixed(1)}%`);
-      });
+      results.forEach((r) => console.log(`  [${r.rank}] similarity: ${(r.similarity * 100).toFixed(1)}%`));
     });
   }
 
@@ -481,59 +464,47 @@ function generateSummaryReport(
 }
 
 // ============================================================================
-// Main Test Execution
+// Main
 // ============================================================================
 
 async function main() {
-  console.log('\n╔════════════════════════════════════════════════════════════════════════════════╗');
-  console.log('║                  END-TO-END INGESTION PIPELINE TEST                           ║');
-  console.log('║                                                                              ║');
-  console.log('║  Testing: PDF | DOCX | XLSX | TXT | MD Extraction & Indexing                ║');
-  console.log('╚════════════════════════════════════════════════════════════════════════════════╝\n');
+  console.log('\n╔═══════════════════════════════════════════════════════════════════════╗');
+  console.log('║          END-TO-END RAG INGESTION PIPELINE TEST                      ║');
+  console.log('║                                                                       ║');
+  console.log('║  Architecture: Caller creates documents → Ingestion inserts chunks   ║');
+  console.log('╚═══════════════════════════════════════════════════════════════════════╝\n');
 
   try {
+    // Stage 0: Resolve system user for created_by
+    const systemUserId = await getSystemUserId();
+
     // Stage 1: Load documents
     const documents = await loadTestDocuments();
-    if (documents.size === 0) {
-      error('No documents loaded. Aborting.');
-      process.exit(1);
-    }
+    if (documents.size === 0) { fail('No documents loaded. Aborting.'); process.exit(1); }
 
     // Stage 2: Upload to storage
     const uploads = await uploadToStorage(documents);
-    if (uploads.size === 0) {
-      error('No documents uploaded. Aborting.');
-      process.exit(1);
-    }
+    if (uploads.size === 0) { fail('No documents uploaded. Aborting.'); process.exit(1); }
 
-    // Stage 3: Insert metadata
-    const documentIds = await insertDocumentMetadata(uploads);
-    if (documentIds.size === 0) {
-      error('No document records created. Aborting.');
-      process.exit(1);
-    }
+    // Stage 3: Create document records (caller's responsibility — NOT the ingestion service)
+    const documentIds = await insertDocumentMetadata(uploads, documents, systemUserId);
+    if (documentIds.size === 0) { fail('No document records created. Aborting.'); process.exit(1); }
 
-    // Stage 4: Run ingestion pipeline
+    // Stage 4: Run ingestion (chunks only — no document creation inside service)
     const ingestionResults = await runIngestionPipeline(documents, documentIds);
 
-    // Stage 5: Query chunks
+    // Stage 5: Verify chunks
     const chunkStats = await queryChunks();
 
-    // Stage 6: Perform semantic search
+    // Stage 6: Semantic search
     const searchResults = await performSemanticSearch();
 
-    // Stage 7: Generate report
+    // Summary
     generateSummaryReport(ingestionResults, chunkStats, searchResults);
-
-    console.log('');
   } catch (err) {
-    error('Test execution failed', err);
+    fail('Test execution failed', err);
     process.exit(1);
   }
 }
 
-// Execute
-main().catch(err => {
-  error('Uncaught error', err);
-  process.exit(1);
-});
+main().catch((err) => { fail('Uncaught error', err); process.exit(1); });
