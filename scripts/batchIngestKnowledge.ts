@@ -482,7 +482,7 @@ async function ingestDocument(
       const t = Date.now();
       documentId = await createDocument(filename, normalizedText, fileBuffer.length, result.docType);
       if (!documentId) {
-        throw new Error('Failed to create document record in Supabase');
+        throw new Error('Chunk ingestion failed: Unable to prepare document metadata');
       }
       ok('DB:Doc', `document created: ${documentId}  (${ms(t)})`);
 
