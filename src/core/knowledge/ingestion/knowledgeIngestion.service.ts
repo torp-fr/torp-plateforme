@@ -4,6 +4,7 @@
  * Prepares knowledge base for RAG (Phase 30)
  */
 
+import crypto from 'crypto';
 import { supabase } from '@/lib/supabase';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
 import { normalizeText } from './textNormalizer.service';
@@ -60,6 +61,17 @@ export interface IngestionResult {
   chunksCreated?: number;
   totalTokens?: number;
   errors?: string[];
+}
+
+/**
+ * Hash a chunk's content using SHA256
+ * Used for deduplication to prevent re-embedding identical chunks
+ */
+function hashChunk(text: string): string {
+  return crypto
+    .createHash('sha256')
+    .update(text)
+    .digest('hex');
 }
 
 
@@ -145,39 +157,81 @@ export async function ingestKnowledgeDocument(
 
     log('[KnowledgeIngestion] Using provided document ID:', documentId);
 
-    // Step 3: Create chunk records
-    const chunkRecords = chunks.map((chunk, index) => ({
-      document_id: documentId,
-      content: chunk.content,
-      chunk_index: index,
-      token_count: chunk.tokenCount,
-      metadata: chunk.metadata ?? {},
-    }));
+    // Step 3: Create chunk records with hash-based deduplication
+    const chunksToInsert = [];
+    let skippedDuplicates = 0;
+
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      const hash = hashChunk(chunk.content);
+
+      // Check if this chunk hash already exists in the database
+      const { data: existingChunk, error: hashCheckError } = await supabase
+        .from('knowledge_chunks')
+        .select('id')
+        .eq('chunk_hash', hash)
+        .maybeSingle();
+
+      if (hashCheckError) {
+        warn('[KnowledgeIngestion] Error checking chunk hash:', hashCheckError.message);
+        // Continue anyway - don't fail the entire ingestion on hash check error
+      }
+
+      if (existingChunk) {
+        // Chunk with this hash already exists - skip it
+        skippedDuplicates++;
+        log('[KnowledgeIngestion] Skipping duplicate chunk (hash exists):', hash.substring(0, 8));
+        continue;
+      }
+
+      // New chunk - add to insertion list with hash
+      chunksToInsert.push({
+        document_id: documentId,
+        content: chunk.content,
+        chunk_index: i,
+        token_count: chunk.tokenCount,
+        chunk_hash: hash,
+        metadata: chunk.metadata ?? {},
+      });
+    }
+
+    if (skippedDuplicates > 0) {
+      log('[KnowledgeIngestion] Skipped', skippedDuplicates, 'duplicate chunks based on hash');
+    }
 
     console.log("SUPABASE INSERT TABLE:", "knowledge_chunks");
-    console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(chunkRecords, null, 2));
+    console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(chunksToInsert, null, 2));
 
+    let insertedChunks: any;
     let chunkError: any;
 
-    try {
-      const result = await supabase
-        .from('knowledge_chunks')
-        .insert(chunkRecords);
-      chunkError = result.error;
+    if (chunksToInsert.length === 0) {
+      log('[KnowledgeIngestion] All chunks were duplicates - no new chunks to insert');
+      insertedChunks = [];
+    } else {
+      try {
+        const result = await supabase
+          .from('knowledge_chunks')
+          .insert(chunksToInsert)
+          .select('id');
+        chunkError = result.error;
+        insertedChunks = result.data;
+
+        if (chunkError) {
+          console.error("SUPABASE INSERT ERROR:", chunkError);
+        }
+      } catch (e) {
+        console.error("SUPABASE INSERT EXCEPTION:", e);
+        chunkError = e;
+      }
 
       if (chunkError) {
-        console.error("SUPABASE INSERT ERROR:", chunkError);
+        throw new Error(`Chunk ingestion failed: ${chunkError.message}`);
       }
-    } catch (e) {
-      console.error("SUPABASE INSERT EXCEPTION:", e);
-      chunkError = e;
     }
 
-    if (chunkError) {
-      throw new Error(`Failed to create chunks: ${chunkError.message}`);
-    }
-
-    log('[KnowledgeIngestion] Chunks inserted:', chunks.length);
+    const insertedCount = insertedChunks?.length || 0;
+    log('[KnowledgeIngestion] Chunks inserted:', insertedCount);
 
     // Step 4: Index chunks (for Phase 30 - RAG)
     const { indexChunks } = await import('./knowledgeIndex.service');
@@ -186,7 +240,7 @@ export async function ingestKnowledgeDocument(
     return {
       success: true,
       documentId: documentId,
-      chunksCreated: chunks.length,
+      chunksCreated: insertedCount,
       totalTokens: chunks.reduce((sum, c) => sum + c.tokenCount, 0),
     };
   } catch (error) {

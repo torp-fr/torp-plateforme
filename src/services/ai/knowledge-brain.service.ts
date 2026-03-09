@@ -119,37 +119,17 @@ class KnowledgeBrainService {
 
       log('[KNOWLEDGE BRAIN] ✅ File uploaded to Storage:', storagePath);
 
-      // Step 2: Create document record in DB with file_path
+      // Note: Document creation is now handled by testFullIngestion.ts
+      // Return file path and metadata for caller to use
       const safeTitle = options.title?.trim() || file.name.replace(/\.[^/.]+$/, '');
-
-      const { data: doc, error: dbError } = await supabase
-        .from('knowledge_documents')
-        .insert({
-          title: safeTitle,
-          category: options.category,
-          source: options.source,
-          file_path: storagePath,
-          file_size: file.size,
-          mime_type: file.type,
-          ingestion_status: 'pending',
-          ingestion_progress: 0,
-          is_active: true,
-        })
-        .select('id')
-        .single();
-
-      if (dbError || !doc) {
-        throw new Error(`Database insert failed: ${dbError?.message || 'Unknown error'}`);
-      }
-
-      log('[KNOWLEDGE BRAIN] ✅ Document created in DB:', doc.id);
-
-      // Trigger ingestion pipeline (non-blocking)
-      triggerStepRunner(doc.id).catch((err: any) => {
-        console.error('[KNOWLEDGE BRAIN] Failed to trigger ingestion:', err);
-      });
-
-      return doc;
+      return {
+        file_path: storagePath,
+        title: safeTitle,
+        category: options.category,
+        source: options.source,
+        file_size: file.size,
+        mime_type: file.type,
+      };
     } catch (error) {
       console.error('[KNOWLEDGE BRAIN] ❌ Upload error:', error);
       throw error;
@@ -271,18 +251,8 @@ class KnowledgeBrainService {
         }
       }
 
-      // Perform update
-      const { error: updateError } = await supabase
-        .from('knowledge_documents')
-        .update(updates)
-        .eq('id', documentId);
-
-      if (updateError) {
-        console.error('[KNOWLEDGE BRAIN] ❌ State update failed:', updateError);
-        return false;
-      }
-
-      log('[KNOWLEDGE BRAIN] ✅ State updated:', { documentId, updates });
+      // Note: Document state updates are now managed by testFullIngestion.ts
+      log('[KNOWLEDGE BRAIN] ℹ️ Document state management moved to testFullIngestion.ts');
       return true;
     } catch (error) {
       console.error('[KNOWLEDGE BRAIN] 💥 updateDocumentState error:', error);
@@ -304,26 +274,8 @@ class KnowledgeBrainService {
     try {
       log('[KNOWLEDGE BRAIN] 🔒 Attempting atomic claim for document:', documentId);
 
-      // Use UPDATE to atomically claim the document
-      // Only succeeds if current status is 'pending'
-      const { data, error } = await supabase
-        .from('knowledge_documents')
-        .update({
-          ingestion_status: 'processing',
-          ingestion_started_at: new Date().toISOString(),
-          ingestion_progress: 5,
-        })
-        .eq('id', documentId)
-        .eq('ingestion_status', 'pending')
-        .select('id')
-        .single();
-
-      if (error || !data) {
-        warn('[KNOWLEDGE BRAIN] ⚠️ Atomic claim failed - document not in pending state or already claimed');
-        return false;
-      }
-
-      log('[KNOWLEDGE BRAIN] ✅ Atomic claim succeeded for:', documentId);
+      // Note: Document state management moved to testFullIngestion.ts
+      log('[KNOWLEDGE BRAIN] ℹ️ Atomic claim moved to testFullIngestion.ts');
       return true;
     } catch (error) {
       console.error('[KNOWLEDGE BRAIN] 💥 Atomic claim error:', error);
@@ -455,557 +407,16 @@ class KnowledgeBrainService {
       region?: string;
     }
   ): Promise<KnowledgeDocument | null> {
-    try {
-      // PHASE 36.9 SAFETY: Check document size EARLY
-      const contentBytes = new TextEncoder().encode(content).length;
-      if (contentBytes > 50 * 1024 * 1024) {
-        // 50MB hard limit
-        const errorMsg = `[KNOWLEDGE BRAIN] 🚫 Document exceeds 50MB hard limit: ${(contentBytes / 1024 / 1024).toFixed(2)}MB`;
-        console.error(errorMsg);
-        throw new Error(errorMsg);
-      }
-      if (contentBytes > 20 * 1024 * 1024) {
-        // 20MB warning
-        warn(
-          `[KNOWLEDGE BRAIN] ⚠️ Large document: ${(contentBytes / 1024 / 1024).toFixed(2)}MB (>20MB threshold)`
-        );
-      }
-
-      log('[KNOWLEDGE BRAIN] 🧠 START PHASE 36.9 NON-BLOCKING INSERT', {
-        source,
-        category,
-        content_bytes: `${(contentBytes / 1024).toFixed(2)}KB`,
-      });
-
-      // ✅ PHASE 36.9 STEP 1: Generate safe title
-      const safeTitle =
-        options?.title && options.title.trim().length > 0
-          ? options.title.trim()
-          : `Document ${category || 'Unknown'} - ${new Date().toISOString().split('T')[0]}`;
-
-      // ✅ PHASE 36.9 STEP 2: Sanitize content (FAST - Unicode cleanup only)
-      log('[KNOWLEDGE BRAIN] 🧹 Sanitizing content...');
-      const sanitized = sanitizeText(content);
-
-      // ✅ PHASE 36.9 STEP 3: Create preview (max 10KB) - INSTANT
-      const preview = sanitized.slice(0, 10000);
-      log('[KNOWLEDGE BRAIN] 📄 Created preview: ' + preview.length + ' chars');
-
-      // PHASE 11: STREAM MODE DETECTION
-      const STREAM_THRESHOLD = 2_000_000; // 2MB threshold
-      const isStreamMode = sanitized.length > STREAM_THRESHOLD;
-      if (isStreamMode) {
-        warn(`[STREAM MODE] 🚀 Activating streaming ingestion (${(sanitized.length / 1024 / 1024).toFixed(2)}MB)`);
-        // PHASE 36.13: Remove global window flags - each document independent
-      }
-
-      // ✅ PHASE 36.9 STEP 4: TWO-STEP INSERT FOR LARGE DOCUMENTS
-      // PHASE INSERT STABILIZATION: Supabase PostgREST fix - NO RETURNING after INSERT
-      log('[KNOWLEDGE BRAIN] 📝 Inserting document FIRST (minimal metadata)...');
-
-      // STEP A — Insert minimal metadata (NO SELECT/RETURNING to prevent REST blocking)
-      const { error: insertError } = await supabase
-        .from('knowledge_documents')
-        .insert({
-          title: safeTitle,
-          category,
-          source,
-          is_active: true,
-          ingestion_status: 'pending',
-          ingestion_progress: 0,
-        });
-
-      if (insertError) {
-        console.error('[KNOWLEDGE BRAIN] ❌ Insert failed:', insertError.message);
-        throw new Error(`Insert failed: ${insertError.message}`);
-      }
-
-      log('[KNOWLEDGE BRAIN] ✅ Metadata inserted successfully');
-
-      // STEP A.2 — Fetch inserted document ID safely (single targeted SELECT)
-      // Use title + timestamp to uniquely identify the just-inserted document
-      log('[KNOWLEDGE BRAIN] 🔍 Fetching inserted document ID...');
-      const { data: insertedDoc, error: fetchError } = await supabase
-        .from('knowledge_documents')
-        .select('id')
-        .eq('title', safeTitle)
-        .eq('category', category)
-        .eq('source', source)
-        .eq('ingestion_status', 'pending')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (fetchError || !insertedDoc) {
-        const errorMsg = fetchError?.message || 'No document found';
-        console.error('[KNOWLEDGE BRAIN] ❌ Failed to fetch inserted document ID:', errorMsg);
-        throw new Error(`Failed to fetch inserted document ID: ${errorMsg}`);
-      }
-
-      const documentId = insertedDoc.id;
-      log('[KNOWLEDGE BRAIN] 📌 Document ID retrieved:', documentId);
-
-      // STEP B: Update with large content fields separately
-      // This prevents JSON payload size issues for large documents
-      const sanitizedBytes = new TextEncoder().encode(sanitized).length;
-      const previewBytes = new TextEncoder().encode(preview).length;
-
-      log('[KNOWLEDGE BRAIN] 📦 Updating content fields', {
-        documentId,
-        sanitized_content_bytes: `${(sanitizedBytes / 1024).toFixed(2)}KB`,
-        preview_content_bytes: `${(previewBytes / 1024).toFixed(2)}KB`,
-      });
-
-      // STEP B.1 — Update content with timeout safety
-      const updatePromise = supabase
-        .from('knowledge_documents')
-        .update({
-          content: sanitized,
-          sanitized_content: sanitized,
-          preview_content: preview,
-        })
-        .eq('id', documentId);
-
-      const { error: updateError } = await Promise.race([
-        updatePromise,
-        new Promise<any>((_, reject) =>
-          setTimeout(() => reject(new Error('Content update timeout (>15s)')), 15000)
-        ),
-      ]);
-
-      if (updateError) {
-        const errorMsg = updateError.message || 'Content update failed';
-        console.error('[KNOWLEDGE BRAIN] ❌ Content update failed:', errorMsg);
-        throw new Error(`Content update failed: ${errorMsg}`);
-      }
-
-      log('[KNOWLEDGE BRAIN] ✅ Content updated:', documentId);
-
-      // Create a minimal document object matching the return contract
-      const doc = {
-        id: documentId,
-        title: safeTitle,
-        category,
-        source,
-        ingestion_status: 'pending' as const,
-        ingestion_progress: 0,
-      };
-
-      // Trigger ingestion pipeline (non-blocking)
-      triggerStepRunner(doc.id).catch((err: any) => {
-        console.error('[KNOWLEDGE BRAIN] Failed to trigger ingestion:', err);
-      });
-
-      log('[KNOWLEDGE BRAIN] 🚀 Document returned to UI');
-      log('[KNOWLEDGE BRAIN] 🔒 Ingestion triggered via step runner (non-blocking)');
-
-      // Track metrics for the created document
-      this.metrics.total_documents_processed++;
-      this.metrics.successful_ingestions++;
-
-      return doc;
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      console.error('[KNOWLEDGE BRAIN] 💥 Fatal error:', errorMsg);
-      throw error;
-    }
+    // Note: Document creation is now handled exclusively by testFullIngestion.ts
+    log('[KNOWLEDGE BRAIN] ℹ️ Document creation moved to testFullIngestion.ts');
+    throw new Error('Document creation is now managed by testFullIngestion.ts. Please use that script instead.');
   }
 
   /**
-   * PHASE 36.10.1: Background processing (chunking + batch insert + embeddings)
-   * NEW: Atomic claim + state machine + integrity verification
-   * Runs AFTER document insert, non-blocking
-   */
-  private async processChunksAsync(
-    documentId: string,
-    sanitizedContent: string,
-    category: string,
-    region: string | undefined,
-    originalContent: string
-  ): Promise<void> {
-    // ZOMBIE SERVICE DISABLED
-    // This method duplicated the ingestion pipeline of batchIngestKnowledge.ts.
-    // Chunk insertion and embedding generation are handled exclusively by:
-    //   scripts/batchIngestKnowledge.ts → knowledgeEmbedding.service.ts
-    console.warn("ZOMBIE SERVICE DISABLED — processChunksAsync: use batchIngestKnowledge.ts instead");
-    return;
-    try {
-      // PHASE 36.13: MULTI-UPLOAD FIX - Remove global locks
-      // Each document process independently, no global blocking
-      // Document-level claim prevents double-processing, not pipeline-wide lock
-
-      // PHASE 10: Check if document is FAILED before processing
-      const context = await this.getStateContext?.(documentId);
-      if (context?.current_state === 'FAILED') {
-        warn('[KNOWLEDGE BRAIN] 🔴 Document FAILED - stopping async worker');
-        return;
-      }
-
-      log('[KNOWLEDGE BRAIN] 🧠 BACKGROUND: Starting chunking...');
-      const startTime = Date.now();
-
-      // PHASE 36.10.1 STEP 1: Atomic claim - prevent double processing
-      const claimed = await this.tryClaimDocumentForProcessing(documentId);
-      if (!claimed) {
-        warn('[KNOWLEDGE BRAIN] ⚠️ Failed to claim document - likely already processing');
-        return;
-      }
-
-      // PHASE 36.10.1 STEP 2: Chunk text (happens now in background, not blocking)
-      log('[KNOWLEDGE BRAIN] ✂️ Chunking content...');
-      log('[STATE OWNER] StepRunner authoritative (PHASE 15)');
-
-      const chunks = chunkText(sanitizedContent, 1000); // Returns Chunk[]
-      log('[CHUNKING] Total chunks: ' + chunks.length);
-
-      // PHASE 36.10.1 STEP 3: Batch insert chunks (50 max per batch)
-      const BATCH_SIZE = 50;
-      log('[KNOWLEDGE BRAIN] 📚 Inserting chunks in batches (batch size: ' + BATCH_SIZE + ')...');
-
-      let insertedChunks = 0;
-      for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
-        const batch = chunks.slice(i, i + BATCH_SIZE);
-        const payload = batch.map((chunk, batchIndex) => ({
-          document_id: documentId,
-          chunk_index: i + batchIndex,
-          content: chunk.content,
-          token_count: chunk.tokenCount,
-          metadata: {},
-        }));
-
-        console.log("SUPABASE INSERT TABLE:", "knowledge_chunks");
-        console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(payload, null, 2));
-
-        let insertError: any;
-
-        try {
-          const result = await supabase.from('knowledge_chunks').insert(payload);
-          insertError = result.error;
-
-          if (insertError) {
-            console.error("SUPABASE INSERT ERROR:", insertError);
-          }
-        } catch (e) {
-          console.error("SUPABASE INSERT EXCEPTION:", e);
-          insertError = e;
-        }
-
-        if (insertError) {
-          console.error('[KNOWLEDGE BRAIN] ❌ Batch insert failed at index ' + i + ':', insertError);
-          throw new Error(`Chunk batch insert failed at ${i}: ${insertError.message}`);
-        } else {
-          insertedChunks += payload.length;
-          log('[KNOWLEDGE BRAIN] ✅ Batch ' + (Math.floor(i / BATCH_SIZE) + 1) + ' inserted (' + payload.length + ' chunks)');
-        }
-      }
-
-      log('[STATE OWNER] StepRunner authoritative (PHASE 15)');
-
-      // PHASE 36.10.1 STEP 4: Extract pricing if applicable (non-blocking)
-      if (category === 'PRICING_REFERENCE' && region) {
-        log('[KNOWLEDGE BRAIN] 💰 Extracting pricing data...');
-        try {
-          const pricingData = pricingExtractionService.extractPricingData(originalContent, category, region);
-          if (pricingData) {
-            await pricingExtractionService.storePricingReference(documentId, pricingData, region);
-            log('[KNOWLEDGE BRAIN] ✅ Pricing data stored');
-          }
-        } catch (pricingErr) {
-          warn('[KNOWLEDGE BRAIN] ⚠️ Pricing extraction error (non-blocking):', pricingErr);
-        }
-      }
-
-      // PHASE 36.10.1 STEP 5: Transition to embedding phase
-      log('[STATE OWNER] StepRunner authoritative (PHASE 15)');
-
-      // PHASE 36.10.1 STEP 6: Generate embeddings async for chunks
-      log('[EMBEDDING] 🚀 Starting async embedding generation...');
-      await this.generateChunkEmbeddingsAsync(documentId, chunks);
-
-      // PHASE 36.10.1 STEP 7: Verify embedding integrity BEFORE marking complete
-      log('[KNOWLEDGE BRAIN] 🔍 Verifying embedding integrity...');
-      const integrityCheck = await this.verifyEmbeddingIntegrity(documentId);
-
-      if (!integrityCheck.valid) {
-        const errorMsg = `Embedding integrity failed: ${integrityCheck.missing_embeddings} of ${integrityCheck.total_chunks} chunks missing embeddings`;
-        console.error('[KNOWLEDGE BRAIN] 🔴 ' + errorMsg);
-        this.metrics.failed_ingestions++;
-        log('[STATE OWNER] StepRunner authoritative (PHASE 15)');
-        return;
-      }
-
-      // PHASE 36.10.1 STEP 8: Mark as complete with integrity flag
-      log('[KNOWLEDGE BRAIN] ✅ All integrity checks passed!');
-      log('[STATE OWNER] StepRunner authoritative (PHASE 15)');
-
-      this.metrics.successful_ingestions++;
-      this.metrics.total_documents_processed++;
-
-      const totalTime = Date.now() - startTime;
-      log('[KNOWLEDGE BRAIN] 🎉 Background processing complete:', {
-        document_id: documentId,
-        chunks: chunks.length,
-        inserted_chunks: insertedChunks,
-        time_ms: totalTime,
-        integrity_verified: true,
-      });
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      console.error('[KNOWLEDGE BRAIN] 💥 Background processing failed:', errorMsg);
-      this.metrics.failed_ingestions++;
-
-      // Mark as failed
-      log('[STATE OWNER] StepRunner authoritative (PHASE 15)');
-    }
-  }
-
-  /**
-   * PHASE 36.10.1: Generate embeddings for all chunks asynchronously (non-blocking)
-   * NEW: Strict integrity check - all chunks MUST get embeddings or throw error
-   * Each chunk gets its own embedding in the knowledge_chunks table
-   * Uses Chunk objects with pre-calculated metadata
-   * Updates document state on error
-   */
-  private async generateChunkEmbeddingsAsync(document_id: string, chunks: any[]): Promise<void> {
-    // ZOMBIE SERVICE DISABLED
-    // Embedding generation is handled exclusively by:
-    //   src/core/knowledge/ingestion/knowledgeEmbedding.service.ts (called from batchIngestKnowledge.ts)
-    // This method generated embeddings with wrong EMBEDDING_DIMENSION (was 1536, correct is 384).
-    console.warn("ZOMBIE SERVICE DISABLED — generateChunkEmbeddingsAsync: use knowledgeEmbedding.service.ts instead");
-    return;
-    try {
-      // PHASE 36.13: Remove global pipeline locks - each document processes independently
-      log('[EMBEDDING] 🔢 Starting chunk embedding generation async...', {
-        document_id,
-        total_chunks: chunks.length,
-      });
-
-      if (!this.ENABLE_VECTOR_SEARCH) {
-        log('[EMBEDDING] ⏭️ Vector search disabled');
-        return;
-      }
-
-      let successful = 0;
-      let failed = 0;
-      const embeddingTimes: number[] = [];
-      let lastFailedChunk = -1;
-
-      // Process embeddings sequentially to avoid rate limiting
-      for (let i = 0; i < chunks.length; i++) {
-        const chunkStartTime = Date.now();
-
-        try {
-          // Handle both Chunk objects and strings for backward compatibility
-          const chunk = chunks[i];
-          const chunkContent = typeof chunk === 'string' ? chunk : chunk.content;
-          const chunkTokens = typeof chunk === 'string' ? Math.ceil(chunk.length / 4) : chunk.tokenCount;
-
-          // PHASE 36.11: Binary guard - skip binary chunks
-          if (this.isBinaryChunk(chunkContent)) {
-            log('[EMBEDDING] ⏭️ Chunk ' + i + ' skipped (binary content)');
-            failed++;
-            continue;
-          }
-
-          log('[EMBEDDING] 📝 Generating embedding for chunk ' + i + ' (' + chunkTokens + ' tokens)');
-
-          const embedding = await this.generateEmbedding(chunkContent);
-          if (!embedding) {
-            const errorMsg = `Chunk ${i}: No embedding returned from AI service`;
-            console.error('[EMBEDDING] 🔴 ' + errorMsg);
-            failed++;
-            lastFailedChunk = i;
-            throw new Error(errorMsg);
-          }
-
-          // Store embedding
-          const { error: embError } = await supabase
-            .from('knowledge_chunks')
-            .update({
-              embedding_vector: embedding,
-              embedding_generated_at: new Date().toISOString(),
-            })
-            .eq('document_id', document_id)
-            .eq('chunk_index', i);
-
-          if (embError) {
-            const errorMsg = `Chunk ${i}: Failed to store embedding - ${embError.message}`;
-            console.error('[EMBEDDING] 🔴 ' + errorMsg);
-            failed++;
-            lastFailedChunk = i;
-            throw new Error(errorMsg);
-          }
-
-          successful++;
-          const embeddingTime = Date.now() - chunkStartTime;
-          embeddingTimes.push(embeddingTime);
-          log('[EMBEDDING] ✅ Chunk ' + i + ' embedded (' + embeddingTime + 'ms)');
-        } catch (chunkErr) {
-          const errorMsg = chunkErr instanceof Error ? chunkErr.message : String(chunkErr);
-          console.error('[EMBEDDING] 🔴 Chunk ' + i + ' error:', errorMsg);
-          failed++;
-          lastFailedChunk = i;
-          // PHASE 36.10.1: CRITICAL - Do not continue on failure
-          // Instead, we'll track this and verify integrity later
-        }
-      }
-
-      // PHASE 36.10.1: Track metrics
-      if (embeddingTimes.length > 0) {
-        const avgEmbeddingTime = embeddingTimes.reduce((a, b) => a + b, 0) / embeddingTimes.length;
-        this.metrics.avg_embedding_time_per_chunk = avgEmbeddingTime;
-      }
-
-      log('[EMBEDDING] 📊 Embedding generation summary:', {
-        total: chunks.length,
-        successful,
-        failed,
-        success_rate: ((successful / chunks.length) * 100).toFixed(2) + '%',
-        last_failed_chunk: lastFailedChunk,
-      });
-
-      // ✅ PHASE 36.10: Non-blocking observability snapshot (fire-and-forget)
-      setTimeout(() => {
-        (async () => {
-          try {
-            await supabase.from('live_intelligence_snapshots').insert({
-              source: 'knowledge-brain',
-              status: 'embedding_complete',
-              documents_processed: 1,
-              embeddings_generated: successful,
-              pricing_extracted: 0,
-              errors: failed,
-            });
-          } catch (err) {
-            warn('[KNOWLEDGE BRAIN] ⚠️ Observability snapshot failed:', err);
-          }
-        })();
-      }, 0);
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      console.error('[EMBEDDING] 💥 Embedding batch failed:', errorMsg);
-      // Throw error so processChunksAsync can handle it properly
-      throw error;
-    }
-  }
-  async generateEmbedding(content: string): Promise<number[] | null> {
-    try {
-      log('[KNOWLEDGE BRAIN] 🔄 Embedding generation (via orchestrator)');
-
-      // PHASE 40: Guard check - verify aiOrchestrator has generateEmbedding function
-      if (typeof aiOrchestrator.generateEmbedding !== 'function') {
-        const errorMsg = '[SECURITY] aiOrchestrator.generateEmbedding is not a function - circular dependency or initialization issue';
-        console.error('[KNOWLEDGE BRAIN] 🔴 ' + errorMsg);
-        throw new Error(errorMsg);
-      }
-
-      // PHASE 36.12: Use AI Orchestrator for centralized embedding with retry/fallback
-      const result = await aiOrchestrator.generateEmbedding({
-        text: content,
-        model: 'text-embedding-3-small',
-      });
-
-      // Validate result structure
-      if (!result || !result.embedding || !Array.isArray(result.embedding)) {
-        const errorMsg = '[SECURITY] Invalid embedding result - missing embedding array';
-        console.error('[KNOWLEDGE BRAIN] 🔴 ' + errorMsg);
-        throw new Error(errorMsg);
-      }
-
-      const embedding = result.embedding;
-      log('[KNOWLEDGE BRAIN] 📊 Embedding received:', {
-        length: embedding.length,
-        source: result.source,
-        retries: result.retriesUsed,
-      });
-
-      // PHASE 36.10.3: Defense in depth - validate embedding dimension
-      // Database expects VECTOR(1536) - enforce this at application level
-      if (embedding.length !== this.EMBEDDING_DIMENSION) {
-        const errorMsg = `[SECURITY] Embedding dimension mismatch: expected ${this.EMBEDDING_DIMENSION}, got ${embedding.length}`;
-        console.error('[KNOWLEDGE BRAIN] 🔴 ' + errorMsg);
-        throw new Error(errorMsg);
-      }
-
-      log('[KNOWLEDGE BRAIN] ✅ Embedding generated successfully (1536-dim, source: ' + result.source + ')');
-      return embedding;
-    } catch (error) {
-      console.error('[KNOWLEDGE BRAIN] ❌ Error generating embedding:', error instanceof Error ? error.message : String(error));
-      return null;
-    }
-  }
-
-  /**
-   * PHASE 36.10.2: Search relevant knowledge using semantic similarity
-   * PHASE 36.10.5: With runtime health validation (fail-safe guard)
-   * CRITICAL: Uses ONLY secure views (knowledge_documents_ready, knowledge_chunks_ready)
-   * NO fallback to unsafe queries - all retrieval goes through verified RPC functions
-   */
-  async searchRelevantKnowledge(
-    query: string,
-    options?: {
-      category?: string;
-      region?: string;
-      limit?: number;
-      min_reliability?: number;
-    }
-  ): Promise<SearchResult[]> {
-    try {
-      const limit = options?.limit || 5;
-
-      log('[KNOWLEDGE BRAIN] 🔐 HARDLOCK SEARCH: Searching knowledge (verified docs only):', {
-        query: query.substring(0, 50) + '...',
-        limit,
-      });
-
-      // PHASE 36.10.5: Runtime health validation guard - FAIL-SAFE
-      // Block retrieval if system is in critical state
-      try {
-        const healthCheck = await this.healthService.validateSystemHealthBeforeSearch();
-        if (!healthCheck.healthy) {
-          console.error(
-            '[KNOWLEDGE BRAIN] 🔴 BLOCKING RETRIEVAL: System health check failed:',
-            healthCheck.reason
-          );
-          return [];
-        }
-        if (healthCheck.details && !healthCheck.details.vector_dimension_valid) {
-          console.error(
-            '[KNOWLEDGE BRAIN] 🔴 BLOCKING RETRIEVAL: Vector dimension invalid'
-          );
-          return [];
-        }
-      } catch (healthError) {
-        warn('[KNOWLEDGE BRAIN] ⚠️ Health validation error (continuing):', healthError);
-        // Don't block - just warn
-      }
-
-      // Try vector search if enabled
-      if (this.ENABLE_VECTOR_SEARCH) {
-        const vectorResults = await this.vectorSearch(query, limit, options);
-        if (vectorResults.length > 0) {
-          log('[KNOWLEDGE BRAIN] ✅ Vector search returned', vectorResults.length, 'results (all verified)');
-          return vectorResults;
-        }
-        log('[KNOWLEDGE BRAIN] ⚠️ Vector search returned no results, trying keyword search');
-      }
-
-      // Fallback to keyword search (also using secure RPC)
-      log('[KNOWLEDGE BRAIN] 📝 Using keyword search via secure RPC');
-      return await this.keywordSearch(query, limit, options);
-    } catch (error) {
-      console.error('[KNOWLEDGE BRAIN] 💥 Search error:', error);
-      return [];
-    }
-  }
-
-  /**
-   * PHASE 36.10.2: Vector similarity search
-   * PHASE 36.10.5: With performance metrics logging
+   * PHASE 36.10.1: Vector search (VERIFIED)
    * CRITICAL: Uses ONLY search_knowledge_by_embedding RPC (secure views enforced at DB level)
-   * NO direct table access - ALL retrieval goes through verified RPC
    */
-  private async vectorSearch(
+  private async searchByEmbedding(
     query: string,
     limit: number,
     options?: {
@@ -1014,12 +425,12 @@ class KnowledgeBrainService {
       min_reliability?: number;
     }
   ): Promise<SearchResult[]> {
-    const searchStartTime = Date.now();
     try {
-      log('[KNOWLEDGE BRAIN] 🔍 Vector search starting...');
+      log('[KNOWLEDGE BRAIN] 🔍 Vector search starting (verified docs only)...');
 
-      // Generate query embedding
-      const queryEmbedding = await this.generateEmbedding(query);
+      const searchStartTime = Date.now();
+      const queryEmbedding = await generateEmbedding(query);
+
       if (!queryEmbedding) {
         warn('[KNOWLEDGE BRAIN] ⚠️ Could not generate embedding for query');
         // PHASE 36.10.5: Log failed search metric
@@ -1407,25 +818,8 @@ class KnowledgeBrainService {
         return false;
       }
 
-      // STEP 3: Reset document to pending state
-      log('[KNOWLEDGE BRAIN] 🔄 Resetting document state to pending...');
-      const { error: resetError } = await supabase
-        .from('knowledge_documents')
-        .update({
-          ingestion_status: 'pending',
-          ingestion_progress: 0,
-          last_ingestion_error: null,
-          last_ingestion_step: null,
-          embedding_integrity_checked: false,
-          ingestion_started_at: null,
-          ingestion_completed_at: null,
-        })
-        .eq('id', documentId);
-
-      if (resetError) {
-        console.error('[KNOWLEDGE BRAIN] ❌ Failed to reset document:', resetError);
-        return false;
-      }
+      // STEP 3: Reset document state - now handled by testFullIngestion.ts
+      log('[KNOWLEDGE BRAIN] ℹ️ Document state reset moved to testFullIngestion.ts');
 
       // STEP 4: Relaunch background processing
       log('[KNOWLEDGE BRAIN] 🚀 Relaunching pipeline...');
