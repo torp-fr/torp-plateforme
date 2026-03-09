@@ -196,7 +196,7 @@ async function insertDocumentMetadata(
           {
             title: testDoc.title,
             category: testDoc.category,
-            source: 'test-ingestion',
+            source: 'internal',
             version: '1.0',
             file_size: 0,
             created_by: userId,
@@ -256,7 +256,7 @@ async function runIngestionPipeline(
       const result = await ingestKnowledgeDocument(buffer, testDoc.name, {
         title: testDoc.title,
         category: testDoc.category,
-        source: 'test-ingestion',
+        source: 'internal',
         version: '1.0',
       }, userId);
 
