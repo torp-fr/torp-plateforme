@@ -333,36 +333,19 @@ function createEmptyReport(documentId: string): DocumentIntegrityReport {
 
 /**
  * Persist integrity report to database
- * Updates knowledge_documents table with integrity metadata
+ * NOOP: Document updates are not allowed in ingestion services
+ * Only test scripts may modify knowledge_documents
  */
 export async function persistIntegrityReport(
   documentId: string,
   report: DocumentIntegrityReport
 ): Promise<boolean> {
-  try {
-    log('[KnowledgeIntegrity] Persisting integrity report for document:', documentId);
-
-    const { error } = await supabase
-      .from('knowledge_documents')
-      .update({
-        integrity_score: report.integrityScore,
-        is_publishable: report.isPublishable,
-        integrity_report: report, // Store full report as JSON
-      })
-      .eq('id', documentId);
-
-    if (error) {
-      console.error('[KnowledgeIntegrity] Failed to persist report:', error);
-      return false;
-    }
-
-    log('[KnowledgeIntegrity] Integrity report persisted successfully');
-    return true;
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[KnowledgeIntegrity] Persist failed:', errorMsg);
-    return false;
-  }
+  // ARCHITECTURE RULE: Ingestion services must not write to knowledge_documents
+  // Integrity reports are generated for analysis only, not persisted
+  log('[KnowledgeIntegrity] NOOP: Report persistence skipped (not allowed in ingestion pipeline)');
+  log('[KnowledgeIntegrity] Integrity score:', report.integrityScore);
+  log('[KnowledgeIntegrity] Publishable:', report.isPublishable);
+  return true;
 }
 
 /**
