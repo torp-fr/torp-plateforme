@@ -314,6 +314,16 @@ async function processEmbeddingsInBatches(documentId: string, chunks: Chunk[]) {
       continue;
     }
 
+    // Defensive guard: created_by must NEVER appear in a chunk row.
+    for (const row of records) {
+      if ('created_by' in row) {
+        throw new Error(
+          `Invalid chunk payload: created_by must not be present in knowledge_chunks. ` +
+          `Document ID: ${documentId}, batch: ${batchLabel}`
+        );
+      }
+    }
+
     // Insert in sub-batches of INSERT_BATCH_SIZE
     for (let j = 0; j < records.length; j += INSERT_BATCH_SIZE) {
       const insertSlice = records.slice(j, j + INSERT_BATCH_SIZE);
@@ -332,7 +342,7 @@ async function processEmbeddingsInBatches(documentId: string, chunks: Chunk[]) {
           console.error('[EMBEDDING] Error message:', insertError.message);
           console.error('[EMBEDDING] Error code:', (insertError as any).code);
           console.error('[EMBEDDING] Error details:', JSON.stringify(insertError, null, 2));
-          console.error('[EMBEDDING] Document ID:', doc.id);
+          console.error('[EMBEDDING] Document ID:', documentId);
           console.error('[EMBEDDING] Batch label:', batchLabel);
           console.error('[EMBEDDING] Chunks in batch:', insertSlice.length);
           console.error('[EMBEDDING] First chunk:', JSON.stringify(insertSlice[0], null, 2));
@@ -343,7 +353,7 @@ async function processEmbeddingsInBatches(documentId: string, chunks: Chunk[]) {
         console.error('[EMBEDDING] Exception type:', e?.constructor?.name);
         console.error('[EMBEDDING] Stack trace:', e instanceof Error ? e.stack : 'N/A');
         console.error('[EMBEDDING] Full exception:', e);
-        console.error('[EMBEDDING] Document ID:', doc.id);
+        console.error('[EMBEDDING] Document ID:', documentId);
         insertError = e;
       }
 

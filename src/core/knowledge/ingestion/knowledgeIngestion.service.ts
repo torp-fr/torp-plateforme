@@ -156,11 +156,24 @@ export async function ingestKnowledgeDocument({
   // ── STEP 4 (CRITICAL): Insert chunks ────────────────────────────────────────
   const chunkRecords = chunks.map((chunk, index) => ({
     document_id: documentId,
-    content: chunk.content,
+    content:     chunk.content,
     chunk_index: index,
     token_count: chunk.tokenCount,
-    metadata: chunk.metadata ?? {},
+    metadata:    chunk.metadata ?? {},
   }));
+
+  // Defensive guard: created_by must NEVER appear in a chunk row.
+  // knowledge_chunks has no created_by column; if it slips in (e.g. via a
+  // spread of a document object), Supabase will reject the insert with an FK
+  // violation on knowledge_documents.fk_created_by.
+  for (const row of chunkRecords) {
+    if ('created_by' in row) {
+      throw new Error(
+        `Invalid chunk payload: created_by must not be present in knowledge_chunks. ` +
+        `Document ID: ${documentId}`
+      );
+    }
+  }
 
   let insertedCount = 0;
   try {
