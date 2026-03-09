@@ -59,8 +59,6 @@ export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): P
     }
 
     for (let i = 0; i < embeddings.length; i++) {
-      console.log("Embedding generated length:", embeddings[i]?.length);
-
       const { error } = await supabase
         .from("knowledge_chunks")
         .update({ embedding_vector: embeddings[i] })
@@ -69,7 +67,7 @@ export async function indexChunks(documentId: string, chunks: ChunkerChunk[]): P
         .is("embedding_vector", null);
 
       if (error) {
-        console.error("Embedding write failed:", error);
+        error(`[KnowledgeIndex] Failed to write embedding for chunk ${i}: ${error.message}`);
       }
     }
 
