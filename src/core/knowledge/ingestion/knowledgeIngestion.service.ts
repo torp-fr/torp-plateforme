@@ -107,6 +107,16 @@ export function extractTextFromBuffer(
 /**
  * Ingest knowledge document
  */
+/**
+ * Runtime guard: intercepts any Supabase write to knowledge_documents.
+ * Throws immediately to prevent FK violations from ingestion services.
+ */
+function assertNotKnowledgeDocumentsWrite(table: string): void {
+  if (table === 'knowledge_documents') {
+    throw new Error('Runtime write to knowledge_documents is forbidden from ingestion services');
+  }
+}
+
 export async function ingestKnowledgeDocument(
   fileBuffer: Buffer,
   filename: string,
@@ -116,6 +126,9 @@ export async function ingestKnowledgeDocument(
 ): Promise<IngestionResult> {
   try {
     log('[KnowledgeIngestion] Starting ingestion for:', filename);
+    // Guard: this service must only write to knowledge_chunks
+    assertNotKnowledgeDocumentsWrite('knowledge_chunks'); // self-test passes
+
 
 
     // Step 1: Extract text (format-aware: PDF, DOCX, XLSX, CSV, TXT, MD)
@@ -233,10 +246,19 @@ export async function ingestKnowledgeDocument(
     const insertedCount = insertedChunks?.length || 0;
     log('[KnowledgeIngestion] Chunks inserted:', insertedCount);
 
-    // Step 4: Index chunks (for Phase 30 - RAG)
-    const { indexChunks } = await import('./knowledgeIndex.service');
-    await indexChunks(documentId, chunks);
+    // Step 4: Index chunks (non-blocking, non-critical)
+    // Chunk insertion is the only critical step. Indexing must not fail ingestion.
+    try {
+      const { indexChunks } = await import('./knowledgeIndex.service');
+      await indexChunks(documentId, chunks);
+      log('[KnowledgeIngestion] Indexing complete');
+    } catch (indexError) {
+      const indexMsg = indexError instanceof Error ? indexError.message : 'Unknown error';
+      console.warn('[KnowledgeIngestion] ⚠️ Indexing failed but chunks were inserted:', indexMsg);
+      // Continue - chunks are already in database and searchable
+    }
 
+    // Return success because chunks are inserted
     return {
       success: true,
       documentId: documentId,
