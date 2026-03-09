@@ -145,7 +145,7 @@ export async function ingestKnowledgeDocument(
       source: metadata.source ?? 'ingestion',
       version: metadata.version || '1.0',
       file_size: fileBuffer.length,
-      created_by: userId,
+      created_by: null,
     };
 
     console.log("SUPABASE INSERT TABLE:", "knowledge_documents");
