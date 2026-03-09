@@ -673,11 +673,26 @@ class KnowledgeBrainService {
           metadata: {},
         }));
 
-        const { error } = await supabase.from('knowledge_chunks').insert(payload);
+        console.log("SUPABASE INSERT TABLE:", "knowledge_chunks");
+        console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(payload, null, 2));
 
-        if (error) {
-          console.error('[KNOWLEDGE BRAIN] ❌ Batch insert failed at index ' + i + ':', error);
-          throw new Error(`Chunk batch insert failed at ${i}: ${error.message}`);
+        let insertError: any;
+
+        try {
+          const result = await supabase.from('knowledge_chunks').insert(payload);
+          insertError = result.error;
+
+          if (insertError) {
+            console.error("SUPABASE INSERT ERROR:", insertError);
+          }
+        } catch (e) {
+          console.error("SUPABASE INSERT EXCEPTION:", e);
+          insertError = e;
+        }
+
+        if (insertError) {
+          console.error('[KNOWLEDGE BRAIN] ❌ Batch insert failed at index ' + i + ':', insertError);
+          throw new Error(`Chunk batch insert failed at ${i}: ${insertError.message}`);
         } else {
           insertedChunks += payload.length;
           log('[KNOWLEDGE BRAIN] ✅ Batch ' + (Math.floor(i / BATCH_SIZE) + 1) + ' inserted (' + payload.length + ' chunks)');

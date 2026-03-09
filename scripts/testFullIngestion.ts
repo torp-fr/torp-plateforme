@@ -15,6 +15,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
@@ -183,36 +184,64 @@ async function insertDocumentMetadata(
   divider('INSERT DOCUMENT METADATA');
 
   const documentIds = new Map<string, string>();
-  const userId = 'test-user-' + Date.now();
 
   for (const testDoc of TEST_DOCUMENTS) {
     if (!uploads.has(testDoc.name)) continue;
 
     try {
-      const { data, error: insertError } = await supabase
-        .from('knowledge_documents')
-        .insert([
-          {
-            title: testDoc.title,
-            category: testDoc.category,
-            source: 'test-ingestion',
-            version: '1.0',
-            file_size: 0,
-            created_by: userId,
-          },
-        ])
-        .select('id')
-        .single();
+      const insertPayload = {
+        title: testDoc.title,
+        category: 'GUIDELINE',
+        source: 'ingestion'.trim().toLowerCase(),
+        version: '1.0',
+        file_size: 0,
+        created_by: null,
+      };
 
-      if (insertError || !data) {
+      // ===== DETAILED DEBUG LOGS =====
+      console.log("SOURCE VALUE:", insertPayload.source);
+      console.log("SOURCE TYPE:", typeof insertPayload.source);
+      console.log("SOURCE LENGTH:", insertPayload.source.length);
+      console.log("INSERT PAYLOAD:", JSON.stringify(insertPayload, null, 2));
+      // ================================
+
+      console.log("SUPABASE INSERT TABLE:", "knowledge_documents");
+      console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(insertPayload, null, 2));
+
+      let data: any;
+      let insertError: any;
+
+      try {
+        const result = await supabase
+          .from('knowledge_documents')
+          .insert([insertPayload])
+          .select('id')
+          .single();
+        data = result.data;
+        insertError = result.error;
+
+        if (insertError) {
+          console.error("SUPABASE INSERT ERROR:", insertError);
+        }
+      } catch (e) {
+        console.error("SUPABASE INSERT EXCEPTION:", e);
+        insertError = e;
+      }
+
+      if (insertError) {
         error(`Insert failed: ${testDoc.name}`, insertError);
+        continue;
+      }
+
+      if (!data) {
+        error(`Insert failed: no data returned for ${testDoc.name}`);
         continue;
       }
 
       documentIds.set(testDoc.name, data.id);
       log('METADATA', `Created document record: ${data.id}`, {
         title: testDoc.title,
-        category: testDoc.category,
+        category: 'GUIDELINE',
       });
     } catch (err) {
       error(`Failed to insert metadata for ${testDoc.name}`, err);
@@ -239,7 +268,6 @@ async function runIngestionPipeline(
   } = await import('@/core/knowledge/ingestion/knowledgeIngestion.service');
 
   const results = new Map<string, { chunkCount: number; tokens: number; errors?: string[] }>();
-  const userId = 'test-user-' + Date.now();
 
   for (const testDoc of TEST_DOCUMENTS) {
     if (!documents.has(testDoc.name) || !documentIds.has(testDoc.name)) {
@@ -254,10 +282,10 @@ async function runIngestionPipeline(
       const startTime = Date.now();
       const result = await ingestKnowledgeDocument(buffer, testDoc.name, {
         title: testDoc.title,
-        category: testDoc.category,
-        source: 'test-ingestion',
+        category: 'GUIDELINE',
+        source: 'ingestion'.trim().toLowerCase(),
         version: '1.0',
-      }, userId);
+      }, null);
 
       const duration = Date.now() - startTime;
 

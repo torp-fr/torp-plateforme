@@ -317,9 +317,26 @@ async function processEmbeddingsInBatches(documentId: string, chunks: Chunk[]) {
     // Insert in sub-batches of INSERT_BATCH_SIZE
     for (let j = 0; j < records.length; j += INSERT_BATCH_SIZE) {
       const insertSlice = records.slice(j, j + INSERT_BATCH_SIZE);
-      const { error } = await supabase.from('knowledge_chunks').insert(insertSlice);
-      if (error) {
-        throw new Error(`[EMBEDDING] Failed to persist chunks (${batchLabel}): ${error.message}`);
+
+      console.log("SUPABASE INSERT TABLE:", "knowledge_chunks");
+      console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(insertSlice, null, 2));
+
+      let insertError: any;
+
+      try {
+        const result = await supabase.from('knowledge_chunks').insert(insertSlice);
+        insertError = result.error;
+
+        if (insertError) {
+          console.error("SUPABASE INSERT ERROR:", insertError);
+        }
+      } catch (e) {
+        console.error("SUPABASE INSERT EXCEPTION:", e);
+        insertError = e;
+      }
+
+      if (insertError) {
+        throw new Error(`[EMBEDDING] Failed to persist chunks (${batchLabel}): ${insertError.message}`);
       }
     }
 
