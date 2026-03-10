@@ -6,11 +6,13 @@
  * const text = await extractPdfText(file);
  */
 
-import { getPdfJs, verifyPdfJsInitialization } from './pdf';
-
 interface ExtractionOptions {
   maxPages?: number;
   timeout?: number;
+}
+
+async function loadPdfModule() {
+  return await import('./pdf');
 }
 
 /**
@@ -26,6 +28,9 @@ export async function extractPdfText(
   const { maxPages = Infinity, timeout = 30000 } = options;
 
   try {
+    // Lazy-load PDF module (prevents pdfjs from loading during Node.js startup)
+    const { getPdfJs, verifyPdfJsInitialization } = await loadPdfModule();
+
     // PHASE 40: Verify PDF.js is properly initialized BEFORE extraction
     const validation = verifyPdfJsInitialization();
     if (!validation.isValid) {
