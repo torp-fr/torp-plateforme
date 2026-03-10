@@ -8,34 +8,6 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
-    proxy: {
-      // Forward /api and /debug to the Express RAG API server (port 3001)
-      '/api': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-        // Gracefully handle cases where the API server isn't running
-        configure: (proxy) => {
-          proxy.on('error', (_err, _req, res) => {
-            if ('writeHead' in res && typeof res.writeHead === 'function') {
-              res.writeHead(503, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: 'API server unavailable. Run: npm run dev:api' }));
-            }
-          });
-        },
-      },
-      '/debug': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-        configure: (proxy) => {
-          proxy.on('error', (_err, _req, res) => {
-            if ('writeHead' in res && typeof res.writeHead === 'function') {
-              res.writeHead(503, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: 'API server unavailable. Run: npm run dev:api' }));
-            }
-          });
-        },
-      },
-    },
   },
   plugins: [
     react(),
