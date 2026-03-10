@@ -6,15 +6,30 @@
 import { SearchResult, MarketPriceReference } from '../types';
 import { log } from '@/lib/logger';
 
+const MAX_CONTEXT_CHARS = 4000;
+
 /**
  * Build a formatted context section from retrieved knowledge documents.
+ * Fills the context window up to MAX_CONTEXT_CHARS instead of applying a
+ * fixed per-chunk truncation, so high-quality chunks can use the full budget.
  */
 export function buildKnowledgeContextSection(knowledge: SearchResult[]): string {
   if (knowledge.length === 0) return '';
 
-  return `\n\nRELEVANT KNOWLEDGE BASE (${knowledge.length} documents):\n${knowledge
-    .map((k, i) => `[${i + 1}] [${k.source}] ${k.category.toUpperCase()}: ${k.content.substring(0, 1200)}...`)
-    .join('\n')}`;
+  const lines: string[] = [];
+  let used = 0;
+
+  for (let i = 0; i < knowledge.length; i++) {
+    const k = knowledge[i];
+    const line = `[${i + 1}] [${k.source}] ${k.category.toUpperCase()}: ${k.content}`;
+    if (used + line.length > MAX_CONTEXT_CHARS) break;
+    lines.push(line);
+    used += line.length;
+  }
+
+  log('[RAG:ContextBuilder] 📐 Context budget used:', used, '/', MAX_CONTEXT_CHARS, 'chars —', lines.length, 'chunks');
+
+  return `\n\nRELEVANT KNOWLEDGE BASE (${lines.length} documents):\n${lines.join('\n')}`;
 }
 
 /**
