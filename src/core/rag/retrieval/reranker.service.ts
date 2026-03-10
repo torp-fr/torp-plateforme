@@ -74,10 +74,11 @@ class CosineReranker implements Reranker {
 
 export type RerankerMode = 'cosine' | 'llm';
 
-const RERANKERS: Record<RerankerMode, Reranker> = {
-  cosine: new CosineReranker(),
+const cosineReranker = new CosineReranker();
+
+const RERANKERS: Partial<Record<RerankerMode, Reranker>> = {
+  cosine: cosineReranker,
   // "llm" will be registered here once the external reranker is implemented
-  llm: (() => { throw new Error('[RAG:Reranker] LLM reranker is not yet implemented'); }) as unknown as Reranker,
 };
 
 // ---------------------------------------------------------------------------
@@ -107,9 +108,16 @@ export async function rerankChunks(
   const mode: RerankerMode = options.mode ?? 'cosine';
   log('[RAG:Reranker] 🔀 Reranking', chunks.length, 'chunks — mode:', mode);
 
-  const reranker = RERANKERS[mode];
-  const reranked = await reranker.rerank(query, chunks, topN);
-
-  log('[RAG:Reranker] ✅ Reranked to top', reranked.length, 'chunks');
-  return reranked;
+  try {
+    const reranker = RERANKERS[mode];
+    if (!reranker) throw new Error(`Reranker "${mode}" is not registered`);
+    const reranked = await reranker.rerank(query, chunks, topN);
+    log('[RAG:Reranker] ✅ Reranked to top', reranked.length, 'chunks');
+    return reranked;
+  } catch (err) {
+    warn(`[RAG:Reranker] ⚠️ Reranker "${mode}" failed — falling back to cosine:`, (err as Error).message);
+    const reranked = await cosineReranker.rerank(query, chunks, topN);
+    log('[RAG:Reranker] ✅ Cosine fallback reranked to top', reranked.length, 'chunks');
+    return reranked;
+  }
 }
