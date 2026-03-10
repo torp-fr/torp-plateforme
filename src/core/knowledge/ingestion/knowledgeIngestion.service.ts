@@ -1,11 +1,21 @@
 /**
- * Knowledge Ingestion Service v1.0
- * Manages document upload, extraction, and indexing
- * Prepares knowledge base for RAG (Phase 30)
+ * Knowledge Ingestion Service v2.0
+ *
+ * ARCHITECTURE RULES (MANDATORY):
+ *  - This service NEVER creates documents in knowledge_documents.
+ *  - The caller (API or test script) is solely responsible for creating the
+ *    document record and passing the resulting documentId here.
+ *  - This service is READ-ONLY for knowledge_documents.
+ *    It only writes to knowledge_chunks.
+ *
+ * Pipeline:
+ *   extract text → normalize → classify → chunk → filter → dedup
+ *   → INSERT knowledge_chunks (BLOCKING, defines success)
+ *   → index / integrity (NON-BLOCKING, failures do not fail ingestion)
  */
 
 import { supabase } from '@/lib/supabase';
-import { log, warn, error, time, timeEnd } from '@/lib/logger';
+import { log, warn } from '@/lib/logger';
 import { normalizeText } from './textNormalizer.service';
 import { classifyDocument } from './documentClassifier.service';
 import { extractDocumentContent } from './documentExtractor.service';
@@ -13,8 +23,12 @@ import { chunkSmart } from './smartChunker.service';
 import { filterChunks } from './chunkQualityFilter.service';
 import { deduplicateChunks } from './semanticDeduplication.service';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Public Types
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
- * Knowledge document metadata
+ * Knowledge document metadata (kept for external consumers that import this type)
  */
 export interface KnowledgeDocumentMetadata {
   title: string;
@@ -62,86 +76,92 @@ export interface IngestionResult {
   errors?: string[];
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Ingestion Entry Point
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Extract text from document buffer
- * Supports: .txt, .md, .pdf (text), .docx (text)
+ * Ingest a knowledge document.
+ *
+ * The caller MUST have already inserted the document row into `knowledge_documents`
+ * and obtained its `documentId`.  This function NEVER writes to `knowledge_documents`.
+ *
+ * SUCCESS is defined solely by chunk insertion.
+ * Deduplication and indexing are non-blocking — their failures never fail ingestion.
+ *
+ * @param documentId  UUID of the pre-existing knowledge_documents row
+ * @param filename    Original filename (used for format detection / extraction)
+ * @param buffer      Raw file content as a Node.js Buffer
  */
-export function extractTextFromBuffer(
-  buffer: Buffer,
-  filename: string
-): string {
-  try {
-    // For now, support plain text and markdown
-    // PDF/DOCX would require additional libraries (pdfjs, docx)
-    if (filename.endsWith('.txt') || filename.endsWith('.md')) {
-      return buffer.toString('utf-8');
-    }
+export async function ingestKnowledgeDocument({
+  documentId,
+  filename,
+  buffer,
+}: {
+  documentId: string;
+  filename: string;
+  buffer: Buffer;
+}): Promise<IngestionResult> {
+  log('[KnowledgeIngestion] Starting ingestion for:', filename, '| documentId:', documentId);
 
-    // For other formats, attempt UTF-8 decode
-    const text = buffer.toString('utf-8');
-    if (text.length > 0) {
-      return text;
-    }
-
-    throw new Error(`Unsupported file format: ${filename}`);
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[KnowledgeIngestion] Text extraction failed:', errorMessage);
-    throw error;
+  if (!documentId) {
+    return { success: false, errors: ['documentId is required — create the document record first'] };
   }
-}
 
-/**
- * Ingest knowledge document
- */
-export async function ingestKnowledgeDocument(
-  fileBuffer: Buffer,
-  filename: string,
-  metadata: KnowledgeDocumentMetadata,
-  userId: string | null,
-  documentId?: string
-): Promise<IngestionResult> {
+  // ── STEP 1 (CRITICAL): Extract text ────────────────────────────────────────
+  let rawText: string;
   try {
-    log('[KnowledgeIngestion] Starting ingestion for:', filename);
-
-
-    // Step 1: Extract text (format-aware: PDF, DOCX, XLSX, CSV, TXT, MD)
-    const rawText = await extractDocumentContent(fileBuffer, filename);
+    rawText = await extractDocumentContent(buffer, filename);
     log('[KnowledgeIngestion] Text extracted:', rawText.length, 'characters');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[KnowledgeIngestion] Text extraction failed:', msg);
+    return { success: false, errors: [`Text extraction failed: ${msg}`] };
+  }
 
-    // Step 1b: Normalize text (remove noise before chunking)
-    const normalizedText = normalizeText(rawText);
-    log('[KnowledgeIngestion] Text normalized:', normalizedText.length, 'characters');
+  // ── STEP 2 (CRITICAL): Normalize → classify → chunk → filter ──────────────
+  const normalizedText = normalizeText(rawText);
+  log('[KnowledgeIngestion] Text normalized:', normalizedText.length, 'characters');
 
-    // Step 1c: Classify document type (used by future specialized chunking)
-    const docType = classifyDocument(normalizedText);
-    log('[KnowledgeIngestion] Document classified as:', docType);
+  const docType = classifyDocument(normalizedText);
+  log('[KnowledgeIngestion] Document classified as:', docType);
 
-    // Step 2: Chunk document using strategy matched to document type
-    const rawChunks = chunkSmart(normalizedText, docType);
-    log('[KnowledgeIngestion] Document chunked into', rawChunks.length, 'chunks');
+  const rawChunks = chunkSmart(normalizedText, docType);
+  log('[KnowledgeIngestion] Raw chunks:', rawChunks.length);
 
-    // Step 2b: Filter out low-quality chunks before embedding generation
-    const qualityChunks = filterChunks(rawChunks);
-    log('[KnowledgeIngestion] Chunks after quality filter:', qualityChunks.length);
+  const qualityChunks = filterChunks(rawChunks);
+  log('[KnowledgeIngestion] Chunks after quality filter:', qualityChunks.length);
 
-    // Step 2c: Drop near-duplicate chunks already present in the vector index
-    const smartChunks = await deduplicateChunks(qualityChunks);
-    log('[KnowledgeIngestion] Chunks after deduplication:', smartChunks.length);
+  // ── STEP 3 (NON-CRITICAL): Deduplication ────────────────────────────────────
+  let dedupedChunks = qualityChunks;
+  try {
+    dedupedChunks = await deduplicateChunks(qualityChunks);
+    log('[KnowledgeIngestion] Chunks after deduplication:', dedupedChunks.length);
+  } catch (err) {
+    warn('[KnowledgeIngestion] Deduplication failed (non-blocking) — using all quality chunks:', err);
+  }
 
-    // Map to the shape expected by indexChunks (adds positional fields)
-    const chunks = smartChunks.map((c) => ({
-      content: c.content,
-      tokenCount: c.tokenCount,
-      metadata: c.metadata ?? {},
-      startIndex: 0,
-      endIndex: c.content.length,
-    }));
+  const chunks = dedupedChunks.map((c) => ({
+    content: c.content,
+    tokenCount: c.tokenCount,
+    metadata: c.metadata ?? {},
+    startIndex: 0,
+    endIndex: c.content.length,
+  }));
 
-    if (!documentId) {
-      throw new Error('documentId is required for ingestion');
-    }
+  if (chunks.length === 0) {
+    return { success: false, chunksCreated: 0, errors: ['No chunks produced from document'] };
+  }
+
+  // ── STEP 4 (CRITICAL): Insert chunks ────────────────────────────────────────
+  // Step 3: Create chunk records
+  const chunkRecords = chunks.map((chunk, index) => ({
+    document_id: documentId,
+    content: chunk.content,
+    chunk_index: index,
+    token_count: chunk.tokenCount,
+    metadata: chunk.metadata ?? {},
+  }));
 
     log('[KnowledgeIngestion] Using provided document ID:', documentId);
 
@@ -186,36 +206,49 @@ if (chunkError) {
 
 log("[KnowledgeIngestion] Chunks inserted:", chunkRecords.length);
 
-    // Step 4: Index chunks (for Phase 30 - RAG)
+  // ── STEP 5 (NON-CRITICAL): Index + integrity verification ───────────────────
+  try {
     const { indexChunks } = await import('./knowledgeIndex.service');
     await indexChunks(documentId, chunks);
+  } catch (err) {
+    warn('[KnowledgeIngestion] Indexing failed (non-blocking) — ingestion still successful:', err);
+  }
 
-    return {
-      success: true,
-      documentId: documentId,
-      chunksCreated: chunks.length,
-      totalTokens: chunks.reduce((sum, c) => sum + c.tokenCount, 0),
-    };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[KnowledgeIngestion] Ingestion failed:', errorMessage);
+  return {
+    success: true,
+    documentId,
+    chunksCreated: insertedCount,
+    totalTokens: chunks.reduce((sum, c) => sum + c.tokenCount, 0),
+  };
+}
 
-    return {
-      success: false,
-      errors: [errorMessage],
-    };
+// ─────────────────────────────────────────────────────────────────────────────
+// Utility: extract raw text from buffer (kept for external callers)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function extractTextFromBuffer(buffer: Buffer, filename: string): string {
+  try {
+    if (filename.endsWith('.txt') || filename.endsWith('.md')) {
+      return buffer.toString('utf-8');
+    }
+    const text = buffer.toString('utf-8');
+    if (text.length > 0) return text;
+    throw new Error(`Unsupported file format: ${filename}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[KnowledgeIngestion] Text extraction failed:', msg);
+    throw err;
   }
 }
 
-/**
- * Search knowledge base
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// Utility: keyword search on chunks
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function searchKnowledge(query: string, limit: number = 10): Promise<KnowledgeChunk[]> {
   try {
     log('[KnowledgeIngestion] Searching for:', query);
 
-
-    // Full-text search on chunk content
     const { data, error } = await supabase
       .from('knowledge_chunks')
       .select('*')
@@ -228,9 +261,9 @@ export async function searchKnowledge(query: string, limit: number = 10): Promis
 
     log('[KnowledgeIngestion] Found', data?.length || 0, 'results');
     return data || [];
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[KnowledgeIngestion] Search failed:', errorMessage);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[KnowledgeIngestion] Search failed:', msg);
     return [];
   }
 }

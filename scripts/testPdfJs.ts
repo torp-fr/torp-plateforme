@@ -12,7 +12,7 @@
 import { createClient } from "@supabase/supabase-js"
 import dotenv from "dotenv"
 import { Buffer } from "buffer"
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs"
+import * as pdfjsLib from "pdfjs-dist"
 
 dotenv.config()
 

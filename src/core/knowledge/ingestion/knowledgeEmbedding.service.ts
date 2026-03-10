@@ -63,20 +63,69 @@ async function invokeBatchEmbedding(inputs: string[]): Promise<number[][]> {
 }
 
 // ---------------------------------------------------------------------------
+// Internal: retry helper with exponential backoff
+// ---------------------------------------------------------------------------
+
+async function retryEmbedding<T>(
+  fn: () => Promise<T>,
+  retries = 3
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (retries === 0) throw err;
+    const delay = (4 - retries) * 500;
+    warn('[KnowledgeEmbedding] Attempt failed, retrying...', { remainingRetries: retries, delayMs: delay });
+    await new Promise(r => setTimeout(r, delay));
+    return retryEmbedding(fn, retries - 1);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /**
  * Generate embedding for a single text.
- * Returns the raw embedding vector, or null on failure.
+ * Throws error if generation fails (instead of returning null).
  */
-export async function generateEmbedding(text: string): Promise<number[] | null> {
+export async function generateEmbedding(text: string): Promise<number[]> {
   try {
-    const embeddings = await invokeBatchEmbedding([text]);
-    return embeddings[0] ?? null;
+    const embeddings = await retryEmbedding(() => invokeBatchEmbedding([text]));
+    if (!embeddings[0]) {
+      throw new Error('[KnowledgeEmbedding] No embedding returned for text');
+    }
+    return embeddings[0];
   } catch (err) {
     error('[KnowledgeEmbedding] Single embedding failed:', err);
-    return null;
+    throw err;
+  }
+}
+
+/**
+ * Generate embeddings for multiple texts in a single batch.
+ * Throws error if generation fails or returns inconsistent size.
+ */
+export async function embedBatch(texts: string[]): Promise<number[][]> {
+  try {
+    if (texts.length === 0) {
+      return [];
+    }
+
+    log('[KnowledgeEmbedding] Generating embeddings for', texts.length, 'texts');
+
+    const embeddings = await retryEmbedding(() => invokeBatchEmbedding(texts));
+
+    if (!embeddings || embeddings.length !== texts.length) {
+      throw new Error('[KnowledgeEmbedding] Batch returned inconsistent size');
+    }
+
+    log('[KnowledgeEmbedding] Batch complete —', embeddings.length, 'embeddings generated');
+
+    return embeddings;
+  } catch (err) {
+    error('[KnowledgeEmbedding] Batch embedding failed:', err);
+    throw err;
   }
 }
 
@@ -101,7 +150,7 @@ export async function generateEmbeddingsForChunks(
     const inputs = batch.map((c) => c.content);
 
     try {
-      const embeddings = await invokeBatchEmbedding(inputs);
+      const embeddings = await retryEmbedding(() => invokeBatchEmbedding(inputs));
 
       batch.forEach((chunk, i) => {
         if (embeddings[i]) {
