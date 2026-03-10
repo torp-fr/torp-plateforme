@@ -65,7 +65,16 @@ export async function retryIngestion(
       return false;
     }
 
-    log('[RAG:Pipeline] ℹ️ Document state reset moved to testFullIngestion.ts');
+    log('[RAG:Pipeline] 🔄 Resetting ingestion_status to pending...');
+    const { error: statusError } = await supabase
+      .from('knowledge_documents')
+      .update({ ingestion_status: 'pending' })
+      .eq('id', documentId);
+
+    if (statusError) {
+      console.error('[RAG:Pipeline] ❌ Failed to reset ingestion_status:', statusError);
+      return false;
+    }
 
     log('[RAG:Pipeline] 🚀 Relaunching pipeline...');
     onRetry?.(1);
