@@ -6,8 +6,7 @@
  * const text = await extractPdfText(file);
  */
 
-import * as pdfjsLib from 'pdfjs-dist';
-import { verifyPdfJsInitialization } from './pdf';
+import { getPdfJs, verifyPdfJsInitialization } from './pdf';
 
 interface ExtractionOptions {
   maxPages?: number;
@@ -49,6 +48,7 @@ export async function extractPdfText(
     );
 
     // Get PDF document with timeout
+    const pdfjsLib = getPdfJs();
     const loadingTask = pdfjsLib.getDocument({
       data: arrayBuffer,
     });

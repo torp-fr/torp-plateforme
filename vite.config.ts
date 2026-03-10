@@ -31,7 +31,6 @@ export default defineConfig(({ mode }) => ({
       include: [/pdfjs-dist/, /node_modules/],
     },
     rollupOptions: {
-      external: ['pdfjs-dist', /^pdfjs-dist\//],
       onwarn(warning, warn) {
         if (warning.code === 'UNRESOLVED_IMPORT' && warning.source?.includes('pdfjs-dist')) {
           return;
