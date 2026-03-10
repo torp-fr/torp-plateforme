@@ -4,11 +4,19 @@
  *
  * Pipeline:
  * 1. Extracts key sentences from the answer.
- * 2. For each sentence, computes a weighted grounding score:
+ * 2. Splits each sentence into micro-claims at " and ", " et ", "," and ";".
+ * 3. Scores each micro-claim independently:
  *    - Token overlap against retrieved chunks  (weight: 0.6)
  *    - Numeric consistency (numbers + units)   (weight: 0.4)
- * 3. Computes a mean support score across all sentences (0–100%).
- * 4. Warns if score falls below threshold (default: 70%).
+ * 4. Aggregates micro-claim scores into a sentence score (mean).
+ * 5. Computes a mean support score across all sentences (0–100%).
+ * 6. Warns if score falls below threshold (default: 70%).
+ *
+ * Micro-claim splitting prevents a well-grounded clause from masking an
+ * ungrounded sibling in compound sentences like:
+ *   "La norme impose 45 mm d'isolant et un coefficient de 3.5"
+ *   → claim 1: "La norme impose 45 mm d'isolant"
+ *   → claim 2: "un coefficient de 3.5"
  *
  * Numeric consistency catches hallucinated figures that token overlap misses:
  * - Bare numbers must appear in at least one retrieved chunk.
@@ -111,6 +119,33 @@ function extractNumericClaims(sentence: string): NumericClaim[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Micro-claim Splitting
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Minimum character length for a micro-claim fragment to be scored independently. */
+const MIN_CLAIM_LENGTH = 4;
+
+/**
+ * Split a sentence into micro-claims at coordinating conjunctions and list
+ * separators: " and ", " et ", "," and ";".
+ *
+ * Example:
+ *   "La norme impose 45 mm d'isolant et un coefficient de 3.5"
+ *   → ["La norme impose 45 mm d'isolant", "un coefficient de 3.5"]
+ *
+ * Falls back to [sentence] when splitting produces no viable fragments,
+ * preserving the original behaviour for simple sentences.
+ */
+function splitIntoMicroClaims(sentence: string): string[] {
+  const parts = sentence
+    .split(/\s+(?:and|et)\s+|[,;]/)
+    .map((p) => p.trim())
+    .filter((p) => p.length >= MIN_CLAIM_LENGTH);
+
+  return parts.length > 0 ? parts : [sentence];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Token Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -132,63 +167,86 @@ function tokenize(text: string): Set<string> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Score one sentence's grounding against all retrieved chunks.
+ * Score a single micro-claim fragment against all retrieved chunks.
  *
- *   sentence_score = (best_token_overlap × 0.6) + (numeric_consistency × 0.4)
+ *   claim_score = (best_token_overlap × 0.6) + (numeric_consistency × 0.4)
  *
- * Token overlap: highest overlap ratio across all chunks.
- * Numeric consistency:
- *   - 1.0 when sentence contains no numbers (vacuously consistent).
- *   - For unit+value claims: compact form must appear in compact chunk text.
- *   - For bare number claims: number must appear anywhere in chunk text.
- *
- * A sentence is "supported" when sentence_score ≥ SIMILARITY_THRESHOLD.
+ * This is the atomic unit of grounding evaluation. Called once per micro-claim;
+ * results are aggregated by scoreSentence.
  */
-function scoreSentence(
-  sentence: string,
+function scoreMicroClaim(
+  claim: string,
   chunks: SearchResult[]
-): { score: number; supported: boolean; matchedChunks: string[] } {
+): { score: number; matchedChunks: string[] } {
   // ── Token overlap ─────────────────────────────────────────────────────────
-  const sentenceTokens = tokenize(sentence);
+  const claimTokens = tokenize(claim);
   const matchedChunks: string[] = [];
   let bestTokenOverlap = 0;
 
   for (const chunk of chunks) {
     const chunkTokens = tokenize(chunk.content);
     let overlaps = 0;
-    for (const t of sentenceTokens) {
+    for (const t of claimTokens) {
       if (chunkTokens.has(t)) overlaps++;
     }
-    const ratio = sentenceTokens.size > 0 ? overlaps / sentenceTokens.size : 0;
+    const ratio = claimTokens.size > 0 ? overlaps / claimTokens.size : 0;
     if (ratio > bestTokenOverlap) bestTokenOverlap = ratio;
     if (ratio >= SIMILARITY_THRESHOLD) matchedChunks.push(chunk.id);
   }
 
   // ── Numeric consistency ───────────────────────────────────────────────────
-  const claims = extractNumericClaims(sentence);
+  const numericClaims = extractNumericClaims(claim);
   let numericScore = 1.0; // vacuously consistent when no numeric claims
 
-  if (claims.length > 0) {
+  if (numericClaims.length > 0) {
     const allChunkText = chunks.map((c) => c.content).join(' ');
     const compactChunkText = allChunkText.replace(/\s+/g, ''); // unit+value matching
 
     let supported = 0;
-    for (const claim of claims) {
-      if (claim.isUnitValue) {
+    for (const nc of numericClaims) {
+      if (nc.isUnitValue) {
         // Strict: value and unit must co-occur (compact form found in compact text)
-        if (compactChunkText.includes(claim.compact)) supported++;
+        if (compactChunkText.includes(nc.compact)) supported++;
       } else {
         // Loose: bare number present anywhere in chunk text
-        if (allChunkText.includes(claim.compact)) supported++;
+        if (allChunkText.includes(nc.compact)) supported++;
       }
     }
-    numericScore = supported / claims.length;
+    numericScore = supported / numericClaims.length;
   }
 
-  // ── Weighted sentence score ───────────────────────────────────────────────
   const score = bestTokenOverlap * TOKEN_MATCH_WEIGHT + numericScore * NUMERIC_MATCH_WEIGHT;
+  return { score, matchedChunks };
+}
 
-  return { score, supported: score >= SIMILARITY_THRESHOLD, matchedChunks };
+/**
+ * Score one sentence's grounding by splitting it into micro-claims and
+ * aggregating their individual scores.
+ *
+ * sentence_score = mean(micro-claim scores)
+ *
+ * Splitting on " and ", " et ", "," and ";" means each independent assertion
+ * within a compound sentence is evaluated on its own merits. A grounded clause
+ * can no longer mask an ungrounded sibling.
+ *
+ * matchedChunks is the union of chunks matched by any micro-claim.
+ * A sentence is "supported" when sentence_score ≥ SIMILARITY_THRESHOLD.
+ */
+function scoreSentence(
+  sentence: string,
+  chunks: SearchResult[]
+): { score: number; supported: boolean; matchedChunks: string[] } {
+  const microClaims = splitIntoMicroClaims(sentence);
+  const results = microClaims.map((claim) => scoreMicroClaim(claim, chunks));
+
+  const meanScore = results.reduce((sum, r) => sum + r.score, 0) / results.length;
+  const allMatchedChunks = [...new Set(results.flatMap((r) => r.matchedChunks))];
+
+  return {
+    score: meanScore,
+    supported: meanScore >= SIMILARITY_THRESHOLD,
+    matchedChunks: allMatchedChunks,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
