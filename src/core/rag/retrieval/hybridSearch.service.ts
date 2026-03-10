@@ -36,15 +36,18 @@ function mergeResults(
 
 /**
  * Map a semantic chunk to the shared SearchResult shape.
+ * documentId is used as the source fallback when source metadata is unavailable
+ * (the match_knowledge_chunks RPC does not return document source/category fields).
  */
 function semanticToSearchResult(chunk: {
   chunkId: string;
   content: string;
   similarity: number;
+  documentId: string;
 }): SearchResult {
   return {
     id: chunk.chunkId,
-    source: '',
+    source: chunk.documentId,
     category: '',
     content: chunk.content,
     reliability_score: 1.0,
