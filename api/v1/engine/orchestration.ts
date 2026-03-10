@@ -7,7 +7,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { ENGINE_REGISTRY } from '../../../src/core/platform/engineRegistry';
+import { ENGINE_REGISTRY } from '@/core/platform/engineRegistry';
 import { getServerSupabase } from '../../_lib/supabase';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

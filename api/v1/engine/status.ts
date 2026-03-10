@@ -8,11 +8,11 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// ENGINE_REGISTRY has no external imports — safe to import via relative path.
+// ENGINE_REGISTRY has no external imports — safe to import.
 import {
   ENGINE_REGISTRY,
   getEngineStats,
-} from '../../../src/core/platform/engineRegistry';
+} from '@/core/platform/engineRegistry';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
