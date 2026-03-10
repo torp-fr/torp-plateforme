@@ -1,13 +1,14 @@
 /**
  * RAG — Reranker Service
  * Re-scores retrieved chunks using cosine similarity between the query
- * embedding and per-chunk content embeddings computed in memory.
+ * embedding and the pre-computed embedding stored in each chunk
+ * (knowledge_chunks.embedding_vector). No chunk re-embedding required.
  *
  * Pipeline position:
  *   keywordSearch / semanticSearch → rerankChunks → caller
  */
 
-import { generateEmbedding, generateEmbeddingsBatch } from '../embeddings/embedding.service';
+import { generateEmbedding } from '../embeddings/embedding.service';
 import { SearchResult } from '../types';
 import { log, warn } from '@/lib/logger';
 
@@ -37,15 +38,15 @@ function cosineSimilarity(a: number[], b: number[]): number {
 
 /**
  * Rerank chunks by cosine similarity between the query embedding and each
- * chunk's content embedding.
+ * chunk's pre-stored embedding_vector (knowledge_chunks.embedding_vector).
  *
  * Steps:
- *   1. Generate query embedding
- *   2. Batch-embed all chunk content strings
- *   3. Score each chunk via cosine similarity
- *   4. Sort descending and return top `topN` results
+ *   1. Generate query embedding (single API call)
+ *   2. Score each chunk that carries embedding_vector via cosine similarity
+ *      (chunks without embedding_vector are skipped — score stays 0)
+ *   3. Sort descending and return top `topN` results
  *
- * Falls back to the original order if embedding generation fails.
+ * Falls back to the original order if query embedding generation fails.
  */
 export async function rerankChunks(
   query: string,
@@ -56,24 +57,24 @@ export async function rerankChunks(
 
   log('[RAG:Reranker] 🔀 Reranking', chunks.length, 'chunks for query:', query);
 
-  // Step 1: query embedding
+  // Step 1: query embedding (single API call — no chunk re-embedding)
   const queryEmbedding = await generateEmbedding(query);
   if (!queryEmbedding) {
     warn('[RAG:Reranker] ⚠️ Failed to generate query embedding — returning original order');
     return chunks.slice(0, topN);
   }
 
-  // Step 2: batch-embed chunk content
-  const batchResults = await generateEmbeddingsBatch(chunks.map((c) => c.content));
-
-  // Step 3: score each chunk
-  const scored = chunks.map((chunk, i) => {
-    const chunkEmbedding = batchResults[i]?.embedding;
+  // Step 2: score each chunk using its stored embedding_vector
+  const scored = chunks.map((chunk) => {
+    const chunkEmbedding = chunk.embedding_vector;
     const similarity = chunkEmbedding ? cosineSimilarity(queryEmbedding, chunkEmbedding) : 0;
+    if (!chunkEmbedding) {
+      warn('[RAG:Reranker] ⚠️ Chunk missing embedding_vector, score=0:', chunk.id);
+    }
     return { chunk: { ...chunk, embedding_similarity: similarity }, similarity };
   });
 
-  // Step 4: sort descending and return top N
+  // Step 3: sort descending and return top N
   scored.sort((a, b) => b.similarity - a.similarity);
 
   const reranked = scored.slice(0, topN).map((s) => s.chunk);
