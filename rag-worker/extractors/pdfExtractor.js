@@ -1,4 +1,4 @@
-import * as pdfjs from "pdfjs-dist/legacy/build/pdf.js";
+import * as pdfjs from "pdfjs-dist";
 
 export async function extractPdfText(arrayBuffer) {
   try {

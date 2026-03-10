@@ -2,7 +2,7 @@ import { Buffer } from "buffer";
 import path from "path";
 import mammoth from "mammoth";
 import ExcelJS from "exceljs";
-import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+import * as pdfjs from "pdfjs-dist";
 
 const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024;
 const COLUMN_GAP_THRESHOLD = 20; // Gap size threshold for column separator
