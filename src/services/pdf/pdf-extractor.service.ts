@@ -3,8 +3,7 @@
  * Extracts text content from PDF files using PDF.js
  */
 
-import * as pdfjsLib from 'pdfjs-dist';
-import { initPdfJs } from '@/lib/pdf';
+import { getPdfJs, initPdfJs } from '@/lib/pdf';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 // Initialize PDF.js with centralized configuration
@@ -25,6 +24,7 @@ export class PDFExtractorService {
       const arrayBuffer = await file.arrayBuffer();
 
       // Load PDF document
+      const pdfjsLib = getPdfJs();
       const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
       const pdf = await loadingTask.promise;
 

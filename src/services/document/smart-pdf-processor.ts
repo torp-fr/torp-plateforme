@@ -9,7 +9,7 @@
  * Optimise le traitement selon le type détecté
  */
 
-import * as pdfjsLib from 'pdfjs-dist';
+import { getPdfJs } from '@/lib/pdf';
 import { extractPdfText } from '@/lib/pdfExtract';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
@@ -79,6 +79,7 @@ class SmartPDFProcessor {
    * Analyse un PDF pour déterminer la stratégie d'extraction optimale
    */
   async analyzePDF(pdfBuffer: ArrayBuffer): Promise<PDFAnalysis> {
+    const pdfjsLib = getPdfJs();
     const pdf = await pdfjsLib.getDocument({ data: pdfBuffer }).promise;
     const totalPages = pdf.numPages;
 
@@ -168,6 +169,7 @@ class SmartPDFProcessor {
     try {
       // Analyser d'abord le PDF
       const analysis = await this.analyzePDF(pdfBuffer);
+      const pdfjsLib = getPdfJs();
       const pdf = await pdfjsLib.getDocument({ data: pdfBuffer }).promise;
 
       const pages: PageExtractionResult[] = [];

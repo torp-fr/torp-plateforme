@@ -3,8 +3,8 @@
  * Utilise PDF.js avec post-traitement intelligent pour les devis BTP
  */
 
-import * as pdfjsLib from 'pdfjs-dist';
-import { initPdfJs } from '@/lib/pdf';
+import { getPdfJs, initPdfJs } from '@/lib/pdf';
+import type * as pdfjsTypes from 'pdfjs-dist/build/pdf.mjs';
 
 // Initialize PDF.js with centralized configuration
 initPdfJs();
@@ -83,6 +83,7 @@ export class OcrExtractorService {
    * Extraction depuis un buffer
    */
   async extractFromBuffer(buffer: ArrayBuffer): Promise<OcrExtractionResult> {
+    const pdfjsLib = getPdfJs();
     const loadingTask = pdfjsLib.getDocument({ data: buffer });
     const pdf = await loadingTask.promise;
 
@@ -117,7 +118,7 @@ export class OcrExtractorService {
   /**
    * Extraction des métadonnées du PDF
    */
-  private async extractMetadata(pdf: pdfjsLib.PDFDocumentProxy): Promise<DocumentMetadata> {
+  private async extractMetadata(pdf: pdfjsTypes.PDFDocumentProxy): Promise<DocumentMetadata> {
     const info = await pdf.getMetadata();
     const data = info?.info as Record<string, unknown> | undefined;
 
@@ -138,7 +139,7 @@ export class OcrExtractorService {
    * Extraction du contenu d'une page avec analyse de structure
    */
   private async extractPageContent(
-    page: pdfjsLib.PDFPageProxy,
+    page: pdfjsTypes.PDFPageProxy,
     pageNumber: number
   ): Promise<PageContent> {
     const textContent = await page.getTextContent();
@@ -152,7 +153,7 @@ export class OcrExtractorService {
     for (const item of textContent.items) {
       if (!('str' in item)) continue;
 
-      const textItem = item as pdfjsLib.TextItem;
+      const textItem = item as pdfjsTypes.TextItem;
       const transform = textItem.transform;
       const x = transform[4];
       const y = viewport.height - transform[5];
@@ -208,7 +209,7 @@ export class OcrExtractorService {
   /**
    * Détection si le texte est en gras (heuristique basée sur fontName)
    */
-  private detectBold(item: pdfjsLib.TextItem): boolean {
+  private detectBold(item: pdfjsTypes.TextItem): boolean {
     const fontName = item.fontName?.toLowerCase() || '';
     return fontName.includes('bold') ||
            fontName.includes('black') ||
