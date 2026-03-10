@@ -251,16 +251,11 @@ export async function semanticSearch(
       similarity: row.similarity,
     }));
 
-    log('[KnowledgeIndex] Retrieved', retrieved.length, 'candidates for reranking');
+    log('[KnowledgeIndex] Retrieved', retrieved.length, 'candidates (raw, unranked)');
 
-    // Rerank and return top limit results
-    const reranked = await rerankChunks(query, retrieved);
-    const results = reranked.slice(0, limit);
-
-    log('[KnowledgeIndex] Found', results.length, 'relevant chunks (after reranking)');
-
-    // Return reranked chunks (context compression happens in generation pipeline)
-    return results.map(({ rerankScore, ...rest }) => rest);
+    // Return raw candidates without reranking.
+    // Reranking must happen only once in hybridSearch.service.ts to avoid double-reranking cost.
+    return retrieved;
   } catch (err) {
     error('[KnowledgeIndex] Search failed:', err);
     return [];
@@ -273,22 +268,26 @@ export async function semanticSearch(
 
 export async function getIndexStats(): Promise<IndexStats> {
   try {
-    const { data: chunks, error: fetchError } = await supabase
-      .from('knowledge_chunks')
-      .select('embedding_vector');
+    const [{ count: totalChunks, error: totalError }, { count: embeddedChunks, error: embeddedError }] =
+      await Promise.all([
+        supabase.from('knowledge_chunks').select('*', { count: 'exact', head: true }),
+        supabase
+          .from('knowledge_chunks')
+          .select('*', { count: 'exact', head: true })
+          .not('embedding_vector', 'is', null),
+      ]);
 
-    if (fetchError) {
-      throw new Error(`Failed to get stats: ${fetchError.message}`);
-    }
+    if (totalError) throw new Error(`Failed to count chunks: ${totalError.message}`);
+    if (embeddedError) throw new Error(`Failed to count embeddings: ${embeddedError.message}`);
 
-    const indexedChunks = (chunks || []).filter((c: any) => c.embedding_vector !== null).length;
-    const totalChunks = chunks?.length || 0;
+    const total = totalChunks ?? 0;
+    const indexed = embeddedChunks ?? 0;
 
     return {
-      chunksIndexed: indexedChunks,
-      embeddingsGenerated: indexedChunks,
-      // 384 dimensions × 4 bytes per float
-      indexSize: totalChunks * 384 * 4,
+      chunksIndexed: indexed,
+      embeddingsGenerated: indexed,
+      // 1536 dimensions × 4 bytes per float
+      indexSize: total * 1536 * 4,
       lastUpdated: new Date().toISOString(),
     };
   } catch (err) {

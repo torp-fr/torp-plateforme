@@ -4,15 +4,24 @@
  */
 
 import { aiOrchestrator } from '@/services/ai/aiOrchestrator.service';
+import { getCachedEmbedding, setCachedEmbedding } from './embeddingCache.service';
 import { log } from '@/lib/logger';
 
 /**
  * Generate an embedding vector for a text string.
+ * Hits the in-memory LRU cache first; calls the AI Orchestrator on a miss.
  * Returns null on failure (caller decides how to handle).
  */
 export async function generateEmbedding(text: string): Promise<number[] | null> {
+  const cached = getCachedEmbedding(text);
+  if (cached) {
+    log('[RAG:Embedding] ⚡ Cache hit for query:', text.substring(0, 60));
+    return cached;
+  }
+
   try {
     const result = await aiOrchestrator.generateEmbedding({ text });
+    setCachedEmbedding(text, result.embedding);
     return result.embedding;
   } catch (err) {
     console.error('[RAG:Embedding] ❌ Failed to generate embedding:', err);

@@ -28,6 +28,8 @@ export interface SearchResult {
   updated_at: string;
   relevance_score: number;
   embedding_similarity: number;
+  /** Pre-computed vector from knowledge_chunks.embedding_vector. Used by the reranker. */
+  embedding_vector?: number[];
 }
 
 export interface SimilarDocument {
