@@ -4,8 +4,12 @@
  * Isolates all PDF.js logic.
  */
 
-import { extractPdfText } from '@/lib/pdfExtract';
 import { log, warn } from '@/lib/logger';
+
+async function getPdfExtractor() {
+  const mod = await import('@/lib/pdfExtract');
+  return mod.extractPdfText;
+}
 
 /**
  * Extract readable text from a File (PDF or plain text).
@@ -26,6 +30,7 @@ export async function extractDocumentText(file: File): Promise<string> {
     if (header === '%PDF') {
       log('[RAG:Extractor] 📄 PDF detected - extracting text...');
       try {
+        const extractPdfText = await getPdfExtractor();
         const extractedText = await extractPdfText(file);
         log('[RAG:Extractor] ✅ PDF text extracted:', extractedText.length, 'chars');
         return extractedText;
