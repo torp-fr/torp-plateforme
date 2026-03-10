@@ -1,16 +1,19 @@
 /**
  * RAG — Reranker Service
- * Pluggable reranker architecture.
+ * Pluggable reranker architecture for ranking retrieved chunks.
  *
  * Modes:
  *   "cosine" (default) — cosine similarity against pre-stored embedding_vector
- *   "llm"              — reserved for a future external reranker API
+ *                        Fast, deterministic, no LLM calls
+ *   "llm"              — cross-encoder reranking via LLM
+ *                        Slower but higher quality ranking, models query-chunk interaction
  *
  * Pipeline position:
  *   keywordSearch / semanticSearch → rerankChunks → caller
  */
 
 import { generateEmbedding } from '../embeddings/embedding.service';
+import { aiOrchestrator } from '@/services/ai/aiOrchestrator.service';
 import { SearchResult } from '../types';
 import { log, warn } from '@/lib/logger';
 
@@ -69,16 +72,105 @@ class CosineReranker implements Reranker {
 }
 
 // ---------------------------------------------------------------------------
+// LlmReranker — Cross-encoder reranking via LLM
+// ---------------------------------------------------------------------------
+
+class LlmReranker implements Reranker {
+  /**
+   * Rerank chunks using an LLM as a cross-encoder.
+   *
+   * For each chunk, uses the LLM to score relevance to the query from 0-1.
+   * This captures query-chunk interaction and semantic understanding that
+   * bi-encoder approaches (like cosine similarity) cannot model.
+   *
+   * Trade-offs:
+   *   Pros:  Higher ranking quality, semantic understanding, query-aware
+   *   Cons:  N LLM API calls (expensive), slower (~1-2s per chunk), quota limited
+   *
+   * Cost: ~$0.005 per chunk (GPT-4o-mini at 2K input tokens avg)
+   * Latency: ~200-500ms per chunk (serial) or ~1-2s for batch (parallel)
+   */
+  async rerank(query: string, chunks: SearchResult[], topN: number): Promise<SearchResult[]> {
+    if (chunks.length === 0) return [];
+
+    log('[RAG:Reranker:LLM] 📊 Starting LLM cross-encoder reranking for', chunks.length, 'chunks');
+
+    try {
+      // Score each chunk in parallel using the LLM
+      const scoredChunks = await Promise.all(
+        chunks.map(async (chunk) => {
+          const score = await this.scoreChunk(query, chunk);
+          return { chunk: { ...chunk, llm_relevance_score: score }, score };
+        })
+      );
+
+      // Sort by LLM relevance score (descending)
+      scoredChunks.sort((a, b) => b.score - a.score);
+
+      const topChunks = scoredChunks.slice(0, topN).map((s) => s.chunk);
+
+      log('[RAG:Reranker:LLM] ✅ LLM reranking complete — top', topChunks.length, 'chunks selected');
+      return topChunks;
+    } catch (err) {
+      warn('[RAG:Reranker:LLM] ⚠️ LLM reranking failed:', (err as Error).message);
+      // Fallback: return chunks in original order
+      return chunks.slice(0, topN);
+    }
+  }
+
+  /**
+   * Score a single chunk's relevance to the query using the LLM.
+   *
+   * Returns a score from 0 (irrelevant) to 1 (highly relevant).
+   * Prompt is designed to elicit numeric scores for consistent parsing.
+   */
+  private async scoreChunk(query: string, chunk: SearchResult): Promise<number> {
+    try {
+      const systemPrompt =
+        'You are an expert evaluator of document relevance. ' +
+        'Score the relevance of a passage to a query from 0 to 1. ' +
+        'Return ONLY a number between 0 and 1, for example: 0.85';
+
+      const userPrompt =
+        `Query: ${query}\n\n` +
+        `Passage: ${chunk.content.substring(0, 500)}\n\n` +
+        `Relevance score (0-1):`;
+
+      const result = await aiOrchestrator.generateCompletion(userPrompt, {
+        systemPrompt,
+        temperature: 0.1, // Deterministic scoring
+        maxTokens: 10, // Just a number
+      } as any);
+
+      // Parse the response — expect a number
+      const scoreText = result.content.trim();
+      const score = parseFloat(scoreText);
+
+      if (isNaN(score) || score < 0 || score > 1) {
+        warn('[RAG:Reranker:LLM] ⚠️ Invalid score response:', scoreText, '— defaulting to 0.5');
+        return 0.5;
+      }
+
+      return score;
+    } catch (err) {
+      warn('[RAG:Reranker:LLM] ⚠️ Failed to score chunk:', (err as Error).message);
+      return 0.5; // Default neutral score on error
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
 
 export type RerankerMode = 'cosine' | 'llm';
 
 const cosineReranker = new CosineReranker();
+const llmReranker = new LlmReranker();
 
-const RERANKERS: Partial<Record<RerankerMode, Reranker>> = {
+const RERANKERS: Record<RerankerMode, Reranker> = {
   cosine: cosineReranker,
-  // "llm" will be registered here once the external reranker is implemented
+  llm: llmReranker,
 };
 
 // ---------------------------------------------------------------------------
