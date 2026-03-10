@@ -6,6 +6,7 @@
 import { keywordSearch } from './keywordSearch.service';
 import { semanticSearch } from '@/core/knowledge/ingestion/knowledgeIndex.service';
 import { rerankChunks } from './reranker.service';
+import { rewriteQuery } from './queryRewrite.service';
 import { SearchResult } from '../types';
 import { log, warn } from '@/lib/logger';
 
@@ -67,13 +68,19 @@ export async function searchRelevantKnowledge(
   log('[RAG:HybridSearch] 🔍 Hybrid knowledge search:', query);
 
   try {
-    // Run both searches concurrently — neither blocks the other
+    // Step 1: rewrite query to improve retrieval quality (falls back on failure)
+    const effectiveQuery = await rewriteQuery(query);
+    if (effectiveQuery !== query) {
+      log('[RAG:HybridSearch] ✏️ Using rewritten query:', effectiveQuery);
+    }
+
+    // Step 2: run both searches concurrently — neither blocks the other
     const [keywordResults, rawSemanticResults] = await Promise.all([
-      keywordSearch(query, limit, {
+      keywordSearch(effectiveQuery, limit, {
         category: options?.category,
         region: options?.region,
       }),
-      semanticSearch(query, limit),
+      semanticSearch(effectiveQuery, limit),
     ]);
 
     log(
@@ -92,7 +99,7 @@ export async function searchRelevantKnowledge(
 
     log('[RAG:HybridSearch] 🔀 Merged pool size:', merged.length);
 
-    return rerankChunks(query, merged, limit);
+    return rerankChunks(effectiveQuery, merged, limit);
   } catch (err) {
     console.error('[RAG:HybridSearch] 💥 Hybrid search error:', err);
     return [];
