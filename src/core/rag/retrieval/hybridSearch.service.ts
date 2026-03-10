@@ -1,6 +1,7 @@
 /**
  * RAG — Hybrid Search Service
  * Runs keyword and semantic search in parallel, merges results, then reranks.
+ * Results are cached to eliminate redundant searches for repeated queries.
  */
 
 import { keywordSearch } from './keywordSearch.service';
@@ -8,6 +9,7 @@ import { semanticSearch } from '@/core/knowledge/ingestion/knowledgeIndex.servic
 import { rerankChunks } from './reranker.service';
 import { rewriteQuery } from './queryRewrite.service';
 import { decomposeQuery } from './queryDecomposition.service';
+import { getCachedResults, cacheResults } from './retrievalCache.service';
 import { SearchResult } from '../types';
 import { log, warn } from '@/lib/logger';
 
@@ -72,6 +74,9 @@ export function computeRetrievalLimit(query: string): number {
 /**
  * Search for relevant knowledge using true hybrid retrieval:
  * keyword + semantic run in parallel, results are merged and reranked.
+ *
+ * Results are cached by (query, category, region) with a 5-minute TTL.
+ * Repeated identical queries return instant cached results.
  */
 export async function searchRelevantKnowledge(
   query: string,
@@ -86,6 +91,12 @@ export async function searchRelevantKnowledge(
   log('[RAG:HybridSearch] 🔍 Hybrid knowledge search:', query);
 
   try {
+    // Step 0: Check cache for existing results (using original query as key)
+    const cachedResults = getCachedResults(query, options?.category, options?.region);
+    if (cachedResults) {
+      log('[RAG:HybridSearch] ⚡ Returning', cachedResults.length, 'cached results (skipping retrieval)');
+      return cachedResults;
+    }
     // Step 1: rewrite query to improve retrieval quality (falls back on failure)
     const effectiveQuery = await rewriteQuery(query);
     if (effectiveQuery !== query) {
@@ -129,7 +140,12 @@ export async function searchRelevantKnowledge(
 
     log('[RAG:HybridSearch] 🔀 Merged pool size:', merged.length);
 
-    return rerankChunks(effectiveQuery, merged, limit);
+    const finalResults = await rerankChunks(effectiveQuery, merged, limit);
+
+    // Step 4: Cache the final results for future identical queries
+    cacheResults(query, finalResults, options?.category, options?.region);
+
+    return finalResults;
   } catch (err) {
     console.error('[RAG:HybridSearch] 💥 Hybrid search error:', err);
     return [];
