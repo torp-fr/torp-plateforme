@@ -77,7 +77,7 @@ class CosineReranker implements Reranker {
 
 class LlmReranker implements Reranker {
   /** Maximum characters taken from each chunk in the batch prompt. */
-  private readonly CHUNK_TRUNCATION = 400;
+  private readonly CHUNK_TRUNCATION = 300;
 
   /**
    * Rerank chunks using a single batch LLM call.
