@@ -2,18 +2,22 @@
  * RAG — Answer Grounding Validation Service
  * Validates that LLM-generated answers are grounded in retrieved knowledge.
  *
- * Purpose: Detect hallucinations and unsupported claims by measuring how much
- * of the LLM answer is actually supported by the retrieved documents.
+ * Pipeline:
+ * 1. Extracts key sentences from the answer.
+ * 2. For each sentence, computes a weighted grounding score:
+ *    - Token overlap against retrieved chunks  (weight: 0.6)
+ *    - Numeric consistency (numbers + units)   (weight: 0.4)
+ * 3. Computes a mean support score across all sentences (0–100%).
+ * 4. Warns if score falls below threshold (default: 70%).
  *
- * Pipeline: After LLM generates a response, this service:
- * 1. Extracts key sentences from the answer
- * 2. Checks overlap with retrieved chunk content
- * 3. Computes a support score (0-100%)
- * 4. Warns if score falls below threshold (default: 70%)
+ * Numeric consistency catches hallucinated figures that token overlap misses:
+ * - Bare numbers must appear in at least one retrieved chunk.
+ * - Unit+value pairs (e.g. "45 mm", "3.5 kWh") are checked as a unit —
+ *   both the value and the unit must co-occur in a chunk.
  */
 
 import { SearchResult } from '../types';
-import { log, warn } from '@/lib/logger';
+import { log } from '@/lib/logger';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -21,9 +25,9 @@ import { log, warn } from '@/lib/logger';
 
 export interface GroundingResult {
   isGrounded: boolean;
-  supportScore: number; // 0-100%
-  groundedSentences: number; // count of sentences with support
-  totalSentences: number; // total sentences in answer
+  supportScore: number; // 0-100% (mean weighted sentence score)
+  groundedSentences: number; // count of sentences with score ≥ threshold
+  totalSentences: number;
   warnings: string[];
   details: {
     sentenceSupport: Array<{ sentence: string; supported: boolean; matchedChunks: string[] }>;
@@ -36,71 +40,155 @@ export interface GroundingResult {
 
 const GROUNDING_THRESHOLD = 70; // Minimum support score (%) to consider answer grounded
 const MIN_SENTENCE_LENGTH = 10; // Ignore very short sentences (noise filtering)
-const SIMILARITY_THRESHOLD = 0.3; // Token overlap ratio for a match
+const SIMILARITY_THRESHOLD = 0.3; // Minimum weighted sentence score to be "supported"
+
+/** Weighted combination: token match 60%, numeric consistency 40% */
+const TOKEN_MATCH_WEIGHT = 0.6;
+const NUMERIC_MATCH_WEIGHT = 0.4;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helper Functions
+// Numeric & Unit Patterns
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** Physical and financial units tracked for hallucination detection. */
+const DETECTABLE_UNITS = ['%', 'm²', 'm2', 'kWh', '€', 'mm', 'cm', 'kg', 'MPa'];
 
 /**
- * Extract sentences from text.
- * Splits on periods, exclamation marks, question marks.
- * Filters out empty or very short sentences.
+ * Matches number+unit pairs like "45 kWh", "3.5m²", "1,200€".
+ * Built once from DETECTABLE_UNITS for efficiency.
  */
-function extractSentences(text: string): string[] {
-  if (!text) return [];
+const UNIT_VALUE_RE = new RegExp(
+  `\\d+(?:[.,]\\d+)?\\s*(?:${DETECTABLE_UNITS.join('|')})`,
+  'g'
+);
 
-  // Split on sentence-ending punctuation
-  const raw = text.split(/[.!?]+/).map((s) => s.trim()).filter((s) => s.length >= MIN_SENTENCE_LENGTH);
+/** Matches standalone numbers: integers and decimals (e.g. 45, 3.14, 1,234). */
+const BARE_NUMBER_RE = /\d+(?:[.,]\d+)?/g;
 
-  return raw;
+// ─────────────────────────────────────────────────────────────────────────────
+// Numeric Claim Extraction
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface NumericClaim {
+  /** Normalized form for chunk matching — no whitespace (e.g. "45mm", "3.5kWh"). */
+  compact: string;
+  /** Whether this claim has a unit; unit+value are checked strictly together. */
+  isUnitValue: boolean;
 }
 
 /**
- * Extract tokens from text (simple split on whitespace and punctuation).
- * Used for overlap calculation.
+ * Extract all numeric claims from a sentence, avoiding double-counting.
+ *
+ * Strategy:
+ * - Pass 1: find all unit+value pairs and record their character spans.
+ * - Pass 2: find all bare numbers; skip any position already covered by a span.
+ *
+ * This ensures "45mm" yields one claim (unit+value) rather than two (number + unit).
  */
-function extractTokens(text: string): Set<string> {
-  const normalized = text.toLowerCase().replace(/[^\w\s]/g, ' ');
-  const tokens = normalized.split(/\s+/).filter((t) => t.length > 2); // Filter tiny tokens
-  return new Set(tokens);
-}
+function extractNumericClaims(sentence: string): NumericClaim[] {
+  const claims: NumericClaim[] = [];
+  const coveredRanges: Array<[number, number]> = [];
 
-/**
- * Calculate token overlap ratio between two texts.
- * Returns: (overlapping tokens) / (unique tokens in target sentence)
- * High ratio = strong support.
- */
-function calculateTokenOverlap(sentence: string, chunkContent: string): number {
-  const sentenceTokens = extractTokens(sentence);
-  const chunkTokens = extractTokens(chunkContent);
-
-  if (sentenceTokens.size === 0) return 0;
-
-  let overlaps = 0;
-  for (const token of sentenceTokens) {
-    if (chunkTokens.has(token)) overlaps++;
+  // Pass 1: unit+value pairs (strict check)
+  for (const m of sentence.matchAll(UNIT_VALUE_RE)) {
+    const start = m.index!;
+    const end = start + m[0].length;
+    coveredRanges.push([start, end]);
+    claims.push({ compact: m[0].replace(/\s+/g, ''), isUnitValue: true });
   }
 
-  return overlaps / sentenceTokens.size;
-}
-
-/**
- * Check if a sentence is supported by the retrieved chunks.
- * A sentence is "supported" if it has sufficient token overlap with at least one chunk.
- */
-function isSentenceSupported(sentence: string, chunks: SearchResult[]): { supported: boolean; matchedChunks: string[] } {
-  const matchedChunks: string[] = [];
-
-  for (const chunk of chunks) {
-    const overlap = calculateTokenOverlap(sentence, chunk.content);
-    if (overlap >= SIMILARITY_THRESHOLD) {
-      matchedChunks.push(chunk.id);
-      return { supported: true, matchedChunks };
+  // Pass 2: bare numbers not already inside a unit+value span
+  for (const m of sentence.matchAll(BARE_NUMBER_RE)) {
+    const start = m.index!;
+    const end = start + m[0].length;
+    const isCovered = coveredRanges.some(([rs, re]) => start >= rs && end <= re);
+    if (!isCovered) {
+      claims.push({ compact: m[0], isUnitValue: false });
     }
   }
 
-  return { supported: false, matchedChunks };
+  return claims;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Token Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function extractSentences(text: string): string[] {
+  if (!text) return [];
+  return text
+    .split(/[.!?]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= MIN_SENTENCE_LENGTH);
+}
+
+function tokenize(text: string): Set<string> {
+  const normalized = text.toLowerCase().replace(/[^\w\s]/g, ' ');
+  return new Set(normalized.split(/\s+/).filter((t) => t.length > 2));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sentence Scoring
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Score one sentence's grounding against all retrieved chunks.
+ *
+ *   sentence_score = (best_token_overlap × 0.6) + (numeric_consistency × 0.4)
+ *
+ * Token overlap: highest overlap ratio across all chunks.
+ * Numeric consistency:
+ *   - 1.0 when sentence contains no numbers (vacuously consistent).
+ *   - For unit+value claims: compact form must appear in compact chunk text.
+ *   - For bare number claims: number must appear anywhere in chunk text.
+ *
+ * A sentence is "supported" when sentence_score ≥ SIMILARITY_THRESHOLD.
+ */
+function scoreSentence(
+  sentence: string,
+  chunks: SearchResult[]
+): { score: number; supported: boolean; matchedChunks: string[] } {
+  // ── Token overlap ─────────────────────────────────────────────────────────
+  const sentenceTokens = tokenize(sentence);
+  const matchedChunks: string[] = [];
+  let bestTokenOverlap = 0;
+
+  for (const chunk of chunks) {
+    const chunkTokens = tokenize(chunk.content);
+    let overlaps = 0;
+    for (const t of sentenceTokens) {
+      if (chunkTokens.has(t)) overlaps++;
+    }
+    const ratio = sentenceTokens.size > 0 ? overlaps / sentenceTokens.size : 0;
+    if (ratio > bestTokenOverlap) bestTokenOverlap = ratio;
+    if (ratio >= SIMILARITY_THRESHOLD) matchedChunks.push(chunk.id);
+  }
+
+  // ── Numeric consistency ───────────────────────────────────────────────────
+  const claims = extractNumericClaims(sentence);
+  let numericScore = 1.0; // vacuously consistent when no numeric claims
+
+  if (claims.length > 0) {
+    const allChunkText = chunks.map((c) => c.content).join(' ');
+    const compactChunkText = allChunkText.replace(/\s+/g, ''); // unit+value matching
+
+    let supported = 0;
+    for (const claim of claims) {
+      if (claim.isUnitValue) {
+        // Strict: value and unit must co-occur (compact form found in compact text)
+        if (compactChunkText.includes(claim.compact)) supported++;
+      } else {
+        // Loose: bare number present anywhere in chunk text
+        if (allChunkText.includes(claim.compact)) supported++;
+      }
+    }
+    numericScore = supported / claims.length;
+  }
+
+  // ── Weighted sentence score ───────────────────────────────────────────────
+  const score = bestTokenOverlap * TOKEN_MATCH_WEIGHT + numericScore * NUMERIC_MATCH_WEIGHT;
+
+  return { score, supported: score >= SIMILARITY_THRESHOLD, matchedChunks };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -110,9 +198,12 @@ function isSentenceSupported(sentence: string, chunks: SearchResult[]): { suppor
 /**
  * Validate that an LLM-generated answer is grounded in retrieved knowledge.
  *
- * @param answer - The LLM-generated response text
+ * supportScore is the mean weighted sentence score (0–100%), reflecting both
+ * textual similarity and numeric consistency with retrieved chunks.
+ *
+ * @param answer          - The LLM-generated response text
  * @param retrievedChunks - The chunks used to generate the answer
- * @returns GroundingResult with support score and details
+ * @returns GroundingResult with weighted support score and per-sentence details
  */
 export function validateGrounding(answer: string, retrievedChunks: SearchResult[]): GroundingResult {
   if (!answer || answer.trim().length === 0) {
@@ -137,7 +228,6 @@ export function validateGrounding(answer: string, retrievedChunks: SearchResult[
     };
   }
 
-  // Extract sentences from the answer
   const sentences = extractSentences(answer);
 
   if (sentences.length === 0) {
@@ -151,19 +241,26 @@ export function validateGrounding(answer: string, retrievedChunks: SearchResult[
     };
   }
 
-  // Check grounding for each sentence
-  const sentenceSupport = sentences.map((sentence) => {
-    const { supported, matchedChunks } = isSentenceSupported(sentence, retrievedChunks);
+  // Score each sentence using weighted token overlap + numeric consistency
+  const scored = sentences.map((sentence) => {
+    const { score, supported, matchedChunks } = scoreSentence(sentence, retrievedChunks);
     return {
       sentence: sentence.substring(0, 80) + (sentence.length > 80 ? '...' : ''),
       supported,
       matchedChunks,
+      _score: score,
     };
   });
 
-  // Calculate support score
-  const groundedSentences = sentenceSupport.filter((s) => s.supported).length;
-  const supportScore = Math.round((groundedSentences / sentences.length) * 100);
+  const groundedSentences = scored.filter((s) => s.supported).length;
+  const meanScore = scored.reduce((sum, s) => sum + s._score, 0) / scored.length;
+  const supportScore = Math.round(meanScore * 100);
+
+  const sentenceSupport = scored.map(({ sentence, supported, matchedChunks }) => ({
+    sentence,
+    supported,
+    matchedChunks,
+  }));
 
   // Build warnings
   const warnings: string[] = [];
@@ -198,6 +295,10 @@ export function validateGrounding(answer: string, retrievedChunks: SearchResult[
     details: { sentenceSupport },
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Formatting
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Format grounding result for logging and user display.
