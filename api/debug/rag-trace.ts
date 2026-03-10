@@ -22,7 +22,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getServerSupabase } from '../_lib/supabase';
 
 const EMBEDDING_MODEL = 'text-embedding-3-small';
-const EMBEDDING_DIMENSIONS = 384;
+const EMBEDDING_DIMENSIONS = 1536;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
