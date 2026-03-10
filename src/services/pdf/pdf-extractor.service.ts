@@ -3,7 +3,7 @@
  * Extracts text content from PDF files using PDF.js
  */
 
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import { initPdfJs } from '@/lib/pdf';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
 

@@ -19,6 +19,9 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    include: ['pdfjs-dist/build/pdf'],
+  },
   build: {
     // Désactivation du code-splitting pour éviter les erreurs React sur Vercel
     // Un bundle unique est plus gros mais garantit le bon ordre de chargement

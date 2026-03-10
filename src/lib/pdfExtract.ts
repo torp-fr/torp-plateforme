@@ -6,7 +6,7 @@
  * const text = await extractPdfText(file);
  */
 
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsLib from 'pdfjs-dist/build/pdf';
 import { verifyPdfJsInitialization } from './pdf';
 
 interface ExtractionOptions {
