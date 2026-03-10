@@ -1,0 +1,62 @@
+[
+  {
+    "id": "regulation_001",
+    "question": "Quelles sont les règles NFC 15-100 pour les installations électriques ?",
+    "expectedKeywords": ["NFC", "installation", "électrique"],
+    "expectedSources": ["nfc_15-100"]
+  },
+  {
+    "id": "regulation_002",
+    "question": "Quelles sont les normes RT2020 pour l'isolation thermique des bâtiments neufs ?",
+    "expectedKeywords": ["RT2020", "isolation", "thermique", "bâtiment"],
+    "expectedSources": ["rt2020"]
+  },
+  {
+    "id": "regulation_003",
+    "question": "Quelles sont les obligations DTU 20.1 pour les travaux de maçonnerie ?",
+    "expectedKeywords": ["DTU", "maçonnerie"],
+    "expectedSources": ["dtu_20-1"]
+  },
+  {
+    "id": "plomberie_001",
+    "question": "Quelles sont les règles d'installation pour une chaudière à gaz en appartement ?",
+    "expectedKeywords": ["chaudière", "gaz", "installation", "ventilation"],
+    "expectedSources": ["dtu_61-1"]
+  },
+  {
+    "id": "plomberie_002",
+    "question": "Quelles sont les normes pour les canalisations d'eau potable en cuivre ?",
+    "expectedKeywords": ["canalisation", "eau potable", "cuivre"],
+    "expectedSources": ["dtu_60-1"]
+  },
+  {
+    "id": "structure_001",
+    "question": "Quelles sont les charges admissibles pour un plancher en béton armé ?",
+    "expectedKeywords": ["plancher", "béton", "charge", "armé"],
+    "expectedSources": ["eurocode_2"]
+  },
+  {
+    "id": "structure_002",
+    "question": "Comment calculer la résistance d'une poutre en bois selon l'Eurocode 5 ?",
+    "expectedKeywords": ["poutre", "bois", "Eurocode", "résistance"],
+    "expectedSources": ["eurocode_5"]
+  },
+  {
+    "id": "securite_001",
+    "question": "Quelles sont les règles de sécurité incendie ERP pour les établissements recevant du public ?",
+    "expectedKeywords": ["incendie", "ERP", "sécurité", "évacuation"],
+    "expectedSources": ["erp_securite"]
+  },
+  {
+    "id": "accessibilite_001",
+    "question": "Quelles sont les normes d'accessibilité PMR pour les rampes d'accès ?",
+    "expectedKeywords": ["PMR", "accessibilité", "rampe"],
+    "expectedSources": ["accessibilite_pmr"]
+  },
+  {
+    "id": "energie_001",
+    "question": "Quels sont les critères de performance énergétique pour obtenir le label BBC ?",
+    "expectedKeywords": ["BBC", "performance", "énergétique", "label"],
+    "expectedSources": ["bbc_effinergie"]
+  }
+]

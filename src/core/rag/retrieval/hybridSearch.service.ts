@@ -1,6 +1,7 @@
 /**
  * RAG — Hybrid Search Service
  * Runs keyword and semantic search in parallel, merges results, then reranks.
+ * Results are cached to eliminate redundant searches for repeated queries.
  */
 
 import { keywordSearch } from './keywordSearch.service';
@@ -8,6 +9,8 @@ import { semanticSearch } from '@/core/knowledge/ingestion/knowledgeIndex.servic
 import { rerankChunks } from './reranker.service';
 import { rewriteQuery } from './queryRewrite.service';
 import { decomposeQuery } from './queryDecomposition.service';
+import { getCachedResults, cacheResults } from './retrievalCache.service';
+import { recordRagTrace } from '../analytics/ragTracing.service';
 import { SearchResult } from '../types';
 import { log, warn } from '@/lib/logger';
 
@@ -72,6 +75,9 @@ export function computeRetrievalLimit(query: string): number {
 /**
  * Search for relevant knowledge using true hybrid retrieval:
  * keyword + semantic run in parallel, results are merged and reranked.
+ *
+ * Results are cached by (query, category, region) with a 5-minute TTL.
+ * Repeated identical queries return instant cached results.
  */
 export async function searchRelevantKnowledge(
   query: string,
@@ -81,22 +87,54 @@ export async function searchRelevantKnowledge(
     limit?: number;
   }
 ): Promise<SearchResult[]> {
+  // Trace instrumentation
+  const traceId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const pipelineStart = Date.now();
+  let rewriteMs = 0;
+  let decomposeMs = 0;
+  let retrievalMs = 0;
+  let rerankMs = 0;
+  let rewrittenQuery = query;
+  let subQueries: string[] = [];
+
   const limit = options?.limit ?? computeRetrievalLimit(query);
 
   log('[RAG:HybridSearch] 🔍 Hybrid knowledge search:', query);
 
   try {
+    // Step 0: Check cache for existing results (using original query as key)
+    const cachedResults = getCachedResults(query, options?.category, options?.region);
+    if (cachedResults) {
+      log('[RAG:HybridSearch] ⚡ Returning', cachedResults.length, 'cached results (skipping retrieval)');
+      // Log cache hit trace (non-blocking)
+      const totalMs = Date.now() - pipelineStart;
+      recordRagTrace({
+        traceId,
+        query,
+        retrievalLimit: limit,
+        retrievalCount: cachedResults.length,
+        compressedCount: cachedResults.length,
+        totalMs,
+      });
+      return cachedResults;
+    }
     // Step 1: rewrite query to improve retrieval quality (falls back on failure)
+    const rewriteStart = Date.now();
     const effectiveQuery = await rewriteQuery(query);
+    rewriteMs = Date.now() - rewriteStart;
+    rewrittenQuery = effectiveQuery;
     if (effectiveQuery !== query) {
       log('[RAG:HybridSearch] ✏️ Using rewritten query:', effectiveQuery);
     }
 
     // Step 2: decompose into independent sub-queries for compound questions
-    const subQueries = await decomposeQuery(effectiveQuery);
+    const decomposeStart = Date.now();
+    subQueries = await decomposeQuery(effectiveQuery);
+    decomposeMs = Date.now() - decomposeStart;
     log('[RAG:HybridSearch] 🔍 Running retrieval for', subQueries.length, 'sub-quer(ies)');
 
     // Step 3: run both searches concurrently for every sub-query, then flatten
+    const retrievalStart = Date.now();
     const allKeyword: SearchResult[] = [];
     const allSemantic: SearchResult[] = [];
 
@@ -113,6 +151,7 @@ export async function searchRelevantKnowledge(
         allSemantic.push(...sem.map(semanticToSearchResult));
       })
     );
+    retrievalMs = Date.now() - retrievalStart;
 
     log(
       '[RAG:HybridSearch] 📊 keyword=%d semantic=%d (across all sub-queries)',
@@ -122,6 +161,20 @@ export async function searchRelevantKnowledge(
 
     if (allKeyword.length === 0 && allSemantic.length === 0) {
       warn('[RAG:HybridSearch] ⚠️ Both searches returned 0 results');
+      const totalMs = Date.now() - pipelineStart;
+      recordRagTrace({
+        traceId,
+        query,
+        rewrittenQuery,
+        subQueries,
+        retrievalLimit: limit,
+        retrievalCount: 0,
+        compressedCount: 0,
+        rewriteMs,
+        decomposeMs,
+        retrievalMs,
+        totalMs,
+      });
       return [];
     }
 
@@ -129,9 +182,51 @@ export async function searchRelevantKnowledge(
 
     log('[RAG:HybridSearch] 🔀 Merged pool size:', merged.length);
 
-    return rerankChunks(effectiveQuery, merged, limit);
+    // Step 4: Rerank (using default cosine mode unless specified)
+    const rerankStart = Date.now();
+    const finalResults = await rerankChunks(effectiveQuery, merged, limit);
+    rerankMs = Date.now() - rerankStart;
+
+    // Step 5: Cache the final results for future identical queries
+    cacheResults(query, finalResults, options?.category, options?.region);
+
+    // Log comprehensive trace (non-blocking fire-and-forget)
+    const totalMs = Date.now() - pipelineStart;
+    recordRagTrace({
+      traceId,
+      query,
+      rewrittenQuery,
+      subQueries,
+      retrievalLimit: limit,
+      retrievalCount: merged.length,
+      compressedCount: finalResults.length,
+      rerankMode: 'cosine', // Default mode
+      rewriteMs,
+      decomposeMs,
+      retrievalMs,
+      rerankMs,
+      totalMs,
+    });
+
+    return finalResults;
   } catch (err) {
     console.error('[RAG:HybridSearch] 💥 Hybrid search error:', err);
+    // Log error trace (non-blocking)
+    const totalMs = Date.now() - pipelineStart;
+    recordRagTrace({
+      traceId,
+      query,
+      rewrittenQuery,
+      subQueries,
+      retrievalLimit: limit,
+      retrievalCount: 0,
+      compressedCount: 0,
+      rewriteMs,
+      decomposeMs,
+      retrievalMs,
+      rerankMs,
+      totalMs,
+    });
     return [];
   }
 }
