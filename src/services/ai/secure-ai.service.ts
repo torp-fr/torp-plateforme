@@ -15,23 +15,32 @@ class SecureAIService {
 
   private initialized = false;
   private initializing: Promise<void> | null = null;
+  private accessToken: string | null = null;
 
   /**
-   * One-time session bootstrap.
-   * If a session already exists (browser context), reuses it.
-   * Otherwise attempts anonymous sign-in (CLI / server context).
+   * Deterministic session bootstrap.
+   * Captures the access token directly from the session or sign-in response —
+   * never relies on polling.
    */
   private async init(): Promise<void> {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token) {
+      this.accessToken = session.access_token;
       this.initialized = true;
       return;
     }
-    // No existing session — create an anonymous one for CLI/server contexts
-    const { error: signInError } = await supabase.auth.signInAnonymously();
-    if (signInError) {
-      warn('[SecureAI] Anonymous sign-in failed:', signInError.message);
+
+    // No existing session — create an anonymous one (CLI / server context)
+    const { data, error } = await supabase.auth.signInAnonymously();
+    if (error) {
+      throw new Error(`SUPABASE_ANON_AUTH_FAILED: ${error.message}`);
     }
+
+    this.accessToken = data.session?.access_token ?? null;
+    if (!this.accessToken) {
+      throw new Error('SUPABASE_SESSION_MISSING');
+    }
+
     this.initialized = true;
   }
 
@@ -44,18 +53,6 @@ class SecureAIService {
       this.initializing = this.init();
     }
     await this.initializing;
-  }
-
-  /**
-   * 🔥 WAIT SESSION — HARD STABLE
-   */
-  private async waitForSession(): Promise<any> {
-    for (let i = 0; i < 20; i++) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) return session;
-      await new Promise(r => setTimeout(r, 150));
-    }
-    throw new Error('SESSION_TIMEOUT');
   }
 
   /**
@@ -75,21 +72,22 @@ class SecureAIService {
     const truncatedText =
       text.length > 8000 ? text.substring(0, 8000) : text;
 
-    const session = await this.waitForSession();
+    const token = this.accessToken;
+    if (!token) {
+      throw new Error('SECURE_AI_NOT_INITIALIZED');
+    }
 
     // EDGE DEBUG — BEFORE INVOKE
     const projectUrl = supabase.supabaseUrl;
-    const hasSession = !!session?.access_token;
     const payloadSize = JSON.stringify({ text: truncatedText, model }).length;
 
     log('[EDGE DEBUG] invoking generate-embedding', {
       projectUrl,
-      hasSession,
+      hasSession: true,
       payloadSize,
       textLength: truncatedText.length,
       model,
       timestamp: new Date().toISOString(),
-      sessionExpiresAt: session?.expires_at,
     });
 
     // CRITICAL: Verify supabase client URL (fixes edge invoke origin mismatch)
@@ -102,7 +100,7 @@ class SecureAIService {
       'generate-embedding',
       {
         headers: {
-          Authorization: `Bearer ${session.access_token}`
+          Authorization: `Bearer ${token}`
         },
         body: {
           text: truncatedText,
@@ -154,14 +152,18 @@ class SecureAIService {
    */
   async complete(params: CompletionParams): Promise<string> {
 
-    const session = await this.waitForSession();
+    await this.ensureInitialized();
+
+    const token = this.accessToken;
+    if (!token) {
+      throw new Error('SECURE_AI_NOT_INITIALIZED');
+    }
 
     // EDGE DEBUG — BEFORE INVOKE
-    const hasSession = !!session?.access_token;
     const payloadSize = JSON.stringify(params).length;
 
     log('[EDGE DEBUG] invoking llm-completion', {
-      hasSession,
+      hasSession: true,
       payloadSize,
       model: params.model,
       messagesCount: params.messages?.length,
@@ -177,7 +179,7 @@ class SecureAIService {
       'llm-completion',
       {
         headers: {
-          Authorization: `Bearer ${session.access_token}`
+          Authorization: `Bearer ${token}`
         },
         body: params
       }
