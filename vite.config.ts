@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   optimizeDeps: {
-    include: ['pdfjs-dist/build/pdf'],
+    include: ['pdfjs-dist/legacy/build/pdf.mjs'],
   },
   build: {
     // Désactivation du code-splitting pour éviter les erreurs React sur Vercel

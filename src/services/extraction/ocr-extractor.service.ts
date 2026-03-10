@@ -3,7 +3,7 @@
  * Utilise PDF.js avec post-traitement intelligent pour les devis BTP
  */
 
-import * as pdfjsLib from 'pdfjs-dist/build/pdf';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { initPdfJs } from '@/lib/pdf';
 
 // Initialize PDF.js with centralized configuration
