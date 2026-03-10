@@ -10,10 +10,17 @@ import { log, warn } from '@/lib/logger';
 export interface RagTraceEntry {
   traceId: string;
   query: string;
+  rewrittenQuery?: string;
+  subQueries?: string[];
+  retrievalLimit?: number;
   retrievalCount: number;
   compressedCount: number;
+  rerankMode?: 'cosine' | 'llm';
   embeddingMs?: number;
   retrievalMs?: number;
+  rewriteMs?: number;
+  decomposeMs?: number;
+  rerankMs?: number;
   compressionMs?: number;
   totalMs?: number;
   timestamp: string;
@@ -47,25 +54,44 @@ function rowToTraceEntry(row: Record<string, unknown>): RagTraceEntry {
  * Record a RAG pipeline trace entry.
  * Inserts into `rag_query_traces` asynchronously (fire-and-forget).
  * Does not block the caller.
+ *
+ * IMPORTANT: This function is non-blocking. The trace is queued for insertion
+ * but the caller does not wait for the DB operation to complete. This ensures
+ * that tracing overhead does not impact query latency.
  */
 export function recordRagTrace(entry: Omit<RagTraceEntry, 'timestamp'>): void {
   const retrieved_chunks = {
     count:       entry.retrievalCount,
+    limit:       entry.retrievalLimit,
     embeddingMs: entry.embeddingMs,
     retrievalMs: entry.retrievalMs,
+    rewriteMs:   entry.rewriteMs,
+    decomposeMs: entry.decomposeMs,
     totalMs:     entry.totalMs,
   };
 
   const reranked_chunks = {
-    count:         entry.compressedCount,
+    count:       entry.compressedCount,
+    mode:        entry.rerankMode,
+    rerankMs:    entry.rerankMs,
     compressionMs: entry.compressionMs,
   };
 
-  const final_context = entry.traceId;
+  const pipeline_metadata = {
+    rewritten_query: entry.rewrittenQuery,
+    sub_queries: entry.subQueries,
+    trace_id: entry.traceId,
+  };
 
+  // Non-blocking insert (fire-and-forget)
   supabase
     .from('rag_query_traces')
-    .insert({ query: entry.query, retrieved_chunks, reranked_chunks, final_context })
+    .insert({
+      query: entry.query,
+      retrieved_chunks,
+      reranked_chunks,
+      pipeline_metadata,
+    })
     .then(({ error }) => {
       if (error) {
         warn('[RAG:Tracing] ⚠️ Failed to persist trace:', error.message);
@@ -74,7 +100,9 @@ export function recordRagTrace(entry: Omit<RagTraceEntry, 'timestamp'>): void {
       log('[RAG:Tracing] 📊 Trace persisted:', {
         traceId:        entry.traceId,
         query:          entry.query.substring(0, 50),
+        subQueries:     entry.subQueries?.length ?? 0,
         retrievalCount: entry.retrievalCount,
+        rerankMode:     entry.rerankMode,
         totalMs:        entry.totalMs,
       });
     });
