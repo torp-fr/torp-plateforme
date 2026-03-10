@@ -5,6 +5,7 @@
 
 import { keywordSearch } from './keywordSearch.service';
 import { semanticSearch } from '@/core/knowledge/ingestion/knowledgeIndex.service';
+import { rerankChunks } from './reranker.service';
 import { SearchResult } from '../types';
 import { log, warn } from '@/lib/logger';
 
@@ -33,7 +34,7 @@ export async function searchRelevantKnowledge(
 
     if (keywordResults.length > 0) {
       log('[RAG:HybridSearch] ✅ Keyword search returned', keywordResults.length, 'results');
-      return keywordResults.slice(0, limit);
+      return rerankChunks(query, keywordResults, limit);
     }
 
     // Step 2: semantic fallback via pgvector + full-text hybrid search
@@ -48,7 +49,7 @@ export async function searchRelevantKnowledge(
 
     log('[RAG:HybridSearch] ✅ Semantic fallback returned', semanticResults.length, 'results');
 
-    return semanticResults.slice(0, limit).map((chunk) => ({
+    const mapped: SearchResult[] = semanticResults.slice(0, limit).map((chunk) => ({
       id: chunk.chunkId,
       source: '',
       category: '',
@@ -59,6 +60,8 @@ export async function searchRelevantKnowledge(
       relevance_score: chunk.similarity,
       embedding_similarity: chunk.similarity,
     }));
+
+    return rerankChunks(query, mapped, limit);
   } catch (err) {
     console.error('[RAG:HybridSearch] 💥 Hybrid search error:', err);
     return [];
