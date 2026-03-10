@@ -32,6 +32,7 @@ import {
   type ChunkVisualization,
   type RAGTrace,
 } from './api/knowledgeDebugApi';
+import { IngestionStudio } from './IngestionStudio';
 
 // ---------------------------------------------------------------------------
 // Ingestion Dashboard Panel
@@ -420,6 +421,7 @@ export function KnowledgeControlCenter() {
         </p>
       </div>
 
+      <IngestionStudio />
       <IngestionDashboardPanel />
       <RetrievalDebuggerPanel />
       <ChunkVisualizerPanel />
