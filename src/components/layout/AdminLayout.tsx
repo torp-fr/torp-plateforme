@@ -20,6 +20,7 @@ import {
   AlertTriangle,
   TrendingUp,
   Plug,
+  FlaskConical,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
@@ -79,6 +80,12 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
     href: '/analytics/knowledge',
     icon: Database,
     label: 'Base de Connaissances',
+  },
+  {
+    id: 'knowledge-debug',
+    href: '/analytics/knowledge-debug',
+    icon: FlaskConical,
+    label: 'Knowledge',
   },
   {
     id: 'system',
