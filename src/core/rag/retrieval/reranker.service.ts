@@ -1,8 +1,10 @@
 /**
  * RAG — Reranker Service
- * Re-scores retrieved chunks using cosine similarity between the query
- * embedding and the pre-computed embedding stored in each chunk
- * (knowledge_chunks.embedding_vector). No chunk re-embedding required.
+ * Pluggable reranker architecture.
+ *
+ * Modes:
+ *   "cosine" (default) — cosine similarity against pre-stored embedding_vector
+ *   "llm"              — reserved for a future external reranker API
  *
  * Pipeline position:
  *   keywordSearch / semanticSearch → rerankChunks → caller
@@ -15,7 +17,15 @@ import { log, warn } from '@/lib/logger';
 const DEFAULT_TOP_N = 10;
 
 // ---------------------------------------------------------------------------
-// Cosine similarity (in-memory, no dependencies)
+// Reranker interface
+// ---------------------------------------------------------------------------
+
+interface Reranker {
+  rerank(query: string, chunks: SearchResult[], topN: number): Promise<SearchResult[]>;
+}
+
+// ---------------------------------------------------------------------------
+// Cosine similarity helper
 // ---------------------------------------------------------------------------
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -33,52 +43,73 @@ function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 // ---------------------------------------------------------------------------
+// CosineReranker
+// ---------------------------------------------------------------------------
+
+class CosineReranker implements Reranker {
+  async rerank(query: string, chunks: SearchResult[], topN: number): Promise<SearchResult[]> {
+    const queryEmbedding = await generateEmbedding(query);
+    if (!queryEmbedding) {
+      warn('[RAG:Reranker] ⚠️ Failed to generate query embedding — returning original order');
+      return chunks.slice(0, topN);
+    }
+
+    const scored = chunks.map((chunk) => {
+      const chunkEmbedding = chunk.embedding_vector;
+      const similarity = chunkEmbedding ? cosineSimilarity(queryEmbedding, chunkEmbedding) : 0;
+      if (!chunkEmbedding) {
+        warn('[RAG:Reranker] ⚠️ Chunk missing embedding_vector, score=0:', chunk.id);
+      }
+      return { chunk: { ...chunk, embedding_similarity: similarity }, similarity };
+    });
+
+    scored.sort((a, b) => b.similarity - a.similarity);
+    return scored.slice(0, topN).map((s) => s.chunk);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Registry
+// ---------------------------------------------------------------------------
+
+export type RerankerMode = 'cosine' | 'llm';
+
+const RERANKERS: Record<RerankerMode, Reranker> = {
+  cosine: new CosineReranker(),
+  // "llm" will be registered here once the external reranker is implemented
+  llm: (() => { throw new Error('[RAG:Reranker] LLM reranker is not yet implemented'); }) as unknown as Reranker,
+};
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
+export interface RerankOptions {
+  mode?: RerankerMode;
+}
+
 /**
- * Rerank chunks by cosine similarity between the query embedding and each
- * chunk's pre-stored embedding_vector (knowledge_chunks.embedding_vector).
+ * Rerank chunks using the selected strategy.
  *
- * Steps:
- *   1. Generate query embedding (single API call)
- *   2. Score each chunk that carries embedding_vector via cosine similarity
- *      (chunks without embedding_vector are skipped — score stays 0)
- *   3. Sort descending and return top `topN` results
- *
- * Falls back to the original order if query embedding generation fails.
+ * @param query   - The original user query.
+ * @param chunks  - Candidate chunks from the retrieval step.
+ * @param topN    - Maximum number of results to return.
+ * @param options - { mode: "cosine" (default) | "llm" }
  */
 export async function rerankChunks(
   query: string,
   chunks: SearchResult[],
-  topN: number = DEFAULT_TOP_N
+  topN: number = DEFAULT_TOP_N,
+  options: RerankOptions = {},
 ): Promise<SearchResult[]> {
   if (chunks.length === 0) return [];
 
-  log('[RAG:Reranker] 🔀 Reranking', chunks.length, 'chunks for query:', query);
+  const mode: RerankerMode = options.mode ?? 'cosine';
+  log('[RAG:Reranker] 🔀 Reranking', chunks.length, 'chunks — mode:', mode);
 
-  // Step 1: query embedding (single API call — no chunk re-embedding)
-  const queryEmbedding = await generateEmbedding(query);
-  if (!queryEmbedding) {
-    warn('[RAG:Reranker] ⚠️ Failed to generate query embedding — returning original order');
-    return chunks.slice(0, topN);
-  }
+  const reranker = RERANKERS[mode];
+  const reranked = await reranker.rerank(query, chunks, topN);
 
-  // Step 2: score each chunk using its stored embedding_vector
-  const scored = chunks.map((chunk) => {
-    const chunkEmbedding = chunk.embedding_vector;
-    const similarity = chunkEmbedding ? cosineSimilarity(queryEmbedding, chunkEmbedding) : 0;
-    if (!chunkEmbedding) {
-      warn('[RAG:Reranker] ⚠️ Chunk missing embedding_vector, score=0:', chunk.id);
-    }
-    return { chunk: { ...chunk, embedding_similarity: similarity }, similarity };
-  });
-
-  // Step 3: sort descending and return top N
-  scored.sort((a, b) => b.similarity - a.similarity);
-
-  const reranked = scored.slice(0, topN).map((s) => s.chunk);
   log('[RAG:Reranker] ✅ Reranked to top', reranked.length, 'chunks');
-
   return reranked;
 }
