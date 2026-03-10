@@ -15,30 +15,58 @@ class SecureAIService {
 
   private initialized = false;
   private initializing: Promise<void> | null = null;
+  private accessToken: string | null = null;
 
   /**
-   * One-time session bootstrap.
-   * If a session already exists (browser context), reuses it.
-   * Otherwise attempts anonymous sign-in (CLI / server context).
+   * Deterministic token resolution — no auth flow, no polling.
+   *
+   * Priority:
+   *   1. Existing Supabase user session (browser — user already logged in)
+   *   2. SUPABASE_SERVICE_ROLE_KEY env var (CLI / server — static admin JWT)
+   *   3. VITE_SUPABASE_ANON_KEY env var (fallback — public anon key)
+   *
+   * Anonymous sign-in is intentionally absent: it creates throwaway users,
+   * burns Supabase rate limits, and is unnecessary when a static key exists.
    */
   private async init(): Promise<void> {
+    // 1. Browser context: reuse the authenticated user's JWT
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token) {
+      this.accessToken = session.access_token;
       this.initialized = true;
       return;
     }
-    // No existing session — create an anonymous one for CLI/server contexts
-    const { error: signInError } = await supabase.auth.signInAnonymously();
-    if (signInError) {
-      warn('[SecureAI] Anonymous sign-in failed:', signInError.message);
+
+    // 2. CLI / server context: use the static key that supabase.ts already resolved.
+    //    Mirror the same resolution order as supabase.ts lines 74-78 so both always
+    //    agree on which credential is in use.
+    const _metaEnv = (typeof import.meta !== 'undefined' && import.meta.env)
+      ? import.meta.env as Record<string, string | undefined>
+      : {} as Record<string, string | undefined>;
+
+    const staticKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ??
+      _metaEnv.VITE_SUPABASE_ANON_KEY ??
+      process.env.VITE_SUPABASE_ANON_KEY ??
+      null;
+
+    if (staticKey) {
+      this.accessToken = staticKey;
+      this.initialized = true;
+      return;
     }
-    this.initialized = true;
+
+    throw new Error(
+      'SECURE_AI_NO_AUTH: No user session and no static Supabase key found.\n' +
+      'CLI: set SUPABASE_SERVICE_ROLE_KEY in .env.local\n' +
+      'Browser: ensure the user is logged in before calling generateEmbedding()'
+    );
   }
 
   /**
    * Ensures init() runs exactly once, even under concurrent callers.
    */
-  async ensureInitialized(): Promise<void> {
+  private async ensureInitialized(): Promise<void> {
     if (this.initialized) return;
     if (!this.initializing) {
       this.initializing = this.init();
@@ -47,15 +75,13 @@ class SecureAIService {
   }
 
   /**
-   * 🔥 WAIT SESSION — HARD STABLE
+   * Returns the resolved Bearer token.
+   * Triggers initialization on first call; subsequent calls are instant.
    */
-  private async waitForSession(): Promise<any> {
-    for (let i = 0; i < 20; i++) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) return session;
-      await new Promise(r => setTimeout(r, 150));
-    }
-    throw new Error('SESSION_TIMEOUT');
+  async getAccessToken(): Promise<string> {
+    await this.ensureInitialized();
+    if (!this.accessToken) throw new Error('SECURE_AI_NOT_INITIALIZED');
+    return this.accessToken;
   }
 
   /**
@@ -75,21 +101,22 @@ class SecureAIService {
     const truncatedText =
       text.length > 8000 ? text.substring(0, 8000) : text;
 
-    const session = await this.waitForSession();
+    const token = this.accessToken;
+    if (!token) {
+      throw new Error('SECURE_AI_NOT_INITIALIZED');
+    }
 
     // EDGE DEBUG — BEFORE INVOKE
     const projectUrl = supabase.supabaseUrl;
-    const hasSession = !!session?.access_token;
     const payloadSize = JSON.stringify({ text: truncatedText, model }).length;
 
     log('[EDGE DEBUG] invoking generate-embedding', {
       projectUrl,
-      hasSession,
+      hasSession: true,
       payloadSize,
       textLength: truncatedText.length,
       model,
       timestamp: new Date().toISOString(),
-      sessionExpiresAt: session?.expires_at,
     });
 
     // CRITICAL: Verify supabase client URL (fixes edge invoke origin mismatch)
@@ -102,7 +129,7 @@ class SecureAIService {
       'generate-embedding',
       {
         headers: {
-          Authorization: `Bearer ${session.access_token}`
+          Authorization: `Bearer ${token}`
         },
         body: {
           text: truncatedText,
@@ -154,14 +181,18 @@ class SecureAIService {
    */
   async complete(params: CompletionParams): Promise<string> {
 
-    const session = await this.waitForSession();
+    await this.ensureInitialized();
+
+    const token = this.accessToken;
+    if (!token) {
+      throw new Error('SECURE_AI_NOT_INITIALIZED');
+    }
 
     // EDGE DEBUG — BEFORE INVOKE
-    const hasSession = !!session?.access_token;
     const payloadSize = JSON.stringify(params).length;
 
     log('[EDGE DEBUG] invoking llm-completion', {
-      hasSession,
+      hasSession: true,
       payloadSize,
       model: params.model,
       messagesCount: params.messages?.length,
@@ -177,7 +208,7 @@ class SecureAIService {
       'llm-completion',
       {
         headers: {
-          Authorization: `Bearer ${session.access_token}`
+          Authorization: `Bearer ${token}`
         },
         body: params
       }
