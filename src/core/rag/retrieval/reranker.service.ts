@@ -5,8 +5,8 @@
  * Modes:
  *   "cosine" (default) — cosine similarity against pre-stored embedding_vector
  *                        Fast, deterministic, no LLM calls
- *   "llm"              — cross-encoder reranking via LLM
- *                        Slower but higher quality ranking, models query-chunk interaction
+ *   "llm"              — batch cross-encoder reranking via LLM (1 API call for all chunks)
+ *                        Higher quality ranking, query-aware; falls back to cosine on error
  *
  * Pipeline position:
  *   keywordSearch / semanticSearch → rerankChunks → caller
@@ -72,90 +72,119 @@ class CosineReranker implements Reranker {
 }
 
 // ---------------------------------------------------------------------------
-// LlmReranker — Cross-encoder reranking via LLM
+// LlmReranker — Batch cross-encoder reranking via LLM
 // ---------------------------------------------------------------------------
 
 class LlmReranker implements Reranker {
+  /** Maximum characters taken from each chunk in the batch prompt. */
+  private readonly CHUNK_TRUNCATION = 400;
+
   /**
-   * Rerank chunks using an LLM as a cross-encoder.
+   * Rerank chunks using a single batch LLM call.
    *
-   * For each chunk, uses the LLM to score relevance to the query from 0-1.
-   * This captures query-chunk interaction and semantic understanding that
-   * bi-encoder approaches (like cosine similarity) cannot model.
+   * All passages are sent in one request; the LLM returns a JSON score map.
+   * On any failure (LLM error or parse error) the error propagates to
+   * rerankChunks(), which falls back to cosine reranking.
    *
-   * Trade-offs:
-   *   Pros:  Higher ranking quality, semantic understanding, query-aware
-   *   Cons:  N LLM API calls (expensive), slower (~1-2s per chunk), quota limited
+   * Trade-offs vs. per-chunk calls:
+   *   Pros:  1 API call regardless of N, ~10-50× cheaper, much lower latency
+   *   Cons:  Very long prompts (>30 chunks) may degrade scoring accuracy
    *
-   * Cost: ~$0.005 per chunk (GPT-4o-mini at 2K input tokens avg)
-   * Latency: ~200-500ms per chunk (serial) or ~1-2s for batch (parallel)
+   * Cost:    ~$0.005 for the whole batch (GPT-4o-mini, 2–4K tokens)
+   * Latency: ~500-900ms per request (vs. N × 200-500ms previously)
    */
   async rerank(query: string, chunks: SearchResult[], topN: number): Promise<SearchResult[]> {
     if (chunks.length === 0) return [];
 
-    log('[RAG:Reranker:LLM] 📊 Starting LLM cross-encoder reranking for', chunks.length, 'chunks');
+    log('[RAG:Reranker:LLM] 📊 Batch LLM reranking for', chunks.length, 'chunks');
 
-    try {
-      // Score each chunk in parallel using the LLM
-      const scoredChunks = await Promise.all(
-        chunks.map(async (chunk) => {
-          const score = await this.scoreChunk(query, chunk);
-          return { chunk: { ...chunk, llm_relevance_score: score }, score };
-        })
-      );
+    // Errors propagate to rerankChunks() → cosine fallback
+    const scores = await this.scoreBatch(query, chunks);
 
-      // Sort by LLM relevance score (descending)
-      scoredChunks.sort((a, b) => b.score - a.score);
+    const scored = chunks.map((chunk, i) => ({
+      chunk: { ...chunk, llm_relevance_score: scores[i] },
+      score: scores[i],
+    }));
 
-      const topChunks = scoredChunks.slice(0, topN).map((s) => s.chunk);
+    scored.sort((a, b) => b.score - a.score);
+    const topChunks = scored.slice(0, topN).map((s) => s.chunk);
 
-      log('[RAG:Reranker:LLM] ✅ LLM reranking complete — top', topChunks.length, 'chunks selected');
-      return topChunks;
-    } catch (err) {
-      warn('[RAG:Reranker:LLM] ⚠️ LLM reranking failed:', (err as Error).message);
-      // Fallback: return chunks in original order
-      return chunks.slice(0, topN);
-    }
+    log('[RAG:Reranker:LLM] ✅ Batch reranking complete — top', topChunks.length, 'selected');
+    return topChunks;
   }
 
   /**
-   * Score a single chunk's relevance to the query using the LLM.
+   * Score all chunks in a single LLM call.
    *
-   * Returns a score from 0 (irrelevant) to 1 (highly relevant).
-   * Prompt is designed to elicit numeric scores for consistent parsing.
+   * Prompt:
+   *   Query: {query}
+   *
+   *   Passages:
+   *   [1] <content>
+   *   [2] <content>
+   *   ...
+   *
+   *   Return JSON: {"1": 0.92, "2": 0.31, ...}
+   *
+   * Returns scores indexed 0…N-1 (matching the input array order).
+   * Throws on LLM error or parse failure so the caller can fall back.
    */
-  private async scoreChunk(query: string, chunk: SearchResult): Promise<number> {
-    try {
-      const systemPrompt =
-        'You are an expert evaluator of document relevance. ' +
-        'Score the relevance of a passage to a query from 0 to 1. ' +
-        'Return ONLY a number between 0 and 1, for example: 0.85';
+  private async scoreBatch(query: string, chunks: SearchResult[]): Promise<number[]> {
+    const passages = chunks
+      .map((c, i) => `[${i + 1}] ${c.content.substring(0, this.CHUNK_TRUNCATION)}`)
+      .join('\n');
 
-      const userPrompt =
-        `Query: ${query}\n\n` +
-        `Passage: ${chunk.content.substring(0, 500)}\n\n` +
-        `Relevance score (0-1):`;
+    const systemPrompt =
+      'You are an expert evaluator of document relevance. ' +
+      'Given a query and numbered passages, score each passage from 0.0 (irrelevant) ' +
+      'to 1.0 (highly relevant). ' +
+      'Return ONLY a valid JSON object mapping each passage number to its score. ' +
+      'Example for 3 passages: {"1": 0.92, "2": 0.31, "3": 0.75}';
 
-      const result = await aiOrchestrator.generateCompletion(userPrompt, {
-        systemPrompt,
-        temperature: 0.1, // Deterministic scoring
-        maxTokens: 10, // Just a number
-      } as any);
+    const userPrompt =
+      `Query: ${query}\n\n` +
+      `Passages:\n${passages}\n\n` +
+      `Return JSON: {"1": score, "2": score, ...}`;
 
-      // Parse the response — expect a number
-      const scoreText = result.content.trim();
-      const score = parseFloat(scoreText);
+    const result = await aiOrchestrator.generateCompletion(userPrompt, {
+      systemPrompt,
+      temperature: 0.1,
+      maxTokens: Math.max(50, chunks.length * 12), // ~12 tokens per score entry
+    } as any);
 
-      if (isNaN(score) || score < 0 || score > 1) {
-        warn('[RAG:Reranker:LLM] ⚠️ Invalid score response:', scoreText, '— defaulting to 0.5');
-        return 0.5;
-      }
+    return this.parseScores(result.content, chunks.length);
+  }
 
-      return score;
-    } catch (err) {
-      warn('[RAG:Reranker:LLM] ⚠️ Failed to score chunk:', (err as Error).message);
-      return 0.5; // Default neutral score on error
+  /**
+   * Parse the JSON score map returned by the LLM.
+   *
+   * Tolerant of surrounding prose and markdown fences: extracts the first
+   * outermost JSON object found in the response text.
+   *
+   * Throws with a descriptive message on any parse failure so rerank()
+   * propagates the error up to the cosine fallback in rerankChunks().
+   */
+  private parseScores(responseText: string, count: number): number[] {
+    // Extract outermost { ... } — tolerant of prose/fences around the JSON
+    const start = responseText.indexOf('{');
+    const end = responseText.lastIndexOf('}');
+    if (start === -1 || end === -1 || end <= start) {
+      throw new Error(`No JSON object found in LLM response: "${responseText.substring(0, 120)}"`);
     }
+
+    const raw = JSON.parse(responseText.slice(start, end + 1)) as Record<string, unknown>;
+
+    const scores: number[] = [];
+    for (let i = 1; i <= count; i++) {
+      const val = raw[String(i)];
+      const score = typeof val === 'number' ? val : parseFloat(String(val));
+      if (isNaN(score) || score < 0 || score > 1) {
+        throw new Error(`Invalid score for passage ${i}: ${JSON.stringify(val)}`);
+      }
+      scores.push(score);
+    }
+
+    return scores; // 0-indexed, length === count
   }
 }
 
