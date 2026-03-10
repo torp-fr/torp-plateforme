@@ -12,7 +12,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   ENGINE_REGISTRY,
   getEngineStats,
-} from '@/core/platform/engineRegistry';
+} from '../../../src/core/platform/engineRegistry';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
