@@ -8,7 +8,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Import worker as URL (Vite-compatible)
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker?url';
 
 // Single initialization guard (StrictMode safe)
 let isInitialized = false;
@@ -42,22 +42,16 @@ export function initPdfJs() {
     }
   } catch (error) {
     console.error('❌ PDF.js initialization failed:', error);
-    throw new Error(
-      'PDF.js initialization failed. Check worker and font paths.'
-    );
+    // Don't throw - PDF features are optional and shouldn't crash the entire app
+    isInitialized = true; // Mark as initialized to prevent repeated attempts
   }
 }
 
 /**
  * Get configured PDF.js library
- * Only use after initPdfJs() has been called
+ * Returns the library regardless of initialization status
  */
 export function getPdfJs() {
-  if (!isInitialized) {
-    throw new Error(
-      'PDF.js not initialized. Call initPdfJs() at app startup.'
-    );
-  }
   return pdfjsLib;
 }
 

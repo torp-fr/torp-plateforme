@@ -45,6 +45,7 @@ import { OrchestrationsPage } from "./pages/admin/OrchestrationsPage";
 import { KnowledgeBasePage } from "./pages/admin/KnowledgeBasePage";
 import { SecurityPage } from "./pages/admin/SecurityPage";
 import { AdminSettingsPage } from "./pages/admin/AdminSettingsPage";
+import { KnowledgeControlCenter } from "./features/knowledge/KnowledgeControlCenter";
 
 const queryClient = new QueryClient();
 
@@ -78,6 +79,7 @@ const AppContent = () => {
               <Route path="intelligence" element={<LiveIntelligencePage />} />
               <Route path="orchestrations" element={<OrchestrationsPage />} />
               <Route path="knowledge" element={<KnowledgeBasePage />} />
+              <Route path="knowledge-debug" element={<KnowledgeControlCenter />} />
               <Route path="security" element={<SecurityPage />} />
               <Route path="settings" element={<AdminSettingsPage />} />
             </Route>

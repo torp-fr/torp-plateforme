@@ -200,23 +200,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     initAuth();
 
     // STEP 5: Listen for auth changes (login/logout) after initial load
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (!isMounted) return;
+    let unsubscribe: (() => void) | null = null;
+    try {
+      const { data: listener } = supabase.auth.onAuthStateChange(
+        (_event, session) => {
+          if (!isMounted) return;
 
-        if (!session) {
-          // User logged out
-          setUser(null);
-          setIsAuthenticated(false);
-          setProjects([]);
-          setCurrentProject(null);
+          if (!session) {
+            // User logged out
+            setUser(null);
+            setIsAuthenticated(false);
+            setProjects([]);
+            setCurrentProject(null);
+          }
         }
-      }
-    );
+      );
+      unsubscribe = () => {
+        listener?.subscription?.unsubscribe();
+      };
+    } catch (err) {
+      console.error('[Auth] Failed to set up auth state listener:', err);
+    }
 
     return () => {
       isMounted = false;
-      listener?.subscription?.unsubscribe();
+      unsubscribe?.();
     };
   }, []);
 
