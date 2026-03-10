@@ -52,6 +52,23 @@ function semanticToSearchResult(chunk: {
 }
 
 /**
+ * Compute a retrieval limit that scales inversely with query length.
+ * Shorter queries are broader and benefit from a larger candidate pool;
+ * longer queries are more specific and require fewer results.
+ *
+ * Thresholds (token count, split on whitespace):
+ *   < 4  tokens → 20
+ *   < 10 tokens → 12
+ *   ≥ 10 tokens →  8
+ */
+export function computeRetrievalLimit(query: string): number {
+  const tokenCount = query.trim().split(/\s+/).filter(Boolean).length;
+  if (tokenCount < 4) return 20;
+  if (tokenCount < 10) return 12;
+  return 8;
+}
+
+/**
  * Search for relevant knowledge using true hybrid retrieval:
  * keyword + semantic run in parallel, results are merged and reranked.
  */
@@ -63,7 +80,7 @@ export async function searchRelevantKnowledge(
     limit?: number;
   }
 ): Promise<SearchResult[]> {
-  const limit = options?.limit ?? 5;
+  const limit = options?.limit ?? computeRetrievalLimit(query);
 
   log('[RAG:HybridSearch] 🔍 Hybrid knowledge search:', query);
 
