@@ -13,7 +13,7 @@ export function buildKnowledgeContextSection(knowledge: SearchResult[]): string 
   if (knowledge.length === 0) return '';
 
   return `\n\nRELEVANT KNOWLEDGE BASE (${knowledge.length} documents):\n${knowledge
-    .map((k, i) => `[${i + 1}] [${k.source}] ${k.category.toUpperCase()}: ${k.content.substring(0, 200)}...`)
+    .map((k, i) => `[${i + 1}] [${k.source}] ${k.category.toUpperCase()}: ${k.content.substring(0, 1200)}...`)
     .join('\n')}`;
 }
 
