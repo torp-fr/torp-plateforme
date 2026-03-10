@@ -41,6 +41,9 @@ import {
   incrementRetrySuccess,
 } from './analytics/ingestionMetrics.service';
 
+// Validation
+import { validateGrounding, formatGroundingResult, type GroundingResult } from './validation/grounding.service';
+
 // Types
 import {
   KnowledgeDocument,
@@ -56,6 +59,9 @@ export type { KnowledgeDocument, SearchResult, SimilarDocument, MarketPriceRefer
 
 // Re-export SystemIntegrityViolation for verifySystemIntegrity return type
 export type { SystemIntegrityViolation };
+
+// Re-export GroundingResult for answer validation
+export type { GroundingResult };
 
 class RagService {
   private readonly ENABLE_VECTOR_SEARCH = true;
@@ -281,6 +287,50 @@ class RagService {
       console.error('[RAG] Feedback storage error:', err);
       return false;
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // ANSWER GROUNDING VALIDATION
+  // -------------------------------------------------------------------------
+
+  /**
+   * Validate that an LLM-generated answer is grounded in retrieved knowledge.
+   *
+   * This method should be called AFTER the LLM generates a response but BEFORE
+   * the response is returned to the user. It checks whether the answer is
+   * supported by the retrieved chunks to detect potential hallucinations.
+   *
+   * Usage in calling code (e.g., torpAnalyzerService):
+   * ```typescript
+   * const retrievedChunks = await searchRelevantKnowledge(query);
+   * const llmAnswer = await aiOrchestrator.generateCompletion(...);
+   * const groundingResult = ragService.validateAnswerGrounding(llmAnswer, retrievedChunks);
+   * if (!groundingResult.isGrounded) {
+   *   console.warn(formatGroundingResult(groundingResult));
+   * }
+   * ```
+   *
+   * @param answer - The LLM-generated response text
+   * @param retrievedChunks - The chunks used to generate the answer
+   * @returns GroundingResult with support score and warnings
+   */
+  validateAnswerGrounding(answer: string, retrievedChunks: SearchResult[]): GroundingResult {
+    const result = validateGrounding(answer, retrievedChunks);
+
+    if (!result.isGrounded) {
+      warn('[RAG:Grounding] ⚠️', formatGroundingResult(result));
+    } else {
+      log('[RAG:Grounding] ✅ Answer is well-grounded in retrieved knowledge');
+    }
+
+    return result;
+  }
+
+  /**
+   * Format grounding result for logging or user display.
+   */
+  formatGroundingResult(result: GroundingResult): string {
+    return formatGroundingResult(result);
   }
 
   // -------------------------------------------------------------------------
