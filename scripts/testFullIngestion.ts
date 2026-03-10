@@ -1,35 +1,9 @@
-/**
- * End-to-End Ingestion Pipeline Test
- *
- * ARCHITECTURE:
- *   1. Load test documents from disk
- *   2. Upload files to Supabase Storage
- *   3. Create document records in knowledge_documents (caller owns this step)
- *   4. Call ingestKnowledgeDocument({ documentId, filename, buffer })
- *      — the ingestion service NEVER creates documents; it only inserts chunks
- *   5. Verify chunks were created
- *   6. Perform RAG semantic search
- *
- * REPORTING:
- *   Success = chunks were created, regardless of non-blocking failures (indexing, dedup)
- *
- * REQUIREMENT:
- *   Set SYSTEM_USER_ID to a valid UUID from auth.users before running this script.
- *   The FK constraint fk_created_by requires a valid user UUID.
- *
- * Usage:
- *   1. Get a valid user UUID from your Supabase auth.users table
- *   2. Update SYSTEM_USER_ID below
- *   3. Run: npx tsx scripts/testFullIngestion.ts
- *
- * Requirements:
- *   SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env
- */
-
 import * as fs from 'fs';
 import * as path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+
+const SYSTEM_USER_ID = '8eb0a486-c27d-44ff-9404-271e8552389b';
 
 // Load environment
 dotenv.config();
@@ -211,23 +185,21 @@ async function insertDocumentMetadata(
   const documentIds = new Map<string, string>();
 
   for (const testDoc of TEST_DOCUMENTS) {
-    if (!uploads.has(testDoc.name)) continue;
+  if (!uploads.has(testDoc.name)) continue;
 
-    const buffer = documents.get(testDoc.name);
-    const storagePath = uploads.get(testDoc.name)!;
+  const storagePath = uploads.get(testDoc.name)!;
 
-    try {
-      const insertPayload: Record<string, any> = {
-        title: testDoc.title,
-        category: testDoc.category,
-        source: 'internal',          // valid value per schema constraints
-        version: '1.0',
-        file_path: storagePath,
-        file_size: buffer?.length ?? 0,
-        // created_by: use valid auth.users UUID to satisfy fk_created_by FK constraint
-        created_by: SYSTEM_USER_ID,
-        ingestion_status: 'pending', // starts the step-runner state machine
-      };
+  try {
+      const insertPayload = {
+  title: testDoc.title,
+  category: testDoc.category,
+  source: 'internal',
+  version: '1.0',
+  file_path: storagePath,
+  file_size: 0,
+  created_by: SYSTEM_USER_ID,
+  ingestion_status: 'pending'
+};
 
       log('METADATA', `Creating document: ${testDoc.name}`, {
         title: testDoc.title,

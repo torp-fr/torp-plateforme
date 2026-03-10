@@ -163,37 +163,48 @@ export async function ingestKnowledgeDocument({
     metadata: chunk.metadata ?? {},
   }));
 
-  console.log("SUPABASE INSERT TABLE:", "knowledge_chunks");
-  console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(chunkRecords, null, 2));
+    log('[KnowledgeIngestion] Using provided document ID:', documentId);
 
-  let chunkError: any = null;
+    // Step 3: Create chunk records
+    // Step 3: Create chunk records
+const chunkRecords = chunks.map((chunk, index) => ({
+  document_id: documentId,
+  content: chunk.content,
+  chunk_index: index,
+  token_count: chunk.tokenCount,
+  metadata: chunk.metadata ?? {},
+}));
 
-  try {
-    await supabase
-      .from("knowledge_chunks")
-      .delete()
-      .eq("document_id", documentId);
+console.log("SUPABASE INSERT TABLE:", "knowledge_chunks");
+console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(chunkRecords, null, 2));
 
-    const { error } = await supabase
-      .from("knowledge_chunks")
-      .insert(chunkRecords);
+let chunkError: any = null;
 
-    chunkError = error;
-  } catch (err) {
-    console.error("SUPABASE INSERT EXCEPTION:", err);
-    chunkError = err;
-  }
+try {
 
-  if (chunkError) {
-    throw new Error(`Failed to create chunks: ${chunkError.message}`);
-  }
+  await supabase
+    .from("knowledge_chunks")
+    .delete()
+    .eq("document_id", documentId);
 
-  log("[KnowledgeIngestion] Chunks inserted:", chunkRecords.length);
-  const insertedCount = chunks.length;
+  const { error } = await supabase
+    .from("knowledge_chunks")
+    .insert(chunkRecords);
 
-  if (insertedCount === 0) {
-    return { success: false, chunksCreated: 0, errors: ['Zero chunks were inserted'] };
-  }
+  chunkError = error;
+
+} catch (err) {
+
+  console.error("SUPABASE INSERT EXCEPTION:", err);
+  chunkError = err;
+
+}
+
+if (chunkError) {
+  throw new Error(`Failed to create chunks: ${chunkError.message}`);
+}
+
+log("[KnowledgeIngestion] Chunks inserted:", chunkRecords.length);
 
   // ── STEP 5 (NON-CRITICAL): Index + integrity verification ───────────────────
   try {
@@ -256,3 +267,5 @@ export async function searchKnowledge(query: string, limit: number = 10): Promis
     return [];
   }
 }
+
+
