@@ -9,7 +9,7 @@
  * Optimise le traitement selon le type détecté
  */
 
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import * as pdfjsLib from 'pdfjs-dist';
 import { extractPdfText } from '@/lib/pdfExtract';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
 

@@ -5,10 +5,10 @@
  * ⚠️ CRITICAL: This must be initialized once at app startup
  */
 
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import * as pdfjsLib from 'pdfjs-dist';
 
 // Import worker as URL (Vite-compatible)
-import pdfWorker from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker?url';
 
 // Single initialization guard (StrictMode safe)
 let isInitialized = false;
