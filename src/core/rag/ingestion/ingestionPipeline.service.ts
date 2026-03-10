@@ -78,15 +78,16 @@ export async function retryIngestion(
 
     log('[RAG:Pipeline] 🚀 Relaunching pipeline...');
     onRetry?.(1);
-    setTimeout(() => {
-      processChunksAsync(
-        documentId,
-        doc.content,
-        doc.category,
-        doc.region,
-        doc.content
-      ).catch((err) => console.error('[RAG:Pipeline] Retry processing error:', err));
-    }, 0);
+
+    // Do not use setTimeout in serverless — execution stops when HTTP response is sent.
+    // Directly await the async operation.
+    await processChunksAsync(
+      documentId,
+      doc.content,
+      doc.category,
+      doc.region,
+      doc.content
+    );
 
     log('[RAG:Pipeline] ✅ Retry initiated successfully');
     return true;

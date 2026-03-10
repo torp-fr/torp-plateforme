@@ -251,16 +251,11 @@ export async function semanticSearch(
       similarity: row.similarity,
     }));
 
-    log('[KnowledgeIndex] Retrieved', retrieved.length, 'candidates for reranking');
+    log('[KnowledgeIndex] Retrieved', retrieved.length, 'candidates (raw, unranked)');
 
-    // Rerank and return top limit results
-    const reranked = await rerankChunks(query, retrieved);
-    const results = reranked.slice(0, limit);
-
-    log('[KnowledgeIndex] Found', results.length, 'relevant chunks (after reranking)');
-
-    // Return reranked chunks (context compression happens in generation pipeline)
-    return results.map(({ rerankScore, ...rest }) => rest);
+    // Return raw candidates without reranking.
+    // Reranking must happen only once in hybridSearch.service.ts to avoid double-reranking cost.
+    return retrieved;
   } catch (err) {
     error('[KnowledgeIndex] Search failed:', err);
     return [];

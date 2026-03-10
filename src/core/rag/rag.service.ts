@@ -59,7 +59,7 @@ export type { SystemIntegrityViolation };
 
 class RagService {
   private readonly ENABLE_VECTOR_SEARCH = true;
-  private readonly EMBEDDING_DIMENSION = 384;
+  private readonly EMBEDDING_DIMENSION = 1536;
   private readonly SIMILARITY_THRESHOLD = 0.5;
   private readonly healthService = new KnowledgeHealthService();
 
@@ -159,7 +159,6 @@ class RagService {
       const knowledge = await searchRelevantKnowledge(prompt, {
         category: options?.category,
         region: options?.region,
-        limit: 5,
       });
 
       if (knowledge.length === 0) {
