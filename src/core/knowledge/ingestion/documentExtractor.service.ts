@@ -2,7 +2,14 @@ import { Buffer } from "buffer";
 import path from "path";
 import mammoth from "mammoth";
 import ExcelJS from "exceljs";
-import * as pdfjs from "pdfjs-dist/build/pdf.mjs";
+
+let pdfjsLib: any | null = null;
+async function loadPdfJs() {
+  if (!pdfjsLib) {
+    pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  }
+  return pdfjsLib;
+}
 
 const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024;
 const COLUMN_GAP_THRESHOLD = 20; // Gap size threshold for column separator
@@ -169,6 +176,7 @@ function reconstructLine(items: TextItem[]): string {
 }
 
 async function extractPdf(buffer: Buffer): Promise<string> {
+  const pdfjs = await loadPdfJs();
   const loadingTask = pdfjs.getDocument({ data: buffer });
   const pdf = await loadingTask.promise;
 

@@ -13,6 +13,39 @@ export interface CompletionParams {
 
 class SecureAIService {
 
+  private initialized = false;
+  private initializing: Promise<void> | null = null;
+
+  /**
+   * One-time session bootstrap.
+   * If a session already exists (browser context), reuses it.
+   * Otherwise attempts anonymous sign-in (CLI / server context).
+   */
+  private async init(): Promise<void> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      this.initialized = true;
+      return;
+    }
+    // No existing session — create an anonymous one for CLI/server contexts
+    const { error: signInError } = await supabase.auth.signInAnonymously();
+    if (signInError) {
+      warn('[SecureAI] Anonymous sign-in failed:', signInError.message);
+    }
+    this.initialized = true;
+  }
+
+  /**
+   * Ensures init() runs exactly once, even under concurrent callers.
+   */
+  async ensureInitialized(): Promise<void> {
+    if (this.initialized) return;
+    if (!this.initializing) {
+      this.initializing = this.init();
+    }
+    await this.initializing;
+  }
+
   /**
    * 🔥 WAIT SESSION — HARD STABLE
    */
@@ -32,6 +65,8 @@ class SecureAIService {
     text: string,
     model: string = 'text-embedding-3-small'
   ): Promise<number[]> {
+
+    await this.ensureInitialized();
 
     if (!text || text.trim().length === 0) {
       throw new Error('EMPTY_TEXT');
