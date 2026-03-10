@@ -18,11 +18,18 @@ class SecureAIService {
   private accessToken: string | null = null;
 
   /**
-   * Deterministic session bootstrap.
-   * Captures the access token directly from the session or sign-in response —
-   * never relies on polling.
+   * Deterministic token resolution — no auth flow, no polling.
+   *
+   * Priority:
+   *   1. Existing Supabase user session (browser — user already logged in)
+   *   2. SUPABASE_SERVICE_ROLE_KEY env var (CLI / server — static admin JWT)
+   *   3. VITE_SUPABASE_ANON_KEY env var (fallback — public anon key)
+   *
+   * Anonymous sign-in is intentionally absent: it creates throwaway users,
+   * burns Supabase rate limits, and is unnecessary when a static key exists.
    */
   private async init(): Promise<void> {
+    // 1. Browser context: reuse the authenticated user's JWT
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token) {
       this.accessToken = session.access_token;
@@ -30,18 +37,30 @@ class SecureAIService {
       return;
     }
 
-    // No existing session — create an anonymous one (CLI / server context)
-    const { data, error } = await supabase.auth.signInAnonymously();
-    if (error) {
-      throw new Error(`SUPABASE_ANON_AUTH_FAILED: ${error.message}`);
+    // 2. CLI / server context: use the static key that supabase.ts already resolved.
+    //    Mirror the same resolution order as supabase.ts lines 74-78 so both always
+    //    agree on which credential is in use.
+    const _metaEnv = (typeof import.meta !== 'undefined' && import.meta.env)
+      ? import.meta.env as Record<string, string | undefined>
+      : {} as Record<string, string | undefined>;
+
+    const staticKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ??
+      _metaEnv.VITE_SUPABASE_ANON_KEY ??
+      process.env.VITE_SUPABASE_ANON_KEY ??
+      null;
+
+    if (staticKey) {
+      this.accessToken = staticKey;
+      this.initialized = true;
+      return;
     }
 
-    this.accessToken = data.session?.access_token ?? null;
-    if (!this.accessToken) {
-      throw new Error('SUPABASE_SESSION_MISSING');
-    }
-
-    this.initialized = true;
+    throw new Error(
+      'SECURE_AI_NO_AUTH: No user session and no static Supabase key found.\n' +
+      'CLI: set SUPABASE_SERVICE_ROLE_KEY in .env.local\n' +
+      'Browser: ensure the user is logged in before calling generateEmbedding()'
+    );
   }
 
   /**
