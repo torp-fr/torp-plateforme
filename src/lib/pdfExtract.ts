@@ -32,7 +32,7 @@ export async function extractPdfText(
     const { getPdfJs, verifyPdfJsInitialization } = await loadPdfModule();
 
     // PHASE 40: Verify PDF.js is properly initialized BEFORE extraction
-    const validation = verifyPdfJsInitialization();
+    const validation = await verifyPdfJsInitialization();
     if (!validation.isValid) {
       const errorDetails = validation.errors.join('; ');
       console.error('❌ PDF.js initialization failed:', errorDetails);
@@ -53,7 +53,7 @@ export async function extractPdfText(
     );
 
     // Get PDF document with timeout
-    const pdfjsLib = getPdfJs();
+    const pdfjsLib = await getPdfJs();
     const loadingTask = pdfjsLib.getDocument({
       data: arrayBuffer,
     });

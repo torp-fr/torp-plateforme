@@ -5,40 +5,48 @@
  * ⚠️ CRITICAL: This must be initialized once at app startup
  */
 
-import * as pdfjsLib from 'pdfjs-dist/build/pdf.mjs';
-
-// Import worker as URL (Vite-compatible)
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-
 // Single initialization guard (StrictMode safe)
 let isInitialized = false;
+let pdfjsLib: any | null = null;
+
+export async function loadPdfJs() {
+  if (!pdfjsLib) {
+    pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  }
+  return pdfjsLib;
+}
 
 /**
  * Initialize PDF.js with proper worker and font configuration
  * Safe to call multiple times - only runs once
  */
-export function initPdfJs() {
+export async function initPdfJs() {
   // Guard against double initialization (important for React 18 StrictMode)
   if (isInitialized) {
     return;
   }
 
   try {
-    // Configure worker source
-    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+    const lib = await loadPdfJs();
+
+    // Configure worker source (browser/Vite only — ?url is a Vite-specific feature)
+    try {
+      const { default: pdfWorker } = await import('pdfjs-dist/build/pdf.worker.min.mjs?url' as any);
+      lib.GlobalWorkerOptions.workerSrc = pdfWorker;
+    } catch {
+      // Worker URL import not available in Node.js / non-Vite environments — safe to skip
+    }
 
     // Configure standard fonts URL
     // CRITICAL: This must point to actual font files
     // Hosting locally: /public/pdfjs-standard-fonts/
-    pdfjsLib.GlobalWorkerOptions.standardFontDataUrl =
-      '/pdfjs-standard-fonts/';
+    lib.GlobalWorkerOptions.standardFontDataUrl = '/pdfjs-standard-fonts/';
 
     isInitialized = true;
 
-    if (import.meta.env.DEV) {
+    if (import.meta.env?.DEV) {
       console.log('✅ PDF.js initialized successfully');
-      console.log('   - Worker:', pdfWorker);
-      console.log('   - Fonts:', pdfjsLib.GlobalWorkerOptions.standardFontDataUrl);
+      console.log('   - Fonts:', lib.GlobalWorkerOptions.standardFontDataUrl);
     }
   } catch (error) {
     console.error('❌ PDF.js initialization failed:', error);
@@ -49,10 +57,10 @@ export function initPdfJs() {
 
 /**
  * Get configured PDF.js library
- * Returns the library regardless of initialization status
+ * Returns a Promise — caller must await
  */
-export function getPdfJs() {
-  return pdfjsLib;
+export async function getPdfJs() {
+  return await loadPdfJs();
 }
 
 /**
@@ -60,8 +68,9 @@ export function getPdfJs() {
  * Runtime guard to catch configuration issues before extraction
  * Returns detailed diagnostic information for production troubleshooting
  */
-export function verifyPdfJsInitialization(): { isValid: boolean; errors: string[] } {
+export async function verifyPdfJsInitialization(): Promise<{ isValid: boolean; errors: string[] }> {
   const errors: string[] = [];
+  const lib = await loadPdfJs();
 
   // Check 1: isInitialized flag
   if (!isInitialized) {
@@ -69,18 +78,18 @@ export function verifyPdfJsInitialization(): { isValid: boolean; errors: string[
   }
 
   // Check 2: Worker source configured
-  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+  if (!lib.GlobalWorkerOptions.workerSrc) {
     errors.push('PDF.js worker source not configured');
   }
 
   // Check 3: Standard font data URL configured (CRITICAL FOR PRODUCTION)
-  if (!pdfjsLib.GlobalWorkerOptions.standardFontDataUrl) {
+  if (!lib.GlobalWorkerOptions.standardFontDataUrl) {
     errors.push('PDF.js standardFontDataUrl not configured - will fail to extract fonts in PDFs');
   }
 
   // Check 4: Verify font URL is accessible (log for debugging)
-  const fontUrl = pdfjsLib.GlobalWorkerOptions.standardFontDataUrl;
-  if (fontUrl && import.meta.env.DEV) {
+  const fontUrl = lib.GlobalWorkerOptions.standardFontDataUrl;
+  if (fontUrl && import.meta.env?.DEV) {
     console.log('[PDF.JS] Font URL configured:', fontUrl);
   }
 
@@ -95,6 +104,5 @@ export function verifyPdfJsInitialization(): { isValid: boolean; errors: string[
  */
 export function resetPdfJs() {
   isInitialized = false;
+  pdfjsLib = null;
 }
-
-export default pdfjsLib;
