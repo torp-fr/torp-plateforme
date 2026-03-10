@@ -1,24 +1,10 @@
-throw new Error("DEBUG SCRIPT LOADED");
-/**
- * End-to-End Ingestion Pipeline Test
- *
- * Tests the complete RAG document ingestion workflow:
- * 1. Load test documents (PDF, DOCX, XLSX, TXT, MD)
- * 2. Upload to Supabase Storage
- * 3. Insert metadata in knowledge_documents table
- * 4. Run ingestion pipeline
- * 5. Verify chunks created
- * 6. Perform RAG semantic search
- *
- * Usage:
- *   npx tsx scripts/testFullIngestion.ts
- */
-
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+
+const SYSTEM_USER_ID = '8eb0a486-c27d-44ff-9404-271e8552389b';
 
 // Load environment
 dotenv.config();
@@ -187,17 +173,21 @@ async function insertDocumentMetadata(
   const documentIds = new Map<string, string>();
 
   for (const testDoc of TEST_DOCUMENTS) {
-    if (!uploads.has(testDoc.name)) continue;
+  if (!uploads.has(testDoc.name)) continue;
 
-    try {
+  const storagePath = uploads.get(testDoc.name)!;
+
+  try {
       const insertPayload = {
-        title: testDoc.title,
-        category: testDoc.category,
-        source: 'ingestion',
-        version: '1.0',
-        file_size: 0,
-        created_by: null,
-      };
+  title: testDoc.title,
+  category: testDoc.category,
+  source: 'internal',
+  version: '1.0',
+  file_path: storagePath,
+  file_size: 0,
+  created_by: SYSTEM_USER_ID,
+  ingestion_status: 'pending'
+};
 
       const { data, error: insertError } = await supabase
         .from('knowledge_documents')

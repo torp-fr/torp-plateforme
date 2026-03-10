@@ -22,7 +22,7 @@ const MAX_ATTEMPTS = 3;
 const PIPELINE_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 
 // Storage bucket used by uploadDocumentForServerIngestion
-const KNOWLEDGE_STORAGE_BUCKET = 'knowledge-files';
+const KNOWLEDGE_STORAGE_BUCKET = 'documents';
 
 // =======================================================
 // Public Entry Point

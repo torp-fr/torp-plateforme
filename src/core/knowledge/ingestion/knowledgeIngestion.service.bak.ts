@@ -146,45 +146,40 @@ export async function ingestKnowledgeDocument(
     log('[KnowledgeIngestion] Using provided document ID:', documentId);
 
     // Step 3: Create chunk records
-    // Step 3: Create chunk records
-const chunkRecords = chunks.map((chunk, index) => ({
-  document_id: documentId,
-  content: chunk.content,
-  chunk_index: index,
-  token_count: chunk.tokenCount,
-  metadata: chunk.metadata ?? {},
-}));
-
-console.log("SUPABASE INSERT TABLE:", "knowledge_chunks");
+    const chunkRecords = chunks.map((chunk, index) => ({
+   console.log("SUPABASE INSERT TABLE:", "knowledge_chunks");
 console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(chunkRecords, null, 2));
 
-let chunkError: any = null;
+let chunkError: any;
 
 try {
 
+  // 🔧 Prevent duplicate chunk_index conflicts
   await supabase
-    .from("knowledge_chunks")
+    .from('knowledge_chunks')
     .delete()
-    .eq("document_id", documentId);
+    .eq('document_id', documentId);
 
-  const { error } = await supabase
-    .from("knowledge_chunks")
+  const result = await supabase
+    .from('knowledge_chunks')
     .insert(chunkRecords);
 
-  chunkError = error;
+  chunkError = result.error;
 
-} catch (err) {
+  if (chunkError) {
+    console.error("SUPABASE INSERT ERROR:", chunkError);
+  }
 
-  console.error("SUPABASE INSERT EXCEPTION:", err);
-  chunkError = err;
-
+} catch (e) {
+  console.error("SUPABASE INSERT EXCEPTION:", e);
+  chunkError = e;
 }
 
 if (chunkError) {
   throw new Error(`Failed to create chunks: ${chunkError.message}`);
 }
 
-log("[KnowledgeIngestion] Chunks inserted:", chunkRecords.length);
+log('[KnowledgeIngestion] Chunks inserted:', chunks.length);
 
     // Step 4: Index chunks (for Phase 30 - RAG)
     const { indexChunks } = await import('./knowledgeIndex.service');
@@ -234,5 +229,4 @@ export async function searchKnowledge(query: string, limit: number = 10): Promis
     return [];
   }
 }
-
 
