@@ -235,6 +235,67 @@ class SecureAIService {
 
     return data?.content || '';
   }
+
+  /**
+   * ✅ LLM COMPLETION — JSON variant
+   * Same as complete() but parses the response as JSON and returns typed T.
+   * Adds response_format: json_object to the request so the model outputs valid JSON.
+   * Called by openai.service.ts generateJSON<T>().
+   */
+  async completeJSON<T>(params: CompletionParams): Promise<T> {
+
+    await this.ensureInitialized();
+
+    const token = this.accessToken;
+    if (!token) {
+      throw new Error('SECURE_AI_NOT_INITIALIZED');
+    }
+
+    const bodyWithFormat: CompletionParams = {
+      ...params,
+      response_format: { type: 'json_object' },
+    };
+
+    const invokeStart = Date.now();
+    const { data, error } = await supabase.functions.invoke(
+      'llm-completion',
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: bodyWithFormat
+      }
+    );
+    const invokeDuration = Date.now() - invokeStart;
+
+    log('[EDGE DEBUG] llm-completion (JSON) response received', {
+      error: error ? { message: error.message } : null,
+      hasData: !!data,
+      contentLength: data?.content?.length || null,
+      invokeDuration,
+    });
+
+    if (error) {
+      console.error('[SECURE AI] LLM JSON ERROR', {
+        message: error.message,
+        context: error.context,
+        statusCode: error.status || 'unknown',
+      });
+      throw new Error(error.message);
+    }
+
+    const content: string = data?.content || '';
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        throw new Error('No JSON object found in LLM response');
+      }
+      return JSON.parse(jsonMatch[0]) as T;
+    } catch (parseError) {
+      const msg = parseError instanceof Error ? parseError.message : String(parseError);
+      throw new Error(`SECURE_AI_JSON_PARSE_FAILED: ${msg}`);
+    }
+  }
 }
 
 export const secureAI = new SecureAIService();
