@@ -66,12 +66,22 @@ class SecureAIService {
   /**
    * Ensures init() runs exactly once, even under concurrent callers.
    */
-  async ensureInitialized(): Promise<void> {
+  private async ensureInitialized(): Promise<void> {
     if (this.initialized) return;
     if (!this.initializing) {
       this.initializing = this.init();
     }
     await this.initializing;
+  }
+
+  /**
+   * Returns the resolved Bearer token.
+   * Triggers initialization on first call; subsequent calls are instant.
+   */
+  async getAccessToken(): Promise<string> {
+    await this.ensureInitialized();
+    if (!this.accessToken) throw new Error('SECURE_AI_NOT_INITIALIZED');
+    return this.accessToken;
   }
 
   /**
