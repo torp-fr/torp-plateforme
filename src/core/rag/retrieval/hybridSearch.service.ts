@@ -7,6 +7,7 @@ import { keywordSearch } from './keywordSearch.service';
 import { semanticSearch } from '@/core/knowledge/ingestion/knowledgeIndex.service';
 import { rerankChunks } from './reranker.service';
 import { rewriteQuery } from './queryRewrite.service';
+import { decomposeQuery } from './queryDecomposition.service';
 import { SearchResult } from '../types';
 import { log, warn } from '@/lib/logger';
 
@@ -91,28 +92,40 @@ export async function searchRelevantKnowledge(
       log('[RAG:HybridSearch] ✏️ Using rewritten query:', effectiveQuery);
     }
 
-    // Step 2: run both searches concurrently — neither blocks the other
-    const [keywordResults, rawSemanticResults] = await Promise.all([
-      keywordSearch(effectiveQuery, limit, {
-        category: options?.category,
-        region: options?.region,
-      }),
-      semanticSearch(effectiveQuery, limit),
-    ]);
+    // Step 2: decompose into independent sub-queries for compound questions
+    const subQueries = await decomposeQuery(effectiveQuery);
+    log('[RAG:HybridSearch] 🔍 Running retrieval for', subQueries.length, 'sub-quer(ies)');
 
-    log(
-      '[RAG:HybridSearch] 📊 keyword=%d semantic=%d',
-      keywordResults.length,
-      rawSemanticResults.length,
+    // Step 3: run both searches concurrently for every sub-query, then flatten
+    const allKeyword: SearchResult[] = [];
+    const allSemantic: SearchResult[] = [];
+
+    await Promise.all(
+      subQueries.map(async (subQuery) => {
+        const [kw, sem] = await Promise.all([
+          keywordSearch(subQuery, limit, {
+            category: options?.category,
+            region: options?.region,
+          }),
+          semanticSearch(subQuery, limit),
+        ]);
+        allKeyword.push(...kw);
+        allSemantic.push(...sem.map(semanticToSearchResult));
+      })
     );
 
-    if (keywordResults.length === 0 && rawSemanticResults.length === 0) {
+    log(
+      '[RAG:HybridSearch] 📊 keyword=%d semantic=%d (across all sub-queries)',
+      allKeyword.length,
+      allSemantic.length,
+    );
+
+    if (allKeyword.length === 0 && allSemantic.length === 0) {
       warn('[RAG:HybridSearch] ⚠️ Both searches returned 0 results');
       return [];
     }
 
-    const semanticResults = rawSemanticResults.map(semanticToSearchResult);
-    const merged = mergeResults(keywordResults, semanticResults);
+    const merged = mergeResults(allKeyword, allSemantic);
 
     log('[RAG:HybridSearch] 🔀 Merged pool size:', merged.length);
 
