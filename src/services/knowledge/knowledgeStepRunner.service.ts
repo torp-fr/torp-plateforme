@@ -143,31 +143,53 @@ async function processDocument(doc: any) {
         .eq('id', doc.id);
 
       // ── 0a: Download file from Supabase Storage ──
-      log(`[INGESTION] downloading file from storage: ${doc.file_path}`);
+      log(`[INGESTION] 📥 Downloading file from storage bucket: ${KNOWLEDGE_STORAGE_BUCKET}`);
+      log(`[INGESTION] File path: ${doc.file_path}`);
+      log(`[INGESTION] File size: ${doc.file_size} bytes`);
+      log(`[INGESTION] File MIME type: ${doc.mime_type}`);
+
       const { data: fileBlob, error: downloadError } = await supabase.storage
         .from(KNOWLEDGE_STORAGE_BUCKET)
         .download(doc.file_path);
 
       if (downloadError || !fileBlob) {
+        const errorMsg = downloadError?.message ?? 'no data returned';
+        log(`[INGESTION] ❌ Storage download failed: ${errorMsg}`);
         throw new Error(
-          `TEXT_EXTRACTION_FAILED: storage download failed: ${downloadError?.message ?? 'no data returned'}`
+          `TEXT_EXTRACTION_FAILED: storage download failed: ${errorMsg}`
         );
       }
+
+      log(`[INGESTION] ✅ File downloaded successfully`);
 
       // ── 0b: Convert Blob → Node Buffer ──
       const arrayBuffer = await fileBlob.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
+      log(`[INGESTION] Buffer size: ${buffer.length} bytes`);
 
       // Derive the filename from the storage path for extension detection
       const filename = doc.file_path.split('/').pop() || doc.title || 'document';
+      const fileExt = filename.split('.').pop()?.toLowerCase() || 'unknown';
+      log(`[INGESTION] File extension detected: .${fileExt}`);
 
       // ── 0c: Extract plain text (pdf-parse / mammoth / exceljs / plain UTF-8) ──
-      log(`[INGESTION] extracting text from: ${filename}`);
-      const rawText = await extractDocumentContent(buffer, filename);
+      log(`[INGESTION] 🔍 Extracting text from: ${filename}`);
+      let rawText: string;
+      try {
+        rawText = await extractDocumentContent(buffer, filename);
+        log(`[INGESTION] ✅ Text extraction completed (raw length: ${rawText.length} chars)`);
+      } catch (extractError) {
+        const errorMsg = extractError instanceof Error ? extractError.message : String(extractError);
+        log(`[INGESTION] ❌ Text extraction failed: ${errorMsg}`);
+        throw new Error(
+          `TEXT_EXTRACTION_FAILED: ${errorMsg}`
+        );
+      }
 
       if (!rawText || rawText.trim().length === 0) {
+        log(`[INGESTION] ⚠️ Warning: Extraction returned empty text (scanned PDF or image-only document?)`);
         throw new Error(
-          'TEXT_EXTRACTION_FAILED: no text could be extracted from document'
+          'TEXT_EXTRACTION_FAILED: no text could be extracted from document (possibly scanned PDF without OCR)'
         );
       }
 

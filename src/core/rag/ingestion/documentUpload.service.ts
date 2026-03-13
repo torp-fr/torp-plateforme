@@ -26,12 +26,20 @@ export async function uploadDocumentToStorage(
   }
 ): Promise<UploadResult> {
   log('[RAG:Upload] 📤 Uploading file to Storage');
+  log('[RAG:Upload] File name:', file.name);
+  log('[RAG:Upload] File size:', file.size, 'bytes');
+  log('[RAG:Upload] File type:', file.type);
 
   const timestamp = Date.now();
   const storagePath = `knowledge-documents/${timestamp}-${file.name}`;
 
+  // CRITICAL: Must match KNOWLEDGE_STORAGE_BUCKET = 'documents' in knowledgeStepRunner
+  const storageBucket = 'documents';
+  log('[RAG:Upload] Uploading to bucket:', storageBucket);
+  log('[RAG:Upload] Storage path:', storagePath);
+
   const { error: uploadError } = await supabase.storage
-    .from('knowledge-files')
+    .from(storageBucket)
     .upload(storagePath, file, { upsert: false });
 
   if (uploadError) {
