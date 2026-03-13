@@ -118,6 +118,8 @@ class AIOrchestrator {
   ): Promise<{ content: string; provider: string }> {
     const requestId = this.generateTraceId();
     const startTime = Date.now();
+    // Tracks the last provider attempted — visible to both try and catch.
+    let lastProvider: string = (options as any)?.preferredProvider ?? env.ai.primaryProvider;
 
     try {
       const result = await this.runLLMCompletion({
@@ -128,11 +130,13 @@ class AIOrchestrator {
         preferredProvider: (options as any)?.preferredProvider,
       });
 
+      lastProvider = result.provider;
+
       // Track successful completion
       aiTelemetry.trackAIRequest({
         requestId,
         operation: 'completion',
-        primaryProvider: env.ai.primaryProvider || 'unknown',
+        primaryProvider: env.ai.primaryProvider,
         providerUsed: result.provider,
         fallbackTriggered: result.retriesUsed > 0,
         latencyMs: Date.now() - startTime,
@@ -153,8 +157,8 @@ class AIOrchestrator {
       aiTelemetry.logAIError({
         requestId,
         operation: 'completion',
-        primaryProvider: env.ai.primaryProvider || 'unknown',
-        lastProviderTried: 'unknown',
+        primaryProvider: env.ai.primaryProvider,
+        lastProviderTried: lastProvider,
         retriesExhausted: true,
         errorCode: error instanceof AIOrchestrationError ? error.code : 'UNKNOWN',
         errorMessage: errorMsg,
@@ -179,6 +183,8 @@ class AIOrchestrator {
   ): Promise<{ data: T; error?: undefined }> {
     const requestId = this.generateTraceId();
     const startTime = Date.now();
+    // Tracks the last provider attempted — visible to both try and catch.
+    let lastProvider: string = (options as any)?.preferredProvider ?? env.ai.primaryProvider;
 
     try {
       const result = await this.runLLMCompletion({
@@ -188,6 +194,8 @@ class AIOrchestrator {
         maxTokens: (options as any)?.maxTokens || 8000,
         preferredProvider: (options as any)?.preferredProvider,
       });
+
+      lastProvider = result.provider;
 
       // Parse JSON from result
       try {
@@ -203,7 +211,7 @@ class AIOrchestrator {
         aiTelemetry.trackAIRequest({
           requestId,
           operation: 'json',
-          primaryProvider: env.ai.primaryProvider || 'unknown',
+          primaryProvider: env.ai.primaryProvider,
           providerUsed: result.provider,
           fallbackTriggered: result.retriesUsed > 0,
           latencyMs: Date.now() - startTime,
@@ -221,7 +229,7 @@ class AIOrchestrator {
         aiTelemetry.logAIError({
           requestId,
           operation: 'json',
-          primaryProvider: env.ai.primaryProvider || 'unknown',
+          primaryProvider: env.ai.primaryProvider,
           lastProviderTried: result.provider,
           retriesExhausted: false,
           errorCode: 'JSON_PARSE_ERROR',
@@ -250,8 +258,8 @@ class AIOrchestrator {
       aiTelemetry.logAIError({
         requestId,
         operation: 'json',
-        primaryProvider: env.ai.primaryProvider || 'unknown',
-        lastProviderTried: 'unknown',
+        primaryProvider: env.ai.primaryProvider,
+        lastProviderTried: lastProvider,
         retriesExhausted: true,
         errorCode: error instanceof AIOrchestrationError ? error.code : 'UNKNOWN',
         errorMessage: errorMsg,
@@ -402,7 +410,7 @@ class AIOrchestrator {
         requestId: embeddingId,
         operation: 'embedding',
         primaryProvider: 'secureAI',
-        lastProviderTried: 'hybridAI', // Tried both
+        lastProviderTried: 'secureAI', // Fallback disabled (Phase 17.5) — only primary is ever tried
         retriesExhausted: true,
         errorCode: error instanceof AIOrchestrationError ? error.code : 'UNKNOWN',
         errorMessage: errorMsg,
@@ -453,6 +461,17 @@ class AIOrchestrator {
           );
 
           retriesUsed = completion.retriesUsed;
+
+          // Throw here so the outer catch can emit proper telemetry instead of
+          // returning a ghost { provider: 'unknown' } that looks like a success.
+          if (!completion.success || !completion.data) {
+            throw completion.lastError ?? new AIOrchestrationError(
+              'LLM completion retries exhausted',
+              'LLM_RETRIES_EXHAUSTED',
+              true
+            );
+          }
+
           return completion.data;
         },
         controller
@@ -467,7 +486,7 @@ class AIOrchestrator {
 
       return {
         content: result?.content || '',
-        provider: result?.provider || 'unknown',
+        provider: result?.provider ?? env.ai.primaryProvider,
         duration: Date.now() - startTime,
         retriesUsed,
       };
