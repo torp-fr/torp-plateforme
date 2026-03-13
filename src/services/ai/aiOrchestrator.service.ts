@@ -410,7 +410,7 @@ class AIOrchestrator {
         requestId: embeddingId,
         operation: 'embedding',
         primaryProvider: 'secureAI',
-        lastProviderTried: 'hybridAI', // Tried both
+        lastProviderTried: 'secureAI', // Fallback disabled (Phase 17.5) — only primary is ever tried
         retriesExhausted: true,
         errorCode: error instanceof AIOrchestrationError ? error.code : 'UNKNOWN',
         errorMessage: errorMsg,

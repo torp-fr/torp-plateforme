@@ -61,6 +61,12 @@ Deno.serve(async (req) => {
   }
 
   const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY");
+  if (!OPENAI_KEY) {
+    return new Response(
+      JSON.stringify({ error: "OPENAI_API_KEY is not configured on this function" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
 
   const requestBody: Record<string, unknown> = {
     model: model || "text-embedding-3-small",
