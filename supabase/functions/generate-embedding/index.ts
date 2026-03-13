@@ -68,52 +68,80 @@ Deno.serve(async (req) => {
     );
   }
 
-  const requestBody: Record<string, unknown> = {
-    model: model || "text-embedding-3-small",
-    input: inputArray,
-  };
+  try {
+    console.log("[EMBEDDING] Generating embeddings for", inputArray.length, "texts");
+    console.log("[EMBEDDING] Model:", model || "text-embedding-3-small");
 
-  // Pass dimensions only when explicitly requested (text-embedding-3-small supports this)
-  if (typeof dimensions === "number" && dimensions > 0) {
-    requestBody.dimensions = dimensions;
-  }
+    // Build OpenAI request - only use parameters that OpenAI accepts
+    // CRITICAL: Do NOT pass dimensions unless explicitly supported by the model
+    const requestBody = {
+      model: "text-embedding-3-small",
+      input: inputArray,
+    };
 
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${OPENAI_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(requestBody),
-  });
+    console.log("[EMBEDDING] OpenAI request body:", JSON.stringify(requestBody, null, 2));
 
-  if (!response.ok) {
-    const errText = await response.text();
+    const response = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    console.log("[EMBEDDING] OpenAI response status:", response.status);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("[EMBEDDING] OpenAI error response:", errText);
+      return new Response(
+        JSON.stringify({ error: `OpenAI error: ${errText}` }),
+        {
+          status: 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const json = await response.json();
+    console.log("[EMBEDDING] OpenAI returned", json.data?.length || 0, "embeddings");
+
+    // Extract embeddings from OpenAI response
+    // OpenAI returns { data: [{ embedding: number[] }, ...], usage: {...} }
+    const embeddings: number[][] = json.data.map(
+      (item: { embedding: number[] }) => item.embedding
+    );
+
+    console.log("[EMBEDDING] Successfully extracted embeddings");
+    console.log("[EMBEDDING] First embedding dimensions:", embeddings[0]?.length || "N/A");
+
+    // Batch callers (inputs or texts) get { embeddings: number[][] }.
+    // Single-text legacy callers get { embedding: number[] }.
+    if (Array.isArray(inputs) || Array.isArray(texts)) {
+      return new Response(JSON.stringify({ embeddings }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ embedding: embeddings[0] }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    console.error("[EMBEDDING] Unexpected error:", error);
+    console.error("[EMBEDDING] Error type:", error?.constructor?.name);
+    console.error("[EMBEDDING] Error message:", error instanceof Error ? error.message : String(error));
+    console.error("[EMBEDDING] Stack:", error instanceof Error ? error.stack : "N/A");
+
     return new Response(
-      JSON.stringify({ error: `OpenAI error: ${errText}` }),
+      JSON.stringify({
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : String(error),
+      }),
       {
-        status: 502,
+        status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
   }
-
-  const json = await response.json();
-
-  // OpenAI returns data[] sorted by index — safe to map directly
-  const embeddings: number[][] = json.data.map(
-    (item: { embedding: number[] }) => item.embedding
-  );
-
-  // Batch callers (inputs or texts) get { embeddings: number[][] }.
-  // Single-text legacy callers get { embedding: number[] }.
-  if (Array.isArray(inputs) || Array.isArray(texts)) {
-    return new Response(JSON.stringify({ embeddings }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  return new Response(JSON.stringify({ embedding: embeddings[0] }), {
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
 });
