@@ -70,10 +70,9 @@ Deno.serve(async (req) => {
 
   try {
     console.log("[EMBEDDING] Generating embeddings for", inputArray.length, "texts");
-    console.log("[EMBEDDING] Model:", model || "text-embedding-3-small");
+    console.log("[EMBEDDING] Model: text-embedding-3-small");
 
     // Build OpenAI request - only use parameters that OpenAI accepts
-    // CRITICAL: Do NOT pass dimensions unless explicitly supported by the model
     const requestBody = {
       model: "text-embedding-3-small",
       input: inputArray,
@@ -81,22 +80,43 @@ Deno.serve(async (req) => {
 
     console.log("[EMBEDDING] OpenAI request body:", JSON.stringify(requestBody, null, 2));
 
-    const response = await fetch("https://api.openai.com/v1/embeddings", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENAI_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    });
+    // Call OpenAI embeddings API
+    console.log("[EMBEDDING] Calling OpenAI embeddings API...");
+    let response;
+    try {
+      response = await fetch("https://api.openai.com/v1/embeddings", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENAI_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+    } catch (fetchErr) {
+      console.error("[EMBEDDING] Network error calling OpenAI:", fetchErr);
+      throw new Error(`Network error: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`);
+    }
 
     console.log("[EMBEDDING] OpenAI response status:", response.status);
+    console.log("[EMBEDDING] OpenAI response headers:", Array.from(response.headers.entries()));
 
+    // Handle non-OK responses
     if (!response.ok) {
-      const errText = await response.text();
-      console.error("[EMBEDDING] OpenAI error response:", errText);
+      let errText = "";
+      try {
+        errText = await response.text();
+      } catch (textErr) {
+        errText = `(failed to read error text: ${textErr})`;
+      }
+      console.error("[EMBEDDING] ❌ OpenAI returned error status:", response.status);
+      console.error("[EMBEDDING] ❌ OpenAI error response body:", errText);
+
       return new Response(
-        JSON.stringify({ error: `OpenAI error: ${errText}` }),
+        JSON.stringify({
+          error: "OPENAI_ERROR",
+          status: response.status,
+          message: errText,
+        }),
         {
           status: 502,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -104,39 +124,69 @@ Deno.serve(async (req) => {
       );
     }
 
-    const json = await response.json();
-    console.log("[EMBEDDING] OpenAI returned", json.data?.length || 0, "embeddings");
+    // Parse JSON response
+    let json;
+    try {
+      json = await response.json();
+      console.log("[EMBEDDING] ✅ OpenAI response parsed successfully");
+    } catch (parseErr) {
+      console.error("[EMBEDDING] ❌ Failed to parse OpenAI response as JSON:", parseErr);
+      console.error("[EMBEDDING] Response text:", await response.text());
+      throw new Error(`JSON parse error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`);
+    }
+
+    // Validate response structure
+    if (!json || !json.data || !Array.isArray(json.data)) {
+      console.error("[EMBEDDING] ❌ Invalid OpenAI response structure");
+      console.error("[EMBEDDING] Response:", JSON.stringify(json, null, 2));
+      throw new Error("Invalid OpenAI response: missing data array");
+    }
+
+    console.log("[EMBEDDING] OpenAI returned", json.data.length, "embeddings");
 
     // Extract embeddings from OpenAI response
     // OpenAI returns { data: [{ embedding: number[] }, ...], usage: {...} }
-    const embeddings: number[][] = json.data.map(
-      (item: { embedding: number[] }) => item.embedding
-    );
-
-    console.log("[EMBEDDING] Successfully extracted embeddings");
-    console.log("[EMBEDDING] First embedding dimensions:", embeddings[0]?.length || "N/A");
+    let embeddings: number[][];
+    try {
+      embeddings = json.data.map(
+        (item: { embedding: number[] }) => item.embedding
+      );
+      console.log("[EMBEDDING] ✅ Successfully extracted embeddings");
+      console.log("[EMBEDDING] First embedding dimensions:", embeddings[0]?.length || "N/A");
+      console.log("[EMBEDDING] All embeddings valid:", embeddings.every(e => Array.isArray(e) && e.length > 0));
+    } catch (mapErr) {
+      console.error("[EMBEDDING] ❌ Failed to extract embeddings:", mapErr);
+      throw new Error(`Embedding extraction error: ${mapErr instanceof Error ? mapErr.message : String(mapErr)}`);
+    }
 
     // Batch callers (inputs or texts) get { embeddings: number[][] }.
     // Single-text legacy callers get { embedding: number[] }.
     if (Array.isArray(inputs) || Array.isArray(texts)) {
+      console.log("[EMBEDDING] ✅ Returning batch response with", embeddings.length, "embeddings");
       return new Response(JSON.stringify({ embeddings }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    console.log("[EMBEDDING] ✅ Returning single embedding response");
     return new Response(JSON.stringify({ embedding: embeddings[0] }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("[EMBEDDING] Unexpected error:", error);
+    console.error("[EMBEDDING] ❌ CAUGHT EXCEPTION");
     console.error("[EMBEDDING] Error type:", error?.constructor?.name);
     console.error("[EMBEDDING] Error message:", error instanceof Error ? error.message : String(error));
-    console.error("[EMBEDDING] Stack:", error instanceof Error ? error.stack : "N/A");
+    console.error("[EMBEDDING] Error string:", String(error));
+    console.error("[EMBEDDING] Full error object:", error);
+    if (error instanceof Error) {
+      console.error("[EMBEDDING] Stack trace:", error.stack);
+    }
 
     return new Response(
       JSON.stringify({
-        error: "Internal server error",
-        details: error instanceof Error ? error.message : String(error),
+        error: "EMBEDDING_ERROR",
+        message: error instanceof Error ? error.message : String(error),
+        type: error?.constructor?.name || "Unknown",
       }),
       {
         status: 500,
