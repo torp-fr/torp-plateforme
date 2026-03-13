@@ -277,23 +277,61 @@ async function processDocument(doc: any) {
  * Call the generate-embedding Edge Function with a batch of texts.
  * Returns one embedding vector per input, preserving order.
  * Throws on network / Edge Function failure — caller handles per-batch fallback.
+ *
+ * CRITICAL: Must pass Authorization header (Bearer token) — Edge Function requires it.
  */
 async function generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
+  console.log(`[EMBEDDING:BATCH] Invoking Edge Function for ${texts.length} texts`);
+  console.log(`[EMBEDDING:BATCH] Request body:`, {
+    textCount: texts.length,
+    model: 'text-embedding-3-small',
+    dimensions: 384,
+    totalChars: texts.reduce((sum, t) => sum + t.length, 0),
+  });
+
+  // Get authorization token from environment (server-side context)
+  // The Edge Function requires an Authorization header
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ||
+                         process.env.SUPABASE_ANON_KEY;
+
+  if (!serviceRoleKey) {
+    console.error('[EMBEDDING:BATCH] ❌ CRITICAL: No SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY in environment');
+    throw new Error('EMBEDDING_AUTH_MISSING: SUPABASE_SERVICE_ROLE_KEY not configured');
+  }
+
+  console.log('[EMBEDDING:BATCH] Authorization token available:', !!serviceRoleKey);
+
   const { data, error: fnError } = await supabase.functions.invoke(
     'generate-embedding',
     {
+      headers: {
+        Authorization: `Bearer ${serviceRoleKey}`
+      },
       body: { inputs: texts, model: 'text-embedding-3-small', dimensions: 384 },
     }
   );
 
   if (fnError) {
+    console.error(`[EMBEDDING:BATCH] Edge Function invocation failed`);
+    console.error(`[EMBEDDING:BATCH] Error type:`, fnError?.constructor?.name);
+    console.error(`[EMBEDDING:BATCH] Error message:`, fnError.message);
+    console.error(`[EMBEDDING:BATCH] Full error:`, fnError);
     throw new Error(`Edge Function error: ${fnError.message}`);
   }
 
+  console.log(`[EMBEDDING:BATCH] Edge Function returned successfully`);
+  console.log(`[EMBEDDING:BATCH] Response data keys:`, Object.keys(data || {}));
+  console.log(`[EMBEDDING:BATCH] Response data:`, JSON.stringify(data, null, 2));
+
   if (!data?.embeddings || !Array.isArray(data.embeddings)) {
+    console.error(`[EMBEDDING:BATCH] Invalid response structure`);
+    console.error(`[EMBEDDING:BATCH] data.embeddings exists:`, !!data?.embeddings);
+    console.error(`[EMBEDDING:BATCH] is array:`, Array.isArray(data?.embeddings));
     throw new Error('Invalid Edge Function response — missing embeddings array');
   }
 
+  console.log(`[EMBEDDING:BATCH] Successfully parsed ${data.embeddings.length} embeddings`);
+  console.log(`[EMBEDDING:BATCH] First embedding dimensions:`, data.embeddings[0]?.length ?? 'N/A');
   return data.embeddings as number[][];
 }
 
@@ -302,6 +340,10 @@ async function generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
 // =======================================================
 
 async function processEmbeddingsInBatches(documentId: string, chunks: Chunk[]) {
+  console.log(`[EMBEDDING] Starting embedding generation for ${chunks.length} total chunks`);
+  console.log(`[EMBEDDING] Batch size: ${EMBEDDING_BATCH_SIZE}`);
+  console.log(`[EMBEDDING] Will process in ${Math.ceil(chunks.length / EMBEDDING_BATCH_SIZE)} batches`);
+
   for (let i = 0; i < chunks.length; i += EMBEDDING_BATCH_SIZE) {
     await ensureStillProcessing(documentId);
 
@@ -309,13 +351,27 @@ async function processEmbeddingsInBatches(documentId: string, chunks: Chunk[]) {
     const texts      = batch.map(c => c.content);
     const batchLabel = `batch ${Math.floor(i / EMBEDDING_BATCH_SIZE) + 1}`;
 
+    // Log batch information before embedding generation
+    console.log(`[EMBEDDING] ${batchLabel} starting`);
+    console.log(`[EMBEDDING] ${batchLabel} chunk count:`, batch.length);
+    console.log(`[EMBEDDING] ${batchLabel} total text length:`, texts.reduce((sum, t) => sum + t.length, 0), 'chars');
+    console.log(`[EMBEDDING] ${batchLabel} avg text length:`, Math.round(texts.reduce((sum, t) => sum + t.length, 0) / texts.length), 'chars');
+
     // Generate all embeddings for this batch in a single Edge Function call.
     // On failure, insert chunks with null embeddings rather than aborting the document.
     let embeddings: (number[] | null)[] = new Array(batch.length).fill(null);
     try {
+      console.log(`[EMBEDDING] ${batchLabel} calling Edge Function...`);
       const result = await generateEmbeddingBatch(texts);
+      console.log(`[EMBEDDING] ${batchLabel} received ${result.length} embeddings from OpenAI`);
       embeddings = result.map(e => (Array.isArray(e) && e.length > 0 ? e : null));
+      console.log(`[EMBEDDING] ${batchLabel} processed embeddings: ${embeddings.filter(e => e !== null).length} valid, ${embeddings.filter(e => e === null).length} null`);
     } catch (err: any) {
+      console.error(`[EMBEDDING] ❌ ${batchLabel} embedding call FAILED`);
+      console.error(`[EMBEDDING] ${batchLabel} error type:`, err?.constructor?.name);
+      console.error(`[EMBEDDING] ${batchLabel} error message:`, err?.message);
+      console.error(`[EMBEDDING] ${batchLabel} error details:`, err);
+      console.error(`[EMBEDDING] ${batchLabel} stack trace:`, err?.stack);
       warn(`[EMBEDDING] ${batchLabel} embedding call failed: ${err.message} — chunks will be stored without vectors`);
     }
 
