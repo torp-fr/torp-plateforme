@@ -1,8 +1,14 @@
 import { Buffer } from "buffer";
-import path from "path";
 import mammoth from "mammoth";
 import ExcelJS from "exceljs";
 import { runGoogleVisionOCR, shouldTryOCR } from '@/services/ai/google-vision-ocr.service';
+
+// Browser-safe file extension extraction (replaces Node.js path.extname for browser environment)
+function getFileExtension(filename: string): string {
+  const lastDot = filename.lastIndexOf('.');
+  if (lastDot === -1) return '';
+  return filename.substring(lastDot).toLowerCase();
+}
 
 let pdfjsLib: any | null = null;
 async function loadPdfJs() {
@@ -267,7 +273,8 @@ export async function extractDocumentContent(
     throw new Error(`Document too large: ${buffer.length}`);
   }
 
-  const ext = path.extname(filename).toLowerCase();
+  console.log("[EXTRACT] Processing file:", filename);
+  const ext = getFileExtension(filename);
 
   switch (ext) {
 
