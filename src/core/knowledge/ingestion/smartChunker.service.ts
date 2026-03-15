@@ -9,12 +9,17 @@
  *  regulation       — split on Article / Art. / Section / Chapitre boundaries
  *  technical_guide  — split on numbered section headers (1. / 1.1 / A.)
  *  pricing_reference— keep table rows together, paragraph-fallback for prose
- *  jurisprudence    — paragraph-based with 50-token overlap
- *  generic          — paragraph-based with 50-token overlap (same as above)
+ *  jurisprudence    — paragraph-based with 150-token overlap
+ *  generic          — paragraph-based with 150-token overlap (same as above)
  *
  * All strategies enforce:
- *  MAX_TOKENS = 500 per chunk
- *  OVERLAP_TOKENS = 50 (paragraph modes only)
+ *  MAX_TOKENS = 1000 per chunk (optimized for semantic coherence)
+ *  OVERLAP_TOKENS = 150 (increased for better context preservation)
+ *
+ * Target metrics:
+ *   Chunk density: 40-120 chunks per document
+ *   Chunk size: 700-900 tokens (~2800-3600 characters)
+ *   Overlap: 120-180 tokens (~480-720 characters)
  */
 
 import type { DocumentType } from './documentClassifier.service';
@@ -24,8 +29,8 @@ import { log } from '@/lib/logger';
 // Constants
 // ---------------------------------------------------------------------------
 
-const MAX_TOKENS = 500;
-const OVERLAP_TOKENS = 50;
+const MAX_TOKENS = 1000;
+const OVERLAP_TOKENS = 150;
 
 // ---------------------------------------------------------------------------
 // Types
