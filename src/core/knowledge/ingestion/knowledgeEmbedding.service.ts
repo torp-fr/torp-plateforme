@@ -6,7 +6,7 @@
  * Key changes from v1.0:
  *  - Placeholder hash-based generator replaced with real OpenAI calls
  *  - True batch support: chunks are sent in groups of BATCH_SIZE per API call
- *  - Dimension is fixed at 384 (OpenAI dimensions param)
+ *  - Dimension is fixed at 1536 (OpenAI dimensions param, Phase 42 upgrade)
  *  - Auth token retrieved from the existing supabase singleton (no new client)
  */
 
@@ -19,8 +19,8 @@ import { log, warn, error } from '@/lib/logger';
 // ---------------------------------------------------------------------------
 
 const EMBEDDING_MODEL = 'text-embedding-3-small';
-const EMBEDDING_DIMENSIONS = 384; // Enforced via OpenAI `dimensions` param
-const BATCH_SIZE = 100;           // Edge Function cap; OpenAI allows up to 2048
+const EMBEDDING_DIMENSIONS = 1536; // Enforced via OpenAI `dimensions` param (Phase 42 upgrade)
+const BATCH_SIZE = 100;            // Edge Function cap; OpenAI allows up to 2048
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -226,7 +226,7 @@ export const EMBEDDING_MODELS = {
     name: 'OpenAI text-embedding-3-small',
     dimensions: EMBEDDING_DIMENSIONS,
     provider: 'OpenAI',
-    description: 'Production embeddings via Supabase Edge Function (dimensions=384)',
+    description: 'Production embeddings via Supabase Edge Function (dimensions=1536)',
   },
   local: {
     name: 'MiniLM-L6-v2',

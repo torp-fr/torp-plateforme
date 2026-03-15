@@ -1,10 +1,10 @@
 /**
- * Knowledge Index Service v2.0 (Phase 30)
+ * Knowledge Index Service v2.0 (Phase 30, upgraded Phase 42)
  * Indexes chunks into pgvector and provides SQL-level semantic search.
  *
  * Key changes from v1.0:
  *  - Bug fix: getSupabaseClient() did not exist — replaced with supabase import
- *  - Embeddings written to `embedding_vector` (vector(384)) via targeted UPDATE per chunk
+ *  - Embeddings written to `embedding_vector` (vector(1536)) via targeted UPDATE per chunk (Phase 42 upgrade)
  *  - semanticSearch() uses supabase.rpc('match_knowledge_chunks') — no in-memory scan
  *  - Backward-compat: existing rows with the old `embedding` column are not touched
  */

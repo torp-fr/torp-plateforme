@@ -72,18 +72,35 @@ if (CHUNK_SIZE !== 2500) {
 }
 
 async function downloadFile(storagePath) {
-  try {
-    const { data, error } = await supabase.storage
-      .from("documents")
-      .download(storagePath);
+  const MAX_RETRIES = 3;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      console.log(`  [DOWNLOAD] Attempt ${attempt}/${MAX_RETRIES}: bucket=documents path=${storagePath}`);
+      const { data, error } = await supabase.storage
+        .from("documents")
+        .download(storagePath);
 
-    if (error) {
-      throw new Error(`Storage download failed: ${error.message}`);
+      if (error) {
+        const errDetail = error.message || JSON.stringify(error) || 'no message';
+        console.error(`  [DOWNLOAD] Storage error (attempt ${attempt}): ${errDetail}`);
+        if (attempt < MAX_RETRIES) {
+          await new Promise(r => setTimeout(r, 2000 * attempt));
+          continue;
+        }
+        throw new Error(`Storage download failed after ${MAX_RETRIES} attempts: ${errDetail}`);
+      }
+
+      const arrayBuffer = await data.arrayBuffer();
+      console.log(`  [DOWNLOAD] ✅ Downloaded ${arrayBuffer.byteLength} bytes`);
+      return arrayBuffer;
+    } catch (err) {
+      if (attempt < MAX_RETRIES && !err.message?.includes('Storage download failed after')) {
+        console.error(`  [DOWNLOAD] Exception (attempt ${attempt}): ${err.message}`);
+        await new Promise(r => setTimeout(r, 2000 * attempt));
+        continue;
+      }
+      throw new Error(`Failed to download file: ${err.message}`);
     }
-
-    return await data.arrayBuffer();
-  } catch (error) {
-    throw new Error(`Failed to download file: ${error.message}`);
   }
 }
 
@@ -245,20 +262,18 @@ async function processDocument(doc) {
         chunk_index: chunk.chunk_index,
         content: chunk.content,
         token_count: Math.ceil(chunk.content.length / 4),
-        metadata: {
-          ...(chunk.metadata || {}),
-          section_title: chunk.section_title,
-          section_level: chunk.section_level,
-          source_type: sourceType,
-          extraction_confidence: extractionConfidence,
-          category: documentMetadata.category,
-          document_version: documentMetadata.documentVersion,
-          authority_weight: documentMetadata.authorityWeight,
-          metier_target: documentMetadata.metierTarget,
-          document_type: documentMetadata.documentType,
-          effective_date: documentMetadata.effectiveDate,
-          expiration_date: documentMetadata.expirationDate,
-        },
+        metadata: chunk.metadata || {},
+        section_title: chunk.section_title || null,
+        section_level: chunk.section_level || null,
+        source_type: sourceType || null,
+        extraction_confidence: extractionConfidence || null,
+        category: documentMetadata.category || null,
+        document_version: documentMetadata.documentVersion || null,
+        authority_weight: documentMetadata.authorityWeight || null,
+        metier_target: documentMetadata.metierTarget || null,
+        document_type: documentMetadata.documentType || null,
+        effective_date: documentMetadata.effectiveDate || null,
+        expiration_date: documentMetadata.expirationDate || null,
       }));
 
       const { error: insertError } = await supabase

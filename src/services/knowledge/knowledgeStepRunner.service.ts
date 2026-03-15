@@ -3,7 +3,6 @@
 // Zero global state. Zero window locks.
 // =======================================================
 
-import { Buffer } from 'buffer';
 import { supabase } from "@/lib/supabase";
 import { log, warn, error as logError } from '@/lib/logger';
 import { chunkSmart, type Chunk } from '@/core/knowledge/ingestion/smartChunker.service';
@@ -163,9 +162,9 @@ async function processDocument(doc: any) {
 
       log(`[INGESTION] ✅ File downloaded successfully`);
 
-      // ── 0b: Convert Blob → Node Buffer ──
+      // ── 0b: Convert Blob → Uint8Array (browser-safe, no Node.js Buffer) ──
       const arrayBuffer = await fileBlob.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
+      const buffer = new Uint8Array(arrayBuffer);
       log(`[INGESTION] Buffer size: ${buffer.length} bytes`);
 
       // Derive the filename from the storage path for extension detection
@@ -291,7 +290,7 @@ async function generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
   console.log(`[EMBEDDING:BATCH] Request body:`, {
     textCount: texts.length,
     model: 'text-embedding-3-small',
-    dimensions: 384,
+    dimensions: 1536,
     totalChars: texts.reduce((sum, t) => sum + t.length, 0),
   });
 
@@ -320,7 +319,7 @@ async function generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
         // Supabase JS SDK automatically includes the correct auth credentials
         // from the client instance (SUPABASE_SERVICE_ROLE_KEY when available).
         // Passing a custom header can override/conflict with these credentials.
-        body: { inputs: texts, model: 'text-embedding-3-small', dimensions: 384 },
+        body: { inputs: texts, model: 'text-embedding-3-small', dimensions: 1536 },
       }
     );
     data = result.data;

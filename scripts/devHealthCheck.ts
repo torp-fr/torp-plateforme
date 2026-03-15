@@ -10,7 +10,7 @@
  *   5. Edge Function       →  generate-embedding reachable
  *   6. Source code audit   →  no .update({ embedding: }) violations
  *   7. Storage bucket      →  'documents' bucket exists with correct RLS
- *   8. Embedding dims      →  Edge Function returns 384-dim vectors
+ *   8. Embedding dims      →  Edge Function returns 1536-dim vectors (Phase 42)
  *   9. rag-worker audit    →  rag-worker/worker.js column names
  *
  * Usage:
@@ -264,7 +264,7 @@ section('8. Embedding dimension validation');
 try {
   const { data: efData, error: efErr } = await supabase.functions.invoke(
     'generate-embedding',
-    { body: { inputs: ['dimension check'], model: 'text-embedding-3-small', dimensions: 384 } }
+    { body: { inputs: ['dimension check'], model: 'text-embedding-3-small', dimensions: 1536 } }
   );
 
   if (efErr) {
@@ -274,12 +274,12 @@ try {
       JSON.stringify(efData).slice(0, 120));
   } else {
     const dims = efData.embeddings[0]?.length ?? 0;
-    if (dims === 384) {
+    if (dims === 1536) {
       record('embedding.dimensions', 'ok',
-        'Edge Function returns 384-dim vectors — matches VECTOR(384) schema');
+        'Edge Function returns 1536-dim vectors — matches VECTOR(1536) schema (Phase 42)');
     } else {
       record('embedding.dimensions', 'error',
-        `Edge Function returned ${dims}-dim vectors, expected 384`,
+        `Edge Function returned ${dims}-dim vectors, expected 1536`,
         'Run: supabase functions deploy generate-embedding');
     }
   }

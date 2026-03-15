@@ -120,7 +120,7 @@ console.log(`
 
   ${C.bold}2. RAG knowledge system${C.reset}
      ${C.dim}src/core/rag/ — semantic + hybrid search, context building${C.reset}
-     ${C.dim}Table: knowledge_chunks.embedding_vector VECTOR(384)${C.reset}
+     ${C.dim}Table: knowledge_chunks.embedding_vector VECTOR(1536) (Phase 42)${C.reset}
 
   ${C.bold}3. Knowledge ingestion${C.reset}
      ${C.dim}Frontend: src/services/knowledge/knowledgeStepRunner.service.ts${C.reset}
@@ -136,7 +136,7 @@ console.log(`
 h2('Critical constraints — read before editing');
 console.log(`
   ${C.yellow}⚠${C.reset}  knowledge_chunks column is ${C.bold}embedding_vector${C.reset} (not "embedding")
-  ${C.yellow}⚠${C.reset}  VECTOR(384) — Edge Function must use dimensions=384
+  ${C.yellow}⚠${C.reset}  VECTOR(1536) — Edge Function must use dimensions=1536 (Phase 42)
   ${C.yellow}⚠${C.reset}  rag-worker/worker.js is ${C.bold}standalone${C.reset} — changes in src/ do not apply to it
   ${C.yellow}⚠${C.reset}  Engine order in orchestrator is ${C.bold}fixed${C.reset} — do not reorder
   ${C.yellow}⚠${C.reset}  Migrations applied via dashboard — CLI shows all as untracked
