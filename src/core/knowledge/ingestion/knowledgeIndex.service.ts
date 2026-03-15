@@ -383,12 +383,14 @@ export async function backfillEmbeddings(documentId?: string): Promise<number> {
   }
 }
 
-// Batch embedding helper (imported from knowledgeStepRunner)
+// Batch embedding helper
+// Uses 384 dimensions to match current database schema (vector(384))
+// Phase 42 migration will upgrade to 1536, but hasn't been applied yet
 async function generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
   const { data, error: fnError } = await supabase.functions.invoke(
     'generate-embedding',
     {
-      body: { inputs: texts, model: 'text-embedding-3-small', dimensions: 1536 },
+      body: { inputs: texts, model: 'text-embedding-3-small', dimensions: 384 },
     }
   );
 
