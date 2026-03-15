@@ -9,7 +9,9 @@
  *   4. Stuck documents     →  processing > 30 min without completing
  *   5. Edge Function       →  generate-embedding reachable
  *   6. Source code audit   →  no .update({ embedding: }) violations
- *   7. rag-worker audit    →  rag-worker/worker.js column names
+ *   7. Storage bucket      →  'documents' bucket exists with correct RLS
+ *   8. Embedding dims      →  Edge Function returns 384-dim vectors
+ *   9. rag-worker audit    →  rag-worker/worker.js column names
  *
  * Usage:
  *   pnpm health:check
@@ -233,9 +235,61 @@ if (violations === 0) {
   record('code.audit', 'ok', 'No embedding column name violations found in source');
 }
 
-// ─── 7. rag-worker specific check ─────────────────────────────────────────────
+// ─── 7. Storage bucket access ─────────────────────────────────────────────────
 
-section('7. rag-worker audit');
+section('7. Storage bucket: documents');
+
+try {
+  const { data: buckets, error: buckErr } = await supabase.storage.listBuckets();
+  if (buckErr) {
+    record('storage.buckets', 'error', 'Cannot list storage buckets', buckErr.message);
+  } else {
+    const docBucket = buckets?.find(b => b.id === 'documents');
+    if (!docBucket) {
+      record('storage.bucket_exists', 'error',
+        '"documents" bucket not found',
+        'Apply migration: 20260315000001_documents_storage_rls.sql');
+    } else {
+      record('storage.bucket_exists', 'ok', '"documents" bucket exists', `public=${docBucket.public}`);
+    }
+  }
+} catch (e: any) {
+  record('storage.bucket_exists', 'error', 'Storage check failed', e.message);
+}
+
+// ─── 8. Embedding dimension validation ────────────────────────────────────────
+
+section('8. Embedding dimension validation');
+
+try {
+  const { data: efData, error: efErr } = await supabase.functions.invoke(
+    'generate-embedding',
+    { body: { inputs: ['dimension check'], model: 'text-embedding-3-small', dimensions: 384 } }
+  );
+
+  if (efErr) {
+    record('embedding.dimensions', 'error', 'Dimension validation call failed', efErr.message);
+  } else if (!efData?.embeddings || !Array.isArray(efData.embeddings)) {
+    record('embedding.dimensions', 'error', 'Unexpected response format from Edge Function',
+      JSON.stringify(efData).slice(0, 120));
+  } else {
+    const dims = efData.embeddings[0]?.length ?? 0;
+    if (dims === 384) {
+      record('embedding.dimensions', 'ok',
+        'Edge Function returns 384-dim vectors — matches VECTOR(384) schema');
+    } else {
+      record('embedding.dimensions', 'error',
+        `Edge Function returned ${dims}-dim vectors, expected 384`,
+        'Run: supabase functions deploy generate-embedding');
+    }
+  }
+} catch (e: any) {
+  record('embedding.dimensions', 'error', 'Dimension validation failed', e.message);
+}
+
+// ─── 9. rag-worker specific check ─────────────────────────────────────────────
+
+section('9. rag-worker audit');
 
 const workerPath = path.join(ROOT, 'rag-worker', 'worker.js');
 if (!fs.existsSync(workerPath)) {

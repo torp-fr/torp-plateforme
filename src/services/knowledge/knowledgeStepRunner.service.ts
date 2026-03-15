@@ -3,6 +3,7 @@
 // Zero global state. Zero window locks.
 // =======================================================
 
+import { Buffer } from 'buffer';
 import { supabase } from "@/lib/supabase";
 import { log, warn, error as logError } from '@/lib/logger';
 import { chunkSmart, type Chunk } from '@/core/knowledge/ingestion/smartChunker.service';
