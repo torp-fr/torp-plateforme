@@ -71,12 +71,19 @@ Deno.serve(async (req) => {
   try {
     console.log("[EMBEDDING] Generating embeddings for", inputArray.length, "texts");
     console.log("[EMBEDDING] Model: text-embedding-3-small");
+    console.log("[EMBEDDING] Requested dimensions:", dimensions || "default (1536)");
 
     // Build OpenAI request - only use parameters that OpenAI accepts
-    const requestBody = {
+    const requestBody: any = {
       model: "text-embedding-3-small",
       input: inputArray,
     };
+
+    // Include dimensions if specified (text-embedding-3-small supports 256-1536)
+    if (dimensions && typeof dimensions === "number" && dimensions > 0) {
+      requestBody.dimensions = dimensions;
+      console.log("[EMBEDDING] Including dimensions parameter:", dimensions);
+    }
 
     console.log("[EMBEDDING] OpenAI request body:", JSON.stringify(requestBody, null, 2));
 

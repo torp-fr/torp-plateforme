@@ -79,7 +79,7 @@ BEGIN
     c.content,
     c.chunk_index,
     c.token_count,
-    (1.0 - (c.embedding <=> query_embedding))::float AS embedding_similarity,
+    (1.0 - (c.embedding_vector <=> query_embedding))::float AS embedding_similarity,
     d.title,
     d.category,
     d.source,
@@ -87,8 +87,8 @@ BEGIN
     d.is_publishable
   FROM knowledge_chunks_ready c
   INNER JOIN knowledge_documents_ready d ON d.id = c.document_id
-  WHERE c.embedding IS NOT NULL
-    AND (1.0 - (c.embedding <=> query_embedding)) > match_threshold
+  WHERE c.embedding_vector IS NOT NULL
+    AND (1.0 - (c.embedding_vector <=> query_embedding)) > match_threshold
     AND d.is_publishable = TRUE
   ORDER BY embedding_similarity DESC
   LIMIT match_count;

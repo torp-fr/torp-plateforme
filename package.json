@@ -26,7 +26,12 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug",
-    "test:e2e:codegen": "playwright codegen"
+    "test:e2e:codegen": "playwright codegen",
+    "health:check": "tsx scripts/devHealthCheck.ts",
+    "fix:pipeline": "tsx scripts/autoFixPipeline.ts",
+    "reindex:embeddings": "tsx scripts/reindexEmbeddings.ts",
+    "context:generate": "tsx scripts/generateProjectContext.ts",
+    "claude:bootstrap": "tsx scripts/claudeBootstrap.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.70.0",

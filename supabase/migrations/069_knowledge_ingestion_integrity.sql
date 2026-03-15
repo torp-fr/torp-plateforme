@@ -46,7 +46,7 @@ ADD CONSTRAINT progress_range CHECK (
 -- Index to find chunks missing embeddings (for integrity checks)
 CREATE INDEX IF NOT EXISTS idx_chunks_missing_embeddings
 ON knowledge_chunks(document_id)
-WHERE embedding IS NULL;
+WHERE embedding_vector IS NULL;
 
 -- Index for complete documents with integrity verified
 CREATE INDEX IF NOT EXISTS idx_documents_complete_integrity
@@ -78,9 +78,9 @@ BEGIN
   SELECT
     d.id,
     COUNT(c.id)::BIGINT as total_chunks,
-    COUNT(CASE WHEN c.embedding IS NOT NULL THEN 1 END)::BIGINT as embedded_chunks,
-    COUNT(CASE WHEN c.embedding IS NULL THEN 1 END)::BIGINT as missing_embeddings,
-    (COUNT(CASE WHEN c.embedding IS NULL THEN 1 END) = 0)::BOOLEAN as is_valid
+    COUNT(CASE WHEN c.embedding_vector IS NOT NULL THEN 1 END)::BIGINT as embedded_chunks,
+    COUNT(CASE WHEN c.embedding_vector IS NULL THEN 1 END)::BIGINT as missing_embeddings,
+    (COUNT(CASE WHEN c.embedding_vector IS NULL THEN 1 END) = 0)::BOOLEAN as is_valid
   FROM knowledge_documents d
   LEFT JOIN knowledge_chunks c ON d.id = c.document_id
   WHERE d.id = p_document_id
@@ -105,7 +105,7 @@ BEGIN
     d.ingestion_status,
     d.embedding_integrity_checked,
     COUNT(c.id)::BIGINT as total_chunks,
-    COUNT(CASE WHEN c.embedding IS NULL THEN 1 END)::BIGINT as missing_embeddings,
+    COUNT(CASE WHEN c.embedding_vector IS NULL THEN 1 END)::BIGINT as missing_embeddings,
     'INCOMPLETE_EMBEDDINGS'::TEXT as violation_type
   FROM knowledge_documents d
   LEFT JOIN knowledge_chunks c ON d.id = c.document_id
@@ -114,7 +114,7 @@ BEGIN
     SELECT 1
     FROM knowledge_chunks c2
     WHERE c2.document_id = d.id
-    AND c2.embedding IS NULL
+    AND c2.embedding_vector IS NULL
   )
   GROUP BY d.id, d.ingestion_status, d.embedding_integrity_checked;
 END;

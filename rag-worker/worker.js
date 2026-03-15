@@ -308,9 +308,8 @@ async function processDocument(doc) {
       const { error: updateError } = await supabase
         .from("knowledge_chunks")
         .update({
-          embedding: embedding,
+          embedding_vector: embedding,
           embedding_generated_at: now,
-          embedding_status: "completed",
         })
         .eq("document_id", documentId)
         .eq("chunk_index", chunk.chunk_index);

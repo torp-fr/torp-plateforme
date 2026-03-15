@@ -258,7 +258,11 @@ async function processDocument(doc: any) {
       .eq('id', doc.id);
 
     log('[INGESTION] generating embeddings');
+    console.log(`\n\n⚠️  [CRITICAL] About to call processEmbeddingsInBatches()`);
+    console.log(`⚠️  [CRITICAL] documentId: ${doc.id}`);
+    console.log(`⚠️  [CRITICAL] chunks.length: ${chunks.length}`);
     await processEmbeddingsInBatches(doc.id, chunks);
+    console.log(`⚠️  [CRITICAL] processEmbeddingsInBatches() completed\n\n`);
 
     // ── Step 4: Mark as completed ────────────────────────────────────────────
     await markCompleted(doc.id, chunks.length);
@@ -281,6 +285,7 @@ async function processDocument(doc: any) {
  * CRITICAL: Must pass Authorization header (Bearer token) — Edge Function requires it.
  */
 async function generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
+  console.log(`[EMBEDDING:BATCH] ========== STARTING BATCH EMBEDDING GENERATION ==========`);
   console.log(`[EMBEDDING:BATCH] Invoking Edge Function for ${texts.length} texts`);
   console.log(`[EMBEDDING:BATCH] Request body:`, {
     textCount: texts.length,
@@ -289,37 +294,57 @@ async function generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
     totalChars: texts.reduce((sum, t) => sum + t.length, 0),
   });
 
-  // Get authorization token from environment (server-side context)
-  // The Edge Function requires an Authorization header
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ||
-                         process.env.SUPABASE_ANON_KEY;
+  // NOTE: The Supabase client is configured with credentials from environment
+  // (SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY).
+  // The JS SDK automatically includes the Authorization header.
+  console.log('[EMBEDDING:BATCH] Supabase client configured with:');
+  console.log('[EMBEDDING:BATCH]   SUPABASE_SERVICE_ROLE_KEY available:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+  console.log('[EMBEDDING:BATCH]   VITE_SUPABASE_ANON_KEY available:', !!process.env.VITE_SUPABASE_ANON_KEY || !!process.env.SUPABASE_ANON_KEY);
+  console.log('[EMBEDDING:BATCH] Supabase JS SDK will automatically include correct Authorization header');
 
-  if (!serviceRoleKey) {
-    console.error('[EMBEDDING:BATCH] ❌ CRITICAL: No SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY in environment');
-    throw new Error('EMBEDDING_AUTH_MISSING: SUPABASE_SERVICE_ROLE_KEY not configured');
+  console.log(`[EMBEDDING:BATCH] About to invoke Edge Function 'generate-embedding'`);
+  console.log(`[EMBEDDING:BATCH] Supabase functions object exists:`, !!supabase.functions);
+  console.log(`[EMBEDDING:BATCH] Invoke method exists:`, typeof supabase.functions.invoke);
+  console.log(`[EMBEDDING:BATCH] Note: NOT passing custom Authorization header - letting Supabase client handle it`);
+
+  let data: any;
+  let fnError: any;
+
+  try {
+    console.log(`[EMBEDDING:BATCH] Calling supabase.functions.invoke() ...`);
+    const result = await supabase.functions.invoke(
+      'generate-embedding',
+      {
+        // IMPORTANT: Do NOT pass custom Authorization header.
+        // Supabase JS SDK automatically includes the correct auth credentials
+        // from the client instance (SUPABASE_SERVICE_ROLE_KEY when available).
+        // Passing a custom header can override/conflict with these credentials.
+        body: { inputs: texts, model: 'text-embedding-3-small', dimensions: 384 },
+      }
+    );
+    data = result.data;
+    fnError = result.error;
+    console.log(`[EMBEDDING:BATCH] Invoke returned. Error present:`, !!fnError);
+    console.log(`[EMBEDDING:BATCH] Data present:`, !!data);
+  } catch (invokeErr: any) {
+    console.error(`[EMBEDDING:BATCH] ❌ INVOKE THREW EXCEPTION (not just error response)`);
+    console.error(`[EMBEDDING:BATCH] Exception type:`, invokeErr?.constructor?.name);
+    console.error(`[EMBEDDING:BATCH] Exception message:`, invokeErr?.message);
+    console.error(`[EMBEDDING:BATCH] Exception details:`, invokeErr);
+    throw invokeErr;
   }
-
-  console.log('[EMBEDDING:BATCH] Authorization token available:', !!serviceRoleKey);
-
-  const { data, error: fnError } = await supabase.functions.invoke(
-    'generate-embedding',
-    {
-      headers: {
-        Authorization: `Bearer ${serviceRoleKey}`
-      },
-      body: { inputs: texts, model: 'text-embedding-3-small', dimensions: 384 },
-    }
-  );
 
   if (fnError) {
     console.error(`[EMBEDDING:BATCH] Edge Function invocation failed`);
     console.error(`[EMBEDDING:BATCH] Error type:`, fnError?.constructor?.name);
     console.error(`[EMBEDDING:BATCH] Error message:`, fnError.message);
-    console.error(`[EMBEDDING:BATCH] Full error:`, fnError);
+    console.error(`[EMBEDDING:BATCH] Error status:`, fnError?.status);
+    console.error(`[EMBEDDING:BATCH] Full error:`, JSON.stringify(fnError, null, 2));
     throw new Error(`Edge Function error: ${fnError.message}`);
   }
 
   console.log(`[EMBEDDING:BATCH] Edge Function returned successfully`);
+  console.log(`[EMBEDDING:BATCH] Response data type:`, typeof data);
   console.log(`[EMBEDDING:BATCH] Response data keys:`, Object.keys(data || {}));
   console.log(`[EMBEDDING:BATCH] Response data:`, JSON.stringify(data, null, 2));
 
@@ -340,17 +365,27 @@ async function generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
 // =======================================================
 
 async function processEmbeddingsInBatches(documentId: string, chunks: Chunk[]) {
-  console.log(`[EMBEDDING] Starting embedding generation for ${chunks.length} total chunks`);
+  console.log(`\n\n🔴🔴🔴 [CRITICAL] ENTERED processEmbeddingsInBatches() 🔴🔴🔴`);
+  console.log(`\n\n========== [EMBEDDING] STARTING EMBEDDING GENERATION PHASE ==========`);
+  console.log(`[EMBEDDING] Document ID: ${documentId}`);
+  console.log(`[EMBEDDING] Total chunks to embed: ${chunks.length}`);
   console.log(`[EMBEDDING] Batch size: ${EMBEDDING_BATCH_SIZE}`);
   console.log(`[EMBEDDING] Will process in ${Math.ceil(chunks.length / EMBEDDING_BATCH_SIZE)} batches`);
+  console.log(`[EMBEDDING] Supabase instance available:`, !!supabase);
+  console.log(`[EMBEDDING] Environment: ${typeof window === 'undefined' ? 'SERVER/NODE.JS' : 'BROWSER'}`);
+
+  console.log(`\n🔴 [CRITICAL] FOR LOOP CHECK: chunks.length=${chunks.length}, EMBEDDING_BATCH_SIZE=${EMBEDDING_BATCH_SIZE}`);
+  console.log(`🔴 [CRITICAL] FOR LOOP will iterate: ${Math.ceil(chunks.length / EMBEDDING_BATCH_SIZE)} times`);
 
   for (let i = 0; i < chunks.length; i += EMBEDDING_BATCH_SIZE) {
+    console.log(`\n🔴 [CRITICAL] INSIDE FOR LOOP at iteration i=${i}`);
     await ensureStillProcessing(documentId);
 
     const batch      = chunks.slice(i, i + EMBEDDING_BATCH_SIZE);
     const texts      = batch.map(c => c.content);
     const batchLabel = `batch ${Math.floor(i / EMBEDDING_BATCH_SIZE) + 1}`;
 
+    console.log(`🔴 [CRITICAL] About to call generateEmbeddingBatch with ${texts.length} texts`);
     // Log batch information before embedding generation
     console.log(`[EMBEDDING] ${batchLabel} starting`);
     console.log(`[EMBEDDING] ${batchLabel} chunk count:`, batch.length);

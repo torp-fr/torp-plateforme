@@ -81,7 +81,15 @@ class RagService {
 
   /**
    * PHASE 42: Server-side document ingestion.
-   * Uploads file to Storage and triggers Edge Function for extraction.
+   * Uploads file to Storage and triggers the ingestion pipeline.
+   *
+   * Flow:
+   * 1. Upload file to Supabase Storage
+   * 2. Create knowledge_documents record with ingestion_status='pending'
+   * 3. Trigger processChunksAsync() to start the pipeline:
+   *    - triggerStepRunner() → runKnowledgeIngestion() → processDocument()
+   *    - indexChunks() → generateEmbedding() → invokeBatchEmbedding()
+   *    - supabase.functions.invoke('generate-embedding')
    */
   async uploadDocumentForServerIngestion(
     file: File,
@@ -92,7 +100,21 @@ class RagService {
     }
   ) {
     try {
-      return await uploadDocumentToStorage(file, options);
+      const result = await uploadDocumentToStorage(file, options);
+
+      // Trigger the ingestion pipeline for chunking and embedding
+      log('[RAG] 🚀 Triggering ingestion pipeline for document:', result.id);
+      processChunksAsync(
+        result.id,
+        '', // unused param
+        options.category,
+        undefined, // unused region param
+        '' // unused original content param
+      ).catch((err) => {
+        console.error('[RAG] ❌ Pipeline trigger failed (non-blocking):', err);
+      });
+
+      return result;
     } catch (err) {
       console.error('[RAG] ❌ Upload error:', err);
       throw err;

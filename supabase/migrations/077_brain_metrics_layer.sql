@@ -91,14 +91,14 @@ SELECT
 
   -- Overall embedding coverage
   COUNT(c.id) as total_chunks,
-  COUNT(CASE WHEN c.embedding IS NOT NULL THEN 1 END) as chunks_with_embedding,
-  COUNT(CASE WHEN c.embedding IS NULL THEN 1 END) as chunks_without_embedding,
+  COUNT(CASE WHEN c.embedding_vector IS NOT NULL THEN 1 END) as chunks_with_embedding,
+  COUNT(CASE WHEN c.embedding_vector IS NULL THEN 1 END) as chunks_without_embedding,
 
   -- Coverage percentage
   CASE
     WHEN COUNT(c.id) > 0 THEN
       ROUND(
-        (COUNT(CASE WHEN c.embedding IS NOT NULL THEN 1 END)::NUMERIC /
+        (COUNT(CASE WHEN c.embedding_vector IS NOT NULL THEN 1 END)::NUMERIC /
          COUNT(c.id)::NUMERIC * 100),
         2
       )
@@ -119,9 +119,9 @@ SELECT
       d.category,
       JSON_BUILD_OBJECT(
         'total_chunks', COUNT(c.id),
-        'with_embedding', COUNT(CASE WHEN c.embedding IS NOT NULL THEN 1 END),
+        'with_embedding', COUNT(CASE WHEN c.embedding_vector IS NOT NULL THEN 1 END),
         'coverage_percent', ROUND(
-          (COUNT(CASE WHEN c.embedding IS NOT NULL THEN 1 END)::NUMERIC /
+          (COUNT(CASE WHEN c.embedding_vector IS NOT NULL THEN 1 END)::NUMERIC /
            COUNT(c.id)::NUMERIC * 100),
           2
         )

@@ -19,7 +19,7 @@
 
 CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_by_document_id
 ON knowledge_chunks(document_id)
-WHERE embedding IS NOT NULL;
+WHERE embedding_vector IS NOT NULL;
 
 COMMENT ON INDEX idx_knowledge_chunks_by_document_id IS
 'Critical for conflict detection performance. Enables fast lookup of document chunks.
