@@ -1,15 +1,7 @@
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
-import { fileURLToPath } from "url";
-import path from "path";
 
-// Configure worker for Node.js ESM environment
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "../../../node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
-  import.meta.url
-).toString();
-
-console.log(`  [PDF] Worker path configured: ${pdfjs.GlobalWorkerOptions.workerSrc}`);
+// Note: Workers are browser-only. In Node.js, disable workers entirely.
+// Workers cause "Setting up fake worker failed" errors in Node environments.
 
 export async function extractPdfText(arrayBuffer) {
   try {
@@ -19,7 +11,14 @@ export async function extractPdfText(arrayBuffer) {
     console.log(`  [PDF] Converting ArrayBuffer to Uint8Array for pdfjs`);
     console.log(`  [PDF] Uint8Array length: ${uint8Array.length} bytes`);
 
-    const loadingTask = pdfjs.getDocument({ data: uint8Array });
+    // Disable workers for Node.js environment
+    const loadingTask = pdfjs.getDocument({
+      data: uint8Array,
+      disableWorker: true,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      useSystemFonts: true,
+    });
     const pdf = await loadingTask.promise;
 
     console.log(`  [PDF] ✅ PDF loaded successfully (${pdf.numPages} pages)`);
