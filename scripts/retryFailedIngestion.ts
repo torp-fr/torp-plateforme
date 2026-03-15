@@ -35,10 +35,10 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 interface FailedDocument {
   id: string;
-  filename: string;
+  title: string;
+  file_path: string;
   ingestion_status: string;
   last_ingestion_error: string | null;
-  created_at: string;
 }
 
 async function retryFailedIngestion(): Promise<void> {
@@ -52,7 +52,7 @@ async function retryFailedIngestion(): Promise<void> {
 
     const { data: failedDocs, error: fetchError } = await supabase
       .from('knowledge_documents')
-      .select('id, filename, ingestion_status, last_ingestion_error, created_at')
+      .select('id, title, file_path, ingestion_status, last_ingestion_error')
       .eq('ingestion_status', 'failed')
       .order('created_at', { ascending: false });
 
@@ -74,7 +74,8 @@ async function retryFailedIngestion(): Promise<void> {
     let stillFailingCount = 0;
 
     for (const doc of failedDocs) {
-      console.log(`⏳ Retrying: ${doc.filename} (ID: ${doc.id.slice(0, 8)}...)`);
+      const displayName = doc.title || doc.file_path || 'Unknown';
+      console.log(`⏳ Retrying: ${displayName} (ID: ${doc.id.slice(0, 8)}...)`);
       if (doc.last_ingestion_error) {
         console.log(`   Previous error: ${doc.last_ingestion_error.slice(0, 100)}...`);
       }
