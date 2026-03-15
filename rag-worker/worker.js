@@ -226,14 +226,8 @@ async function processDocument(doc) {
       return;
     }
 
-    // Step 2: Delete existing chunks to avoid duplicates
-    console.log(`  🗑️ Cleaning up existing chunks...`);
-    await supabase
-      .from("knowledge_chunks")
-      .delete()
-      .eq("document_id", documentId);
-
-    // Step 3: Download file
+    // Step 2: Download file (moved before chunk deletion for safety)
+    // Chunks will be deleted AFTER text validation succeeds
     console.log(`  📥 Downloading file...`);
     console.log(`  📥 Document file_path from DB: "${doc.file_path}"`);
     const arrayBuffer = await downloadFile(doc.file_path);
@@ -291,6 +285,13 @@ async function processDocument(doc) {
         .eq("id", documentId);
       return;
     }
+
+    // ✅ Text validation passed — NOW safe to delete old chunks
+    console.log(`  🗑️ Deleting existing chunks (text validation passed)...`);
+    await supabase
+      .from("knowledge_chunks")
+      .delete()
+      .eq("document_id", documentId);
 
     // Step 6: Structure text into sections
     console.log(`  📚 Structuring sections...`);
