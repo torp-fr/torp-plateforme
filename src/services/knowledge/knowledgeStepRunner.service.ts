@@ -21,6 +21,11 @@ const INSERT_BATCH_SIZE    = 100; // rows per Supabase insert call
 const MAX_ATTEMPTS = 3;
 const PIPELINE_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 
+// Embedding dimension must match database schema: knowledge_chunks.embedding_vector vector(384)
+// Phase 42 migration (20260307000002_hybrid_rag_search.sql) will upgrade this to 1536,
+// but hasn't been applied to the Supabase database yet. Update when migration is applied.
+const EMBEDDING_DIMENSIONS = 384;
+
 // Storage bucket used by uploadDocumentForServerIngestion
 const KNOWLEDGE_STORAGE_BUCKET = 'documents';
 
@@ -290,7 +295,7 @@ async function generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
   console.log(`[EMBEDDING:BATCH] Request body:`, {
     textCount: texts.length,
     model: 'text-embedding-3-small',
-    dimensions: 1536,
+    dimensions: EMBEDDING_DIMENSIONS,
     totalChars: texts.reduce((sum, t) => sum + t.length, 0),
   });
 
@@ -319,7 +324,7 @@ async function generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
         // Supabase JS SDK automatically includes the correct auth credentials
         // from the client instance (SUPABASE_SERVICE_ROLE_KEY when available).
         // Passing a custom header can override/conflict with these credentials.
-        body: { inputs: texts, model: 'text-embedding-3-small', dimensions: 1536 },
+        body: { inputs: texts, model: 'text-embedding-3-small', dimensions: EMBEDDING_DIMENSIONS },
       }
     );
     data = result.data;

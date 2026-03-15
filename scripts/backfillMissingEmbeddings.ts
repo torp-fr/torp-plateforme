@@ -32,7 +32,9 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 const BATCH_SIZE = 50; // Embeddings per Edge Function call
 const EMBEDDING_MODEL = 'text-embedding-3-small';
-const EMBEDDING_DIMENSIONS = 1536;
+// NOTE: Using 384 dimensions because Phase 42 migration (upgrading to 1536) hasn't been applied yet.
+// Once 20260307000002_hybrid_rag_search.sql is applied to the database, change this to 1536.
+const EMBEDDING_DIMENSIONS = 384;
 
 async function generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
   console.log(`[BATCH] Generating ${texts.length} embeddings...`);
@@ -132,6 +134,7 @@ async function backfillEmbeddings(documentId?: string): Promise<number> {
 
           if (updateError) {
             console.error(`  ⚠️  Chunk ${chunk.id}: update failed`);
+            console.error(`      Error:`, updateError.message);
           } else {
             batchSuccess++;
             successCount++;

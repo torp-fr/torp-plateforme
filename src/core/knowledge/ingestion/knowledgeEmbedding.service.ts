@@ -19,7 +19,10 @@ import { log, warn, error } from '@/lib/logger';
 // ---------------------------------------------------------------------------
 
 const EMBEDDING_MODEL = 'text-embedding-3-small';
-const EMBEDDING_DIMENSIONS = 1536; // Enforced via OpenAI `dimensions` param (Phase 42 upgrade)
+// Embedding dimension must match database schema: knowledge_chunks.embedding_vector vector(384)
+// Phase 42 migration (20260307000002_hybrid_rag_search.sql) will upgrade this to 1536,
+// but hasn't been applied to the Supabase database yet. Update when migration is applied.
+const EMBEDDING_DIMENSIONS = 384;
 const BATCH_SIZE = 100;            // Edge Function cap; OpenAI allows up to 2048
 
 // ---------------------------------------------------------------------------
