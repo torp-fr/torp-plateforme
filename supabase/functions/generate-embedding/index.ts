@@ -41,24 +41,51 @@ Deno.serve(async (req) => {
     ? [text]
     : [];
 
-  if (inputArray.length === 0) {
+  console.log("[EMBEDDING] Received", inputArray.length, "raw inputs");
+
+  // =========================================================================
+  // INPUT SANITIZATION: Remove nulls, trim, filter empty
+  // =========================================================================
+  const cleanedInputs = inputArray
+    .map((t) => (t || "").trim())
+    .filter((t) => t.length > 0);
+
+  console.log("[EMBEDDING] After sanitization:", cleanedInputs.length, "valid inputs");
+
+  if (cleanedInputs.length === 0) {
+    console.warn("[EMBEDDING] No valid inputs after sanitization");
     return new Response(
-      JSON.stringify({ error: "inputs must be an array of strings" }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ embeddings: [] }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
   // OpenAI allows up to 2048 inputs per request; enforce a safe server-side cap
   const MAX_BATCH = 100;
-  if (inputArray.length > MAX_BATCH) {
+  if (cleanedInputs.length > MAX_BATCH) {
+    console.warn("[EMBEDDING] Batch size", cleanedInputs.length, "exceeds MAX_BATCH of", MAX_BATCH);
     return new Response(
       JSON.stringify({ error: `Batch size exceeds limit of ${MAX_BATCH}` }),
       {
-        status: 400,
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
   }
+
+  // =========================================================================
+  // TEXT LENGTH LIMIT: OpenAI cannot handle extremely long inputs
+  // =========================================================================
+  const MAX_TEXT_LENGTH = 8000;
+  const safeInputs = cleanedInputs.map((t) => {
+    if (t.length > MAX_TEXT_LENGTH) {
+      console.warn("[EMBEDDING] Truncating text from", t.length, "to", MAX_TEXT_LENGTH, "characters");
+      return t.slice(0, MAX_TEXT_LENGTH);
+    }
+    return t;
+  });
+
+  console.log("[EMBEDDING] After length limiting: all texts <= ", MAX_TEXT_LENGTH, "chars");
 
   const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_KEY) {
@@ -69,14 +96,14 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log("[EMBEDDING] Generating embeddings for", inputArray.length, "texts");
+    console.log("[EMBEDDING] Generating embeddings for", safeInputs.length, "texts");
     console.log("[EMBEDDING] Model: text-embedding-3-small");
     console.log("[EMBEDDING] Requested dimensions:", dimensions || "default (1536)");
 
     // Build OpenAI request - only use parameters that OpenAI accepts
     const requestBody: any = {
       model: "text-embedding-3-small",
-      input: inputArray,
+      input: safeInputs,
     };
 
     // Include dimensions if specified (text-embedding-3-small supports 256-1536)
@@ -118,6 +145,7 @@ Deno.serve(async (req) => {
       console.error("[EMBEDDING] ❌ OpenAI returned error status:", response.status);
       console.error("[EMBEDDING] ❌ OpenAI error response body:", errText);
 
+      // Return 200 with error detail instead of crashing with 502
       return new Response(
         JSON.stringify({
           error: "OPENAI_ERROR",
@@ -125,7 +153,7 @@ Deno.serve(async (req) => {
           message: errText,
         }),
         {
-          status: 502,
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
@@ -166,6 +194,18 @@ Deno.serve(async (req) => {
       throw new Error(`Embedding extraction error: ${mapErr instanceof Error ? mapErr.message : String(mapErr)}`);
     }
 
+    // =========================================================================
+    // PROTECT AGAINST EMPTY RESPONSE: Pad with null if OpenAI returns fewer
+    // =========================================================================
+    if (embeddings.length < safeInputs.length) {
+      console.warn("[EMBEDDING] ⚠️  OpenAI returned", embeddings.length, "embeddings but we sent", safeInputs.length, "inputs");
+      console.warn("[EMBEDDING] Padding with null values...");
+      while (embeddings.length < safeInputs.length) {
+        embeddings.push(null as any);
+      }
+      console.log("[EMBEDDING] ✅ Padded embeddings array to", embeddings.length);
+    }
+
     // Batch callers (inputs or texts) get { embeddings: number[][] }.
     // Single-text legacy callers get { embedding: number[] }.
     if (Array.isArray(inputs) || Array.isArray(texts)) {
@@ -189,6 +229,7 @@ Deno.serve(async (req) => {
       console.error("[EMBEDDING] Stack trace:", error.stack);
     }
 
+    // Return 200 with error detail instead of crashing with 500
     return new Response(
       JSON.stringify({
         error: "EMBEDDING_ERROR",
@@ -196,7 +237,7 @@ Deno.serve(async (req) => {
         type: error?.constructor?.name || "Unknown",
       }),
       {
-        status: 500,
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
