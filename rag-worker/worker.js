@@ -63,7 +63,7 @@ if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
 const BUILD_ID = "NUCLEAR_VERIFY_2500_V1";
 const BATCH_SIZE = 50;
 const CHUNK_SIZE = 2500;
-const EMBEDDING_DIMENSION = 1536;
+const EMBEDDING_DIMENSION = 384;
 const POLL_INTERVAL = 10000;
 
 // 🔒 HARD LOCK: Verify chunk size at build time
@@ -74,7 +74,7 @@ if (CHUNK_SIZE !== 2500) {
 async function downloadFile(storagePath) {
   try {
     const { data, error } = await supabase.storage
-      .from("knowledge-files")
+      .from("documents")
       .download(storagePath);
 
     if (error) {
@@ -245,18 +245,20 @@ async function processDocument(doc) {
         chunk_index: chunk.chunk_index,
         content: chunk.content,
         token_count: Math.ceil(chunk.content.length / 4),
-        section_title: chunk.section_title,
-        section_level: chunk.section_level,
-        metadata: JSON.stringify(chunk.metadata),
-        source_type: sourceType,
-        extraction_confidence: extractionConfidence,
-        category: documentMetadata.category,
-        document_version: documentMetadata.documentVersion,
-        authority_weight: documentMetadata.authorityWeight,
-        metier_target: documentMetadata.metierTarget,
-        document_type: documentMetadata.documentType,
-        effective_date: documentMetadata.effectiveDate,
-        expiration_date: documentMetadata.expirationDate,
+        metadata: {
+          ...(chunk.metadata || {}),
+          section_title: chunk.section_title,
+          section_level: chunk.section_level,
+          source_type: sourceType,
+          extraction_confidence: extractionConfidence,
+          category: documentMetadata.category,
+          document_version: documentMetadata.documentVersion,
+          authority_weight: documentMetadata.authorityWeight,
+          metier_target: documentMetadata.metierTarget,
+          document_type: documentMetadata.documentType,
+          effective_date: documentMetadata.effectiveDate,
+          expiration_date: documentMetadata.expirationDate,
+        },
       }));
 
       const { error: insertError } = await supabase

@@ -4,7 +4,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const EMBEDDING_DIMENSION = 1536;
+const EMBEDDING_DIMENSION = 384;
 const BATCH_SIZE = 10; // Process embeddings in batches
 
 export async function generateBatchEmbeddings(texts) {
@@ -16,6 +16,7 @@ export async function generateBatchEmbeddings(texts) {
     const response = await openai.embeddings.create({
       model: "text-embedding-3-small",
       input: texts,
+      dimensions: EMBEDDING_DIMENSION,
     });
 
     const embeddings = response.data.map((item) => item.embedding);
