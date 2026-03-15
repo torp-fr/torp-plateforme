@@ -1,4 +1,13 @@
-import * as pdfjs from "pdfjs-dist";
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+import { fileURLToPath } from "url";
+import path from "path";
+
+// Configure worker for Node.js ESM environment
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/legacy/build/pdf.worker.mjs",
+  import.meta.url
+).toString();
 
 export async function extractPdfText(arrayBuffer) {
   try {
