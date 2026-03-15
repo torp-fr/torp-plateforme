@@ -8,15 +8,33 @@
  *   npx tsx scripts/testPdfExtraction.ts
  */
 
+import "dotenv/config"
 import { createClient } from "@supabase/supabase-js"
-import dotenv from "dotenv"
 import { extractDocumentContent } from "../src/core/knowledge/ingestion/documentExtractor.service"
 
-dotenv.config()
+// Validate required environment variables
+console.log("[ENV] Validating Supabase configuration...")
+console.log("[ENV] SUPABASE_URL:", process.env.SUPABASE_URL ? "✅" : "❌")
+console.log(
+  "[ENV] SERVICE_ROLE_KEY:",
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+    ? "✅ " + process.env.SUPABASE_SERVICE_ROLE_KEY.slice(0, 10) + "..."
+    : "❌"
+)
+
+if (!process.env.SUPABASE_URL) {
+  throw new Error("❌ SUPABASE_URL environment variable is not set")
+}
+
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error("❌ SUPABASE_SERVICE_ROLE_KEY environment variable is not set")
+}
+
+console.log("[ENV] ✅ Environment validation passed\n")
 
 const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
 async function main() {
@@ -36,24 +54,47 @@ async function main() {
   }
 
   console.log("Document:", docs.title)
-  console.log("File:", docs.file_path)
+  console.log("File path:", docs.file_path)
   console.log("")
 
-  // Download PDF from storage
+  // Download PDF from storage (matches worker implementation)
+  console.log("[DOWNLOAD] Starting file download from Supabase Storage...")
+  console.log("[DOWNLOAD] bucket:", "documents")
+  console.log("[DOWNLOAD] path:", docs.file_path)
+
   const { data: fileBlob, error: downloadError } = await supabase.storage
-    .from("knowledge-files")
+    .from("documents")
     .download(docs.file_path)
 
-  if (downloadError || !fileBlob) {
-    console.error("Failed to download file:", downloadError?.message)
-    return
+  if (downloadError) {
+    console.error("[DOWNLOAD ERROR]", downloadError)
+    const errDetail =
+      downloadError?.message ||
+      (downloadError && typeof downloadError === "object"
+        ? JSON.stringify(downloadError)
+        : String(downloadError)) ||
+      "unknown error"
+    console.error("[DOWNLOAD ERROR] detail:", errDetail)
+    throw new Error(`Storage download failed: ${errDetail}`)
+  }
+
+  if (!fileBlob) {
+    console.error("[DOWNLOAD ERROR] Download returned null data")
+    throw new Error("Download returned null data (file not found or inaccessible)")
   }
 
   const arrayBuffer = await fileBlob.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
 
-  console.log("Downloaded:", buffer.length, "bytes")
-  console.log("")
+  console.log("[BUFFER] Conversion complete")
+  console.log("[BUFFER] byteLength:", arrayBuffer.byteLength)
+
+  if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+    console.error("[BUFFER ERROR] ArrayBuffer is empty or invalid")
+    throw new Error("Downloaded file buffer is empty")
+  }
+
+  const buffer = Buffer.from(arrayBuffer)
+  console.log("[DOWNLOAD] ✅ Downloaded and validated", buffer.length, "bytes\n")
 
   // Extract text using improved coordinate-aware algorithm
   console.log("Extracting text with coordinate-aware reconstruction...")
