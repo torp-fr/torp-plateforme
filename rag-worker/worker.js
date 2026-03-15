@@ -60,16 +60,12 @@ if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
   console.warn("⚠️ GOOGLE_SERVICE_ACCOUNT_JSON environment variable not found. OCR may fail.");
 }
 
-const BUILD_ID = "NUCLEAR_VERIFY_2500_V1";
+const BUILD_ID = "SEMANTIC_CHUNKING_V2";
 const BATCH_SIZE = 50;
-const CHUNK_SIZE = 2500;
 const EMBEDDING_DIMENSION = 384;
 const POLL_INTERVAL = 10000;
 
-// 🔒 HARD LOCK: Verify chunk size at build time
-if (CHUNK_SIZE !== 2500) {
-  throw new Error("🚨 FATAL: CHUNK_SIZE mismatch at build time. Expected 2500, got " + CHUNK_SIZE);
-}
+// Note: CHUNK_SIZE parameter is now deprecated — smartChunker uses token-based sizing (700-900 tokens)
 
 async function downloadFile(storagePath) {
   const MAX_RETRIES = 3;
@@ -283,8 +279,17 @@ async function processDocument(doc) {
     cleanedText = removeHeaders(cleanedText);
     cleanedText = cleanText(cleanedText);
 
-    if (!cleanedText || cleanedText.trim().length === 0) {
-      throw new Error("No text content to process after cleaning");
+    if (!cleanedText || cleanedText.trim().length < 20) {
+      console.warn(`  ⚠️ No usable text extracted (${cleanedText?.length || 0} chars) — skipping document`);
+      await supabase
+        .from("knowledge_documents")
+        .update({
+          ingestion_status: "completed",
+          ingestion_progress: 100,
+          last_ingestion_error: "No extractable text",
+        })
+        .eq("id", documentId);
+      return;
     }
 
     // Step 6: Structure text into sections
@@ -293,28 +298,31 @@ async function processDocument(doc) {
     console.log(`  ✅ Found ${sections.length} sections`);
 
     // Step 7: Create smart chunks with metadata
-    console.log(`  ✂️ Creating smart chunks...`);
+    // Note: Using semantic chunking (700-900 tokens per chunk, ~2800-3600 chars)
+    console.log(`  ✂️ Creating semantic chunks...`);
 
-    // 🚨 PRODUCTION ERROR CHECK
-    if (CHUNK_SIZE !== 2500) {
-      throw new Error("🚨 PRODUCTION ERROR: CHUNK_SIZE is not 2500. Current value: " + CHUNK_SIZE);
-    }
-
-    let chunks = smartChunkText(cleanedText, sections, CHUNK_SIZE);
+    let chunks = smartChunkText(cleanedText, sections);
 
     if (chunks.length === 0) {
       console.log(`  ⚠️ Smart chunker returned 0 chunks, activating fallback chunking`);
-      chunks = fallbackChunking(cleanedText, CHUNK_SIZE);
+      chunks = fallbackChunking(cleanedText, 2500);
 
       if (chunks.length === 0) {
-        throw new Error(
-          "Fallback chunking also returned 0 chunks - text too small or invalid"
-        );
+        console.warn(`  ⚠️ Fallback chunking also returned 0 chunks — skipping document`);
+        await supabase
+          .from("knowledge_documents")
+          .update({
+            ingestion_status: "completed",
+            ingestion_progress: 100,
+            last_ingestion_error: "Could not chunk document",
+          })
+          .eq("id", documentId);
+        return;
       }
 
       console.log(`  ✅ Fallback created ${chunks.length} chunks`);
     } else {
-      console.log(`  ✅ Created ${chunks.length} chunks`);
+      console.log(`  ✅ Created ${chunks.length} chunks (semantic chunking)`);
     }
 
     // Step 8: Update progress
@@ -473,17 +481,17 @@ async function pollDocuments() {
   }
 }
 
-// 🚨 NUCLEAR VERIFICATION - RUNTIME PROOF
-console.log("🚨🚨🚨 BUILD VERSION: CHUNK_SIZE_2500_ACTIVE 🚨🚨🚨");
-console.log("🚨 Runtime CHUNK_SIZE value:", CHUNK_SIZE);
-console.log("🚨 Worker file path:", __filename);
-console.log("🚨 BUILD ID:", BUILD_ID);
-
-console.log("🚀 RAG Worker v2 started");
+// 📋 INITIALIZATION SUMMARY
+console.log("═══════════════════════════════════════════════════════════════════");
+console.log("🚀 RAG Worker v2 started (Semantic Chunking)");
+console.log("═══════════════════════════════════════════════════════════════════");
+console.log(`📋 Build ID: ${BUILD_ID}`);
 console.log(`📍 Poll interval: ${POLL_INTERVAL}ms`);
 console.log(`📦 Batch size: ${BATCH_SIZE}`);
-console.log(`📄 Chunk size: ${CHUNK_SIZE}`);
+console.log(`📝 Chunking: Semantic (700-900 tokens, ~2800-3600 chars)`);
 console.log(`🔑 Formats: PDF, DOCX, XLSX, Images (OCR), TXT`);
+console.log(`📂 Worker path: ${__filename}`);
+console.log("═══════════════════════════════════════════════════════════════════");
 
 setInterval(pollDocuments, POLL_INTERVAL);
 

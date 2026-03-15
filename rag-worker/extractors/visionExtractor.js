@@ -8,6 +8,17 @@ const __dirname = path.dirname(__filename);
 
 export async function extractImageText(arrayBuffer, fileName) {
   try {
+    // Check if Google Vision credentials are configured
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+      console.warn(`  [OCR] Google Vision credentials missing — OCR disabled`);
+      return {
+        text: "",
+        confidence: "ocr_disabled",
+        skipped: true,
+        reason: "missing_credentials",
+      };
+    }
+
     // Create temporary file from arrayBuffer
     const tempDir = path.join(__dirname, "..", "temp");
     if (!fs.existsSync(tempDir)) {

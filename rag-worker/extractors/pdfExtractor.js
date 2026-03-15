@@ -5,9 +5,11 @@ import path from "path";
 // Configure worker for Node.js ESM environment
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/legacy/build/pdf.worker.mjs",
+  "../../../node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
   import.meta.url
 ).toString();
+
+console.log(`  [PDF] Worker path configured: ${pdfjs.GlobalWorkerOptions.workerSrc}`);
 
 export async function extractPdfText(arrayBuffer) {
   try {
