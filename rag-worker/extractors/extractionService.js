@@ -19,39 +19,38 @@ export async function extractDocumentText(arrayBuffer, fileName, mimeType) {
   const fileExt = getFileExtension(fileName).toLowerCase();
   const normalizedMimeType = (mimeType || "").toLowerCase();
 
-  // PDF with native extraction only (no OCR fallback)
+  // PDF with native extraction + OCR fallback for scanned documents
   if (
     fileExt === "pdf" ||
     normalizedMimeType === MIME_TYPES.pdf
   ) {
     console.log(`  📄 PDF detected - attempting native extraction...`);
-    try {
-      const result = await extractPdfText(arrayBuffer);
 
-      if (!result.text || result.text.trim().length < 500) {
-        console.log(
-          `  ⚠️ Scanned PDF detected (native extraction empty or too short) - skipping document (OCR disabled)`
-        );
+    const result = await extractPdfText(arrayBuffer);
+
+    // Check if OCR fallback is needed
+    if (result.requiresOCR) {
+      console.log(`  🔄 OCR fallback triggered for PDF`);
+      console.log(`  🖼️ Attempting Google Vision OCR...`);
+
+      try {
+        const ocrResult = await extractImageText(arrayBuffer, fileName);
+        console.log(`  ✅ OCR fallback successful (${ocrResult.text?.length || 0} characters extracted)`);
+        return ocrResult;
+      } catch (ocrError) {
+        console.error(`  ❌ OCR fallback failed: ${ocrError.message}`);
         return {
           text: "",
-          confidence: "native_failed",
+          confidence: "ocr_failed",
           skipped: true,
-          reason: "scanned_pdf_not_supported",
+          reason: "ocr_extraction_error",
+          error: ocrError.message,
         };
       }
-
-      return result;
-    } catch (error) {
-      console.log(
-        `  ⚠️ PDF native extraction failed: ${error.message} - skipping document (OCR disabled)`
-      );
-      return {
-        text: "",
-        confidence: "native_failed",
-        skipped: true,
-        reason: "native_extraction_error",
-      };
     }
+
+    // Native extraction succeeded
+    return result;
   }
 
   // DOCX
