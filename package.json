@@ -30,6 +30,7 @@
     "health:check": "tsx scripts/devHealthCheck.ts",
     "fix:pipeline": "tsx scripts/autoFixPipeline.ts",
     "reindex:embeddings": "tsx scripts/reindexEmbeddings.ts",
+    "retry:ingestion": "tsx scripts/retryFailedIngestion.ts",
     "context:generate": "tsx scripts/generateProjectContext.ts",
     "claude:bootstrap": "tsx scripts/claudeBootstrap.ts"
   },

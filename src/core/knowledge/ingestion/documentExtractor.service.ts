@@ -18,7 +18,8 @@ async function loadPdfJs() {
   return pdfjsLib;
 }
 
-const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024;
+// Increased to 80MB to support large construction PDFs (DTU, CSTB standards)
+const MAX_DOCUMENT_SIZE = 80 * 1024 * 1024;
 const COLUMN_GAP_THRESHOLD = 20; // Gap size threshold for column separator
 const WORD_GAP_THRESHOLD = 5; // Gap size threshold for word space
 const Y_THRESHOLD_DEFAULT = 5; // Default Y-coordinate clustering threshold (pixels)
