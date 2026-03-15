@@ -127,8 +127,30 @@ async function downloadFile(storagePath) {
         throw new Error("Storage returned empty data (file not found or inaccessible)");
       }
 
+      // Convert Blob to ArrayBuffer
       const arrayBuffer = await data.arrayBuffer();
-      console.log(`  [DOWNLOAD] ✅ Downloaded ${arrayBuffer.byteLength} bytes`);
+
+      // Diagnostic logging with comprehensive buffer info
+      console.log(`  [DOWNLOAD RESULT]`, {
+        hasData: !!data,
+        dataType: data?.constructor?.name || 'unknown',
+        arrayBufferByteLength: arrayBuffer?.byteLength || 0,
+        hasByteLength: !!arrayBuffer?.byteLength,
+        error: null,
+      });
+
+      // Validate buffer is not empty
+      if (!arrayBuffer) {
+        throw new Error("arrayBuffer is null or undefined after conversion");
+      }
+
+      if (arrayBuffer.byteLength === 0) {
+        throw new Error("Downloaded file buffer is empty (file may be corrupted, 0 bytes, or access denied)");
+      }
+
+      console.log(`  [BUFFER SIZE] ${arrayBuffer.byteLength} bytes`);
+      console.log(`  [DOWNLOAD] ✅ Downloaded and validated ${arrayBuffer.byteLength} bytes`);
+
       return arrayBuffer;
     } catch (err) {
       console.error(`  [DOWNLOAD] Exception (attempt ${attempt}/${MAX_RETRIES}):`, err);
@@ -219,6 +241,16 @@ async function processDocument(doc) {
     console.log(`  📥 Downloading file...`);
     console.log(`  📥 Document file_path from DB: "${doc.file_path}"`);
     const arrayBuffer = await downloadFile(doc.file_path);
+
+    // Validate arrayBuffer before extraction
+    console.log(`  📥 ArrayBuffer validation:`);
+    console.log(`     - Type: ${arrayBuffer?.constructor?.name || 'null'}`);
+    console.log(`     - ByteLength: ${arrayBuffer?.byteLength || 0}`);
+    console.log(`     - Is valid: ${!!(arrayBuffer && arrayBuffer.byteLength > 0)}`);
+
+    if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+      throw new Error(`TEXT_EXTRACTION_FAILED: Downloaded arrayBuffer is empty or invalid`);
+    }
 
     // Step 4: Extract text based on file type
     console.log(`  🔍 Extracting text...`);
