@@ -38,3 +38,6 @@ coverage
 
 # Debug
 debug.log
+
+# Generated AI context files
+PROJECT_CONTEXT.md
