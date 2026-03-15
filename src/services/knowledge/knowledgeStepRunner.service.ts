@@ -153,15 +153,40 @@ async function processDocument(doc: any) {
       log(`[INGESTION] File size: ${doc.file_size} bytes`);
       log(`[INGESTION] File MIME type: ${doc.mime_type}`);
 
+      // Defensive checks before download
+      if (!doc.file_path) {
+        throw new Error(
+          `TEXT_EXTRACTION_FAILED: document has no file_path in database`
+        );
+      }
+      if (typeof doc.file_path !== 'string') {
+        throw new Error(
+          `TEXT_EXTRACTION_FAILED: file_path is not a string (got ${typeof doc.file_path})`
+        );
+      }
+      if (doc.file_path.trim().length === 0) {
+        throw new Error(
+          `TEXT_EXTRACTION_FAILED: file_path is empty string`
+        );
+      }
+
       const { data: fileBlob, error: downloadError } = await supabase.storage
         .from(KNOWLEDGE_STORAGE_BUCKET)
         .download(doc.file_path);
 
-      if (downloadError || !fileBlob) {
-        const errorMsg = downloadError?.message ?? 'no data returned';
+      if (downloadError) {
+        log(`[INGESTION] ❌ Storage download error object:`, downloadError);
+        const errorMsg = downloadError?.message ?? JSON.stringify(downloadError) ?? 'unknown error';
         log(`[INGESTION] ❌ Storage download failed: ${errorMsg}`);
         throw new Error(
           `TEXT_EXTRACTION_FAILED: storage download failed: ${errorMsg}`
+        );
+      }
+
+      if (!fileBlob) {
+        log(`[INGESTION] ❌ Storage returned no data (file not found or inaccessible)`);
+        throw new Error(
+          `TEXT_EXTRACTION_FAILED: storage returned empty data (file not found)`
         );
       }
 

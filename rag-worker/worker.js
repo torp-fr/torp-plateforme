@@ -73,32 +73,73 @@ if (CHUNK_SIZE !== 2500) {
 
 async function downloadFile(storagePath) {
   const MAX_RETRIES = 3;
+  const bucket = "documents";
+
+  // Defensive logging before attempting download
+  console.log(`  [DOWNLOAD] ════════════════════════════════════════`);
+  console.log(`  [DOWNLOAD] bucket: "${bucket}"`);
+  console.log(`  [DOWNLOAD] path: "${storagePath}"`);
+  console.log(`  [DOWNLOAD] path length: ${storagePath?.length || 'undefined'}`);
+  console.log(`  [DOWNLOAD] path type: ${typeof storagePath}`);
+  console.log(`  [DOWNLOAD] ════════════════════════════════════════`);
+
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      console.log(`  [DOWNLOAD] Attempt ${attempt}/${MAX_RETRIES}: bucket=documents path=${storagePath}`);
+      console.log(`  [DOWNLOAD] Attempt ${attempt}/${MAX_RETRIES}`);
+
+      // Validate path before attempting download
+      if (!storagePath) {
+        throw new Error("storagePath is null or undefined");
+      }
+      if (typeof storagePath !== 'string') {
+        throw new Error(`storagePath must be string, got ${typeof storagePath}`);
+      }
+      if (storagePath.trim().length === 0) {
+        throw new Error("storagePath is empty string");
+      }
+
       const { data, error } = await supabase.storage
-        .from("documents")
+        .from(bucket)
         .download(storagePath);
 
       if (error) {
-        const errDetail = error.message || JSON.stringify(error) || 'no message';
-        console.error(`  [DOWNLOAD] Storage error (attempt ${attempt}): ${errDetail}`);
+        // Detailed error logging
+        console.error(`  [DOWNLOAD ERROR] Attempt ${attempt}/${MAX_RETRIES}`);
+        console.error(`  [DOWNLOAD ERROR] bucket: "${bucket}"`);
+        console.error(`  [DOWNLOAD ERROR] path: "${storagePath}"`);
+        console.error(`  [DOWNLOAD ERROR] error object:`, error);
+
+        const errDetail = error?.message ||
+                         (error && typeof error === 'object' ? JSON.stringify(error) : String(error)) ||
+                         'unknown error';
+        console.error(`  [DOWNLOAD ERROR] error detail: ${errDetail}`);
+
         if (attempt < MAX_RETRIES) {
-          await new Promise(r => setTimeout(r, 2000 * attempt));
+          const delay = 2000 * attempt;
+          console.log(`  [DOWNLOAD] Retrying after ${delay}ms...`);
+          await new Promise(r => setTimeout(r, delay));
           continue;
         }
         throw new Error(`Storage download failed after ${MAX_RETRIES} attempts: ${errDetail}`);
+      }
+
+      if (!data) {
+        throw new Error("Storage returned empty data (file not found or inaccessible)");
       }
 
       const arrayBuffer = await data.arrayBuffer();
       console.log(`  [DOWNLOAD] ✅ Downloaded ${arrayBuffer.byteLength} bytes`);
       return arrayBuffer;
     } catch (err) {
+      console.error(`  [DOWNLOAD] Exception (attempt ${attempt}/${MAX_RETRIES}):`, err);
+
       if (attempt < MAX_RETRIES && !err.message?.includes('Storage download failed after')) {
-        console.error(`  [DOWNLOAD] Exception (attempt ${attempt}): ${err.message}`);
-        await new Promise(r => setTimeout(r, 2000 * attempt));
+        const delay = 2000 * attempt;
+        console.log(`  [DOWNLOAD] Retrying after ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
         continue;
       }
+
       throw new Error(`Failed to download file: ${err.message}`);
     }
   }
@@ -176,6 +217,7 @@ async function processDocument(doc) {
 
     // Step 3: Download file
     console.log(`  📥 Downloading file...`);
+    console.log(`  📥 Document file_path from DB: "${doc.file_path}"`);
     const arrayBuffer = await downloadFile(doc.file_path);
 
     // Step 4: Extract text based on file type
@@ -356,7 +398,11 @@ async function processDocument(doc) {
 
     console.log(`Completed: ${documentId}`);
   } catch (error) {
-    console.error(`Error: ${error.message}`);
+    console.error(`❌ Error processing document ${documentId}:`);
+    console.error(`  Message: ${error.message}`);
+    if (error.stack) {
+      console.error(`  Stack:`, error.stack);
+    }
 
     try {
       await supabase
