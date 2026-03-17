@@ -15,7 +15,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getServerSupabase } from '../_lib/supabase';
+import { getServerSupabase } from '../_lib/supabase.js';
 
 const EMBEDDING_MODEL = 'text-embedding-3-small';
 const EMBEDDING_DIMENSIONS = 1536;

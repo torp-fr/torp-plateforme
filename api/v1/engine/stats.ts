@@ -12,7 +12,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   ENGINE_REGISTRY,
   getEngineStats,
-} from '../../../src/core/platform/engineRegistry';
+} from '../../../src/core/platform/engineRegistry.js';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   console.log('🔥 [stats] API CALLED:', req.method, req.url);
