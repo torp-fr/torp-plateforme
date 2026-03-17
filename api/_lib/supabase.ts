@@ -28,6 +28,12 @@ export function getServerSupabase(): ServerSupabaseClient {
     process.env.VITE_SUPABASE_ANON_KEY ??
     '';
 
+  // Debug: log env var presence (never log key value)
+  console.log('🔥 [supabase] SUPABASE_URL:', url ? url.slice(0, 30) + '...' : '❌ MISSING');
+  console.log('🔥 [supabase] SUPABASE_SERVICE_ROLE_KEY exists:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+  console.log('🔥 [supabase] VITE_SUPABASE_ANON_KEY exists:', !!process.env.VITE_SUPABASE_ANON_KEY);
+  console.log('🔥 [supabase] key resolved:', key ? '✅' : '❌ MISSING');
+
   if (!url) {
     throw new Error(
       '[api/_lib/supabase] Missing Supabase URL. Set SUPABASE_URL in Vercel environment variables.'
@@ -36,7 +42,7 @@ export function getServerSupabase(): ServerSupabaseClient {
 
   if (!key) {
     throw new Error(
-      '[api/_lib/supabase] Missing Supabase key. Set SUPABASE_SERVICE_ROLE_KEY in Vercel environment variables.'
+      '[api/_lib/supabase] Missing Supabase key. Set SUPABASE_SERVICE_ROLE_KEY (preferred) or VITE_SUPABASE_ANON_KEY in Vercel environment variables.'
     );
   }
 

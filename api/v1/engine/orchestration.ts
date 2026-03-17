@@ -11,12 +11,16 @@ import { ENGINE_REGISTRY } from '../../../src/core/platform/engineRegistry';
 import { getServerSupabase } from '../../_lib/supabase';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  console.log('🔥 [orchestration] API CALLED:', req.method, req.url);
+
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
   try {
+    console.log('🔥 [orchestration] calling getServerSupabase()');
     const supabase = getServerSupabase();
+    console.log('🔥 [orchestration] Supabase client ready');
 
     // Fetch the most recent orchestration run from the database.
     const { data: runs, error: dbError } = await supabase
@@ -26,7 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .limit(1);
 
     if (dbError) {
-      console.error('[/api/v1/engine/orchestration] DB error:', dbError.message);
+      console.error('🔥 [orchestration] DB error:', dbError.message);
     }
 
     const lastRun = runs?.[0] ?? null;
@@ -52,8 +56,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[/api/v1/engine/orchestration] Error:', message);
-    return res.status(500).json({ success: false, error: message });
+    const error = err instanceof Error ? err : new Error(String(err));
+    console.error('🔥 [orchestration] FULL ERROR:', error.message);
+    console.error('🔥 [orchestration] STACK:', error.stack);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal error',
+      message: error.message,
+      stack: error.stack,
+    });
   }
 }
