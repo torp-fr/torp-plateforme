@@ -6,7 +6,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { SearchResult } from '../types';
-import { log, warn } from '@/lib/logger';
+import { log } from '@/lib/logger';
 
 /**
  * Keyword fallback search using the `search_knowledge_by_keyword` RPC.
@@ -42,16 +42,12 @@ export async function keywordSearch(
 
     log('[RAG:KeywordSearch] ✅ Keyword search found', data.length, 'verified chunks');
 
-    // Apply publishability filter (integrity governance)
-    const publishableResults = data.filter((item: any) => {
-      if (item.is_publishable !== true) {
-        warn('[RAG:KeywordSearch] ⚠️ Filtered: Document is not publishable', item.id);
-        return false;
-      }
-      return true;
-    });
+    // Publishability is enforced at the database level:
+    // knowledge_documents_ready view filters is_publishable = TRUE,
+    // and search_knowledge_by_keyword queries that view exclusively.
+    // No application-level filter needed here.
 
-    return publishableResults.map((item: any) => ({
+    return data.map((item: any) => ({
       id: item.id,
       source: item.doc_source,
       category: item.doc_category,

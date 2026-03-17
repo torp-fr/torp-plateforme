@@ -53,8 +53,8 @@ let _supabase: ReturnType<typeof createClient<Database>> | null = null;
  * Returns the shared Supabase client, creating it on first call.
  *
  * Credential resolution (first non-empty value wins):
- *   URL : import.meta.env.VITE_SUPABASE_URL → process.env.VITE_SUPABASE_URL → process.env.SUPABASE_URL
- *   KEY : process.env.SUPABASE_SERVICE_ROLE_KEY → import.meta.env.VITE_SUPABASE_ANON_KEY → process.env.VITE_SUPABASE_ANON_KEY
+ *   URL : import.meta.env.VITE_SUPABASE_URL → process.env.SUPABASE_URL
+ *   KEY : import.meta.env.VITE_SUPABASE_ANON_KEY → process.env.SUPABASE_SERVICE_ROLE_KEY
  *
  * Throws with a clear message if the URL or key is missing, so callers fail
  * fast with an actionable error rather than a cryptic network failure later.
@@ -66,15 +66,15 @@ export function getSupabase(): ReturnType<typeof createClient<Database>> {
 
     const url =
       _metaEnv.VITE_SUPABASE_URL ??
-      process.env.VITE_SUPABASE_URL ??
-      process.env.SUPABASE_URL ??
+      (process.env as Record<string, string | undefined>).VITE_SUPABASE_URL ??
+      (process.env as Record<string, string | undefined>).SUPABASE_URL ??
       '';
 
-    // Prefer the service role key (batch scripts / server) over the anon key (browser).
+    // Browser: prefer VITE_SUPABASE_ANON_KEY. Node scripts: prefer SUPABASE_SERVICE_ROLE_KEY.
     const key =
-      process.env.SUPABASE_SERVICE_ROLE_KEY ??
       _metaEnv.VITE_SUPABASE_ANON_KEY ??
-      process.env.VITE_SUPABASE_ANON_KEY ??
+      (process.env as Record<string, string | undefined>).SUPABASE_SERVICE_ROLE_KEY ??
+      (process.env as Record<string, string | undefined>).VITE_SUPABASE_ANON_KEY ??
       '';
 
     if (!url) {
@@ -141,11 +141,10 @@ export const supabase = new Proxy({} as SupabaseClient, {
  */
 export const isSupabaseConfigured = (): boolean => {
   const _metaEnv = (import.meta.env ?? {}) as Record<string, string | undefined>;
-  const url = _metaEnv.VITE_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '';
+  const url = _metaEnv.VITE_SUPABASE_URL ?? (process.env as Record<string, string | undefined>).SUPABASE_URL ?? '';
   const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
     _metaEnv.VITE_SUPABASE_ANON_KEY ??
-    process.env.VITE_SUPABASE_ANON_KEY ??
+    (process.env as Record<string, string | undefined>).SUPABASE_SERVICE_ROLE_KEY ??
     '';
   return Boolean(url && key && !env.api.useMock);
 };

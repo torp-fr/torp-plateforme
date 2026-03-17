@@ -52,29 +52,19 @@ export function isValidStrategy(strategy) {
 
 /**
  * Get default strategy for document category
- * Maps document category to recommended extraction strategy
- * @param {string} category - Document category (DTU, EUROCODE, REGULATION, BEST_PRACTICE, etc.)
+ * Maps canonical TORP document category to recommended extraction strategy.
+ * @param {string} category - Document category (DTU | EUROCODE | CODE_CONSTRUCTION | NORME | GUIDE_TECHNIQUE | JURISPRUDENCE | PRIX_BTP)
  * @returns {string} Recommended extraction strategy
  */
 export function getDefaultStrategyForCategory(category) {
   const categoryMapping = {
-    'DTU': 'strict_obligations',
-    'EUROCODE': 'strict_obligations',
-    'NORM': 'strict_obligations',
-    'REGULATION': 'legal_obligations_only',
-    'LEGAL': 'legal_obligations_only',
-    'GUIDELINE': 'best_practices',
-    'BEST_PRACTICE': 'best_practices',
-    'TECHNICAL_GUIDE': 'best_practices',
-    'TRAINING': 'contextual_insights',
-    'MANUAL': 'contextual_insights',
-    'HANDBOOK': 'contextual_insights',
-    'SUSTAINABILITY': 'best_practices',
-    'ENERGY_EFFICIENCY': 'best_practices',
-    'LIABILITY': 'legal_obligations_only',
-    'WARRANTY': 'legal_obligations_only',
-    'CASE_STUDY': 'contextual_insights',
-    'LESSONS_LEARNED': 'contextual_insights'
+    'DTU':               'strict_obligations',
+    'EUROCODE':          'strict_obligations',
+    'NORME':             'strict_obligations',
+    'CODE_CONSTRUCTION': 'legal_obligations_only',
+    'JURISPRUDENCE':     'legal_obligations_only',
+    'GUIDE_TECHNIQUE':   'best_practices',
+    'PRIX_BTP':          'contextual_insights',
   };
 
   return categoryMapping[category] || 'legal_obligations_only';

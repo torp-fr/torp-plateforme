@@ -87,14 +87,14 @@ interface EnvConfig {
 const _env = (import.meta.env ?? {}) as Record<string, string | boolean | undefined>;
 
 const getEnv = (key: string, fallback: string = ''): string => {
-  return (_env[key] as string | undefined) || process.env[key] || fallback;
+  return (_env[key] as string | undefined) || fallback;
 };
 
 /**
  * Get boolean environment variable
  */
 const getBoolEnv = (key: string, fallback: boolean = false): boolean => {
-  const value = _env[key] ?? process.env[key];
+  const value = _env[key];
   if (value === undefined) return fallback;
   return value === 'true' || value === true;
 };
@@ -103,7 +103,7 @@ const getBoolEnv = (key: string, fallback: boolean = false): boolean => {
  * Get number environment variable
  */
 const getNumEnv = (key: string, fallback: number = 0): number => {
-  const value = _env[key] ?? process.env[key];
+  const value = _env[key];
   if (value === undefined) return fallback;
   const num = parseInt(value as string, 10);
   return isNaN(num) ? fallback : num;

@@ -27,7 +27,7 @@ export default function Login() {
 
       // Use same redirect logic as handleLogin
       if (user.isAdmin === true) {
-        navigate('/analytics');
+        navigate('/admin');
       } else if (user.type === 'B2B') {
         navigate('/projets');
       } else {
@@ -39,7 +39,7 @@ export default function Login() {
   // Admin redirect trigger on user change
   useEffect(() => {
     if (user?.isAdmin === true) {
-      navigate('/analytics', { replace: true });
+      navigate('/admin', { replace: true });
     }
   }, [user]);
 
@@ -69,7 +69,7 @@ export default function Login() {
 
       if (response.user.isAdmin === true) {
         log('[Login] Admin détecté, redirection vers /analytics');
-        navigate('/analytics');
+        navigate('/admin');
       } else if (response.user.type === 'B2B') {
         log('[Login] Utilisateur B2B, redirection vers /projets');
         navigate('/projets');

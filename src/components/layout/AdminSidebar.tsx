@@ -39,28 +39,28 @@ const ADMIN_SECTIONS = {
     items: [
       {
         id: 'dashboard',
-        href: '/analytics',
+        href: '/admin',
         icon: LayoutDashboard,
         label: 'Dashboard Global',
         description: 'Vue d\'ensemble plateforme',
       },
       {
         id: 'orchestration',
-        href: '/analytics/orchestrations',
+        href: '/admin/orchestrations',
         icon: Zap,
         label: 'Cockpit d\'Orchestration',
         description: 'Status des moteurs',
       },
       {
         id: 'fraud',
-        href: '/analytics/security',
+        href: '/admin/security',
         icon: AlertTriangle,
         label: 'Surveillance Fraude',
         description: 'Détection & patterns',
       },
       {
         id: 'adaptive',
-        href: '/analytics/intelligence',
+        href: '/admin/intelligence',
         icon: TrendingUp,
         label: 'Monitoring Adaptatif',
         description: 'Impacts & ajustements',
@@ -72,14 +72,14 @@ const ADMIN_SECTIONS = {
     items: [
       {
         id: 'kb',
-        href: '/analytics/knowledge',
+        href: '/admin/knowledge',
         icon: BookOpen,
         label: 'Base de Connaissances',
         description: 'Documents & ingestion',
       },
       {
         id: 'doctrine',
-        href: '/analytics/settings',
+        href: '/admin/settings',
         icon: Shield,
         label: 'Doctrine & Normes',
         description: 'Règles & jurisprudence',
@@ -91,7 +91,7 @@ const ADMIN_SECTIONS = {
     items: [
       {
         id: 'apis',
-        href: '/analytics/system',
+        href: '/admin/system',
         icon: Plug,
         label: 'APIs Externes',
         description: 'Services intégrés',
@@ -105,14 +105,14 @@ const ADMIN_SECTIONS = {
       },
       {
         id: 'logs',
-        href: '/analytics/system',
+        href: '/admin/system',
         icon: FileText,
         label: 'Logs Système',
         description: 'Audit trail',
       },
       {
         id: 'config',
-        href: '/analytics/settings',
+        href: '/admin/settings',
         icon: Cog,
         label: 'Configuration',
         description: 'Paramètres plateforme',

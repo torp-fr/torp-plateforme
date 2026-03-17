@@ -18,7 +18,7 @@ const QUICK_ACTIONS: ActionItem[] = [
     icon: Database,
     label: 'Upload Knowledge',
     description: 'Add documents to KB',
-    href: '/analytics/knowledge',
+    href: '/admin/knowledge',
     color: 'from-amber-500/10 to-amber-600/5',
   },
   {
@@ -26,7 +26,7 @@ const QUICK_ACTIONS: ActionItem[] = [
     icon: Zap,
     label: 'Launch Orchestration',
     description: 'Run analysis engine',
-    href: '/analytics/orchestrations',
+    href: '/admin/orchestrations',
     color: 'from-blue-500/10 to-blue-600/5',
   },
   {
@@ -34,7 +34,7 @@ const QUICK_ACTIONS: ActionItem[] = [
     icon: Plug,
     label: 'Check APIs',
     description: 'System health status',
-    href: '/analytics/system',
+    href: '/admin/system',
     color: 'from-purple-500/10 to-purple-600/5',
   },
   {
@@ -42,7 +42,7 @@ const QUICK_ACTIONS: ActionItem[] = [
     icon: FileText,
     label: 'View Logs',
     description: 'System activity log',
-    href: '/analytics/security',
+    href: '/admin/security',
     color: 'from-green-500/10 to-green-600/5',
   },
 ];

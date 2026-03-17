@@ -24,6 +24,9 @@ export default defineConfig(({ mode }) => ({
   },
   define: {
     global: 'globalThis',
+    // Prevent "process is not defined" crashes in browser bundles.
+    // Any process.env.* access in browser code returns undefined instead of throwing.
+    'process.env': {},
   },
   build: {
     // Désactivation du code-splitting pour éviter les erreurs React sur Vercel

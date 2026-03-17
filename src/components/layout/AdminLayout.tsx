@@ -52,50 +52,50 @@ interface NavItem {
 const ADMIN_NAV_ITEMS: NavItem[] = [
   {
     id: 'dashboard',
-    href: '/analytics',
+    href: '/admin',
     icon: BarChart3,
     label: 'Dashboard',
     exact: true,
   },
   {
     id: 'orchestrations',
-    href: '/analytics/orchestrations',
+    href: '/admin/orchestrations',
     icon: Zap,
     label: "Cockpit d'Orchestration",
   },
   {
     id: 'security',
-    href: '/analytics/security',
+    href: '/admin/security',
     icon: AlertTriangle,
     label: 'Surveillance Fraude',
   },
   {
     id: 'intelligence',
-    href: '/analytics/intelligence',
+    href: '/admin/intelligence',
     icon: TrendingUp,
     label: 'Adaptatif',
   },
   {
     id: 'knowledge',
-    href: '/analytics/knowledge',
+    href: '/admin/knowledge',
     icon: Database,
-    label: 'Base de Connaissances',
+    label: 'Gestion des documents',
   },
   {
     id: 'knowledge-debug',
-    href: '/analytics/knowledge-debug',
+    href: '/admin/knowledge-debug',
     icon: FlaskConical,
-    label: 'Knowledge',
+    label: 'Knowledge Debug',
   },
   {
     id: 'system',
-    href: '/analytics/system',
+    href: '/admin/system',
     icon: Plug,
     label: 'APIs',
   },
   {
     id: 'settings',
-    href: '/analytics/settings',
+    href: '/admin/settings',
     icon: Settings,
     label: 'Settings',
   },
@@ -155,7 +155,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     <>
       {/* Logo */}
       <div className="p-4 border-b border-sidebar-border">
-        <Link to="/analytics" className="flex items-center gap-3">
+        <Link to="/admin" className="flex items-center gap-3">
           <img src={BRANDING.logoPrimary} alt="TORP" className="h-10 w-auto" />
           <div>
             <div className="flex items-center gap-2">
@@ -226,7 +226,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             >
               {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
-            <Link to="/analytics" className="flex items-center gap-2">
+            <Link to="/admin" className="flex items-center gap-2">
               <img src={BRANDING.logoPrimary} alt="TORP" className="h-8 w-auto" />
               <span className="font-bold">TORP</span>
             </Link>

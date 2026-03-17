@@ -7,7 +7,6 @@
 import React, { useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Upload,
@@ -17,26 +16,23 @@ import {
   FileText,
   X,
 } from 'lucide-react';
-import { KNOWLEDGE_CATEGORY_LABELS, getAllCategories } from '@/constants/knowledge-categories';
 import { knowledgeBrainService } from '@/services/ai/knowledge-brain.service';
 import { env } from '@/config/env';
-import { log, warn, error, time, timeEnd } from '@/lib/logger';
+import { log } from '@/lib/logger';
+import {
+  DOCUMENT_CATEGORIES as CATEGORY_VALUES,
+  DOCUMENT_CATEGORY_LABELS,
+  type DocumentCategory,
+} from '@/constants/documentCategories';
 
-// Map of sources with French labels
-const SOURCES = {
-  internal: { label: 'Interne', reliability: 50 },
-  external: { label: 'Externe', reliability: 40 },
-  official: { label: 'Officiel', reliability: 95 },
-} as const;
-
-// Get all available categories with French labels
-const KNOWLEDGE_CATEGORIES = getAllCategories().map(cat => cat.id);
+const DOCUMENT_CATEGORIES = CATEGORY_VALUES.map(value => ({
+  value,
+  label: DOCUMENT_CATEGORY_LABELS[value],
+}));
 
 interface UploadState {
   file: File | null;
-  category: string;
-  source: 'internal' | 'external' | 'official';
-  region?: string;
+  category: DocumentCategory;
   loading: boolean;
   error: string | null;
   success: boolean;
@@ -46,9 +42,7 @@ export function KnowledgeBaseUpload() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<UploadState>({
     file: null,
-    category: 'GUIDELINE',
-    source: 'internal',
-    region: 'National',
+    category: 'DTU',
     loading: false,
     error: null,
     success: false,
@@ -115,7 +109,7 @@ export function KnowledgeBaseUpload() {
         {
           title: finalTitle,
           category: state.category,
-          source: state.source,
+          source: 'official',
         }
       );
 
@@ -131,9 +125,7 @@ export function KnowledgeBaseUpload() {
       setState(prev => ({
         ...prev,
         file: null,
-        category: 'GUIDELINE',
-        source: 'internal',
-        region: 'National',
+        category: 'DTU',
         success: true,
         loading: false,
       }));
@@ -225,59 +217,20 @@ export function KnowledgeBaseUpload() {
           <p className="text-xs text-muted-foreground">Max {(env.upload.maxFileSize / (1024 * 1024)).toFixed(0)}MB. Formats: PDF, TXT, MD, DOCX, XLSX, CSV</p>
         </div>
 
-        {/* Category - PHASE 36.2: Display French labels */}
+        {/* Category */}
         <div className="space-y-2">
           <label className="block text-sm font-semibold">Catégorie *</label>
           <select
             value={state.category}
-            onChange={e => setState(prev => ({ ...prev, category: e.target.value }))}
+            onChange={e => setState(prev => ({ ...prev, category: e.target.value as DocumentCategory }))}
             className="w-full px-3 py-2 border rounded-md text-sm"
           >
-            {KNOWLEDGE_CATEGORIES.map(catKey => (
-              <option key={catKey} value={catKey}>
-                {KNOWLEDGE_CATEGORY_LABELS[catKey]?.label || catKey}
+            {DOCUMENT_CATEGORIES.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
               </option>
             ))}
           </select>
-          {state.category && KNOWLEDGE_CATEGORY_LABELS[state.category]?.description && (
-            <p className="text-xs text-muted-foreground mt-1">
-              {KNOWLEDGE_CATEGORY_LABELS[state.category].description}
-            </p>
-          )}
-        </div>
-
-        {/* Source - PHASE 36.2: French labels with reliability info */}
-        <div className="space-y-2">
-          <label className="block text-sm font-semibold">Source *</label>
-          <div className="space-y-2">
-            {(Object.entries(SOURCES) as Array<[keyof typeof SOURCES, typeof SOURCES[keyof typeof SOURCES]]>).map(([sourceKey, sourceInfo]) => (
-              <label key={sourceKey} className="flex items-center gap-3 p-2 rounded border hover:bg-muted cursor-pointer">
-                <input
-                  type="radio"
-                  name="source"
-                  value={sourceKey}
-                  checked={state.source === sourceKey}
-                  onChange={() => setState(prev => ({ ...prev, source: sourceKey }))}
-                />
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{sourceInfo.label}</p>
-                  <p className="text-xs text-muted-foreground">Fiabilité: {sourceInfo.reliability}%</p>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Region */}
-        <div className="space-y-2">
-          <label className="block text-sm font-semibold">Région (optionnel)</label>
-          <input
-            type="text"
-            value={state.region || ''}
-            onChange={e => setState(prev => ({ ...prev, region: e.target.value || 'National' }))}
-            placeholder="Ex: Île-de-France, National..."
-            className="w-full px-3 py-2 border rounded-md text-sm"
-          />
         </div>
 
         {/* Upload Button */}
@@ -288,9 +241,7 @@ export function KnowledgeBaseUpload() {
               setState(prev => ({
                 ...prev,
                 file: null,
-                category: 'GUIDELINE',
-                source: 'internal',
-                region: 'National',
+                category: 'DTU',
               }));
               if (fileInputRef.current) fileInputRef.current.value = '';
             }}

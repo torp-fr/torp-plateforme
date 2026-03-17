@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppProvider } from "@/context/AppContext";
 import { ErrorBoundary } from "@/components/error/ErrorBoundary";
 
@@ -73,7 +73,7 @@ const AppContent = () => {
           {/* ADMIN ROUTES - Admin-only protection */}
           {/* ============================================ */}
           <Route element={<AdminRoute><AdminLayout /></AdminRoute>}>
-            <Route path="/analytics">
+            <Route path="/admin">
               <Route index element={<DashboardPage />} />
               <Route path="system" element={<SystemHealthPage />} />
               <Route path="intelligence" element={<LiveIntelligencePage />} />
@@ -84,6 +84,9 @@ const AppContent = () => {
               <Route path="settings" element={<AdminSettingsPage />} />
             </Route>
           </Route>
+
+          {/* Backward-compatibility redirect */}
+          <Route path="/analytics/*" element={<Navigate to="/admin" replace />} />
 
           {/* ============================================ */}
           {/* USER ROUTES - Authenticated user protection */}

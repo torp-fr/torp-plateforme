@@ -1,139 +1,126 @@
 /**
- * Test: PDF Extraction with Coordinate-Aware Reconstruction
+ * Test: PDF Extraction via rag-worker extractor (pdf-parse)
  *
- * Demonstrates the improved PDF text extraction that preserves
- * table structure using item coordinates.
+ * Downloads a document from Supabase Storage and runs it through
+ * the production extractor used by the RAG worker.
  *
  * Usage:
- *   npx tsx scripts/testPdfExtraction.ts
+ *   npx tsx scripts/testPdfExtraction.ts <storage_path>
+ *
+ * Example:
+ *   npx tsx scripts/testPdfExtraction.ts knowledge-documents/1773604173269-713532582-DTU-31-3-P2-Charpente-en-Bois-Assemblees-Par-Connecteurs-Metalliques-Ou-Goussets-CCS.pdf
  */
 
-import "dotenv/config"
+import "../rag-worker/config/loadEnv.js";
 import { createClient } from "@supabase/supabase-js"
-import { extractDocumentContent } from "../src/core/knowledge/ingestion/documentExtractor.service"
-
-// Validate required environment variables
-console.log("[ENV] Validating Supabase configuration...")
-console.log("[ENV] SUPABASE_URL:", process.env.SUPABASE_URL ? "✅" : "❌")
-console.log(
-  "[ENV] SERVICE_ROLE_KEY:",
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-    ? "✅ " + process.env.SUPABASE_SERVICE_ROLE_KEY.slice(0, 10) + "..."
-    : "❌"
-)
-
-if (!process.env.SUPABASE_URL) {
-  throw new Error("❌ SUPABASE_URL environment variable is not set")
-}
-
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error("❌ SUPABASE_SERVICE_ROLE_KEY environment variable is not set")
-}
-
-console.log("[ENV] ✅ Environment validation passed\n")
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
+import { extractPdfText } from "../rag-worker/extractors/pdfExtractor.js"
 
 async function main() {
-  console.log("PDF EXTRACTION TEST STARTED\n")
+  const filePath = process.argv[2]
 
-  // Fetch a PDF document from Supabase
-  const { data: docs, error: fetchError } = await supabase
-    .from("knowledge_documents")
-    .select("id,title,file_path,mime_type")
-    .like("file_path", "%.pdf")
-    .limit(1)
-    .single()
-
-  if (fetchError || !docs) {
-    console.error("No PDF document found in knowledge_documents")
-    return
+  if (!filePath) {
+    console.error("Usage: npx tsx scripts/testPdfExtraction.ts <storage_path>")
+    console.error("")
+    console.error("Example:")
+    console.error("  npx tsx scripts/testPdfExtraction.ts knowledge-documents/my-doc.pdf")
+    process.exit(1)
   }
 
-  console.log("Document:", docs.title)
-  console.log("File path:", docs.file_path)
+  // Validate env
+  console.log("[ENV] Validating Supabase configuration...")
+  console.log("[ENV] SUPABASE_URL:", process.env.SUPABASE_URL ? "✅" : "❌")
+  console.log(
+    "[ENV] SERVICE_ROLE_KEY:",
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+      ? "✅ " + process.env.SUPABASE_SERVICE_ROLE_KEY.slice(0, 10) + "..."
+      : "❌"
+  )
+
+  if (!process.env.SUPABASE_URL) {
+    throw new Error("SUPABASE_URL environment variable is not set")
+  }
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY environment variable is not set")
+  }
+
+  console.log(
+    "[ENV] GOOGLE_SERVICE_ACCOUNT_JSON:",
+    process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+      ? "✅ loaded (" + process.env.GOOGLE_SERVICE_ACCOUNT_JSON.length + " chars)"
+      : "❌ missing"
+  )
+  console.log("[ENV] ✅ Environment validation passed")
   console.log("")
 
-  // Download PDF from storage (matches worker implementation)
-  console.log("[DOWNLOAD] Starting file download from Supabase Storage...")
-  console.log("[DOWNLOAD] bucket:", "documents")
-  console.log("[DOWNLOAD] path:", docs.file_path)
+  const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  )
 
-  const { data: fileBlob, error: downloadError } = await supabase.storage
+  // Download from Supabase Storage
+  console.log("PDF EXTRACTION TEST")
+  console.log("===================")
+  console.log("Bucket:     ", "documents")
+  console.log("Storage path:", filePath)
+  console.log("")
+
+  console.log("[DOWNLOAD] Downloading from Supabase Storage...")
+
+  const { data, error } = await supabase.storage
     .from("documents")
-    .download(docs.file_path)
+    .download(filePath)
 
-  if (downloadError) {
-    console.error("[DOWNLOAD ERROR]", downloadError)
-    const errDetail =
-      downloadError?.message ||
-      (downloadError && typeof downloadError === "object"
-        ? JSON.stringify(downloadError)
-        : String(downloadError)) ||
-      "unknown error"
-    console.error("[DOWNLOAD ERROR] detail:", errDetail)
-    throw new Error(`Storage download failed: ${errDetail}`)
+  if (error) {
+    const detail =
+      error.message ||
+      (typeof error === "object" ? JSON.stringify(error) : String(error))
+    console.error("[DOWNLOAD ERROR]", detail)
+    throw new Error(`Storage download failed: ${detail}`)
   }
 
-  if (!fileBlob) {
-    console.error("[DOWNLOAD ERROR] Download returned null data")
-    throw new Error("Download returned null data (file not found or inaccessible)")
+  if (!data) {
+    throw new Error("Download returned null (file not found or inaccessible)")
   }
 
-  const arrayBuffer = await fileBlob.arrayBuffer()
+  const arrayBuffer = await data.arrayBuffer()
 
-  console.log("[BUFFER] Conversion complete")
-  console.log("[BUFFER] byteLength:", arrayBuffer.byteLength)
-
-  if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-    console.error("[BUFFER ERROR] ArrayBuffer is empty or invalid")
-    throw new Error("Downloaded file buffer is empty")
-  }
-
-  const buffer = Buffer.from(arrayBuffer)
-  console.log("[DOWNLOAD] ✅ Downloaded and validated", buffer.length, "bytes\n")
-
-  // Extract text using improved coordinate-aware algorithm
-  console.log("Extracting text with coordinate-aware reconstruction...")
-  let text: string
-
-  try {
-    text = await extractDocumentContent(buffer, docs.file_path)
-  } catch (err: any) {
-    console.error("Extraction failed:", err.message)
-    return
-  }
-
-  console.log("Extracted:", text.length, "characters")
+  console.log("[DOWNLOAD] ✅ Downloaded", arrayBuffer.byteLength, "bytes")
   console.log("")
 
-  // Display sample of extracted text
-  console.log("==============================")
-  console.log("EXTRACTED TEXT (first 1000 chars)")
-  console.log("==============================")
-  console.log(text.slice(0, 1000))
-  console.log("==============================")
+  if (arrayBuffer.byteLength === 0) {
+    throw new Error("Downloaded file is empty (0 bytes)")
+  }
+
+  // Run extraction through the rag-worker extractor
+  console.log("Running extractPdfText()...")
   console.log("")
 
-  // Analysis of structure
-  const lines = text.split("\n")
-  const tableLines = lines.filter(l => l.includes(" | "))
-  const avgLineLength = lines.reduce((sum, l) => sum + l.length, 0) / lines.length
+  const result = await extractPdfText(arrayBuffer)
 
-  console.log("Analysis:")
-  console.log("  Total lines:", lines.length)
-  console.log("  Lines with table structure (|):", tableLines.length)
-  console.log("  Average line length:", avgLineLength.toFixed(1), "chars")
+  // Diagnostics
+  console.log("===================")
+  console.log("RESULTS")
+  console.log("===================")
+  console.log("Pages:       ", result.pageCount ?? "n/a")
+  console.log("Text length: ", result.text?.length ?? 0)
+  console.log("Confidence:  ", result.confidence ?? "n/a")
+  console.log("Requires OCR:", result.requiresOCR)
+  if (result.error) {
+    console.log("Error:       ", result.error)
+  }
   console.log("")
 
-  if (tableLines.length > 0) {
-    console.log("Sample table lines:")
-    tableLines.slice(0, 3).forEach((line, i) => {
-      console.log(`  [${i + 1}] ${line}`)
-    })
+  if (result.text && result.text.length > 0) {
+    console.log("===================")
+    console.log("PREVIEW (first 500 chars)")
+    console.log("===================")
+    console.log(result.text.slice(0, 500))
+    console.log("===================")
+  } else {
+    console.warn("No text extracted.")
+    if (result.requiresOCR) {
+      console.warn("Document flagged for OCR fallback.")
+    }
   }
 
   console.log("")
@@ -141,5 +128,6 @@ async function main() {
 }
 
 main().catch(err => {
-  console.error("TEST FAILED:", err)
+  console.error("TEST FAILED:", err.message || err)
+  process.exit(1)
 })
