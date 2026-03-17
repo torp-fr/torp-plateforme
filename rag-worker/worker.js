@@ -1,3 +1,6 @@
+import "./config/loadEnv.js";
+import "./config/validateEnv.js";
+
 import fs from "fs";
 
 // ===============================
@@ -38,27 +41,9 @@ try {
   // Continue worker execution even if test fails
 }
 
-// ===============================
-// GOOGLE VISION AUTH INITIALIZER
-// ===============================
+// Google Vision credentials are handled inline in ocrService.js — no file write needed.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-  try {
-    const credentialsPath = path.join(__dirname, "google-credentials.json");
-    fs.writeFileSync(
-      credentialsPath,
-      process.env.GOOGLE_SERVICE_ACCOUNT_JSON
-    );
-    process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
-    console.log("✅ Google Vision credentials initialized from environment variable.");
-  } catch (error) {
-    console.error("❌ Failed to initialize Google Vision credentials:", error.message);
-  }
-} else {
-  console.warn("⚠️ GOOGLE_SERVICE_ACCOUNT_JSON environment variable not found. OCR may fail.");
-}
 
 const BUILD_ID = "SEMANTIC_CHUNKING_V2";
 const BATCH_SIZE = 50;
@@ -209,6 +194,18 @@ async function processDocument(doc) {
   console.log(`Processing: ${documentId}`);
 
   try {
+    // Step 0: Idempotency guard — skip already completed documents that have chunks
+    // unless force_reprocess is explicitly set on the document row.
+    const { count } = await supabase
+      .from("knowledge_chunks")
+      .select("id", { count: "exact", head: true })
+      .eq("document_id", documentId);
+
+    if (doc.ingestion_status === "completed" && count > 0 && !doc.force_reprocess) {
+      console.log(`[WORKER] Skipping completed document (${count} chunks exist): ${documentId}`);
+      return;
+    }
+
     // Step 1: Claim document (atomic pattern)
     const { data: claimed, error: claimError } = await supabase
       .from("knowledge_documents")
@@ -273,7 +270,7 @@ async function processDocument(doc) {
     cleanedText = removeHeaders(cleanedText);
     cleanedText = cleanText(cleanedText);
 
-    if (!cleanedText || cleanedText.trim().length < 20) {
+    if (!cleanedText || cleanedText.trim().length < 200) {
       console.warn(`  ⚠️ No usable text extracted (${cleanedText?.length || 0} chars) — skipping document`);
       await supabase
         .from("knowledge_documents")

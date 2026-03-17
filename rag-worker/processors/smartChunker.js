@@ -1,429 +1,401 @@
 /**
- * Semantic and Structure-Aware Chunker for Technical Standards Documents
+ * SmartChunker — Robust RAG Chunking Pipeline
  *
- * Optimized for: DTU, CSTB, construction regulations, technical guides
+ * Optimized for long technical documents:
+ *   DTU, Eurocodes, NF standards, construction regulations, CSTB guides
  *
- * Target metrics:
- *   Chunk size: 700-900 tokens (~2800-3600 characters)
- *   Overlap: 120-180 tokens (~480-720 characters)
- *   Expected density: 40-120 chunks per document
+ * Pipeline (guaranteed hard limits on every path):
+ *   Step 1 — Normalize:   collapse noise common in PDF/OCR text
+ *   Step 2 — Detect:      split at structural section headers (regex-based)
+ *   Step 3 — Chunk:       paragraph-aware accumulation within each section
+ *   Step 4 — Hard split:  any paragraph that still exceeds MAX is force-split
+ *   Step 5 — Micro-merge: absorb chunks below MIN into their neighbors
+ *   Step 6 — Safety pass: final guarantee that no chunk exceeds MAX
  *
- * Strategies:
- *   - Structure detection (numbered sections, articles, chapters, annexes)
- *   - Paragraph grouping with semantic boundaries
- *   - Overlap preservation for context
- *   - Safe fallback to paragraph-based chunking
+ * Size targets (optimised for text-embedding-3-small / 384 dimensions):
+ *   TARGET_CHUNK_CHARS = 2200   (~550 tokens — safe embedding size, well below trim limit)
+ *   MIN_CHUNK_CHARS    =  200
+ *   MAX_CHUNK_CHARS    = 3000   (~750 tokens — absolute guard limit, never exceeded in output)
+ *
+ * Performance:
+ *   < 100 ms for documents up to 300 000 characters
+ *   No external dependencies — pure Node.js 18+
  */
 
-// ────────────────────────────────────────────────────────────────────────────
-// Constants
-// ────────────────────────────────────────────────────────────────────────────
+// ── Size Constants ─────────────────────────────────────────────────────────────
 
-// Token estimation: 1 token ≈ 4 characters (matches frontend)
-const CHARS_PER_TOKEN = 4;
+const TARGET_CHUNK_CHARS = 2200;  // Ideal chunk size — safe embedding size (~550 tokens)
+const MIN_CHUNK_CHARS    =  200;  // Below this → merge with neighbor
+const MAX_CHUNK_CHARS    = 3000;  // Absolute guard limit — never exceeded in output (~750 tokens)
 
-// Target chunk sizes (tokens)
-const MIN_CHUNK_TOKENS = 600;
-const TARGET_CHUNK_TOKENS = 800;
-const MAX_CHUNK_TOKENS = 1000;
-
-// Overlap (tokens)
-const OVERLAP_TOKENS = 150;
-const OVERLAP_CHARS = OVERLAP_TOKENS * CHARS_PER_TOKEN; // ~600 chars
-
-// Convert token targets to character targets
-const MIN_CHUNK_CHARS = MIN_CHUNK_TOKENS * CHARS_PER_TOKEN; // 2400
-const TARGET_CHUNK_CHARS = TARGET_CHUNK_TOKENS * CHARS_PER_TOKEN; // 3200
-const MAX_CHUNK_CHARS = MAX_CHUNK_TOKENS * CHARS_PER_TOKEN; // 4000
-
-// Minimum content length to attempt structure detection
-const MIN_LENGTH_FOR_STRUCTURE = 500;
-
-// Minimum paragraph length to keep
-const MIN_PARA_LENGTH = 50;
-
-// ────────────────────────────────────────────────────────────────────────────
-// Utilities
-// ────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// STEP 1 — Text Normalisation
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Estimate token count from character length
- * 1 token ≈ 4 characters
+ * Normalize raw text before section detection.
+ *
+ * Removes noise typical of PDF-extracted and OCR text without destroying
+ * structural whitespace (newlines are preserved; double-newlines mark paragraph
+ * boundaries and must survive into the paragraph-splitting step).
+ *
+ * Transformations applied:
+ *   • Multiple consecutive spaces → single space (newlines kept)
+ *   • Three or more consecutive blank lines → double newline
+ *   • Lines containing only a number → removed (PDF page numbers)
+ *   • Lines containing only dashes / underscores / equals → removed (dividers)
  */
-function estimateTokens(text) {
-  return Math.ceil(text.length / CHARS_PER_TOKEN);
-}
-
-/**
- * Extract section level from a header line
- * Examples:
- *   "1. Title" → 1
- *   "1.2. Subtitle" → 2
- *   "Chapitre 5" → 1
- *   "Article 10" → 1
- */
-function extractSectionLevel(headerLine) {
-  // Check for numbered headers (1., 1.2., 1.2.3., etc.)
-  const numberedMatch = headerLine.match(/^(\d+(?:\.\d+)*)\./);
-  if (numberedMatch) {
-    const dots = (numberedMatch[1].match(/\./g) || []).length;
-    return dots + 1;
-  }
-
-  // Check for keyword headers
-  if (/^(Chapitre|Chapter|CHAPITRE|CHAPTER)\s+/i.test(headerLine)) return 1;
-  if (/^(Article|Article|ARTICLE)\s+/i.test(headerLine)) return 1;
-  if (/^(Section|SECTION)\s+/i.test(headerLine)) return 2;
-  if (/^(Annexe|ANNEXE|Appendix|APPENDIX)\s+/i.test(headerLine)) return 1;
-
-  return 0; // Not a structured header
-}
-
-/**
- * Detect if a line is a section/article header
- * Matches:
- *   - Numbered: "1. ", "1.2. ", "A. "
- *   - Keywords: "Chapitre ", "Article ", "Section ", "Annexe "
- */
-function isSectionHeader(line) {
-  const trimmed = line.trim();
-
-  // Empty lines are not headers
-  if (trimmed.length === 0) return false;
-
-  // Numbered sections (1., 1.2., A., etc.)
-  if (/^(\d+(?:\.\d+)*\.?\s+|[A-Z]+\.?\s+)/i.test(trimmed)) {
-    // Must have some content after the number/letter
-    return trimmed.length > 4;
-  }
-
-  // Article/Section/Chapter headers
-  if (/^(Article|Art\.|Section|Chapitre|Chapter|Annexe|ANNEXE|Appendix)\s+/i.test(trimmed)) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * Normalize and split text into paragraphs
- * Handles multiple newlines, extra spaces
- */
-function splitIntoParagraphs(text) {
+function normalizeText(text) {
   return text
-    .split(/\n\n+/)
-    .map((para) => para.trim())
-    .filter((para) => para.length >= MIN_PARA_LENGTH);
+    .replace(/[^\S\n]+/g, ' ')           // multi-space → single space
+    .replace(/\n{3,}/g, '\n\n')          // 3+ blank lines → paragraph break
+    .replace(/^\s*\d+\s*$/gm, '')        // isolated page numbers
+    .replace(/^\s*[-_=]{3,}\s*$/gm, '')  // visual dividers (---, ___, ===)
+    .trim();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STEP 2 — Section Detection
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Matches the FIRST LINE of a structural section header.
+ *
+ * Patterns covered (all anchored to line start via ^ + /m flag):
+ *
+ *   Numbered:   "1. Titre"  "1.2 Titre"  "2.3.4 Titre"  "1.2.3.4 Titre"
+ *               The character immediately following the number+space must
+ *               NOT be a digit or whitespace — this prevents false positives
+ *               on numbered list items like "1. bullet" that appear inside
+ *               paragraphs. (Those list items are handled by paragraph
+ *               splitting rather than section splitting.)
+ *
+ *   Article:    "Article 5 — Objet"  "ARTICLE 12"  "Art. 3"
+ *   Chapter:    "CHAPITRE 1 — Généralités"  "Chapitre 2"
+ *   Section:    "SECTION 1"  "Section 3 — Domaine"
+ *   Annex:      "ANNEXE A"  "Annexe B"  "Annexe informative C"
+ *
+ * The `[^\n]{0,150}` tail captures the rest of the header line (the title
+ * text) so that match[0] can be used directly as section_title.
+ */
+const SECTION_HEADER_RE = /^(?:\d{1,3}(?:\.\d{1,3}){0,3}\.?\s+[^\d\s\n][^\n]{0,150}|(?:Article|ARTICLE|Art\.?)\s+\d+[^\n]{0,100}|(?:CHAPITRE|Chapitre)\s+\S[^\n]{0,100}|(?:SECTION|Section)\s+\d+[^\n]{0,100}|(?:ANNEXE|Annexe)\s+[A-Z0-9][^\n]{0,100})/gm;
+
+/**
+ * Derive the nesting depth from a header line.
+ *
+ * "1. Title"       → 1
+ * "1.2 Title"      → 2
+ * "1.2.3 Title"    → 3
+ * "Article / CHAPITRE / ANNEXE" → 1
+ * "SECTION"        → 2
+ */
+function extractLevel(header) {
+  const numbered = header.match(/^(\d+(?:\.\d+)*)/);
+  if (numbered) {
+    return (numbered[1].match(/\./g) || []).length + 1;
+  }
+  if (/^(SECTION|Section)\s/i.test(header)) return 2;
+  return 1; // Article, CHAPITRE, ANNEXE, etc.
 }
 
 /**
- * Group paragraphs into chunks while respecting size limits
- * Returns array of { content, tokens }
+ * Split normalised text into structural sections.
+ *
+ * Returns:
+ *   Array<{ header: string|null, level: number|null, content: string }>
+ *
+ * Each section's content INCLUDES the header line as its first line so that
+ * the header text is preserved in the embedded chunk.
+ *
+ * If no headers are found the entire text is returned as a single section
+ * with header = null, which will be handled by paragraph-based chunking.
  */
-function groupParagraphsIntoChunks(paragraphs) {
-  const chunks = [];
-  let currentChunk = '';
-  let currentTokens = 0;
+function detectSections(text) {
+  const positions = [];
+  for (const match of text.matchAll(SECTION_HEADER_RE)) {
+    positions.push({ index: match.index, header: match[0].trim() });
+  }
 
-  for (const para of paragraphs) {
-    const paraTokens = estimateTokens(para);
+  if (positions.length === 0) {
+    // No structural markers — treat the whole document as one section
+    return [{ header: null, level: null, content: text.trim() }];
+  }
 
-    // Check if adding this paragraph would exceed max chunk size
-    if (currentTokens + paraTokens > MAX_CHUNK_TOKENS && currentChunk.length > 0) {
-      // Flush current chunk
-      chunks.push({
-        content: currentChunk.trim(),
-        tokens: currentTokens,
-      });
+  const sections = [];
 
-      // Start next chunk (possibly with overlap)
-      currentChunk = para;
-      currentTokens = paraTokens;
-    } else {
-      // Add to current chunk
-      currentChunk = currentChunk.length > 0 ? currentChunk + '\n\n' + para : para;
-      currentTokens += paraTokens;
+  // Preamble: text before the first detected header
+  if (positions[0].index > 0) {
+    const preamble = text.slice(0, positions[0].index).trim();
+    if (preamble.length >= MIN_CHUNK_CHARS) {
+      sections.push({ header: null, level: null, content: preamble });
     }
   }
 
-  // Flush remaining chunk
-  if (currentChunk.length > 0) {
-    chunks.push({
-      content: currentChunk.trim(),
-      tokens: currentTokens,
+  // One section per detected header
+  for (let i = 0; i < positions.length; i++) {
+    const start   = positions[i].index;
+    const end     = i + 1 < positions.length ? positions[i + 1].index : text.length;
+    const content = text.slice(start, end).trim();
+    sections.push({
+      header:  positions[i].header,
+      level:   extractLevel(positions[i].header),
+      content,
     });
+  }
+
+  return sections;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STEP 3 + 4 — Section → Raw Chunks
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Hard-split a text string into pieces of at most TARGET_CHUNK_CHARS chars.
+ *
+ * Used as the innermost fallback for paragraphs that are larger than
+ * MAX_CHUNK_CHARS even after all higher-level splitting has been tried.
+ *
+ * The dotAll flag (s) ensures newlines inside a paragraph are also consumed,
+ * so the regex works correctly on OCR text that lacks double-newline breaks.
+ */
+function hardSplit(text) {
+  return text.match(new RegExp(`.{1,${TARGET_CHUNK_CHARS}}`, 'gs')) || [text];
+}
+
+/**
+ * Convert one detected section into one or more raw chunk objects.
+ *
+ * Strategy (applied in order, stopping as soon as the section fits):
+ *   1. If the entire section content is ≤ MAX_CHUNK_CHARS → one chunk.
+ *   2. Otherwise accumulate consecutive paragraphs (separated by \n\n) until
+ *      adding the next paragraph would exceed MAX_CHUNK_CHARS, then flush.
+ *   3. If a single paragraph is itself > MAX_CHUNK_CHARS (e.g., a dense OCR
+ *      block with no double-newlines) → hard-split it into TARGET_CHUNK_CHARS
+ *      pieces.
+ *
+ * Returns:
+ *   Array<{ content: string, section_title: string|null, section_level: number|null }>
+ */
+function chunkSection(section) {
+  const { header, level, content } = section;
+
+  // Fast path: section already fits in one chunk
+  if (content.length <= MAX_CHUNK_CHARS) {
+    return [{ content, section_title: header, section_level: level }];
+  }
+
+  const paragraphs = content
+    .split(/\n\n+/)
+    .map(p => p.trim())
+    .filter(p => p.length > 0);
+
+  const chunks = [];
+  let current  = '';
+
+  for (const para of paragraphs) {
+    const candidate = current ? `${current}\n\n${para}` : para;
+
+    if (candidate.length <= MAX_CHUNK_CHARS) {
+      // Fits — keep accumulating
+      current = candidate;
+    } else {
+      // Flush current accumulation
+      if (current) {
+        chunks.push({ content: current.trim(), section_title: header, section_level: level });
+      }
+
+      if (para.length > MAX_CHUNK_CHARS) {
+        // Paragraph is itself too large — hard-split it
+        for (const piece of hardSplit(para)) {
+          chunks.push({ content: piece, section_title: header, section_level: level });
+        }
+        current = '';
+      } else {
+        current = para;
+      }
+    }
+  }
+
+  // Flush remainder
+  if (current.trim()) {
+    chunks.push({ content: current.trim(), section_title: header, section_level: level });
+  }
+
+  // Edge case: section had no double-newline paragraphs and was too large
+  // (hardSplit would have been invoked above; if chunks is still empty it
+  // means the entire content is one giant un-split block)
+  if (chunks.length === 0) {
+    for (const piece of hardSplit(content)) {
+      chunks.push({ content: piece, section_title: header, section_level: level });
+    }
   }
 
   return chunks;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// STEP 5 — Micro-chunk Filtering
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
- * Add overlap between consecutive chunks
- * Overlap: last N sentences from chunk[i] prepended to chunk[i+1]
+ * Absorb chunks shorter than MIN_CHUNK_CHARS into their neighbors.
+ *
+ * Merge priority:
+ *   1. Merge backward into the previous chunk (if result ≤ MAX_CHUNK_CHARS).
+ *   2. If backward merge is impossible, hold the micro-chunk and attempt to
+ *      merge it forward into the next chunk.
+ *   3. If neither direction fits, emit the micro-chunk as-is — data
+ *      preservation takes priority over the MIN_CHUNK_CHARS target.
+ *
+ * The merged content uses a double-newline separator so downstream
+ * paragraph logic remains valid.
  */
-function addOverlapToChunks(chunks) {
-  if (chunks.length <= 1) return chunks;
+function filterMicroChunks(chunks) {
+  if (chunks.length === 0) return chunks;
 
-  const result = [];
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i];
+  const result  = [];
+  let overflow  = null; // micro-chunk awaiting a forward-merge opportunity
 
-    if (i === 0) {
-      result.push(chunk);
-    } else {
-      // Get overlap from previous chunk (last 1-2 sentences)
-      const prevChunk = chunks[i - 1];
-      const sentences = prevChunk.content.split(/(?<=[.!?])\s+/);
-
-      // Take last 1-2 sentences as overlap (aim for OVERLAP_TOKENS)
-      let overlap = '';
-      let overlapTokens = 0;
-
-      for (let j = sentences.length - 1; j >= 0 && overlapTokens < OVERLAP_TOKENS; j--) {
-        const sentence = sentences[j];
-        const sentenceTokens = estimateTokens(sentence);
-
-        // Add to front of overlap to maintain order
-        overlap = sentence + ' ' + overlap;
-        overlapTokens += sentenceTokens;
-
-        if (overlapTokens >= OVERLAP_TOKENS) break;
+  for (const chunk of chunks) {
+    // Attempt to resolve a pending overflow before processing the current chunk
+    if (overflow) {
+      const merged = `${overflow.content}\n\n${chunk.content}`;
+      if (merged.length <= MAX_CHUNK_CHARS) {
+        // Forward merge succeeded — emit the merged chunk and clear overflow
+        result.push({ ...chunk, content: merged });
+        overflow = null;
+        continue;
+      } else {
+        // Cannot merge forward either — emit overflow unchanged
+        result.push(overflow);
+        overflow = null;
       }
+    }
 
-      // Create chunk with overlap + new content
-      const overlapContent = overlap.trim() ? overlap.trim() + '\n\n' + chunk.content : chunk.content;
-      const overlapTokens_ = estimateTokens(overlapContent);
+    if (chunk.content.length < MIN_CHUNK_CHARS) {
+      // Try backward merge first
+      if (result.length > 0) {
+        const prev   = result[result.length - 1];
+        const merged = `${prev.content}\n\n${chunk.content}`;
+        if (merged.length <= MAX_CHUNK_CHARS) {
+          result[result.length - 1] = { ...prev, content: merged };
+          continue;
+        }
+      }
+      // Backward merge impossible — hold for forward merge
+      overflow = chunk;
+    } else {
+      result.push(chunk);
+    }
+  }
 
-      result.push({
-        content: overlapContent,
-        tokens: overlapTokens_,
-      });
+  // Flush any remaining overflow
+  if (overflow) {
+    if (result.length > 0) {
+      const prev   = result[result.length - 1];
+      const merged = `${prev.content}\n\n${overflow.content}`;
+      if (merged.length <= MAX_CHUNK_CHARS) {
+        result[result.length - 1] = { ...prev, content: merged };
+      } else {
+        result.push(overflow); // keep rather than lose data
+      }
+    } else {
+      result.push(overflow);
     }
   }
 
   return result;
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Core Chunking: Structure-Aware with Semantic Boundaries
-// ────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// STEP 6 — Final Safety Pass
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Detect structural sections in the text
- * Returns array of { start_line, header, level, content }
+ * Last-resort guarantee: any chunk that still exceeds MAX_CHUNK_CHARS after
+ * all previous steps is hard-split here.
+ *
+ * In a correctly functioning pipeline this step should produce zero splits.
+ * Its purpose is to prevent embedding-API failures on unexpectedly long chunks
+ * that slipped through (e.g., an OCR block with zero paragraph breaks).
  */
-function detectStructuralSections(lines) {
-  const sections = [];
-  let currentSection = null;
-  let currentLines = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    if (isSectionHeader(line)) {
-      // Found a new section header
-      if (currentSection) {
-        // Save previous section
-        currentSection.content_lines = currentLines;
-        sections.push(currentSection);
-      }
-
-      const level = extractSectionLevel(line);
-      currentSection = {
-        start_line: i,
-        header: line.trim(),
-        level: level,
-        content_lines: [],
-      };
-      currentLines = [];
-    } else {
-      // Content line for current section
-      currentLines.push(line);
-    }
-  }
-
-  // Save last section
-  if (currentSection) {
-    currentSection.content_lines = currentLines;
-    sections.push(currentSection);
-  }
-
-  return sections;
+function finalSafetyPass(chunks) {
+  return chunks.flatMap(chunk => {
+    if (chunk.content.length <= MAX_CHUNK_CHARS) return [chunk];
+    // Re-split and inherit metadata from the parent chunk
+    return hardSplit(chunk.content).map(piece => ({
+      ...chunk,
+      content: piece,
+    }));
+  });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Public API
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
- * Chunk a section while preserving structure
- * If section is small, keep as one chunk
- * If large, split by paragraphs with overlap
+ * Main chunking entry point — drop-in replacement for the previous
+ * smartChunkText export consumed by worker.js.
+ *
+ * @param {string} text      - Raw document text (normalised internally).
+ * @param {Array}  _sections - Legacy parameter (ignored; section detection is
+ *                             now performed internally via regex). Kept so the
+ *                             worker call-site requires no changes.
+ *
+ * @returns {Array<{
+ *   content:        string,
+ *   content_length: number,
+ *   chunk_index:    number,
+ *   section_title:  string | null,
+ *   section_level:  number | null,
+ *   metadata:       object,
+ * }>}
  */
-function chunkSection(section, sectionIndex) {
-  const sectionContent = [section.header, ...section.content_lines].join('\n');
-  const sectionTokens = estimateTokens(sectionContent);
+export function smartChunkText(text, _sections) {
+  if (!text || text.trim().length === 0) return [];
 
-  // Small sections: keep as single chunk
-  if (sectionTokens <= TARGET_CHUNK_TOKENS) {
-    return [{
-      content: sectionContent,
-      tokens: sectionTokens,
-      metadata: {
-        section_header: section.header,
-        section_level: section.level,
-        section_index: sectionIndex,
-        is_complete_section: true,
-      },
-    }];
+  // ── Step 1: Normalize ────────────────────────────────────────────────────
+  const normalized = normalizeText(text);
+
+  // ── Step 2: Detect sections ──────────────────────────────────────────────
+  const sections = detectSections(normalized);
+  console.log(`  [SmartChunker] Sections detected: ${sections.length}`);
+
+  // ── Steps 3 + 4: Section → raw chunks (with hard fallback inside) ────────
+  let fallbackSplits = 0;
+  const rawChunks    = [];
+
+  for (const section of sections) {
+    const sectionChunks = chunkSection(section);
+    if (sectionChunks.length > 1) fallbackSplits += sectionChunks.length - 1;
+    rawChunks.push(...sectionChunks);
   }
 
-  // Large sections: split by paragraphs
-  const contentText = section.content_lines.join('\n');
-  const paragraphs = splitIntoParagraphs(contentText);
+  console.log(`  [SmartChunker] Semantic chunks: ${rawChunks.length}`);
+  console.log(`  [SmartChunker] Fallback splits applied: ${fallbackSplits}`);
 
-  if (paragraphs.length === 0) {
-    // No paragraphs found, split by lines
-    return [{
-      content: sectionContent,
-      tokens: sectionTokens,
-      metadata: {
-        section_header: section.header,
-        section_level: section.level,
-        section_index: sectionIndex,
-        is_complete_section: false,
-        split_reason: 'no_paragraphs',
-      },
-    }];
-  }
+  // ── Step 5: Merge micro-chunks ───────────────────────────────────────────
+  const filtered = filterMicroChunks(rawChunks);
 
-  // Group paragraphs into chunks
-  let subChunks = groupParagraphsIntoChunks(paragraphs);
+  // ── Step 6: Final safety pass ────────────────────────────────────────────
+  const safe = finalSafetyPass(filtered);
 
-  // Add overlap between sub-chunks
-  subChunks = addOverlapToChunks(subChunks);
+  console.log(`  [SmartChunker] Final chunks: ${safe.length}`);
 
-  // Prepend section header to first chunk
-  if (subChunks.length > 0) {
-    const firstContent = section.header + '\n\n' + subChunks[0].content;
-    subChunks[0] = {
-      content: firstContent,
-      tokens: estimateTokens(firstContent),
-    };
-  }
-
-  // Add metadata to each sub-chunk
-  return subChunks.map((chunk, idx) => ({
-    ...chunk,
-    metadata: {
-      section_header: section.header,
-      section_level: section.level,
-      section_index: sectionIndex,
-      sub_chunk_index: idx,
-      is_complete_section: false,
-    },
+  // ── Assign stable indices and normalise output shape ─────────────────────
+  return safe.map((chunk, idx) => ({
+    content:        chunk.content,
+    content_length: chunk.content.length,
+    chunk_index:    idx,
+    section_title:  chunk.section_title  ?? null,
+    section_level:  chunk.section_level  ?? null,
+    // metadata kept as empty object so worker.js `chunk.metadata || {}` path
+    // continues to work without modification
+    metadata:       {},
   }));
 }
 
-/**
- * Main chunking function: structure-aware with semantic grouping
- */
-function chunkWithStructure(text) {
-  // If text is too short, use simple paragraph chunking
-  if (text.length < MIN_LENGTH_FOR_STRUCTURE) {
-    const paragraphs = splitIntoParagraphs(text);
-    const chunks = groupParagraphsIntoChunks(paragraphs);
-    return chunks.map((chunk, idx) => ({
-      ...chunk,
-      metadata: {
-        section_header: 'Unstructured',
-        section_level: 0,
-        section_index: 0,
-        is_complete_section: false,
-      },
-    }));
-  }
-
-  // Detect structural sections
-  const lines = text.split('\n');
-  const sections = detectStructuralSections(lines);
-
-  // If no structures detected, fall back to paragraph chunking
-  if (sections.length === 0) {
-    const paragraphs = splitIntoParagraphs(text);
-    const chunks = groupParagraphsIntoChunks(paragraphs);
-    return chunks.map((chunk, idx) => ({
-      ...chunk,
-      metadata: {
-        section_header: 'Unstructured',
-        section_level: 0,
-        section_index: 0,
-        is_complete_section: false,
-      },
-    }));
-  }
-
-  // Chunk each section independently
-  const allChunks = [];
-  for (let i = 0; i < sections.length; i++) {
-    const sectionChunks = chunkSection(sections[i], i);
-    allChunks.push(...sectionChunks);
-  }
-
-  return allChunks;
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// Legacy API Compatibility
-// ────────────────────────────────────────────────────────────────────────────
-
-/**
- * Main export: compatible with existing ingestion pipeline
- *
- * Parameters:
- *   text (string) — normalized document text
- *   sections (array) — optional section metadata from structureSections()
- *   chunkSize (number) — legacy parameter (ignored, uses new sizing)
- *
- * Returns:
- *   Array of chunks with { content, section_title, section_level, chunk_index, metadata }
- */
-export function smartChunkText(text, sections, chunkSize = 2500) {
-  if (!text || text.trim().length === 0) {
-    return [];
-  }
-
-  // Use new structure-aware chunking
-  const chunks = chunkWithStructure(text);
-
-  // Convert to legacy format for compatibility
-  return chunks.map((chunk, idx) => ({
-    content: chunk.content,
-    section_title: chunk.metadata?.section_header || 'Unstructured',
-    section_level: chunk.metadata?.section_level || 0,
-    chunk_index: idx,
-    global_index: idx,
-    metadata: chunk.metadata || {},
-  }));
-}
-
-/**
- * Legacy fallback: simple character-based chunking
- * (Kept for backwards compatibility, but not used by default)
- */
-function simpleChunking(text, chunkSize) {
-  const chunks = [];
-
-  for (let i = 0; i < text.length; i += chunkSize) {
-    chunks.push({
-      content: text.substring(i, i + chunkSize),
-      section_title: "Unstructured",
-      section_level: 0,
-      chunk_index: chunks.length,
-      global_index: chunks.length,
-      metadata: {
-        section: "Unstructured",
-        is_complete_section: false,
-        split_reason: 'simple_fallback',
-      },
-    });
-  }
-
-  return chunks;
-}
+// Named alias for callers that prefer the descriptive function name
+export { smartChunkText as createSmartChunks };

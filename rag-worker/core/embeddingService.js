@@ -5,7 +5,12 @@ const openai = new OpenAI({
 });
 
 const EMBEDDING_DIMENSION = 384;
-const BATCH_SIZE = 10; // Process embeddings in batches
+const BATCH_SIZE = 20; // Process embeddings in batches
+
+// Maximum characters allowed for embedding input.
+// Matches smartChunker target size (~2800 chars).
+// Prevents unnecessary trimming of valid chunks.
+const MAX_EMBEDDING_CHARS = 4000;
 
 export async function generateBatchEmbeddings(texts) {
   try {
@@ -13,9 +18,22 @@ export async function generateBatchEmbeddings(texts) {
       throw new Error("No texts provided for embedding");
     }
 
+    // Defensive trim: ensure no individual text exceeds the embedding limit
+    const safeTexts = texts.map((text, i) => {
+      if (text.length > MAX_EMBEDDING_CHARS) {
+        console.warn(
+          `[EmbeddingService] Chunk ${i} too large (${text.length} chars), trimming to ${MAX_EMBEDDING_CHARS}`
+        );
+        return text.slice(0, MAX_EMBEDDING_CHARS);
+      }
+      return text;
+    });
+
+    console.log(`[EmbeddingService] Processing batch of ${safeTexts.length} chunks`);
+
     const response = await openai.embeddings.create({
       model: "text-embedding-3-small",
-      input: texts,
+      input: safeTexts,
       dimensions: EMBEDDING_DIMENSION,
     });
 
