@@ -8,7 +8,7 @@
 -- ============================================================================
 -- Before applying changes, verify current state:
 -- SELECT data_type FROM information_schema.columns
--- WHERE table_name = 'knowledge_chunks' AND column_name = 'embedding';
+-- WHERE table_name = 'knowledge_chunks' AND column_name = 'embedding_vector';
 -- Expected result: vector(384) or vector(1536)
 
 -- ============================================================================
@@ -26,7 +26,7 @@ DROP INDEX IF EXISTS idx_knowledge_chunks_embedding_hnsw;
 -- Migration must align database with code expectations
 --
 ALTER TABLE knowledge_chunks
-ALTER COLUMN embedding TYPE VECTOR(1536);
+ALTER COLUMN embedding_vector TYPE VECTOR(1536);
 
 -- ============================================================================
 -- 4️⃣ ADD MISSING embedding_generated_at COLUMN
@@ -63,12 +63,12 @@ COMMENT ON COLUMN knowledge_documents.region IS
 -- Index for finding chunks missing embeddings (for integrity checks)
 CREATE INDEX IF NOT EXISTS idx_chunks_missing_embeddings
 ON knowledge_chunks(document_id)
-WHERE embedding IS NULL;
+WHERE embedding_vector IS NULL;
 
 -- Index for efficient vector-based retrieval
 CREATE INDEX IF NOT EXISTS idx_chunks_ready_composite
-ON knowledge_chunks(document_id, embedding)
-WHERE embedding IS NOT NULL;
+ON knowledge_chunks(document_id, embedding_vector)
+WHERE embedding_vector IS NOT NULL;
 
 -- Optional: HNSW index for ultra-fast vector search (requires pgvector extension)
 -- Uncomment if pgvector extension is enabled in production
@@ -93,7 +93,7 @@ WHERE embedding IS NOT NULL;
 
 -- Verify vector dimension changed
 -- SELECT data_type FROM information_schema.columns
--- WHERE table_name = 'knowledge_chunks' AND column_name = 'embedding';
+-- WHERE table_name = 'knowledge_chunks' AND column_name = 'embedding_vector';
 -- Expected: 'vector(1536)'
 
 -- Verify embedding_generated_at column exists
@@ -108,8 +108,8 @@ WHERE embedding IS NOT NULL;
 
 -- Count chunks by embedding status
 -- SELECT
---   COUNT(*) FILTER (WHERE embedding IS NOT NULL) as with_embeddings,
---   COUNT(*) FILTER (WHERE embedding IS NULL) as without_embeddings,
+--   COUNT(*) FILTER (WHERE embedding_vector IS NOT NULL) as with_embeddings,
+--   COUNT(*) FILTER (WHERE embedding_vector IS NULL) as without_embeddings,
 --   COUNT(*) as total_chunks
 -- FROM knowledge_chunks;
 

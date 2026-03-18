@@ -1,15 +1,46 @@
 /**
- * Rule Engine v1.0
- * Minimal rule evaluation engine for declarative obligations
- * Pure structuring - no AI, no external APIs, no Supabase, no scoring
+ * Rule Engine v2.0
+ *
+ * Fetches rules from the Supabase `rules` table, converts them into
+ * ProtoDecisions via the Decision Builder, then resolves them into a single
+ * authoritative bound per (element, property, unit) key via the Decision
+ * Resolver.
+ *
+ * Resolved decisions are stored on `executionContext.resolvedDecisions` for
+ * downstream engines (audit, comparison, etc.).
+ *
+ * Tone: advisory — never punitive.
  */
 
-import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
-import { getRulesByCategory, getRuleById } from '@/core/rules/ruleRegistry';
+import { supabase } from '@/lib/supabase';
+import { log, warn } from '@/lib/logger';
+import type { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
+import {
+  buildDecisions,
+  groupDecisionsByKey,
+  type RuleRow,
+  type DecisionContext,
+  type BuildingType,
+} from '@/core/decision/decisionBuilder';
 
-/**
- * Rule obligation structure with type, severity and weight
- */
+function normalizeBuildingType(input?: string): BuildingType | undefined {
+  if (!input) return undefined;
+  const val = input.toLowerCase();
+  if (val.includes('erp'))      return 'erp';
+  if (val.includes('maison'))   return 'maison';
+  if (val.includes('industri')) return 'industrie';
+  return 'autre';
+}
+import {
+  resolveDecisions,
+  type ResolvedDecision,
+} from '@/core/decision/decisionResolver';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/** Kept for backward compatibility with downstream engines. */
 export interface RuleObligation {
   id: string;
   category: string;
@@ -20,9 +51,6 @@ export interface RuleObligation {
   source?: string;
 }
 
-/**
- * Rule Engine result with weighted obligations and type classification
- */
 export interface RuleEngineResult {
   obligations: string[];
   uniqueObligations: string[];
@@ -44,132 +72,241 @@ export interface RuleEngineResult {
     commercial: number;
   };
   categorySummary: Record<string, number>;
+  /** Primary output of v2.0 — one resolved constraint per property key. */
+  resolvedDecisions: ResolvedDecision[];
   meta: {
     engineVersion: string;
     createdAt: string;
     processingTime: number;
+    rulesFetched: number;
+    decisionsBuilt: number;
+    decisionsResolved: number;
   };
 }
 
-/**
- * Run Rule Engine - evaluate declarative rules based on lots
- * Input: EngineExecutionContext with normalized lots from Lot Engine
- * Output: Set of obligations with severity and weight for scoring
- */
+// ---------------------------------------------------------------------------
+// DB row shape (only fields we consume)
+// ---------------------------------------------------------------------------
+
+interface DbRuleRow {
+  id: string;
+  document_id: string | null;
+  domain: string | null;
+  category: string | null;
+  rule_type: string;
+  confidence_score: number;
+  description: string | null;
+  structured_data: {
+    property?: string | null;
+    property_key?: string | null;
+    property_category?: string | null;
+    operator?: string | null;
+    value?: number | string | null;
+    unit?: string | null;
+    element?: string | null;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Rule types treated as actionable numeric constraints
+// ---------------------------------------------------------------------------
+
+// 'formula' is included so Eurocode rules (all stored as formula type) flow
+// into buildDecisions and are filtered by the Eurocode-specific semantic checks.
+const ACTIONABLE_RULE_TYPES = new Set(['constraint', 'requirement', 'formula']);
+
+// ---------------------------------------------------------------------------
+// DB fetch
+// ---------------------------------------------------------------------------
+
+async function fetchRules(domains: string[]): Promise<RuleRow[]> {
+  try {
+    let query = supabase
+      .from('rules')
+      .select('id, document_id, domain, category, rule_type, confidence_score, description, structured_data')
+      .in('rule_type', ['constraint', 'requirement', 'formula'])
+      .limit(500);
+
+    if (domains.length > 0) {
+      query = query.in('domain', domains);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      warn('[RuleEngine] DB fetch failed, falling back to empty rule set', {
+        message: error.message,
+        domains,
+      });
+      return [];
+    }
+
+    const rows = (data ?? []) as DbRuleRow[];
+    log(`[RuleEngine] Fetched ${rows.length} rules from DB`, { domains });
+
+    return rows.map((row): RuleRow => {
+      const sd = row.structured_data ?? {};
+      return {
+        property:          sd.property          ?? null,
+        property_key:      sd.property_key      ?? null,
+        property_category: sd.property_category ?? null,
+        operator:          sd.operator          ?? null,
+        value:             sd.value             ?? null,
+        unit:              sd.unit              ?? null,
+        element:           sd.element           ?? null,
+        domain:            row.domain           ?? null,
+        category:          row.category         ?? null,
+        description:       row.description      ?? null,
+        // Map DB rule_type → classification understood by buildDecisions
+        classification: ACTIONABLE_RULE_TYPES.has(row.rule_type)
+          ? 'actionable_numeric'
+          : row.rule_type,
+        confidence_score:  row.confidence_score ?? null,
+        source_document_id: row.document_id     ?? null,
+      };
+    });
+  } catch (err) {
+    warn('[RuleEngine] Unexpected error during rule fetch, using empty fallback', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Obligation helpers (backward compat for downstream engines)
+// ---------------------------------------------------------------------------
+
+function formatObligationText(rd: ResolvedDecision): string {
+  const parts: string[] = [];
+  if (rd.element) parts.push(rd.element);
+  parts.push(rd.property);
+
+  const bounds: string[] = [];
+  if (rd.min !== undefined) bounds.push(`≥ ${rd.min}${rd.unit ? ' ' + rd.unit : ''}`);
+  if (rd.max !== undefined) bounds.push(`≤ ${rd.max}${rd.unit ? ' ' + rd.unit : ''}`);
+  if (rd.exact !== undefined) bounds.push(`= ${rd.exact}${rd.unit ? ' ' + rd.unit : ''}`);
+  if (bounds.length > 0) parts.push(`(${bounds.join(', ')})`);
+
+  return parts.join(' — ');
+}
+
+function severityFromConfidence(
+  confidence: number
+): RuleObligation['severity'] {
+  if (confidence >= 0.9) return 'high';
+  if (confidence >= 0.75) return 'medium';
+  return 'low';
+}
+
+function toDetailedObligation(rd: ResolvedDecision): RuleObligation {
+  return {
+    id: `${rd.element ?? ''}|${rd.property}|${rd.unit ?? ''}`,
+    category: rd.domain,
+    obligation: formatObligationText(rd),
+    ruleType: 'regulatory',
+    severity: severityFromConfidence(rd.confidence),
+    weight: rd.confidence,
+    source: rd.sources[0],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Engine entry point
+// ---------------------------------------------------------------------------
+
 export async function runRuleEngine(
   executionContext: EngineExecutionContext
 ): Promise<RuleEngineResult> {
   const startTime = Date.now();
 
   try {
-    console.log('[RuleEngine] Starting rule evaluation');
+    log('[RuleEngine] Starting rule evaluation (v2.0 — DB-backed)');
 
-    // Extract normalized lots from execution context
-    const normalizedLots = executionContext.lots?.normalizedLots || [];
+    // 1. Extract unique domains from lots produced by Lot Engine
+    const normalizedLots: any[] = executionContext.lots?.normalizedLots ?? [];
+    const domains = [...new Set<string>(
+      normalizedLots
+        .map((lot) => lot.category as string | undefined)
+        .filter((c): c is string => !!c && c !== 'unknown' && c !== 'autre')
+    )];
 
-    // Collect obligations based on lot categories
-    const obligations: string[] = [];
-    const detailedObligations: RuleObligation[] = [];
-    const categoryTriggers: Record<string, number> = {};
-    let totalWeight = 0;
+    // 2. Fetch → Build → Resolve
+    const rawRules = await fetchRules(domains);
 
-    const severityBreakdown = {
-      critical: 0,
-      high: 0,
-      medium: 0,
-      low: 0,
+    // Extract building type from project data for context-aware priority weighting
+    const decisionContext: DecisionContext = {
+      buildingType: normalizeBuildingType(
+        executionContext.projectData?.buildingType
+          ?? executionContext.projectData?.building_type
+      ),
     };
 
-    const typeBreakdown = {
-      legal: 0,
-      regulatory: 0,
-      advisory: 0,
-      commercial: 0,
-    };
+    const decisions = buildDecisions(rawRules, decisionContext);
+    log(`[RuleEngine] Built ${decisions.length} proto-decisions`);
 
-    normalizedLots.forEach((lot: any) => {
-      const category = lot.category || 'unknown';
+    const grouped = groupDecisionsByKey(decisions);
+    const resolved = resolveDecisions(grouped);
+    log(`[RuleEngine] Resolved ${resolved.length} decisions`);
 
-      // Track which categories trigger rules
-      categoryTriggers[category] = (categoryTriggers[category] || 0) + 1;
+    // 3. Store on context for downstream engines
+    executionContext.resolvedDecisions = resolved;
 
-      // Get rules for this category from the centralized registry
-      const rules = getRulesByCategory(category);
+    // 4. Derive backward-compat obligation fields from resolved decisions
+    const detailedObligations = resolved.map(toDetailedObligation);
+    const obligations = detailedObligations.map((o) => o.obligation);
+    const totalWeight = resolved.reduce((sum, rd) => sum + rd.confidence, 0);
 
-      // Collect obligations from matching rules with type, severity and weight
-      rules.forEach((rule) => {
-        obligations.push(rule.obligation);
+    const severityBreakdown = { critical: 0, high: 0, medium: 0, low: 0 };
+    const categorySummary: Record<string, number> = {};
 
-        const detailedObligation: RuleObligation = {
-          id: rule.id,
-          category: rule.category,
-          obligation: rule.obligation,
-          ruleType: rule.ruleType,
-          severity: rule.severity,
-          weight: rule.weight,
-          source: rule.source,
-        };
-
-        detailedObligations.push(detailedObligation);
-        totalWeight += rule.weight;
-        severityBreakdown[rule.severity]++;
-        typeBreakdown[rule.ruleType]++;
-      });
-    });
-
-    // Deduplicate obligations while preserving order
-    const uniqueObligations = Array.from(new Set(obligations));
-
-    // Deduplicate detailed obligations by ID (preserve detailed info, eliminate duplicates)
-    const seenIds = new Set<string>();
-    const uniqueDetailedObligations: RuleObligation[] = [];
-
-    detailedObligations.forEach((oblig) => {
-      if (!seenIds.has(oblig.id)) {
-        seenIds.add(oblig.id);
-        uniqueDetailedObligations.push(oblig);
-      }
-    });
-
-    // Build category summary
-    const categorySummary = categoryTriggers;
+    for (const o of detailedObligations) {
+      severityBreakdown[o.severity]++;
+      categorySummary[o.category] = (categorySummary[o.category] ?? 0) + 1;
+    }
 
     const processingTime = Date.now() - startTime;
 
     const result: RuleEngineResult = {
       obligations,
-      uniqueObligations,
+      uniqueObligations: [...new Set(obligations)],
       detailedObligations,
-      uniqueDetailedObligations,
+      uniqueDetailedObligations: detailedObligations, // already unique by key
       obligationCount: obligations.length,
-      ruleCount: uniqueObligations.length,
+      ruleCount: resolved.length,
       totalWeight,
       severityBreakdown,
-      typeBreakdown,
+      typeBreakdown: {
+        legal: 0,
+        regulatory: resolved.length,
+        advisory: 0,
+        commercial: 0,
+      },
       categorySummary,
+      resolvedDecisions: resolved,
       meta: {
-        engineVersion: '1.0',
+        engineVersion: '2.0',
         createdAt: new Date().toISOString(),
         processingTime,
+        rulesFetched: rawRules.length,
+        decisionsBuilt: decisions.length,
+        decisionsResolved: resolved.length,
       },
     };
 
-    console.log('[RuleEngine] Rule evaluation completed', {
-      totalObligations: obligations.length,
-      uniqueRules: uniqueObligations.length,
-      totalWeight,
-      severityBreakdown,
-      typeBreakdown,
-      categories: Object.keys(categoryTriggers),
+    log('[RuleEngine] Rule evaluation completed', {
+      rulesFetched: rawRules.length,
+      decisionsBuilt: decisions.length,
+      decisionsResolved: resolved.length,
+      conflicts: resolved.filter((r) => r.conflict).length,
       processingTime,
     });
 
     return result;
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[RuleEngine] Error during rule evaluation', error);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    warn('[RuleEngine] Unexpected error during rule evaluation', { message });
 
-    // Return graceful error result
     return {
       obligations: [],
       uniqueObligations: [],
@@ -178,66 +315,40 @@ export async function runRuleEngine(
       obligationCount: 0,
       ruleCount: 0,
       totalWeight: 0,
-      severityBreakdown: {
-        critical: 0,
-        high: 0,
-        medium: 0,
-        low: 0,
-      },
-      typeBreakdown: {
-        legal: 0,
-        regulatory: 0,
-        advisory: 0,
-        commercial: 0,
-      },
+      severityBreakdown: { critical: 0, high: 0, medium: 0, low: 0 },
+      typeBreakdown: { legal: 0, regulatory: 0, advisory: 0, commercial: 0 },
       categorySummary: {},
+      resolvedDecisions: [],
       meta: {
-        engineVersion: '1.0',
+        engineVersion: '2.0',
         createdAt: new Date().toISOString(),
         processingTime: Date.now() - startTime,
+        rulesFetched: 0,
+        decisionsBuilt: 0,
+        decisionsResolved: 0,
       },
     };
   }
 }
 
-/**
- * Get Rule Engine metadata
- * Describes engine capabilities
- */
+// ---------------------------------------------------------------------------
+// Metadata
+// ---------------------------------------------------------------------------
+
 export function getRuleEngineMetadata() {
   return {
     id: 'ruleEngine',
     name: 'Rule Engine',
-    version: '1.0',
-    description: 'Evaluate declarative rules based on lot categories',
+    version: '2.0',
+    description: 'Fetch rules from DB, build and resolve decisions per property key',
     capabilities: [
-      'Category-based obligation inference',
-      'Obligation deduplication',
-      'Category summary',
-      'Rule composition',
+      'DB-backed rule fetching (filtered by domain)',
+      'Decision building with operator normalization',
+      'Conflict detection (min > max, divergent exact)',
+      'Resolved decisions stored on execution context',
     ],
     inputs: ['normalizedLots from lotEngine'],
-    outputs: ['obligations', 'uniqueObligations', 'ruleCount'],
-    dependencies: ['lotEngine', 'contextEngine'],
-    rules: {
-      electricite: [
-        'Vérifier conformité NFC 15-100',
-        'Vérifier déclaration conformité électrique',
-        'Vérifier assurance responsabilité civile',
-      ],
-      plomberie: [
-        'Vérifier conformité normes eau potable',
-        'Vérifier assurance dommages',
-      ],
-      toiture: [
-        'Vérifier déclaration préalable en mairie',
-        'Vérifier conformité code construction',
-        'Vérifier couverture assurance décennale',
-      ],
-      generic: [
-        'Établir devis détaillé',
-        'Vérifier garanties décennales',
-      ],
-    },
+    outputs: ['resolvedDecisions', 'obligations (compat)', 'ruleCount'],
+    dependencies: ['lotEngine', 'supabase.rules'],
   };
 }

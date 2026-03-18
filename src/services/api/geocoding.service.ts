@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Service de géocodage - API Géoplateforme IGN + Google Places
  *
@@ -199,7 +201,7 @@ class GeocodingService {
       if (options.citycode) params.append('citycode', options.citycode);
       if (options.type) params.append('type', options.type);
 
-      console.log('[Geocoding] Recherche:', address);
+      log('[Geocoding] Recherche:', address);
       const response = await fetch(`${GEOCODING_API_URL}/search?${params}`);
 
       if (!response.ok) {
@@ -210,7 +212,7 @@ class GeocodingService {
       const data = await response.json();
 
       if (!data.features || data.features.length === 0) {
-        console.log('[Geocoding] Aucun résultat pour:', address);
+        log('[Geocoding] Aucun résultat pour:', address);
         return { success: true, data: [], bestMatch: undefined };
       }
 
@@ -240,7 +242,7 @@ class GeocodingService {
         };
       });
 
-      console.log('[Geocoding] Trouvé:', results.length, 'résultats');
+      log('[Geocoding] Trouvé:', results.length, 'résultats');
       return {
         success: true,
         data: results,
@@ -281,7 +283,7 @@ class GeocodingService {
 
       if (options.type) params.append('type', options.type);
 
-      console.log('[Geocoding] Reverse:', lat, lon);
+      log('[Geocoding] Reverse:', lat, lon);
       const response = await fetch(`${GEOCODING_API_URL}/reverse?${params}`);
 
       if (!response.ok) {
@@ -479,7 +481,7 @@ class GeocodingService {
       ? `${hours}h ${mins > 0 ? `${mins} min` : ''}`
       : `${mins} min`;
 
-    console.log('[Geocoding] Distance calculée:', {
+    log('[Geocoding] Distance calculée:', {
       origin: origin.label,
       destination: dest.label,
       distanceKm: Math.round(distanceKm * 10) / 10,
@@ -843,7 +845,7 @@ class GeocodingService {
     error?: string;
   }> {
     if (!GOOGLE_MAPS_API_KEY) {
-      console.warn('[Geocoding] Google Places API non configurée');
+      warn('[Geocoding] Google Places API non configurée');
       return { success: false, error: 'API Google Places non configurée' };
     }
 
@@ -940,7 +942,7 @@ class GeocodingService {
       // Trier par distance
       results.sort((a, b) => (a.distanceKm || 0) - (b.distanceKm || 0));
 
-      console.log('[Geocoding] Google Places:', results.length, 'résultats trouvés');
+      log('[Geocoding] Google Places:', results.length, 'résultats trouvés');
       return { success: true, data: results };
 
     } catch (error) {

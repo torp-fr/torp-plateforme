@@ -1,518 +1,619 @@
-/**
- * PHASE 38C: Knowledge Ingestion Step Runner
- *
- * Orchestrates document ingestion by stepping through each stage independently.
- * Decouples ingestion steps using the state machine, enabling:
- * - Resumable processing from any checkpoint
- * - Better error isolation per step
- * - Independent testing of each step
- * - Foundation for distributed processing
- *
- * IMPORTANT: This is an ORCHESTRATION layer only.
- * All actual logic remains in knowledge-brain.service.
- * This service coordinates the flow via state machine.
- */
+// =======================================================
+// PHASE 41 — TRANSACTIONAL STEP RUNNER (DB-DRIVEN)
+// Zero global state. Zero window locks.
+// =======================================================
 
-import { knowledgeBrainService } from '@/services/ai/knowledge-brain.service';
-import { ingestionStateMachineService } from './ingestionStateMachine.service';
-import { DocumentIngestionState, IngestionFailureReason } from './ingestionStates';
-import { supabase } from '@/lib/supabase';
+import { supabase } from "@/lib/supabase";
+import { log, warn, error as logError } from '@/lib/logger';
+import { chunkSmart, type Chunk } from '@/core/knowledge/ingestion/smartChunker.service';
+import { classifyDocument } from '@/core/knowledge/ingestion/documentClassifier.service';
+import { extractDocumentContent } from '@/core/knowledge/ingestion/documentExtractor.service';
+import { normalizeText } from '@/core/knowledge/ingestion/textNormalizer.service';
+import { sanitizeText } from '@/utils/text-sanitizer';
 
-export interface StepResult {
-  success: boolean;
-  nextState?: DocumentIngestionState;
-  error?: string;
-  duration: number;
+// ---------------------------------------------------------------------------
+// Embedding constants
+// ---------------------------------------------------------------------------
+
+const EMBEDDING_BATCH_SIZE = 100; // texts per Edge Function call (server cap)
+const INSERT_BATCH_SIZE    = 100; // rows per Supabase insert call
+
+const MAX_ATTEMPTS = 3;
+const PIPELINE_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
+
+// Embedding dimension must match database schema: knowledge_chunks.embedding_vector vector(384)
+// Phase 42 migration (20260307000002_hybrid_rag_search.sql) will upgrade this to 1536,
+// but hasn't been applied to the Supabase database yet. Update when migration is applied.
+const EMBEDDING_DIMENSIONS = 384;
+
+// Storage bucket used by uploadDocumentForServerIngestion
+const KNOWLEDGE_STORAGE_BUCKET = 'documents';
+
+// =======================================================
+// Public Entry Point
+// =======================================================
+
+export async function runKnowledgeIngestion(documentId: string) {
+  // PRODUCTION PROBE — search for this tag in Vercel / browser DevTools console.
+  // If absent after upload, the wrong pipeline is executing.
+  console.log('[INGESTION_PIPELINE_V2]', { documentId, pipeline: 'knowledgeStepRunner', ts: new Date().toISOString() });
+  log(`[INGESTION] Starting knowledge ingestion for document ${documentId}`);
+
+  try {
+    // Step 1: Claim document (atomic DB lock)
+    const claimed = await claimDocument(documentId);
+    if (!claimed) {
+      log(`[INGESTION] Could not claim document ${documentId} (already processing or max retries)`);
+      return;
+    }
+
+    // Step 2: Process document (extract, chunk, embed)
+    await processDocument(claimed);
+
+    log(`[INGESTION] ✅ Ingestion complete for document ${documentId}`);
+  } catch (err: any) {
+    const errorMsg = err?.message || "Unknown error";
+    logError(`[INGESTION] ❌ Ingestion failed for document ${documentId}:`, errorMsg);
+
+    // Mark as failed in database, preserving the error message
+    await markFailed(documentId, errorMsg);
+  }
 }
 
-export class KnowledgeStepRunnerService {
-  /**
-   * Run the next step for a document based on its current ingestion_status
-   *
-   * Flow:
-   * UPLOADED: → EXTRACTING (on demand, not automatic)
-   * EXTRACTING: → CHUNKING
-   * CHUNKING: → EMBEDDING
-   * EMBEDDING: → FINALIZING
-   * FINALIZING: → COMPLETED
-   * COMPLETED/FAILED: terminal (nothing to run)
-   *
-   * @param documentId Document ID
-   * @returns StepResult with success status and next state
-   */
-  static async runNextStep(documentId: string): Promise<StepResult> {
-    const startTime = Date.now();
+// =======================================================
+// Claim (Atomic DB Lock)
+// =======================================================
 
-    try {
-      console.log(`[STEP RUNNER] 🚀 Running next step for document ${documentId}`);
+async function claimDocument(documentId: string) {
+  try {
+    // Fetch current document first
+    const { data: currentDoc, error: fetchError } = await supabase
+      .from("knowledge_documents")
+      .select("ingestion_attempts, ingestion_status")
+      .eq("id", documentId)
+      .single();
 
-      // Get current state
-      const context = await ingestionStateMachineService.getStateContext(documentId);
-      if (!context) {
-        return {
-          success: false,
-          error: 'Failed to fetch document state',
-          duration: Date.now() - startTime,
-        };
-      }
-
-      const currentState = context.current_state;
-      console.log(`[STEP RUNNER] Current state: ${currentState}`);
-
-      // Determine next step and run it
-      let result: StepResult;
-
-      switch (currentState) {
-        case DocumentIngestionState.UPLOADED:
-          console.log(`[STEP RUNNER] ℹ️ Document UPLOADED - waiting for extraction trigger`);
-          return {
-            success: true,
-            nextState: DocumentIngestionState.UPLOADED,
-            duration: Date.now() - startTime,
-          };
-
-        case DocumentIngestionState.EXTRACTING:
-          result = await this.runExtractionStep(documentId);
-          break;
-
-        case DocumentIngestionState.CHUNKING:
-          result = await this.runChunkingStep(documentId);
-          break;
-
-        case DocumentIngestionState.EMBEDDING:
-          result = await this.runEmbeddingStep(documentId);
-          break;
-
-        case DocumentIngestionState.FINALIZING:
-          result = await this.runFinalizingStep(documentId);
-          break;
-
-        case DocumentIngestionState.COMPLETED:
-          console.log(`[STEP RUNNER] ✅ Document already COMPLETED`);
-          return {
-            success: true,
-            nextState: DocumentIngestionState.COMPLETED,
-            duration: Date.now() - startTime,
-          };
-
-        case DocumentIngestionState.FAILED:
-          console.log(`[STEP RUNNER] ❌ Document in FAILED state`);
-          return {
-            success: false,
-            error: context.error_message || 'Document processing failed',
-            duration: Date.now() - startTime,
-          };
-
-        default:
-          return {
-            success: false,
-            error: `Unknown state: ${currentState}`,
-            duration: Date.now() - startTime,
-          };
-      }
-
-      return result;
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`[STEP RUNNER] 💥 Step runner error:`, errorMsg);
-      return {
-        success: false,
-        error: errorMsg,
-        duration: Date.now() - startTime,
-      };
+    if (fetchError || !currentDoc) {
+      logError("[CLAIM] Document not found:", fetchError?.message);
+      return null;
     }
-  }
 
-  /**
-   * STEP 1: Extraction (EXTRACTING state)
-   * Extracts text from PDF document
-   *
-   * Calls knowledge-brain.service internal function
-   * On success: transitions to CHUNKING
-   * On failure: marks FAILED with EXTRACTION error
-   */
-  private static async runExtractionStep(documentId: string): Promise<StepResult> {
-    const startTime = Date.now();
-
-    try {
-      console.log(`[STEP RUNNER] 📄 EXTRACTION STEP: Extracting text from PDF...`);
-
-      // Fetch document to get file path
-      const { data: doc, error: fetchError } = await supabase
-        .from('knowledge_documents')
-        .select('file_path, original_content')
-        .eq('id', documentId)
-        .single();
-
-      if (fetchError || !doc) {
-        throw new Error(`Failed to fetch document: ${fetchError?.message || 'Not found'}`);
-      }
-
-      // Get the content (either from original_content or would need to fetch from storage)
-      // This assumes the document has original_content stored
-      if (!doc.original_content) {
-        throw new Error('No content available for extraction');
-      }
-
-      const content = doc.original_content;
-      console.log(`[STEP RUNNER] ✅ Text extracted (${content.length} chars)`);
-
-      // Validate extraction
-      if (!content || content.trim().length === 0) {
-        await ingestionStateMachineService.markFailed(
-          documentId,
-          IngestionFailureReason.EXTRACTION_EMPTY,
-          'No text content extracted from document',
-          undefined
-        );
-        return {
-          success: false,
-          nextState: DocumentIngestionState.FAILED,
-          error: 'Extraction returned empty content',
-          duration: Date.now() - startTime,
-        };
-      }
-
-      // Transition to CHUNKING
-      const transitioned = await ingestionStateMachineService.transitionTo(
-        documentId,
-        DocumentIngestionState.CHUNKING,
-        'extraction_complete'
-      );
-
-      if (!transitioned) {
-        throw new Error('Failed to transition to CHUNKING state');
-      }
-
-      console.log(`[STEP RUNNER] 🎉 EXTRACTION complete → CHUNKING`);
-      return {
-        success: true,
-        nextState: DocumentIngestionState.CHUNKING,
-        duration: Date.now() - startTime,
-      };
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown extraction error';
-      console.error(`[STEP RUNNER] ❌ Extraction failed:`, errorMsg);
-
-      await ingestionStateMachineService.markFailed(
-        documentId,
-        IngestionFailureReason.EXTRACTION_ERROR || IngestionFailureReason.UNKNOWN_ERROR,
-        errorMsg,
-        error instanceof Error ? error.stack : undefined
-      );
-
-      return {
-        success: false,
-        nextState: DocumentIngestionState.FAILED,
-        error: errorMsg,
-        duration: Date.now() - startTime,
-      };
+    // Check if already processing or max retries exceeded
+    if (currentDoc.ingestion_status !== "pending") {
+      log("[CLAIM] Document already processing or completed");
+      return null;
     }
-  }
 
-  /**
-   * STEP 2: Chunking (CHUNKING state)
-   * Splits extracted text into semantic chunks
-   *
-   * Calls knowledge-brain.service internal function
-   * On success: transitions to EMBEDDING
-   * On failure: marks FAILED with CHUNKING error
-   */
-  private static async runChunkingStep(documentId: string): Promise<StepResult> {
-    const startTime = Date.now();
-
-    try {
-      console.log(`[STEP RUNNER] ✂️ CHUNKING STEP: Splitting text into chunks...`);
-
-      // Fetch content to chunk
-      const { data: doc, error: fetchError } = await supabase
-        .from('knowledge_documents')
-        .select('original_content')
-        .eq('id', documentId)
-        .single();
-
-      if (fetchError || !doc || !doc.original_content) {
-        throw new Error('No content available for chunking');
-      }
-
-      // Use knowledge-brain service chunking function
-      // (In PHASE 39, this would delegate to knowledge-brain.service.chunkAndStore())
-      const { chunkText } = await import('@/utils/chunking');
-      const chunks = chunkText(doc.original_content, 1000);
-
-      if (!chunks || chunks.length === 0) {
-        throw new Error('No chunks created from content');
-      }
-
-      console.log(`[STEP RUNNER] ✅ Created ${chunks.length} chunks`);
-
-      // Store chunks count metadata (for later reference)
-      await supabase
-        .from('knowledge_documents')
-        .update({
-          chunks_created: chunks.length,
-        })
-        .eq('id', documentId);
-
-      // Transition to EMBEDDING
-      const transitioned = await ingestionStateMachineService.transitionTo(
-        documentId,
-        DocumentIngestionState.EMBEDDING,
-        'chunking_complete'
-      );
-
-      if (!transitioned) {
-        throw new Error('Failed to transition to EMBEDDING state');
-      }
-
-      console.log(`[STEP RUNNER] 🎉 CHUNKING complete → EMBEDDING`);
-      return {
-        success: true,
-        nextState: DocumentIngestionState.EMBEDDING,
-        duration: Date.now() - startTime,
-      };
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown chunking error';
-      console.error(`[STEP RUNNER] ❌ Chunking failed:`, errorMsg);
-
-      await ingestionStateMachineService.markFailed(
-        documentId,
-        IngestionFailureReason.CHUNKING_ERROR,
-        errorMsg,
-        error instanceof Error ? error.stack : undefined
-      );
-
-      return {
-        success: false,
-        nextState: DocumentIngestionState.FAILED,
-        error: errorMsg,
-        duration: Date.now() - startTime,
-      };
+    if (currentDoc.ingestion_attempts >= MAX_ATTEMPTS) {
+      await markFailed(documentId, "Max retry attempts exceeded");
+      return null;
     }
-  }
 
-  /**
-   * STEP 3: Embedding (EMBEDDING state)
-   * Generates embeddings for each chunk
-   *
-   * Calls knowledge-brain.service embedding function
-   * On success: transitions to FINALIZING
-   * On failure: marks FAILED with EMBEDDING error
-   */
-  private static async runEmbeddingStep(documentId: string): Promise<StepResult> {
-    const startTime = Date.now();
+    // Atomic update: claim document for processing
+    // .select() returns all columns including file_path, mime_type, title
+    const { data, error } = await supabase
+      .from("knowledge_documents")
+      .update({
+        ingestion_status: "processing",
+        ingestion_attempts: (currentDoc.ingestion_attempts || 0) + 1,
+        processing_started_at: new Date().toISOString(),
+        pipeline_timeout_at: new Date(Date.now() + PIPELINE_TIMEOUT_MS).toISOString(),
+      })
+      .eq("id", documentId)
+      .eq("ingestion_status", "pending")
+      .select()
+      .single();
 
-    try {
-      console.log(`[STEP RUNNER] 🔢 EMBEDDING STEP: Generating embeddings for chunks...`);
-
-      // Fetch chunks to embed
-      const { data: chunks, error: fetchError } = await supabase
-        .from('knowledge_chunks')
-        .select('id, content')
-        .eq('document_id', documentId)
-        .order('chunk_index', { ascending: true });
-
-      if (fetchError || !chunks || chunks.length === 0) {
-        throw new Error('No chunks found to embed');
-      }
-
-      console.log(`[STEP RUNNER] Processing ${chunks.length} chunks...`);
-
-      let successCount = 0;
-      let failureCount = 0;
-
-      // Generate embeddings for each chunk sequentially
-      for (let i = 0; i < chunks.length; i++) {
-        try {
-          const chunk = chunks[i];
-          console.log(`[STEP RUNNER] Embedding chunk ${i + 1}/${chunks.length}...`);
-
-          // Call knowledge-brain service embedding function
-          const embedding = await knowledgeBrainService.generateEmbedding(chunk.content);
-
-          if (!embedding) {
-            console.warn(`[STEP RUNNER] ⚠️ Chunk ${i} embedding returned null`);
-            failureCount++;
-            continue;
-          }
-
-          // Store embedding
-          const { error: updateError } = await supabase
-            .from('knowledge_chunks')
-            .update({
-              embedding,
-              embedding_generated_at: new Date().toISOString(),
-            })
-            .eq('id', chunk.id);
-
-          if (updateError) {
-            console.error(`[STEP RUNNER] Failed to store embedding for chunk ${i}:`, updateError);
-            failureCount++;
-          } else {
-            successCount++;
-          }
-        } catch (chunkError) {
-          console.error(`[STEP RUNNER] Error embedding chunk ${i}:`, chunkError);
-          failureCount++;
-        }
-      }
-
-      console.log(
-        `[STEP RUNNER] ✅ Embedding complete: ${successCount}/${chunks.length} successful`
-      );
-
-      // Check if all chunks were embedded
-      if (failureCount > 0 && successCount === 0) {
-        throw new Error(`All ${failureCount} chunks failed to embed`);
-      }
-
-      // Transition to FINALIZING
-      const transitioned = await ingestionStateMachineService.transitionTo(
-        documentId,
-        DocumentIngestionState.FINALIZING,
-        'embedding_complete'
-      );
-
-      if (!transitioned) {
-        throw new Error('Failed to transition to FINALIZING state');
-      }
-
-      console.log(`[STEP RUNNER] 🎉 EMBEDDING complete → FINALIZING`);
-      return {
-        success: true,
-        nextState: DocumentIngestionState.FINALIZING,
-        duration: Date.now() - startTime,
-      };
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown embedding error';
-      console.error(`[STEP RUNNER] ❌ Embedding failed:`, errorMsg);
-
-      await ingestionStateMachineService.markFailed(
-        documentId,
-        IngestionFailureReason.EMBEDDING_API_ERROR,
-        errorMsg,
-        error instanceof Error ? error.stack : undefined
-      );
-
-      return {
-        success: false,
-        nextState: DocumentIngestionState.FAILED,
-        error: errorMsg,
-        duration: Date.now() - startTime,
-      };
+    if (error || !data) {
+      log("[CLAIM] Failed to claim document (already processing)");
+      return null;
     }
+
+    log("[CLAIM] Document claimed successfully", { documentId, attempt: data.ingestion_attempts });
+    return data;
+  } catch (err: any) {
+    logError("[CLAIM] Error claiming document:", err.message);
+    return null;
   }
+}
 
-  /**
-   * STEP 4: Finalizing (FINALIZING state)
-   * Performs integrity checks and cleanup
-   *
-   * Verifies all embeddings present and correct
-   * On success: transitions to COMPLETED
-   * On failure: marks FAILED with INTEGRITY error
-   */
-  private static async runFinalizingStep(documentId: string): Promise<StepResult> {
-    const startTime = Date.now();
+// =======================================================
+// Main Pipeline
+// =======================================================
 
-    try {
-      console.log(`[STEP RUNNER] 🔍 FINALIZING STEP: Verifying integrity...`);
+async function processDocument(doc: any) {
+  log(`[PROCESS] Starting ingestion for document ${doc.id}`);
 
-      // Check chunk count
-      const { data: chunks, error: fetchError } = await supabase
-        .from('knowledge_chunks')
-        .select('id, embedding')
-        .eq('document_id', documentId);
+  try {
+    // Verify document is still in processing state
+    await ensureStillProcessing(doc.id);
+    checkTimeout(doc);
 
-      if (fetchError || !chunks) {
-        throw new Error('Failed to fetch chunks for verification');
-      }
+    // ── Step 0: Extract text from file if content not yet extracted ──────────
+    //
+    // The upload path stores the file in Supabase Storage and creates the DB
+    // row with content = NULL. This step downloads the file, extracts plain
+    // text, sanitizes it and persists both raw and sanitized forms to the DB.
+    //
+    if (!doc.sanitized_content && !doc.content) {
+      log('[INGESTION] content is missing — starting text extraction');
 
-      const totalChunks = chunks.length;
-      const embeddedChunks = chunks.filter((c) => c.embedding).length;
-      const missingEmbeddings = totalChunks - embeddedChunks;
-
-      console.log(
-        `[STEP RUNNER] 📊 Integrity check: ${embeddedChunks}/${totalChunks} chunks have embeddings`
-      );
-
-      if (missingEmbeddings > 0) {
+      if (!doc.file_path) {
         throw new Error(
-          `Integrity check failed: ${missingEmbeddings} chunks missing embeddings`
+          'TEXT_EXTRACTION_FAILED: document has no file_path and no pre-extracted content'
         );
       }
 
-      // Update document metadata
+      // Transition to EXTRACTING state
       await supabase
         .from('knowledge_documents')
-        .update({
-          chunks_embedded: embeddedChunks,
-          embedding_integrity_checked: true,
-        })
-        .eq('id', documentId);
+        .update({ ingestion_status: 'extracting', ingestion_progress: 20 })
+        .eq('id', doc.id);
 
-      // Transition to COMPLETED
-      const transitioned = await ingestionStateMachineService.transitionTo(
-        documentId,
-        DocumentIngestionState.COMPLETED,
-        'finalization_complete'
-      );
+      // ── 0a: Download file from Supabase Storage ──
+      log(`[INGESTION] 📥 Downloading file from storage bucket: ${KNOWLEDGE_STORAGE_BUCKET}`);
+      log(`[INGESTION] File path: ${doc.file_path}`);
+      log(`[INGESTION] File size: ${doc.file_size} bytes`);
+      log(`[INGESTION] File MIME type: ${doc.mime_type}`);
 
-      if (!transitioned) {
-        throw new Error('Failed to transition to COMPLETED state');
+      // Defensive checks before download
+      if (!doc.file_path) {
+        throw new Error(
+          `TEXT_EXTRACTION_FAILED: document has no file_path in database`
+        );
+      }
+      if (typeof doc.file_path !== 'string') {
+        throw new Error(
+          `TEXT_EXTRACTION_FAILED: file_path is not a string (got ${typeof doc.file_path})`
+        );
+      }
+      if (doc.file_path.trim().length === 0) {
+        throw new Error(
+          `TEXT_EXTRACTION_FAILED: file_path is empty string`
+        );
       }
 
-      console.log(`[STEP RUNNER] 🎉 FINALIZING complete → COMPLETED ✅`);
-      return {
-        success: true,
-        nextState: DocumentIngestionState.COMPLETED,
-        duration: Date.now() - startTime,
-      };
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown finalization error';
-      console.error(`[STEP RUNNER] ❌ Finalization failed:`, errorMsg);
+      const storagePath = doc.file_path.replace(/^knowledge-documents\//, '');
+      log(`[INGESTION] Downloading from storage: ${storagePath}`);
+      const { data: fileBlob, error: downloadError } = await supabase.storage
+        .from(KNOWLEDGE_STORAGE_BUCKET)
+        .download(storagePath);
 
-      await ingestionStateMachineService.markFailed(
-        documentId,
-        IngestionFailureReason.INTEGRITY_CHECK_FAILED,
-        errorMsg,
-        error instanceof Error ? error.stack : undefined
-      );
+      if (downloadError) {
+        log(`[INGESTION] ❌ Storage download error object:`, downloadError);
+        const errorMsg = downloadError?.message ?? JSON.stringify(downloadError) ?? 'unknown error';
+        log(`[INGESTION] ❌ Storage download failed: ${errorMsg}`);
+        throw new Error(
+          `TEXT_EXTRACTION_FAILED: storage download failed: ${errorMsg}`
+        );
+      }
 
-      return {
-        success: false,
-        nextState: DocumentIngestionState.FAILED,
-        error: errorMsg,
-        duration: Date.now() - startTime,
-      };
+      if (!fileBlob) {
+        log(`[INGESTION] ❌ Storage returned no data (file not found or inaccessible)`);
+        throw new Error(
+          `TEXT_EXTRACTION_FAILED: storage returned empty data (file not found)`
+        );
+      }
+
+      log(`[INGESTION] ✅ File downloaded successfully`);
+
+      // ── 0b: Convert Blob → Uint8Array (browser-safe, no Node.js Buffer) ──
+      const arrayBuffer = await fileBlob.arrayBuffer();
+      const buffer = new Uint8Array(arrayBuffer);
+      log(`[INGESTION] Buffer size: ${buffer.length} bytes`);
+
+      // Derive the filename from the storage path for extension detection
+      const filename = doc.file_path.split('/').pop() || doc.title || 'document';
+      const fileExt = filename.split('.').pop()?.toLowerCase() || 'unknown';
+      log(`[INGESTION] File extension detected: .${fileExt}`);
+
+      // ── 0c: Extract plain text (pdf-parse / mammoth / exceljs / plain UTF-8) ──
+      log(`[INGESTION] 🔍 Extracting text from: ${filename}`);
+      let rawText: string;
+      try {
+        rawText = await extractDocumentContent(buffer, filename);
+        log(`[INGESTION] ✅ Text extraction completed (raw length: ${rawText.length} chars)`);
+      } catch (extractError) {
+        const errorMsg = extractError instanceof Error ? extractError.message : String(extractError);
+        log(`[INGESTION] ❌ Text extraction failed: ${errorMsg}`);
+        throw new Error(
+          `TEXT_EXTRACTION_FAILED: ${errorMsg}`
+        );
+      }
+
+      if (!rawText || rawText.trim().length === 0) {
+        log(`[INGESTION] ⚠️ Warning: Extraction returned empty text (scanned PDF or image-only document?)`);
+        throw new Error(
+          'TEXT_EXTRACTION_FAILED: no text could be extracted from document (possibly scanned PDF without OCR)'
+        );
+      }
+
+      // ── 0d: Normalize then sanitize ──
+      log(`[INGESTION] sanitizing text (raw chars: ${rawText.length})`);
+      const normalizedText = normalizeText(rawText);
+      const sanitizedText  = sanitizeText(normalizedText);
+
+      if (!sanitizedText || sanitizedText.trim().length === 0) {
+        throw new Error(
+          'TEXT_EXTRACTION_FAILED: sanitized text is empty after normalization'
+        );
+      }
+
+      // ── 0e: Persist extracted content ──
+      const { error: updateError } = await supabase
+        .from('knowledge_documents')
+        .update({
+          content:           rawText,
+          sanitized_content: sanitizedText,
+        })
+        .eq('id', doc.id);
+
+      if (updateError) {
+        throw new Error(
+          `TEXT_EXTRACTION_FAILED: failed to store extracted content: ${updateError.message}`
+        );
+      }
+
+      // Propagate extracted content so the rest of this function can use it
+      doc.content           = rawText;
+      doc.sanitized_content = sanitizedText;
+
+      log(`[INGESTION] text extraction complete (sanitized chars: ${sanitizedText.length})`);
     }
-  }
 
-  /**
-   * Get the next state for a document
-   * Useful for UI to show what happens next
-   */
-  static async getNextState(documentId: string): Promise<DocumentIngestionState | null> {
-    const context = await ingestionStateMachineService.getStateContext(documentId);
-    if (!context) return null;
-
-    return ingestionStateMachineService.getNextStep(context.current_state);
-  }
-
-  /**
-   * Check if document can proceed to next step
-   */
-  static async canProceed(documentId: string): Promise<boolean> {
-    const context = await ingestionStateMachineService.getStateContext(documentId);
-    if (!context) return false;
-
-    // Terminal states cannot proceed
-    if (ingestionStateMachineService.isTerminalState(context.current_state)) {
-      return false;
+    // ── Step 1: Validate content ─────────────────────────────────────────────
+    const sanitized = doc.sanitized_content || doc.content;
+    if (!sanitized || sanitized.trim().length === 0) {
+      throw new Error('TEXT_EXTRACTION_FAILED: no content available after extraction');
     }
 
-    // Non-terminal states can proceed
-    return true;
+    log(`[PROCESS] Document size: ${(sanitized.length / 1024).toFixed(2)}KB`);
+
+    // ── Step 2: Classify and chunk ───────────────────────────────────────────
+    await supabase
+      .from('knowledge_documents')
+      .update({ ingestion_status: 'chunking', ingestion_progress: 40 })
+      .eq('id', doc.id);
+
+    log('[INGESTION] chunking document');
+    const docType = classifyDocument(sanitized);
+    log(`[PROCESS] Document type: ${docType}`);
+
+    const rawChunks = chunkSmart(sanitized, docType);
+
+    // Hard safety: split any chunk still exceeding 4000 characters.
+    // This is a deterministic backstop — independent of document structure
+    // or smartChunker strategy. A 4.7M-char document must never reach
+    // the embedding step as a single chunk.
+    const SAFE_MAX = 4_000;
+    const safeChunks = rawChunks.flatMap((chunk) => {
+      if (chunk.content.length <= SAFE_MAX) return [chunk];
+      const split = [];
+      for (let i = 0; i < chunk.content.length; i += SAFE_MAX) {
+        split.push({
+          ...chunk,
+          content: chunk.content.slice(i, i + SAFE_MAX),
+          metadata: { ...chunk.metadata, splitMode: 'forced' },
+        });
+      }
+      return split;
+    });
+
+    console.log('[INGESTION_PIPELINE_V2]', {
+      documentId: doc.id,
+      totalChars: sanitized.length,
+      chunks: safeChunks.length,
+    });
+
+    // Hard guarantee: a document larger than 2000 chars must never silently collapse to 1 chunk.
+    if (safeChunks.length <= 1 && sanitized.length > 2000) {
+      throw new Error('CRITICAL: chunking failed — only 1 chunk produced for large document');
+    }
+
+    if (!safeChunks.length) {
+      throw new Error('No chunks generated from content');
+    }
+
+    log(`[PROCESS] Generated ${safeChunks.length} chunks (raw: ${rawChunks.length})`);
+
+    // ── Step 3: Generate embeddings ──────────────────────────────────────────
+    await supabase
+      .from('knowledge_documents')
+      .update({ ingestion_status: 'embedding', ingestion_progress: 75 })
+      .eq('id', doc.id);
+
+    log('[INGESTION] generating embeddings');
+    console.log(`\n\n⚠️  [CRITICAL] About to call processEmbeddingsInBatches()`);
+    console.log(`⚠️  [CRITICAL] documentId: ${doc.id}`);
+    console.log(`⚠️  [CRITICAL] chunks.length: ${safeChunks.length}`);
+    await processEmbeddingsInBatches(doc.id, safeChunks);
+    console.log(`⚠️  [CRITICAL] processEmbeddingsInBatches() completed\n\n`);
+
+    // ── Step 4: Mark as completed ────────────────────────────────────────────
+    await markCompleted(doc.id, safeChunks.length);
+    log(`[PROCESS] Ingestion complete for document ${doc.id}`);
+  } catch (err: any) {
+    logError(`[PROCESS] Error processing document ${doc.id}:`, err.message);
+    throw err;
   }
 }
 
-export const knowledgeStepRunnerService = new KnowledgeStepRunnerService();
+// =======================================================
+// Embedding helpers
+// =======================================================
+
+/**
+ * Call the generate-embedding Edge Function with a batch of texts.
+ * Returns one embedding vector per input, preserving order.
+ * Throws on network / Edge Function failure — caller handles per-batch fallback.
+ *
+ * CRITICAL: Must pass Authorization header (Bearer token) — Edge Function requires it.
+ */
+async function generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
+  console.log(`[EMBEDDING:BATCH] ========== STARTING BATCH EMBEDDING GENERATION ==========`);
+  console.log(`[EMBEDDING:BATCH] Invoking Edge Function for ${texts.length} texts`);
+  console.log(`[EMBEDDING:BATCH] Request body:`, {
+    textCount: texts.length,
+    model: 'text-embedding-3-small',
+    dimensions: EMBEDDING_DIMENSIONS,
+    totalChars: texts.reduce((sum, t) => sum + t.length, 0),
+  });
+
+  // NOTE: The Supabase client is configured with credentials from environment
+  // (SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY).
+  // The JS SDK automatically includes the Authorization header.
+  console.log('[EMBEDDING:BATCH] Supabase client configured with:');
+  console.log('[EMBEDDING:BATCH]   SUPABASE_SERVICE_ROLE_KEY available:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+  console.log('[EMBEDDING:BATCH]   VITE_SUPABASE_ANON_KEY available:', !!process.env.VITE_SUPABASE_ANON_KEY || !!process.env.SUPABASE_ANON_KEY);
+  console.log('[EMBEDDING:BATCH] Supabase JS SDK will automatically include correct Authorization header');
+
+  console.log(`[EMBEDDING:BATCH] About to invoke Edge Function 'generate-embedding'`);
+  console.log(`[EMBEDDING:BATCH] Supabase functions object exists:`, !!supabase.functions);
+  console.log(`[EMBEDDING:BATCH] Invoke method exists:`, typeof supabase.functions.invoke);
+  console.log(`[EMBEDDING:BATCH] Note: NOT passing custom Authorization header - letting Supabase client handle it`);
+
+  let data: any;
+  let fnError: any;
+
+  try {
+    console.log(`[EMBEDDING:BATCH] Calling supabase.functions.invoke() ...`);
+    const result = await supabase.functions.invoke(
+      'generate-embedding',
+      {
+        // IMPORTANT: Do NOT pass custom Authorization header.
+        // Supabase JS SDK automatically includes the correct auth credentials
+        // from the client instance (SUPABASE_SERVICE_ROLE_KEY when available).
+        // Passing a custom header can override/conflict with these credentials.
+        body: { inputs: texts, model: 'text-embedding-3-small', dimensions: EMBEDDING_DIMENSIONS },
+      }
+    );
+    data = result.data;
+    fnError = result.error;
+    console.log(`[EMBEDDING:BATCH] Invoke returned. Error present:`, !!fnError);
+    console.log(`[EMBEDDING:BATCH] Data present:`, !!data);
+  } catch (invokeErr: any) {
+    console.error(`[EMBEDDING:BATCH] ❌ INVOKE THREW EXCEPTION (not just error response)`);
+    console.error(`[EMBEDDING:BATCH] Exception type:`, invokeErr?.constructor?.name);
+    console.error(`[EMBEDDING:BATCH] Exception message:`, invokeErr?.message);
+    console.error(`[EMBEDDING:BATCH] Exception details:`, invokeErr);
+    throw invokeErr;
+  }
+
+  if (fnError) {
+    console.error(`[EMBEDDING:BATCH] Edge Function invocation failed`);
+    console.error(`[EMBEDDING:BATCH] Error type:`, fnError?.constructor?.name);
+    console.error(`[EMBEDDING:BATCH] Error message:`, fnError.message);
+    console.error(`[EMBEDDING:BATCH] Error status:`, fnError?.status);
+    console.error(`[EMBEDDING:BATCH] Full error:`, JSON.stringify(fnError, null, 2));
+    throw new Error(`Edge Function error: ${fnError.message}`);
+  }
+
+  console.log(`[EMBEDDING:BATCH] Edge Function returned successfully`);
+  console.log(`[EMBEDDING:BATCH] Response data type:`, typeof data);
+  console.log(`[EMBEDDING:BATCH] Response data keys:`, Object.keys(data || {}));
+  console.log(`[EMBEDDING:BATCH] Response data:`, JSON.stringify(data, null, 2));
+
+  if (!data?.embeddings || !Array.isArray(data.embeddings)) {
+    console.error(`[EMBEDDING:BATCH] Invalid response structure`);
+    console.error(`[EMBEDDING:BATCH] data.embeddings exists:`, !!data?.embeddings);
+    console.error(`[EMBEDDING:BATCH] is array:`, Array.isArray(data?.embeddings));
+    throw new Error('Invalid Edge Function response — missing embeddings array');
+  }
+
+  console.log(`[EMBEDDING:BATCH] Successfully parsed ${data.embeddings.length} embeddings`);
+  console.log(`[EMBEDDING:BATCH] First embedding dimensions:`, data.embeddings[0]?.length ?? 'N/A');
+  return data.embeddings as number[][];
+}
+
+// =======================================================
+// Embedding Batch Processor
+// =======================================================
+
+async function processEmbeddingsInBatches(documentId: string, chunks: Chunk[]) {
+  console.log(`\n\n🔴🔴🔴 [CRITICAL] ENTERED processEmbeddingsInBatches() 🔴🔴🔴`);
+  console.log(`\n\n========== [EMBEDDING] STARTING EMBEDDING GENERATION PHASE ==========`);
+  console.log(`[EMBEDDING] Document ID: ${documentId}`);
+  console.log(`[EMBEDDING] Total chunks to embed: ${chunks.length}`);
+  console.log(`[EMBEDDING] Batch size: ${EMBEDDING_BATCH_SIZE}`);
+  console.log(`[EMBEDDING] Will process in ${Math.ceil(chunks.length / EMBEDDING_BATCH_SIZE)} batches`);
+  console.log(`[EMBEDDING] Supabase instance available:`, !!supabase);
+  console.log(`[EMBEDDING] Environment: ${typeof window === 'undefined' ? 'SERVER/NODE.JS' : 'BROWSER'}`);
+
+  console.log(`\n🔴 [CRITICAL] FOR LOOP CHECK: chunks.length=${chunks.length}, EMBEDDING_BATCH_SIZE=${EMBEDDING_BATCH_SIZE}`);
+  console.log(`🔴 [CRITICAL] FOR LOOP will iterate: ${Math.ceil(chunks.length / EMBEDDING_BATCH_SIZE)} times`);
+
+  for (let i = 0; i < chunks.length; i += EMBEDDING_BATCH_SIZE) {
+    console.log(`\n🔴 [CRITICAL] INSIDE FOR LOOP at iteration i=${i}`);
+    await ensureStillProcessing(documentId);
+
+    const batch      = chunks.slice(i, i + EMBEDDING_BATCH_SIZE);
+    const texts      = batch.map(c => c.content);
+    const batchLabel = `batch ${Math.floor(i / EMBEDDING_BATCH_SIZE) + 1}`;
+
+    console.log(`🔴 [CRITICAL] About to call generateEmbeddingBatch with ${texts.length} texts`);
+    // Log batch information before embedding generation
+    console.log(`[EMBEDDING] ${batchLabel} starting`);
+    console.log(`[EMBEDDING] ${batchLabel} chunk count:`, batch.length);
+    console.log(`[EMBEDDING] ${batchLabel} total text length:`, texts.reduce((sum, t) => sum + t.length, 0), 'chars');
+    console.log(`[EMBEDDING] ${batchLabel} avg text length:`, Math.round(texts.reduce((sum, t) => sum + t.length, 0) / texts.length), 'chars');
+
+    // Generate all embeddings for this batch in a single Edge Function call.
+    // On failure, insert chunks with null embeddings rather than aborting the document.
+    let embeddings: (number[] | null)[] = new Array(batch.length).fill(null);
+    try {
+      console.log(`[EMBEDDING] ${batchLabel} calling Edge Function...`);
+      const result = await generateEmbeddingBatch(texts);
+      console.log(`[EMBEDDING] ${batchLabel} received ${result.length} embeddings from OpenAI`);
+      embeddings = result.map(e => (Array.isArray(e) && e.length > 0 ? e : null));
+      console.log(`[EMBEDDING] ${batchLabel} processed embeddings: ${embeddings.filter(e => e !== null).length} valid, ${embeddings.filter(e => e === null).length} null`);
+    } catch (err: any) {
+      console.error(`[EMBEDDING] ❌ ${batchLabel} embedding call FAILED`);
+      console.error(`[EMBEDDING] ${batchLabel} error type:`, err?.constructor?.name);
+      console.error(`[EMBEDDING] ${batchLabel} error message:`, err?.message);
+      console.error(`[EMBEDDING] ${batchLabel} error details:`, err);
+      console.error(`[EMBEDDING] ${batchLabel} stack trace:`, err?.stack);
+      warn(`[EMBEDDING] ${batchLabel} embedding call failed: ${err.message} — chunks will be stored without vectors`);
+    }
+
+    // Build insert records (skip empty-content chunks)
+    const records = batch
+      .filter(c => c.content && c.content.trim().length > 0)
+      .map((chunk, idx) => ({
+        document_id:      documentId,
+        content:          chunk.content,
+        chunk_index:      i + idx,
+        token_count:      chunk.tokenCount,
+        metadata:         chunk.metadata ?? {},
+        embedding_vector: embeddings[idx] ?? null,
+      }));
+
+    if (records.length === 0) {
+      warn(`[EMBEDDING] ${batchLabel} produced no valid records — skipping`);
+      continue;
+    }
+
+    // Defensive guard: created_by must NEVER appear in a chunk row.
+    for (const row of records) {
+      if ('created_by' in row) {
+        throw new Error(
+          `Invalid chunk payload: created_by must not be present in knowledge_chunks. ` +
+          `Document ID: ${documentId}, batch: ${batchLabel}`
+        );
+      }
+    }
+
+    // Insert in sub-batches of INSERT_BATCH_SIZE
+    for (let j = 0; j < records.length; j += INSERT_BATCH_SIZE) {
+      const insertSlice = records.slice(j, j + INSERT_BATCH_SIZE);
+
+      console.log("SUPABASE INSERT TABLE:", "knowledge_chunks");
+      console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(insertSlice, null, 2));
+
+      let insertError: any;
+
+      try {
+        const result = await supabase.from('knowledge_chunks').insert(insertSlice);
+        insertError = result.error;
+
+        if (insertError) {
+          console.error(`[EMBEDDING] ❌ DATABASE ERROR (${batchLabel})`);
+          console.error('[EMBEDDING] Error message:', insertError.message);
+          console.error('[EMBEDDING] Error code:', (insertError as any).code);
+          console.error('[EMBEDDING] Error details:', JSON.stringify(insertError, null, 2));
+          console.error('[EMBEDDING] Document ID:', documentId);
+          console.error('[EMBEDDING] Batch label:', batchLabel);
+          console.error('[EMBEDDING] Chunks in batch:', insertSlice.length);
+          console.error('[EMBEDDING] First chunk:', JSON.stringify(insertSlice[0], null, 2));
+        }
+      } catch (e) {
+        console.error(`[EMBEDDING] ❌ EXCEPTION THROWN (${batchLabel})`);
+        console.error('[EMBEDDING] Exception message:', e instanceof Error ? e.message : String(e));
+        console.error('[EMBEDDING] Exception type:', e?.constructor?.name);
+        console.error('[EMBEDDING] Stack trace:', e instanceof Error ? e.stack : 'N/A');
+        console.error('[EMBEDDING] Full exception:', e);
+        console.error('[EMBEDDING] Document ID:', documentId);
+        insertError = e;
+      }
+
+      if (insertError) {
+        const errorMsg = insertError instanceof Error ? insertError.message : insertError?.message || 'Unknown error';
+        throw new Error(`[EMBEDDING] Failed to persist chunks (${batchLabel}): ${errorMsg}`);
+      }
+    }
+
+    const successCount = records.filter(r => r.embedding_vector !== null).length;
+    log(`[EMBEDDING] ${batchLabel} complete — ${successCount}/${records.length} chunks embedded`);
+  }
+}
+
+// =======================================================
+// Guards
+// =======================================================
+
+async function ensureStillProcessing(documentId: string) {
+  const { data } = await supabase
+    .from("knowledge_documents")
+    .select("ingestion_status, pipeline_timeout_at")
+    .eq("id", documentId)
+    .single();
+
+  // Accept any intermediate processing state (processing, extracting, chunking, embedding)
+  const activeStatuses = ['processing', 'extracting', 'chunking', 'embedding'];
+  if (!data || !activeStatuses.includes(data.ingestion_status)) {
+    throw new Error("Document no longer in processing state");
+  }
+
+  checkTimeout(data);
+}
+
+function checkTimeout(doc: any) {
+  if (doc.pipeline_timeout_at) {
+    if (new Date() > new Date(doc.pipeline_timeout_at)) {
+      throw new Error("Pipeline timeout exceeded");
+    }
+  }
+}
+
+// =======================================================
+// Final States
+// =======================================================
+
+async function markCompleted(documentId: string, chunkCount?: number) {
+  const { error: updateError } = await supabase
+    .from("knowledge_documents")
+    .update({
+      ingestion_status: "completed",
+      ingestion_completed_at: new Date().toISOString(),
+      pipeline_timeout_at: null,
+      ingestion_progress: 100,
+      ...(chunkCount !== undefined && { chunk_count: chunkCount }),
+    })
+    .eq("id", documentId);
+
+  if (updateError) {
+    logError(`[MARK_COMPLETED] Failed to mark document as completed:`, updateError.message);
+  } else {
+    log(`[MARK_COMPLETED] Document completed successfully:`, documentId);
+  }
+}
+
+async function markFailed(documentId: string, errorMessage: string) {
+  const { error: updateError } = await supabase
+    .from("knowledge_documents")
+    .update({
+      ingestion_status: "failed",
+      last_ingestion_error: JSON.stringify({
+        reason: "INGESTION_ERROR",
+        message: errorMessage,
+        timestamp: new Date().toISOString(),
+      }),
+      pipeline_timeout_at: null,
+    })
+    .eq("id", documentId);
+
+  if (updateError) {
+    logError(`[MARK_FAILED] Failed to mark document as failed:`, updateError.message);
+  } else {
+    log(`[MARK_FAILED] Document marked as failed:`, documentId);
+  }
+}

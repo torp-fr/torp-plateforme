@@ -203,7 +203,7 @@ export function ProjectComparison({ currentProjectId }: ComparisonProps) {
                       </h5>
                       <ul className="space-y-2">
                         {currentProject.analysisResult?.strengths?.slice(0, 3).map((strength: string, index: number) => (
-                          <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
+                          <li key={`strength-current-${index}`} className="text-sm text-muted-foreground flex items-start gap-2">
                             <div className="w-1.5 h-1.5 bg-success rounded-full mt-2 flex-shrink-0" />
                             {strength}
                           </li>
@@ -218,7 +218,7 @@ export function ProjectComparison({ currentProjectId }: ComparisonProps) {
                       </h5>
                       <ul className="space-y-2">
                         {compareProject.analysisResult?.strengths?.slice(0, 3).map((strength: string, index: number) => (
-                          <li key={index} className="text-sm text-muted-foreground flex items-start gap-2">
+                          <li key={`strength-compare-${index}`} className="text-sm text-muted-foreground flex items-start gap-2">
                             <div className="w-1.5 h-1.5 bg-success rounded-full mt-2 flex-shrink-0" />
                             {strength}
                           </li>

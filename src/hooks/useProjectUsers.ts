@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useApp } from '@/context/AppContext';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 // =============================================================================
 // TYPES
@@ -219,7 +220,7 @@ export function useProjectUsers({
       if (error) throw error;
 
       // TODO: Envoyer un email d'invitation via service email
-      console.log('[useProjectUsers] Invitation created, email should be sent to:', email);
+      log('[useProjectUsers] Invitation created, email should be sent to:', email);
 
       return data;
     },
@@ -335,7 +336,7 @@ export function useProjectUsers({
       if (error) throw error;
 
       // TODO: Renvoyer l'email d'invitation
-      console.log('[useProjectUsers] Invitation resent to:', invitation.email);
+      log('[useProjectUsers] Invitation resent to:', invitation.email);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: keys.invitations });

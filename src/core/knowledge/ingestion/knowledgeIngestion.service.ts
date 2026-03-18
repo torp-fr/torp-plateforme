@@ -1,13 +1,34 @@
 /**
- * Knowledge Ingestion Service v1.0
- * Manages document upload, extraction, and indexing
- * Prepares knowledge base for RAG (Phase 30)
+ * Knowledge Ingestion Service v2.0
+ *
+ * ARCHITECTURE RULES (MANDATORY):
+ *  - This service NEVER creates documents in knowledge_documents.
+ *  - The caller (API or test script) is solely responsible for creating the
+ *    document record and passing the resulting documentId here.
+ *  - This service is READ-ONLY for knowledge_documents.
+ *    It only writes to knowledge_chunks.
+ *
+ * Pipeline:
+ *   extract text → normalize → classify → chunk → filter → dedup
+ *   → INSERT knowledge_chunks (BLOCKING, defines success)
+ *   → index / integrity (NON-BLOCKING, failures do not fail ingestion)
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
+import { log, warn } from '@/lib/logger';
+import { normalizeText } from './textNormalizer.service';
+import { classifyDocument } from './documentClassifier.service';
+import { extractDocumentContent } from './documentExtractor.service';
+import { chunkSmart } from './smartChunker.service';
+import { filterChunks } from './chunkQualityFilter.service';
+import { deduplicateChunks } from './semanticDeduplication.service';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Public Types
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Knowledge document metadata
+ * Knowledge document metadata (kept for external consumers that import this type)
  */
 export interface KnowledgeDocumentMetadata {
   title: string;
@@ -40,7 +61,7 @@ export interface KnowledgeChunk {
   content: string;
   chunk_index: number;
   token_count: number;
-  embedding?: number[];
+  embedding_vector?: number[];
   created_at: string;
 }
 
@@ -55,144 +76,179 @@ export interface IngestionResult {
   errors?: string[];
 }
 
-/**
- * Initialize Supabase client
- */
-function getSupabaseClient() {
-  const supabaseUrl = process.env.SUPABASE_URL || '';
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Ingestion Entry Point
+// ─────────────────────────────────────────────────────────────────────────────
 
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase configuration');
+/**
+ * Ingest a knowledge document.
+ *
+ * The caller MUST have already inserted the document row into `knowledge_documents`
+ * and obtained its `documentId`.  This function NEVER writes to `knowledge_documents`.
+ *
+ * SUCCESS is defined solely by chunk insertion.
+ * Deduplication and indexing are non-blocking — their failures never fail ingestion.
+ *
+ * @param documentId  UUID of the pre-existing knowledge_documents row
+ * @param filename    Original filename (used for format detection / extraction)
+ * @param buffer      Raw file content as a Node.js Buffer
+ */
+export async function ingestKnowledgeDocument({
+  documentId,
+  filename,
+  buffer,
+}: {
+  documentId: string;
+  filename: string;
+  buffer: Buffer;
+}): Promise<IngestionResult> {
+  log('[KnowledgeIngestion] Starting ingestion for:', filename, '| documentId:', documentId);
+
+  if (!documentId) {
+    return { success: false, errors: ['documentId is required — create the document record first'] };
   }
 
-  return createClient(supabaseUrl, supabaseKey);
+  // ── STEP 1 (CRITICAL): Extract text ────────────────────────────────────────
+  let rawText: string;
+  try {
+    rawText = await extractDocumentContent(buffer, filename);
+    log('[KnowledgeIngestion] Text extracted:', rawText.length, 'characters');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[KnowledgeIngestion] Text extraction failed:', msg);
+    return { success: false, errors: [`Text extraction failed: ${msg}`] };
+  }
+
+  // ── STEP 2 (CRITICAL): Normalize → classify → chunk → filter ──────────────
+  const normalizedText = normalizeText(rawText);
+  log('[KnowledgeIngestion] Text normalized:', normalizedText.length, 'characters');
+
+  const docType = classifyDocument(normalizedText);
+  log('[KnowledgeIngestion] Document classified as:', docType);
+
+  const rawChunks = chunkSmart(normalizedText, docType);
+  log('[KnowledgeIngestion] Raw chunks:', rawChunks.length);
+
+  const qualityChunks = filterChunks(rawChunks);
+  log('[KnowledgeIngestion] Chunks after quality filter:', qualityChunks.length);
+
+  // ── STEP 3 (NON-CRITICAL): Deduplication ────────────────────────────────────
+  let dedupedChunks = qualityChunks;
+  try {
+    dedupedChunks = await deduplicateChunks(qualityChunks);
+    log('[KnowledgeIngestion] Chunks after deduplication:', dedupedChunks.length);
+  } catch (err) {
+    warn('[KnowledgeIngestion] Deduplication failed (non-blocking) — using all quality chunks:', err);
+  }
+
+  const chunks = dedupedChunks.map((c) => ({
+    content: c.content,
+    tokenCount: c.tokenCount,
+    metadata: c.metadata ?? {},
+    startIndex: 0,
+    endIndex: c.content.length,
+  }));
+
+  if (chunks.length === 0) {
+    return { success: false, chunksCreated: 0, errors: ['No chunks produced from document'] };
+  }
+
+  // ── STEP 4 (CRITICAL): Insert chunks ────────────────────────────────────────
+  // Step 3: Create chunk records
+  const chunkRecords = chunks.map((chunk, index) => ({
+    document_id: documentId,
+    content: chunk.content,
+    chunk_index: index,
+    token_count: chunk.tokenCount,
+    metadata: chunk.metadata ?? {},
+  }));
+
+    log('[KnowledgeIngestion] Using provided document ID:', documentId);
+
+    // Step 3: Create chunk records
+    // Step 3: Create chunk records
+const chunkRecords = chunks.map((chunk, index) => ({
+  document_id: documentId,
+  content: chunk.content,
+  chunk_index: index,
+  token_count: chunk.tokenCount,
+  metadata: chunk.metadata ?? {},
+}));
+
+console.log("SUPABASE INSERT TABLE:", "knowledge_chunks");
+console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(chunkRecords, null, 2));
+
+let chunkError: any = null;
+
+try {
+
+  await supabase
+    .from("knowledge_chunks")
+    .delete()
+    .eq("document_id", documentId);
+
+  const { error } = await supabase
+    .from("knowledge_chunks")
+    .insert(chunkRecords);
+
+  chunkError = error;
+
+} catch (err) {
+
+  console.error("SUPABASE INSERT EXCEPTION:", err);
+  chunkError = err;
+
 }
 
-/**
- * Extract text from document buffer
- * Supports: .txt, .md, .pdf (text), .docx (text)
- */
-export function extractTextFromBuffer(
-  buffer: Buffer,
-  filename: string
-): string {
+if (chunkError) {
+  throw new Error(`Failed to create chunks: ${chunkError.message}`);
+}
+
+log("[KnowledgeIngestion] Chunks inserted:", chunkRecords.length);
+
+  // ── STEP 5 (NON-CRITICAL): Index + integrity verification ───────────────────
   try {
-    // For now, support plain text and markdown
-    // PDF/DOCX would require additional libraries (pdfjs, docx)
+    const { indexChunks } = await import('./knowledgeIndex.service');
+    await indexChunks(documentId, chunks);
+  } catch (err) {
+    warn('[KnowledgeIngestion] Indexing failed (non-blocking) — ingestion still successful:', err);
+  }
+
+  return {
+    success: true,
+    documentId,
+    chunksCreated: insertedCount,
+    totalTokens: chunks.reduce((sum, c) => sum + c.tokenCount, 0),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Utility: extract raw text from buffer (kept for external callers)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function extractTextFromBuffer(buffer: Buffer, filename: string): string {
+  try {
     if (filename.endsWith('.txt') || filename.endsWith('.md')) {
       return buffer.toString('utf-8');
     }
-
-    // For other formats, attempt UTF-8 decode
     const text = buffer.toString('utf-8');
-    if (text.length > 0) {
-      return text;
-    }
-
+    if (text.length > 0) return text;
     throw new Error(`Unsupported file format: ${filename}`);
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[KnowledgeIngestion] Text extraction failed:', errorMessage);
-    throw error;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[KnowledgeIngestion] Text extraction failed:', msg);
+    throw err;
   }
 }
 
-/**
- * Ingest knowledge document
- */
-export async function ingestKnowledgeDocument(
-  fileBuffer: Buffer,
-  filename: string,
-  metadata: KnowledgeDocumentMetadata,
-  userId: string
-): Promise<IngestionResult> {
-  try {
-    console.log('[KnowledgeIngestion] Starting ingestion for:', filename);
+// ─────────────────────────────────────────────────────────────────────────────
+// Utility: keyword search on chunks
+// ─────────────────────────────────────────────────────────────────────────────
 
-    const supabase = getSupabaseClient();
-
-    // Step 1: Extract text
-    const text = extractTextFromBuffer(fileBuffer, filename);
-    console.log('[KnowledgeIngestion] Text extracted:', text.length, 'characters');
-
-    // Step 2: Import chunking service
-    const { chunkDocument } = await import('./knowledgeChunker.service');
-    const chunks = chunkDocument(text);
-    console.log('[KnowledgeIngestion] Document chunked into', chunks.length, 'chunks');
-
-    // Step 3: Create document record
-    const { data: docData, error: docError } = await supabase
-      .from('knowledge_documents')
-      .insert([
-        {
-          title: metadata.title,
-          category: metadata.category,
-          source: metadata.source,
-          version: metadata.version || '1.0',
-          file_size: fileBuffer.length,
-          created_by: userId,
-          chunk_count: chunks.length,
-        },
-      ])
-      .select('id')
-      .single();
-
-    if (docError || !docData) {
-      throw new Error(`Failed to create document record: ${docError?.message}`);
-    }
-
-    console.log('[KnowledgeIngestion] Document created:', docData.id);
-
-    // Step 4: Create chunk records
-    const chunkRecords = chunks.map((chunk, index) => ({
-      document_id: docData.id,
-      content: chunk.content,
-      chunk_index: index,
-      token_count: chunk.tokenCount,
-    }));
-
-    const { error: chunkError } = await supabase
-      .from('knowledge_chunks')
-      .insert(chunkRecords);
-
-    if (chunkError) {
-      throw new Error(`Failed to create chunks: ${chunkError.message}`);
-    }
-
-    console.log('[KnowledgeIngestion] Chunks inserted:', chunks.length);
-
-    // Step 5: Index chunks (for Phase 30 - RAG)
-    const { indexChunks } = await import('./knowledgeIndex.service');
-    await indexChunks(docData.id, chunks);
-
-    return {
-      success: true,
-      documentId: docData.id,
-      chunksCreated: chunks.length,
-      totalTokens: chunks.reduce((sum, c) => sum + c.tokenCount, 0),
-    };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[KnowledgeIngestion] Ingestion failed:', errorMessage);
-
-    return {
-      success: false,
-      errors: [errorMessage],
-    };
-  }
-}
-
-/**
- * Search knowledge base
- */
 export async function searchKnowledge(query: string, limit: number = 10): Promise<KnowledgeChunk[]> {
   try {
-    console.log('[KnowledgeIngestion] Searching for:', query);
+    log('[KnowledgeIngestion] Searching for:', query);
 
-    const supabase = getSupabaseClient();
-
-    // Full-text search on chunk content
     const { data, error } = await supabase
       .from('knowledge_chunks')
       .select('*')
@@ -203,97 +259,13 @@ export async function searchKnowledge(query: string, limit: number = 10): Promis
       throw new Error(`Search failed: ${error.message}`);
     }
 
-    console.log('[KnowledgeIngestion] Found', data?.length || 0, 'results');
+    log('[KnowledgeIngestion] Found', data?.length || 0, 'results');
     return data || [];
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[KnowledgeIngestion] Search failed:', errorMessage);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[KnowledgeIngestion] Search failed:', msg);
     return [];
   }
 }
 
-/**
- * Get knowledge base stats
- */
-export async function getKnowledgeStats(): Promise<{
-  documentCount: number;
-  chunkCount: number;
-  totalSize: number;
-}> {
-  try {
-    const supabase = getSupabaseClient();
 
-    const { data: docs, error: docsError } = await supabase
-      .from('knowledge_documents')
-      .select('file_size');
-
-    const { data: chunks, error: chunksError } = await supabase
-      .from('knowledge_chunks')
-      .select('id');
-
-    if (docsError || chunksError) {
-      throw new Error('Failed to fetch stats');
-    }
-
-    return {
-      documentCount: docs?.length || 0,
-      chunkCount: chunks?.length || 0,
-      totalSize: (docs || []).reduce((sum, d: any) => sum + (d.file_size || 0), 0),
-    };
-  } catch (error) {
-    console.warn('[KnowledgeIngestion] Failed to get stats:', error);
-    return { documentCount: 0, chunkCount: 0, totalSize: 0 };
-  }
-}
-
-/**
- * Get recent documents
- */
-export async function getRecentDocuments(limit: number = 10): Promise<KnowledgeDocument[]> {
-  try {
-    const supabase = getSupabaseClient();
-
-    const { data, error } = await supabase
-      .from('knowledge_documents')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (error) {
-      throw new Error(`Failed to fetch documents: ${error.message}`);
-    }
-
-    return data || [];
-  } catch (error) {
-    console.warn('[KnowledgeIngestion] Failed to fetch documents:', error);
-    return [];
-  }
-}
-
-/**
- * Delete document and its chunks
- */
-export async function deleteKnowledgeDocument(documentId: string): Promise<boolean> {
-  try {
-    const supabase = getSupabaseClient();
-
-    // Delete chunks first (cascade)
-    await supabase.from('knowledge_chunks').delete().eq('document_id', documentId);
-
-    // Delete document
-    const { error } = await supabase
-      .from('knowledge_documents')
-      .delete()
-      .eq('id', documentId);
-
-    if (error) {
-      throw new Error(`Failed to delete document: ${error.message}`);
-    }
-
-    console.log('[KnowledgeIngestion] Document deleted:', documentId);
-    return true;
-  } catch (error) {
-    console.error('[KnowledgeIngestion] Delete failed:', error);
-    return false;
-  }
-}

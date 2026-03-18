@@ -19,10 +19,8 @@ import {
   RefreshCw,
   Download,
 } from 'lucide-react';
-import { jobService } from '@/core/jobs/job.service';
 import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
-import type { AnalysisJob } from '@/core/jobs/job.service';
 
 const STATUS_LABELS = {
   pending: 'En attente',
@@ -54,7 +52,7 @@ export default function JobStatusPage() {
   const { user } = useApp();
   const { toast } = useToast();
 
-  const [job, setJob] = useState<AnalysisJob | null>(null);
+  const [job, setJob] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -64,18 +62,17 @@ export default function JobStatusPage() {
     if (!jobId) return;
 
     try {
-      const fetchedJob = await jobService.getJobById(jobId);
-      if (!fetchedJob) {
-        setError('Job not found');
-        setJob(null);
-      } else {
-        setJob(fetchedJob);
-        setError(null);
+      const response = await fetch(`/api/jobs/${jobId}`);
+      if (!response.ok) throw new Error('Job not found');
+      const result = await response.json();
+      const fetchedJob = result.data;
 
-        // Stop auto-refresh when job is completed or failed
-        if (fetchedJob.status === 'completed' || fetchedJob.status === 'failed') {
-          setAutoRefresh(false);
-        }
+      setJob(fetchedJob);
+      setError(null);
+
+      // Stop auto-refresh when job is completed or failed
+      if (fetchedJob.status === 'completed' || fetchedJob.status === 'failed') {
+        setAutoRefresh(false);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch job status';
@@ -112,7 +109,11 @@ export default function JobStatusPage() {
     if (!jobId) return;
 
     try {
-      await jobService.cancelJob(jobId);
+      const response = await fetch(`/api/jobs/${jobId}/cancel`, {
+        method: 'POST',
+      });
+      if (!response.ok) throw new Error('Failed to cancel job');
+
       toast({
         title: 'Job cancelled',
         description: 'The analysis job has been cancelled.',

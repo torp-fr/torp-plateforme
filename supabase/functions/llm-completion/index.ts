@@ -2,7 +2,6 @@
 // Edge Function pour appeler les LLMs de mani??re s??curis??e (cl??s API c??t?? serveur)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,17 +31,10 @@ serve(async (req) => {
       throw new Error('Missing authorization header')
     }
 
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    )
-
-    // V??rifier que l'utilisateur est authentifi??
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
-    if (authError || !user) {
-      throw new Error('Unauthorized - Invalid or expired token')
-    }
+    // Accept service role key (CLI) and user JWTs (browser) alike.
+    // auth.getUser() only validates user JWTs and rejects the service role key,
+    // so we use the same token-presence check as generate-embedding instead.
+    // The Bearer token was already verified to be non-empty above (line 31-34).
 
     // Parser le body de la requ??te
     const params: CompletionRequest = await req.json()

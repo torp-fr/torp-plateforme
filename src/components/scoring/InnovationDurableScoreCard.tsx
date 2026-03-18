@@ -190,7 +190,7 @@ export function InnovationDurableScoreCard({ score, showDetails = true }: Props)
                 </h5>
                 <div className="flex flex-wrap gap-1.5">
                   {score.pointsForts.map((point, i) => (
-                    <Badge key={i} variant="outline" className="text-xs bg-green-50 border-green-200">
+                    <Badge key={`item-${i}`} variant="outline" className="text-xs bg-green-50 border-green-200">
                       {point}
                     </Badge>
                   ))}
@@ -207,7 +207,7 @@ export function InnovationDurableScoreCard({ score, showDetails = true }: Props)
                 </h5>
                 <ul className="text-sm space-y-1.5">
                   {score.recommandations.map((reco, i) => (
-                    <li key={i} className="flex items-start gap-2 text-muted-foreground">
+                    <li key={`item-${i}`} className="flex items-start gap-2 text-muted-foreground">
                       <span className="text-orange-500 mt-0.5">-</span>
                       <span>{reco}</span>
                     </li>

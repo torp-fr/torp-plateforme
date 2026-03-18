@@ -5,6 +5,7 @@
  */
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Audit report structure - Final deliverable from pipeline
@@ -150,7 +151,7 @@ export async function runAuditEngine(
   const warnings: string[] = [];
 
   try {
-    console.log('[AuditEngine] Starting audit report generation');
+    log('[AuditEngine] Starting audit report generation');
 
     // Extract and validate context data
     const audit = executionContext.audit || {};
@@ -247,7 +248,7 @@ export async function runAuditEngine(
       },
     };
 
-    console.log('[AuditEngine] Audit report generated successfully', {
+    log('[AuditEngine] Audit report generated successfully', {
       projectProfile: report.projectProfile,
       riskLevel: report.riskAssessment.riskLevel,
       obligationCount: report.complianceFindings.obligations.length,

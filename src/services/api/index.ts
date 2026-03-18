@@ -5,8 +5,7 @@
 
 import { env } from '@/config/env';
 
-export { apiClient, ApiClient } from './client';
-export type { ApiError, ApiResponse } from './client';
+export { apiGet, apiPost } from './client';
 
 // Export external API services
 export { gpuService } from './gpu.service';
@@ -27,6 +26,7 @@ import { MockProjectService } from './mock/project.service';
 import { SupabaseAuthService } from './supabase/auth.service';
 import { SupabaseDevisService } from './supabase/devis.service';
 import { SupabaseProjectService } from './supabase/project.service';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 // Re-export types
 export type { LoginCredentials, RegisterData, AuthResponse } from './mock/auth.service';
@@ -90,7 +90,7 @@ export const getServiceStatus = () => {
 
 // Log service status in development mode
 if (env.app.debugMode) {
-  console.log('[Services] Configuration:', getServiceStatus());
+  log('[Services] Configuration:', getServiceStatus());
 }
 
 export default services;

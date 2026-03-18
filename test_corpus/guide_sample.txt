@@ -1,0 +1,137 @@
+Guide technique — Mise en œuvre des enduits de façade
+
+1. Introduction
+
+Ce guide présente les bonnes pratiques pour la préparation, l'application et
+la finition des enduits de façade sur supports maçonnés, conformément aux
+prescriptions du DTU 26.1 (enduits aux mortiers de liants hydrauliques) et
+du DTU 59.1 (travaux de peinture).
+
+Il s'adresse aux applicateurs qualifiés et aux conducteurs de travaux chargés
+du suivi des chantiers de ravalement ou de construction neuve.
+
+2. Préparation du support
+
+2.1 Diagnostic préalable
+
+Avant tout démarrage d'application, réaliser un diagnostic du support :
+
+- Vérifier la planéité : tolérance de 5 mm sous la règle de 2 m pour les
+  supports destinés à recevoir un enduit mince (< 10 mm).
+- Contrôler la cohésion : sondage au marteau, test d'adhérence à la croix (pull-off)
+  avec valeur minimale de 0,3 MPa pour les supports anciens.
+- Évaluer la porosité : test à l'eau (absorption après 60 s), critère visuel
+  selon la classification NF EN 1996.
+- Vérifier l'absence de sels solubles : test de conductivité sur carotte prélevée
+  en surface (seuil d'alarme 1 000 µS/cm).
+
+2.2 Travaux préparatoires
+
+Selon l'état du support, prévoir les travaux préparatoires suivants :
+
+- Nettoyage haute pression (100–150 bar) pour éliminer les mousses, lichens et
+  anciens revêtements cloqués ou décarbonatés.
+- Traitement hydrofuge de pénétration sur les supports présentant une absorption
+  capillaire élevée (> 0,5 kg/m²·min^0,5).
+- Application d'un primaire d'accrochage sur les supports lisses (béton banché,
+  béton cellulaire) ou fortement absorbants.
+- Remplacement des joints de maçonnerie dégradés (effrittés, creux > 5 mm)
+  par rejointoiement au mortier bâtard dosé à 350 kg/m³ de ciment CEM II.
+
+3. Choix du système d'enduit
+
+3.1 Enduit traditionnel monocouche
+
+Recommandé pour les supports homogènes et réguliers. Épaisseur nominale 15 mm
+(10 à 20 mm admissible). Rapport eau/ciment ≤ 0,65.
+
+Conditions d'application :
+- Température support et ambiance : +5 °C à +30 °C
+- Hygrométrie relative : 40–80 %
+- Éviter les applications en plein soleil (> 25 °C surface) ou par vent fort
+  (> 5 m/s) sans protection provisoire.
+
+3.2 Enduit en deux couches (gobetis + corps d'enduit)
+
+À prescrire sur les supports hétérogènes (assemblage de matériaux différents)
+ou fortement absorbants. Le gobetis (épaisseur 4–6 mm) assure l'homogénéisation
+de l'absorption avant l'application du corps d'enduit.
+
+Délai minimum entre gobetis et corps d'enduit : 24 h (support ressuée,
+non encore sec).
+
+3.3 Enduit de finition
+
+Le choix de la finition influe directement sur l'imperméabilité et l'aspect :
+
+- Taloché fin : perméabilité à l'eau W < 0,5 kg/m²·h^0,5 (NF EN 1015-18)
+- Gratté / écrasé : W < 1,0 kg/m²·h^0,5
+- Projeté rustique (tyrolien) : à réserver aux zones peu exposées aux pluies
+  battantes (classe d'exposition < E4)
+
+4. Application
+
+4.1 Projection mécanique
+
+La projection mécanique à la pompe à vis ou à vis hélicoïdale est préconisée
+pour les chantiers de surface > 200 m². Régler le débit pour obtenir un jet
+homogène sans projection de granulats séparée.
+
+Épaisseur par couche : 8–15 mm selon la formulation. Ne pas dépasser 20 mm en
+une seule passe pour éviter le fluage et le faïençage.
+
+4.2 Application manuelle
+
+Pour les petites surfaces ou les zones de reprise, l'application à la truelle
+est admise. Utiliser un peigne à denture de 10 mm pour homogénéiser l'épaisseur
+avant talochage.
+
+4.3 Traitement des angles et des tableaux
+
+Les angles rentrants et sortants doivent être renforcés par une bande de
+treillis en fibre de verre d'armature (maille 10 × 10 mm, résistance à la
+traction ≥ 50 N/5 cm) noyée dans la première couche.
+
+Les tableaux de baies de largeur > 60 cm reçoivent un arrêt de rive en
+profilé PVC ou aluminium fileté, fixé mécaniquement avant application.
+
+5. Contrôle qualité en cours de travaux
+
+5.1 Contrôles visuels journaliers
+
+- Absence de cloquage, faïençage ou décollement dans les 24 h suivant l'application
+- Planéité : règle de 2 m (tolérance 5 mm)
+- Respect des épaisseurs par sondage destructif ou mesure par jauge magnétique
+  sur treillis métallique
+
+5.2 Tests d'adhérence à la réception
+
+Réaliser au minimum 1 essai pull-off pour 500 m² de surface enduite, avec un
+minimum de 3 essais par chantier. Valeur minimale requise :
+
+- Enduit neuf sur support sain : ≥ 0,5 MPa
+- Enduit sur support ancien traité : ≥ 0,3 MPa
+
+6. Points de vigilance et pathologies courantes
+
+6.1 Faïençage superficiel
+
+Origine principale : séchage trop rapide (vent, chaleur, fort ensoleillement)
+ou dosage en ciment trop élevé (> 400 kg/m³).
+Prévention : protection solaire provisoire (bâches), humidification légère
+du support avant application en période chaude.
+
+6.2 Efflorescences
+
+Origine : migration de sels solubles depuis le support ou l'eau de gâchage.
+Prévention : utiliser de l'eau de gâchage dont la conductivité est < 800 µS/cm
+et éviter l'application par temps de pluie.
+Traitement curatif : brossage à sec après carbonatation complète (≥ 28 jours),
+application d'un neutralisant de sels puis d'un consolidant silicaté.
+
+6.3 Décollement en plaque
+
+Cause la plus fréquente : mauvaise préparation du support (laitance, huile
+de décoffrage, ancienne peinture non éliminée).
+Prévention : respect impératif des étapes de diagnostic et de traitement
+décrites en section 2.

@@ -6,6 +6,7 @@
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 import { CertificationRecord } from '@/core/platform/certification.manager';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Public narrative for external communication
@@ -345,7 +346,7 @@ export function runNarrativeEngine(
   const startTime = Date.now();
 
   try {
-    console.log('[NarrativeEngine] Generating public narrative');
+    log('[NarrativeEngine] Generating public narrative');
 
     // Extract data from context
     // Official grade source: finalProfessionalGrade (from trust capping), fall back to certification.grade
@@ -402,7 +403,7 @@ export function runNarrativeEngine(
       },
     };
 
-    console.log('[NarrativeEngine] Narrative generated successfully', {
+    log('[NarrativeEngine] Narrative generated successfully', {
       grade,
       riskLevel,
       transparencyLevel,

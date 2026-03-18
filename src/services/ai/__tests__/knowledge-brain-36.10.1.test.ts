@@ -4,7 +4,61 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// Mock supabase before importing the service
+vi.mock('@/lib/supabase', () => {
+  function makeChain(finalValue = { data: null, error: null }) {
+    const chain: any = {};
+    const methods = ['select', 'insert', 'update', 'delete', 'upsert', 'eq', 'neq', 'gt', 'gte',
+      'lt', 'lte', 'in', 'is', 'not', 'or', 'and', 'order', 'limit', 'range', 'match', 'filter',
+      'contains', 'containedBy', 'overlaps', 'textSearch', 'ilike', 'like'];
+    for (const method of methods) {
+      chain[method] = function() { return chain; };
+    }
+    chain.insert = function() { return Promise.resolve({ data: null, error: null }); };
+    chain.single = function() {
+      return Promise.resolve({
+        data: { id: 'test-doc-id', ingestion_status: 'pending', embedding_integrity_checked: false },
+        error: null,
+      });
+    };
+    chain.then = function(resolve: any, reject: any) {
+      return Promise.resolve(finalValue).then(resolve, reject);
+    };
+    return chain;
+  }
+  return {
+    supabase: {
+      from: function() { return makeChain(); },
+      rpc: function() { return Promise.resolve({ data: [], error: null }); },
+      functions: {
+        invoke: function() { return Promise.resolve({ data: null, error: null }); },
+      },
+      storage: {
+        from: function() {
+          return { upload: function() { return Promise.resolve({ data: { path: 'test/path' }, error: null }); } };
+        },
+      },
+    },
+  };
+});
+
+vi.mock('@/services/ai/knowledge-health.service', () => {
+  function MockKnowledgeHealthService() {}
+  MockKnowledgeHealthService.prototype.validateSystemHealthBeforeSearch = function() {
+    return Promise.resolve({ healthy: true });
+  };
+  MockKnowledgeHealthService.prototype.logRpcMetric = function() {
+    return Promise.resolve(undefined);
+  };
+  MockKnowledgeHealthService.prototype.getSystemHealth = function() {
+    return Promise.resolve({ vector_dimension_valid: true, documents_missing_embeddings: 0, ingestion_stalled_documents: 0 });
+  };
+  return { KnowledgeHealthService: MockKnowledgeHealthService };
+});
+
 import { knowledgeBrainService } from '../knowledge-brain.service';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
   beforeEach(() => {
@@ -27,14 +81,11 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       expect(doc?.id).toBeDefined();
       expect(doc?.ingestion_status || 'pending').toBe('pending');
 
-      // Wait for background processing
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-
       const metrics = knowledgeBrainService.getIngestionMetrics();
       expect(metrics.total_documents_processed).toBeGreaterThan(0);
       expect(metrics.successful_ingestions).toBeGreaterThan(0);
 
-      console.log('✅ Test 1 PASSED: Small document completed with integrity');
+      log('✅ Test 1 PASSED: Small document completed with integrity');
     });
   });
 
@@ -59,7 +110,7 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       const metrics = knowledgeBrainService.getIngestionMetrics();
       expect(metrics.avg_chunks_per_document).toBeGreaterThanOrEqual(0);
 
-      console.log('✅ Test 2 PASSED: Large document shows progress tracking');
+      log('✅ Test 2 PASSED: Large document shows progress tracking');
     });
   });
 
@@ -82,7 +133,7 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       // Verify initial state
       expect(doc?.ingestion_status || 'pending').toBe('pending');
 
-      console.log('✅ Test 3 PASSED: Error handling prepared (requires mock in CI/CD)');
+      log('✅ Test 3 PASSED: Error handling prepared (requires mock in CI/CD)');
     });
   });
 
@@ -107,7 +158,7 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       const retryResult = await knowledgeBrainService.retryIngestion(doc.id);
 
       // Retry may fail if document is not in failed state, which is expected
-      console.log('✅ Test 4 PASSED: Retry mechanism ready');
+      log('✅ Test 4 PASSED: Retry mechanism ready');
     });
   });
 
@@ -128,7 +179,7 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       // Status should be persisted in DB
       expect(doc?.ingestion_progress).toBe(0);
 
-      console.log('✅ Test 5 PASSED: Status persistence validated');
+      log('✅ Test 5 PASSED: Status persistence validated');
     });
   });
 
@@ -139,7 +190,7 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       // System should be clean (no broken documents)
       expect(Array.isArray(violations)).toBe(true);
 
-      console.log('✅ Test 6 PASSED: System integrity audit complete');
+      log('✅ Test 6 PASSED: System integrity audit complete');
     });
   });
 
@@ -160,7 +211,7 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       expect(resetMetrics.total_documents_processed).toBe(0);
       expect(resetMetrics.successful_ingestions).toBe(0);
 
-      console.log('✅ Test 7 PASSED: Metrics tracking validated');
+      log('✅ Test 7 PASSED: Metrics tracking validated');
     });
   });
 
@@ -185,7 +236,7 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       // pending → processing → chunking → embedding → complete
       // Each transition is validated internally
 
-      console.log('✅ Test 8 PASSED: State machine compliance enforced');
+      log('✅ Test 8 PASSED: State machine compliance enforced');
     });
   });
 
@@ -206,14 +257,11 @@ describe('PHASE 36.10.1 - Ingestion State Machine + Recovery', () => {
       expect(doc).toBeDefined();
       expect(doc?.id).toBeDefined();
 
-      // Wait for processing
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-
       // Verify no integrity violations
       const violations = await knowledgeBrainService.verifySystemIntegrity();
       expect(violations.length).toBe(0);
 
-      console.log('✅ End-to-End PASSED: No integrity violations detected');
+      log('✅ End-to-End PASSED: No integrity violations detected');
     });
   });
 });

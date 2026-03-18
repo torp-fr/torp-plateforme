@@ -6,6 +6,7 @@
  */
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Scoring result structure with weighted scoring
@@ -59,7 +60,7 @@ export async function runScoringEngine(
   const startTime = Date.now();
 
   try {
-    console.log('[ScoringEngine] Starting project scoring with type-classified rules');
+    log('[ScoringEngine] Starting project scoring with type-classified rules');
 
     // Extract metrics from execution context
     const obligationCount = executionContext.rules?.obligationCount || 0;
@@ -168,7 +169,7 @@ export async function runScoringEngine(
       },
     };
 
-    console.log('[ScoringEngine] Project scoring completed', {
+    log('[ScoringEngine] Project scoring completed', {
       globalScore: result.globalScore,
       riskLevel: result.riskLevel,
       obligationCount,

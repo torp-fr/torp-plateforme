@@ -90,7 +90,7 @@ export function AnalyseCompletetudeConformite({
                 </div>
                 <ul className="space-y-2">
                   {scoreCompletude.elementsManquants.map((element, index) => (
-                    <li key={index} className="flex items-start gap-2 text-sm">
+                    <li key={`missing-${index}`} className="flex items-start gap-2 text-sm">
                       <XCircle className="w-4 h-4 text-warning mt-0.5 flex-shrink-0" />
                       <span className="text-muted-foreground">{element}</span>
                     </li>
@@ -109,7 +109,7 @@ export function AnalyseCompletetudeConformite({
                 </div>
                 <ul className="space-y-2">
                   {scoreCompletude.incoherences.map((incoherence, index) => (
-                    <li key={index} className="flex items-start gap-2 text-sm">
+                    <li key={`incoherent-${index}`} className="flex items-start gap-2 text-sm">
                       <AlertCircle className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" />
                       <span className="text-muted-foreground">{incoherence}</span>
                     </li>
@@ -128,7 +128,7 @@ export function AnalyseCompletetudeConformite({
                 </div>
                 <ul className="space-y-2">
                   {scoreCompletude.risquesTechniques.map((risque, index) => (
-                    <li key={index} className="flex items-start gap-2 text-sm">
+                    <li key={`risk-${index}`} className="flex items-start gap-2 text-sm">
                       <AlertTriangle className="w-4 h-4 text-warning mt-0.5 flex-shrink-0" />
                       <span className="text-muted-foreground">{risque}</span>
                     </li>
@@ -260,7 +260,7 @@ export function AnalyseCompletetudeConformite({
                 </div>
                 <ul className="space-y-2">
                   {scoreConformite.defauts.map((defaut, index) => (
-                    <li key={index} className="flex items-start gap-2 text-sm">
+                    <li key={`alert-${index}`} className="flex items-start gap-2 text-sm">
                       <XCircle className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" />
                       <span className="text-muted-foreground">{defaut}</span>
                     </li>

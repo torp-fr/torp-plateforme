@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * AI Telemetry Service
  * Lightweight observability for AI operations (structured JSON logging)
@@ -96,8 +98,8 @@ class AITelemetryService {
     const level = metric.success ? 'INFO' : 'WARN';
     const summary = this.buildSummary(metric);
 
-    // Structured JSON log
-    const log = {
+    // Structured JSON log — named `entry` to avoid shadowing the imported `log` function
+    const entry = {
       timestamp: new Date().toISOString(),
       tag: this.TAG,
       level,
@@ -112,7 +114,7 @@ class AITelemetryService {
     };
 
     // Output as structured JSON (for parsing by logs infrastructure)
-    console.log(JSON.stringify(log));
+    log(JSON.stringify(entry));
   }
 
   /**

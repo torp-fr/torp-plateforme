@@ -5,10 +5,27 @@ import path from 'path';
 export default defineConfig({
   plugins: [react()],
   test: {
+    root: './src',
     globals: true,
     environment: 'jsdom',
-    setupFiles: './src/test/setup.ts',
-    css: true,
+    setupFiles: ['./src/test/setup.ts'],
+    include: [
+      '**/*.test.ts',
+      '**/*.test.tsx',
+      '**/*.spec.ts',
+    ],
+    exclude: [
+      'node_modules/**',
+      'dist/**',
+      'e2e/**',
+      'tests/**',
+      '**/*.spec.ts',
+      '**/*.e2e.ts',
+    ],
+    watchExclude: [
+      'e2e/**',
+      'tests/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],

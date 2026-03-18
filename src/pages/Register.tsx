@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label';
 import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft } from 'lucide-react';
-import torpLogo from '@/assets/torp-logo-red.png';
+import { BRANDING } from '@/config/branding';
 import { authService } from '@/services/api';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export default function Register() {
   const [email, setEmail] = useState('');
@@ -22,14 +23,14 @@ export default function Register() {
   const { toast } = useToast();
 
   const handleRegister = async (e: React.FormEvent) => {
-    console.log('[Register] Form submitted');
+    log('[Register] Form submitted');
     e.preventDefault();
 
     // Validation
-    console.log('[Register] Validating form:', { email, name, passwordLength: password.length });
+    log('[Register] Validating form:', { email, name, passwordLength: password.length });
 
     if (!email || !name || !password) {
-      console.log('[Register] Missing required fields');
+      log('[Register] Missing required fields');
       toast({
         title: 'Erreur',
         description: 'Veuillez remplir tous les champs obligatoires',
@@ -39,7 +40,7 @@ export default function Register() {
     }
 
     if (password !== confirmPassword) {
-      console.log('[Register] Passwords do not match');
+      log('[Register] Passwords do not match');
       toast({
         title: 'Erreur',
         description: 'Les mots de passe ne correspondent pas',
@@ -49,7 +50,7 @@ export default function Register() {
     }
 
     if (password.length < 8) {
-      console.log('[Register] Password too short');
+      log('[Register] Password too short');
       toast({
         title: 'Erreur',
         description: 'Le mot de passe doit contenir au moins 8 caractères',
@@ -58,12 +59,12 @@ export default function Register() {
       return;
     }
 
-    console.log('[Register] Validation passed, calling authService.register()');
+    log('[Register] Validation passed, calling authService.register()');
     setIsLoading(true);
 
     try {
       // Register with B2B as default (user can change in settings)
-      console.log('[Register] Starting registration...');
+      log('[Register] Starting registration...');
       const response = await authService.register({
         email,
         password,
@@ -72,7 +73,7 @@ export default function Register() {
         phone: phone || undefined,
       });
 
-      console.log('[Register] Registration successful:', response.user.email);
+      log('[Register] Registration successful:', response.user.email);
       setUser(response.user);
 
       toast({
@@ -81,7 +82,7 @@ export default function Register() {
       });
 
       // Redirect to dashboard (they can set role in settings)
-      console.log('[Register] Redirecting to dashboard');
+      log('[Register] Redirecting to dashboard');
       navigate('/dashboard');
     } catch (error) {
       console.error('[Register] Error:', error);
@@ -108,7 +109,7 @@ export default function Register() {
         <Card className="backdrop-blur-sm bg-white/95 shadow-strong">
           <CardHeader className="text-center">
             <div className="flex items-center justify-center gap-3 mb-4">
-              <img src={torpLogo} alt="TORP" className="h-12 w-auto" />
+              <img src={BRANDING.logoPrimary} alt="TORP" className="h-12 w-auto" />
               <div>
                 <CardTitle className="text-2xl font-bold text-primary">TORP</CardTitle>
                 <CardDescription>Créer votre compte</CardDescription>
@@ -184,7 +185,7 @@ export default function Register() {
                 className="w-full"
                 disabled={isLoading}
                 onClick={(e) => {
-                  console.log('[Register] Button clicked:', { isLoading, email, name, passwordLength: password.length });
+                  log('[Register] Button clicked:', { isLoading, email, name, passwordLength: password.length });
                   if (isLoading) {
                     e.preventDefault();
                   }

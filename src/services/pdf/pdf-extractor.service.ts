@@ -3,11 +3,11 @@
  * Extracts text content from PDF files using PDF.js
  */
 
-import * as pdfjsLib from 'pdfjs-dist';
+import { getPdfJs, initPdfJs } from '@/lib/pdf';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
-// Set worker source - use local worker from public directory
-// In production (Vite), files in /public are served at root
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+// Initialize PDF.js with centralized configuration
+initPdfJs();
 
 export interface PDFExtractionResult {
   text: string;
@@ -24,6 +24,7 @@ export class PDFExtractorService {
       const arrayBuffer = await file.arrayBuffer();
 
       // Load PDF document
+      const pdfjsLib = getPdfJs();
       const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
       const pdf = await loadingTask.promise;
 
@@ -49,7 +50,7 @@ export class PDFExtractorService {
         throw new Error('No text content found in PDF');
       }
 
-      console.log(`[PDF] Extracted ${fullText.length} characters from ${numPages} pages`);
+      log(`[PDF] Extracted ${fullText.length} characters from ${numPages} pages`);
 
       return fullText;
     } catch (error) {

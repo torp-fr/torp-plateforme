@@ -12,6 +12,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { env } from '@/config/env';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 // Modèles Claude valides avec ordre de priorité
 export const CLAUDE_MODELS = {
@@ -83,7 +84,7 @@ export class ClaudeService {
     for (const currentModel of modelsToTry) {
       try {
         if (env.app.debugMode) {
-          console.log(`[Claude] Trying model: ${currentModel}`);
+          log(`[Claude] Trying model: ${currentModel}`);
         }
 
         const message = await this.client.messages.create({
@@ -107,7 +108,7 @@ export class ClaudeService {
 
         // If it's a model not found error (404), try next model
         if (errorMessage.includes('404') || errorMessage.includes('model') || errorMessage.includes('not found')) {
-          console.warn(`[Claude] Model ${currentModel} not available, trying fallback...`);
+          warn(`[Claude] Model ${currentModel} not available, trying fallback...`);
           continue;
         }
 
@@ -152,7 +153,7 @@ export class ClaudeService {
     for (const currentModel of modelsToTry) {
       try {
         if (env.app.debugMode) {
-          console.log(`[Claude] Trying model for JSON: ${currentModel}`);
+          log(`[Claude] Trying model for JSON: ${currentModel}`);
         }
 
         const message = await this.client.messages.create({
@@ -191,7 +192,7 @@ export class ClaudeService {
           return JSON.parse(cleanedContent) as T;
         } catch (parseError) {
           // Try to fix common JSON errors
-          console.warn('[Claude] Initial JSON parse failed, attempting cleanup...', parseError);
+          warn('[Claude] Initial JSON parse failed, attempting cleanup...', parseError);
 
           // Remove trailing commas (common issue)
           cleanedContent = cleanedContent.replace(/,(\s*[}\]])/g, '$1');
@@ -205,7 +206,7 @@ export class ClaudeService {
 
         // If it's a model not found error (404), try next model
         if (errorMessage.includes('404') || errorMessage.includes('model') || errorMessage.includes('not found')) {
-          console.warn(`[Claude] Model ${currentModel} not available for JSON, trying fallback...`);
+          warn(`[Claude] Model ${currentModel} not available for JSON, trying fallback...`);
           continue;
         }
 

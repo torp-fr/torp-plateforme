@@ -1,0 +1,54 @@
+GUIDE DE CONSTRUCTION - OUVRAGES EN BÉTON ARMÉ
+
+Article 1: Dispositions Générales
+
+1.1 Scope
+Ce guide s'applique à la conception et l'exécution des ouvrages en béton armé conformément aux DTU et normes applicables.
+
+1.2 Compétences requises
+Les travaux doivent être exécutés par des entreprises de bâtiment dûment qualifiées et disposant des certifications ISO 9001.
+
+Article 2: Préparation des Fondations
+
+2.1 Conditions géotechniques
+Une étude de sol doit être réalisée avant tout travail de fondation. La portance du sol doit être évaluée conformément à la norme NF P 94-262.
+
+2.2 Ancrage des armatures
+Les armatures doivent être ancrées dans le béton avec une longueur minimale définie par les calculs de dimensionnement.
+
+Article 3: Qualité des Matériaux
+
+3.1 Béton
+- Classe minimum: C25/30 pour structures courantes
+- Affaissement: 120 ± 20 mm
+- Résistance en compression: 25 MPa à 28 jours
+
+3.2 Acier
+- Nuance: Fe500B conformément à la norme NF A 35-016
+- Allongement à la rupture: minimum 5%
+
+Article 4: Exécution
+
+4.1 Mise en place du béton
+Le béton doit être mis en place dans les 90 minutes suivant sa fabrication. Une vibration appropriée est essentielle pour éviter les défauts.
+
+4.2 Cure du béton
+Une humidification régulière pendant au moins 7 jours est requise pour assurer une hydratation correcte du ciment.
+
+Article 5: Contrôles et Essais
+
+5.1 Essais de conformité
+- Essai de compression sur carottes
+- Auscultation sonique des voiles
+- Essai d'étanchéité des parements
+
+5.2 Documentation
+Tous les résultats d'essais doivent être conservés pour une période minimale de 5 ans.
+
+Article 6: Garantie et Responsabilité
+
+6.1 Garantie décennale
+L'entrepreneur garantit l'ouvrage pour une période de 10 ans.
+
+6.2 Assurance de responsabilité civile
+Une couverture d'assurance décennale est obligatoire.

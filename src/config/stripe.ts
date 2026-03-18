@@ -9,6 +9,7 @@
  */
 
 import { env } from './env';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface StripeConfig {
   /** Si Stripe est activé */
@@ -197,13 +198,13 @@ export const formatPrice = (amount: number, currency: string = 'eur'): string =>
  */
 export const createCheckoutSession = async (priceId: string, userId: string): Promise<string | null> => {
   if (!isStripeEnabled()) {
-    console.warn('[Stripe] Stripe is not enabled. Enable it by setting VITE_STRIPE_ENABLED=true');
+    warn('[Stripe] Stripe is not enabled. Enable it by setting VITE_STRIPE_ENABLED=true');
     return null;
   }
 
   // TODO: Implémenter l'appel API vers votre backend
   // Le backend créera la session Stripe et retournera l'URL de checkout
-  console.log('[Stripe] Would create checkout session for:', { priceId, userId });
+  log('[Stripe] Would create checkout session for:', { priceId, userId });
 
   return null;
 };

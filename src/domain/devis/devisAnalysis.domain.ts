@@ -31,6 +31,7 @@ import type {
 
 import { torpAnalyzerService } from '@/services/ai/torp-analyzer.service';
 import { knowledgeBrainService } from '@/services/ai/knowledge-brain.service';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 import type {
   ProjectContextEmbeddings,
@@ -158,7 +159,7 @@ export class DevisAnalysisDomain {
     const startTime = Date.now();
     const errors: Array<{ stage: string; message: string; severity: 'error' | 'warning' }> = [];
 
-    console.log(`[DOMAIN] Starting devis analysis for ${input.devisId}...`);
+    log(`[DOMAIN] Starting devis analysis for ${input.devisId}...`);
 
     // --------
     // STEP 1: Extract structured data (PROPOSITION)
@@ -167,14 +168,14 @@ export class DevisAnalysisDomain {
     let proposalEmbeddings: DevisProposalVector | null = null;
 
     try {
-      console.log(`[DOMAIN] STEP 1 - Extracting proposal data...`);
+      log(`[DOMAIN] STEP 1 - Extracting proposal data...`);
       extractedData = await torpAnalyzerService.extractDevisDataDirect(input.devisText);
 
       if (extractedData) {
         proposalEmbeddings = devisProposalEmbeddingsService.vectorizeDevisProposal(extractedData);
-        console.log(`[DOMAIN] ✅ Proposal extracted and vectorized`);
+        log(`[DOMAIN] ✅ Proposal extracted and vectorized`);
       } else {
-        console.warn(`[DOMAIN] ⚠️ No extracted data from devis`);
+        warn(`[DOMAIN] ⚠️ No extracted data from devis`);
         errors.push({
           stage: 'extraction',
           message: 'Could not extract structured data from devis text',
@@ -197,7 +198,7 @@ export class DevisAnalysisDomain {
 
     if (input.projectMetadata?.nom || input.projectMetadata?.typeTravaux) {
       try {
-        console.log(`[DOMAIN] STEP 2 - Vectorizing project context (DEMAND)...`);
+        log(`[DOMAIN] STEP 2 - Vectorizing project context (DEMAND)...`);
 
         const projectContextData = {
           name: input.projectMetadata?.nom || '',
@@ -215,7 +216,7 @@ export class DevisAnalysisDomain {
         };
 
         demandEmbeddings = projectContextEmbeddingsService.vectorizeProjectContext(projectContextData);
-        console.log(`[DOMAIN] ✅ Project context vectorized (DEMAND)`);
+        log(`[DOMAIN] ✅ Project context vectorized (DEMAND)`);
       } catch (error) {
         console.error(`[DOMAIN] ⚠️ Demand vectorization failed:`, error);
         errors.push({
@@ -225,7 +226,7 @@ export class DevisAnalysisDomain {
         });
       }
     } else {
-      console.log(`[DOMAIN] ⓘ No project metadata provided, skipping DEMAND vectorization`);
+      log(`[DOMAIN] ⓘ No project metadata provided, skipping DEMAND vectorization`);
     }
 
     // --------
@@ -235,12 +236,12 @@ export class DevisAnalysisDomain {
 
     if (demandEmbeddings && proposalEmbeddings) {
       try {
-        console.log(`[DOMAIN] STEP 3 - Comparing DEMAND vs PROPOSITION...`);
+        log(`[DOMAIN] STEP 3 - Comparing DEMAND vs PROPOSITION...`);
         demandVsProposalComparison = devisProposalEmbeddingsService.compareVectors(
           demandEmbeddings,
           proposalEmbeddings
         );
-        console.log(`[DOMAIN] ✅ Comparison complete (Alignment: ${demandVsProposalComparison.alignmentScore}/100)`);
+        log(`[DOMAIN] ✅ Comparison complete (Alignment: ${demandVsProposalComparison.alignmentScore}/100)`);
       } catch (error) {
         console.error(`[DOMAIN] ⚠️ Comparison failed:`, error);
         errors.push({
@@ -257,7 +258,7 @@ export class DevisAnalysisDomain {
     let torAnalysisResult: TorpAnalysisResult;
 
     try {
-      console.log(`[DOMAIN] STEP 4 - Running TORP analysis...`);
+      log(`[DOMAIN] STEP 4 - Running TORP analysis...`);
 
       const enrichedMetadata = {
         ...input.projectMetadata,
@@ -266,7 +267,7 @@ export class DevisAnalysisDomain {
 
       torAnalysisResult = await torpAnalyzerService.analyzeDevis(input.devisText, enrichedMetadata as any);
 
-      console.log(`[DOMAIN] ✅ TORP analysis complete (Score: ${torAnalysisResult.scoreGlobal}/1000 - ${torAnalysisResult.grade})`);
+      log(`[DOMAIN] ✅ TORP analysis complete (Score: ${torAnalysisResult.scoreGlobal}/1000 - ${torAnalysisResult.grade})`);
     } catch (error) {
       console.error(`[DOMAIN] ❌ TORP analysis failed:`, error);
       errors.push({
@@ -284,7 +285,7 @@ export class DevisAnalysisDomain {
 
     if (input.analyzeOptions?.includeKnowledgeEnrichment !== false) {
       try {
-        console.log(`[DOMAIN] STEP 5 - Enriching with knowledge brain...`);
+        log(`[DOMAIN] STEP 5 - Enriching with knowledge brain...`);
 
         // Search for similar documents in knowledge brain
         const searchQuery = `${input.projectMetadata?.typeTravaux || ''} ${input.projectMetadata?.description || ''}`.trim();
@@ -311,10 +312,10 @@ export class DevisAnalysisDomain {
             ],
           };
 
-          console.log(`[DOMAIN] ✅ Knowledge enrichment complete (${similarDocs.length} documents trouvés)`);
+          log(`[DOMAIN] ✅ Knowledge enrichment complete (${similarDocs.length} documents trouvés)`);
         }
       } catch (error) {
-        console.warn(`[DOMAIN] ⚠️ Knowledge enrichment failed:`, error);
+        warn(`[DOMAIN] ⚠️ Knowledge enrichment failed:`, error);
         errors.push({
           stage: 'knowledge_enrichment',
           message: error instanceof Error ? error.message : 'Unknown enrichment error',
@@ -340,7 +341,7 @@ export class DevisAnalysisDomain {
 
     const dureeAnalyse = Math.round((Date.now() - startTime) / 1000);
 
-    console.log(`[DOMAIN] ✅ Analysis complete (${dureeAnalyse}s total, ${errors.length} warning(s))`);
+    log(`[DOMAIN] ✅ Analysis complete (${dureeAnalyse}s total, ${errors.length} warning(s))`);
 
     // --------
     // Return structured result
@@ -379,7 +380,7 @@ export class DevisAnalysisDomain {
    */
   static async extractDevisDataOnly(devisText: string): Promise<ExtractedDevisData | null> {
     try {
-      console.log(`[DOMAIN] Extracting devis data only...`);
+      log(`[DOMAIN] Extracting devis data only...`);
       return await torpAnalyzerService.extractDevisDataDirect(devisText);
     } catch (error) {
       console.error(`[DOMAIN] Extraction failed:`, error);

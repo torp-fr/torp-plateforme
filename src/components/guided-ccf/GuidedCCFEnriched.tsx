@@ -19,6 +19,7 @@ import { AlertCircle, Loader, CheckCircle2, MapPin, Zap } from 'lucide-react';
 import { enrichClientData } from '@/services/enrichmentService';
 import type { ClientInfo, EnrichedClientData } from '@/types/enrichment';
 import type { CCFData } from './GuidedCCF';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 interface GuidedCCFEnrichedProps {
   onSubmit: (data: CCFData & { enrichedData?: EnrichedClientData }) => void;
@@ -133,11 +134,11 @@ export function GuidedCCFEnriched({
       if (result.success && result.data) {
         setEnrichedData(result.data);
         setEnrichmentStatus('completed');
-        console.log('✅ Client data enriched:', result.data);
+        log('✅ Client data enriched:', result.data);
       } else {
         setEnrichmentStatus('error');
         setEnrichmentError(result.errors?.[0] || 'Enrichment failed');
-        console.warn('⚠️ Enrichment failed:', result.errors);
+        warn('⚠️ Enrichment failed:', result.errors);
       }
     } catch (error) {
       setEnrichmentStatus('error');
