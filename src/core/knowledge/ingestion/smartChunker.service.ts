@@ -67,6 +67,43 @@ function makeChunk(content: string, meta: Record<string, unknown>): Chunk {
 }
 
 // ---------------------------------------------------------------------------
+// Strategy: size-based hard split (fallback for unstructured text)
+// ---------------------------------------------------------------------------
+
+const MAX_CHARS = MAX_TOKENS * 4; // 1 token ≈ 4 characters
+
+/**
+ * Split text into fixed-size chunks, attempting to break on sentence
+ * boundaries when possible. Used as a last-resort fallback for text that
+ * has no structural markers and no paragraph breaks.
+ */
+function splitBySize(text: string, strategy: string): Chunk[] {
+  const chunks: Chunk[] = [];
+  let pos = 0;
+
+  while (pos < text.length) {
+    let end = Math.min(pos + MAX_CHARS, text.length);
+
+    // Prefer a sentence boundary within the last 20% of the window
+    if (end < text.length) {
+      const searchFrom = pos + Math.floor(MAX_CHARS * 0.8);
+      const lastPeriod = text.lastIndexOf('.', end);
+      if (lastPeriod >= searchFrom) {
+        end = lastPeriod + 1;
+      }
+    }
+
+    const content = text.slice(pos, end).trim();
+    if (content.length > 0) {
+      chunks.push(makeChunk(content, { strategy, splitMode: 'size' }));
+    }
+    pos = end;
+  }
+
+  return chunks;
+}
+
+// ---------------------------------------------------------------------------
 // Strategy: paragraph-based with overlap
 // Used by: jurisprudence, generic (and as sub-chunker fallback)
 // ---------------------------------------------------------------------------
@@ -74,6 +111,8 @@ function makeChunk(content: string, meta: Record<string, unknown>): Chunk {
 /**
  * Split text into paragraph-bounded chunks, adding sentence-level overlap
  * between successive chunks to preserve context across boundaries.
+ * Paragraphs that individually exceed MAX_TOKENS are size-split so that
+ * unstructured documents (no double-newlines) always produce multiple chunks.
  */
 function chunkByParagraphs(
   text: string,
@@ -90,6 +129,18 @@ function chunkByParagraphs(
 
   for (const para of paragraphs) {
     const paraTokens = estimateTokens(para);
+
+    // Paragraph is too large on its own — size-split it directly
+    if (paraTokens >= MAX_TOKENS) {
+      // Flush any accumulated content first
+      if (current.trim().length > 0) {
+        chunks.push(makeChunk(current, { strategy, splitMode: 'paragraph' }));
+        current = '';
+        currentTokens = 0;
+      }
+      chunks.push(...splitBySize(para, strategy));
+      continue;
+    }
 
     if (currentTokens + paraTokens > MAX_TOKENS && current.length > 0) {
       // Flush current chunk
@@ -453,6 +504,21 @@ export function chunkSmart(text: string, documentType: DocumentType): Chunk[] {
 
   // Drop empty chunks that can appear when sections have no body text
   chunks = chunks.filter((c) => c.content.length > 0);
+
+  // Size-guard: any chunk still over MAX_TOKENS gets size-split.
+  // This covers structural strategies that produce a single massive section
+  // (e.g. regulation with no article markers, single-block OCR output).
+  chunks = chunks.flatMap((c) =>
+    c.tokenCount > MAX_TOKENS ? splitBySize(c.content, documentType) : [c]
+  );
+
+  // Single-chunk fallback: if a document larger than 2000 chars produced only
+  // 1 chunk (e.g. regulation with no article headers, all-prose text fitting
+  // exactly within MAX_TOKENS), force a size-based split on the original text.
+  // Documents ≤ 2000 chars legitimately fit in a single chunk.
+  if (chunks.length === 1 && text.length > 2000) {
+    chunks = splitBySize(text, documentType);
+  }
 
   const avgTokens =
     chunks.length > 0

@@ -34,6 +34,9 @@ const KNOWLEDGE_STORAGE_BUCKET = 'documents';
 // =======================================================
 
 export async function runKnowledgeIngestion(documentId: string) {
+  // PRODUCTION PROBE — search for this tag in Vercel / browser DevTools console.
+  // If absent after upload, the wrong pipeline is executing.
+  console.log('[INGESTION_PIPELINE_V2]', { documentId, pipeline: 'knowledgeStepRunner', ts: new Date().toISOString() });
   log(`[INGESTION] Starting knowledge ingestion for document ${documentId}`);
 
   try {
@@ -274,12 +277,42 @@ async function processDocument(doc: any) {
     const docType = classifyDocument(sanitized);
     log(`[PROCESS] Document type: ${docType}`);
 
-    const chunks = chunkSmart(sanitized, docType);
-    if (!chunks.length) {
-      throw new Error("No chunks generated from content");
+    const rawChunks = chunkSmart(sanitized, docType);
+
+    // Hard safety: split any chunk still exceeding 4000 characters.
+    // This is a deterministic backstop — independent of document structure
+    // or smartChunker strategy. A 4.7M-char document must never reach
+    // the embedding step as a single chunk.
+    const SAFE_MAX = 4_000;
+    const safeChunks = rawChunks.flatMap((chunk) => {
+      if (chunk.content.length <= SAFE_MAX) return [chunk];
+      const split = [];
+      for (let i = 0; i < chunk.content.length; i += SAFE_MAX) {
+        split.push({
+          ...chunk,
+          content: chunk.content.slice(i, i + SAFE_MAX),
+          metadata: { ...chunk.metadata, splitMode: 'forced' },
+        });
+      }
+      return split;
+    });
+
+    console.log('[INGESTION_PIPELINE_V2]', {
+      documentId: doc.id,
+      totalChars: sanitized.length,
+      chunks: safeChunks.length,
+    });
+
+    // Hard guarantee: a document larger than 2000 chars must never silently collapse to 1 chunk.
+    if (safeChunks.length <= 1 && sanitized.length > 2000) {
+      throw new Error('CRITICAL: chunking failed — only 1 chunk produced for large document');
     }
 
-    log(`[PROCESS] Generated ${chunks.length} chunks`);
+    if (!safeChunks.length) {
+      throw new Error('No chunks generated from content');
+    }
+
+    log(`[PROCESS] Generated ${safeChunks.length} chunks (raw: ${rawChunks.length})`);
 
     // ── Step 3: Generate embeddings ──────────────────────────────────────────
     await supabase
@@ -290,12 +323,12 @@ async function processDocument(doc: any) {
     log('[INGESTION] generating embeddings');
     console.log(`\n\n⚠️  [CRITICAL] About to call processEmbeddingsInBatches()`);
     console.log(`⚠️  [CRITICAL] documentId: ${doc.id}`);
-    console.log(`⚠️  [CRITICAL] chunks.length: ${chunks.length}`);
-    await processEmbeddingsInBatches(doc.id, chunks);
+    console.log(`⚠️  [CRITICAL] chunks.length: ${safeChunks.length}`);
+    await processEmbeddingsInBatches(doc.id, safeChunks);
     console.log(`⚠️  [CRITICAL] processEmbeddingsInBatches() completed\n\n`);
 
     // ── Step 4: Mark as completed ────────────────────────────────────────────
-    await markCompleted(doc.id, chunks.length);
+    await markCompleted(doc.id, safeChunks.length);
     log(`[PROCESS] Ingestion complete for document ${doc.id}`);
   } catch (err: any) {
     logError(`[PROCESS] Error processing document ${doc.id}:`, err.message);
