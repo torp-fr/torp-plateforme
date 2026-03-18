@@ -219,21 +219,24 @@ async function extractPdf(buffer: Buffer): Promise<string> {
   // ── OCR Fallback: If pdfjs returns empty text (scanned PDF), try Google Vision OCR ──
   if (shouldTryOCR(cleanedText)) {
     console.log("[EXTRACTION] pdfjs extraction returned empty text (scanned PDF detected)");
+
+    // Guard: skip OCR entirely if credentials are not available
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+      console.warn("[EXTRACTION] OCR disabled: missing GOOGLE_SERVICE_ACCOUNT_JSON — skipping OCR");
+      return cleanedText;
+    }
+
     console.log("[EXTRACTION] Attempting Google Cloud Vision OCR fallback...");
 
     try {
       const ocrText = await runGoogleVisionOCR(buffer, "document.pdf");
       console.log("[EXTRACTION] ✅ OCR fallback successful");
-      console.log("[EXTRACTION] pdfjs extraction length: 0");
       console.log("[EXTRACTION] OCR fallback length:", ocrText.length, "chars");
       return ocrText;
     } catch (ocrError) {
       const errorMsg = ocrError instanceof Error ? ocrError.message : String(ocrError);
-      console.error("[EXTRACTION] ❌ OCR fallback failed:", errorMsg);
-      // If OCR also fails, throw error (don't return empty string)
-      throw new Error(
-        `TEXT_EXTRACTION_FAILED: pdfjs returned empty text and OCR fallback failed: ${errorMsg}`
-      );
+      console.warn("[EXTRACTION] OCR failed, skipping OCR:", errorMsg);
+      return cleanedText;
     }
   }
 
