@@ -7,6 +7,15 @@
 import { supabase } from '@/lib/supabase';
 import { log } from '@/lib/logger';
 
+function sanitizeFileName(name: string): string {
+  return name
+    .normalize('NFD')                   // decompose accented characters
+    .replace(/[\u0300-\u036f]/g, '')    // strip combining diacritics (é → e)
+    .replace(/\s+/g, '_')              // spaces → underscores
+    .replace(/[^a-zA-Z0-9._-]/g, '')   // remove all remaining unsafe chars
+    .toLowerCase();
+}
+
 export interface UploadResult {
   id: string;
   file_path: string;
@@ -31,7 +40,8 @@ export async function uploadDocumentToStorage(
   log('[RAG:Upload] File type:', file.type);
 
   const timestamp = Date.now();
-  const storagePath = `knowledge-documents/${timestamp}-${file.name}`;
+  const safeName = sanitizeFileName(file.name);
+  const storagePath = `knowledge-documents/${timestamp}-${safeName}`;
 
   // CRITICAL: Must match KNOWLEDGE_STORAGE_BUCKET = 'documents' in knowledgeStepRunner
   const storageBucket = 'documents';
