@@ -1,21 +1,6 @@
 import "./config/loadEnv.js";
 import "./config/validateEnv.js";
 
-import fs from "fs";
-
-// ===============================
-// 📂 TEMPORARY: FILE SYSTEM DEBUG
-// ===============================
-console.log("📂 FILE SYSTEM DEBUG START");
-console.log("Current working directory:", process.cwd());
-console.log("Root directory contents:", fs.readdirSync("./"));
-console.log("Scripts exists?", fs.existsSync("./scripts"));
-if (fs.existsSync("./scripts")) {
-  console.log("Scripts directory contents:", fs.readdirSync("./scripts"));
-}
-console.log("📂 FILE SYSTEM DEBUG END");
-// ===============================
-
 import path from "path";
 import { fileURLToPath } from "url";
 import { supabase } from "./core/supabaseClient.js";
@@ -27,19 +12,6 @@ import { cleanText, removeHeaders, normalizeLineEndings } from "./processors/cle
 import { structureSections } from "./processors/structureSections.js";
 import { smartChunkText } from "./processors/smartChunker.js";
 import { generateBatchEmbeddings } from "./core/embeddingService.js";
-
-// ===============================
-// ⚠️ TEMPORARY: OBLIGATION EXTRACTION TEST
-// This import executes the extraction test on worker startup
-// Remove this import after testing is complete
-// ===============================
-try {
-  await import("./scripts/testObligationExtraction.js");
-  console.log("⚠️ TEST OBLIGATION EXTRACTION MODE ACTIVE - Test script executed");
-} catch (testError) {
-  console.warn("⚠️ TEST OBLIGATION EXTRACTION: Test import failed (non-critical)", testError.message);
-  // Continue worker execution even if test fails
-}
 
 // Google Vision credentials are handled inline in ocrService.js — no file write needed.
 const __filename = fileURLToPath(import.meta.url);

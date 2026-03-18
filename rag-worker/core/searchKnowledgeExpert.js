@@ -1,7 +1,7 @@
 import { supabase } from "./supabaseClient.js";
 import { generateSingleEmbedding } from "./embeddingService.js";
 
-const EMBEDDING_DIMENSION = 1536;
+const EMBEDDING_DIMENSION = 384;
 const DEFAULT_MATCH_COUNT = 10;
 
 async function searchKnowledgeExpert(query, options = {}) {

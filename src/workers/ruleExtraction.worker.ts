@@ -32,6 +32,7 @@ import {
 } from '@/services/categoryExtraction.service';
 import { enrichRules, type EnrichedRule } from '@/services/ruleEnrichment.service';
 import { validateRule } from '@/core/rules/ruleValidator';
+import { sanitizeUnit } from '@/core/utils/unitNormalizer';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -149,7 +150,12 @@ async function insertRules(
       domain:          rule.domain,
       rule_type:       rule.rule_type,
       description:     rule.description,
-      structured_data: rule.structured_data as Record<string, unknown>,
+      structured_data: rule.structured_data
+        ? {
+            ...(rule.structured_data as Record<string, unknown>),
+            unit: sanitizeUnit(rule.structured_data.unit ?? undefined),
+          }
+        : rule.structured_data,
       confidence_score: rule.confidence_score,
       source: rule.source_sentence.length > 500
         ? rule.source_sentence.substring(0, 497) + '…'

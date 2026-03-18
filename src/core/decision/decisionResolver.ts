@@ -29,6 +29,8 @@ export interface ResolvedDecision {
   unit?: string;
   sources: string[];
   confidence: number;
+  /** Weighted authority score averaged from source rules (1.0 = DTU, 0.5 = Eurocode). */
+  priority: number;
   tone: "advisory";
   conflict?: boolean;
   conflictReason?: string;
@@ -57,6 +59,7 @@ function resolveGroup(decisions: ProtoDecision[]): ResolvedDecision {
     tone: "advisory",
     sources: uniqueSources(decisions),
     confidence: average(decisions.map((d) => d.confidence)),
+    priority: Math.max(...decisions.map((d) => d.priority)),
     ...(first.element && { element: first.element }),
     ...(first.unit && { unit: first.unit }),
   };
@@ -119,11 +122,7 @@ export function resolveDecisions(
   return Object.values(groups)
     .filter((group) => group.length > 0)
     .map(resolveGroup)
-    .sort((a, b) =>
-      `${a.domain}${a.element ?? ""}${a.property}`.localeCompare(
-        `${b.domain}${b.element ?? ""}${b.property}`
-      )
-    );
+    .sort((a, b) => b.priority - a.priority);
 }
 
 /**

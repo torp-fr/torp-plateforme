@@ -19,7 +19,18 @@ import {
   buildDecisions,
   groupDecisionsByKey,
   type RuleRow,
+  type DecisionContext,
+  type BuildingType,
 } from '@/core/decision/decisionBuilder';
+
+function normalizeBuildingType(input?: string): BuildingType | undefined {
+  if (!input) return undefined;
+  const val = input.toLowerCase();
+  if (val.includes('erp'))      return 'erp';
+  if (val.includes('maison'))   return 'maison';
+  if (val.includes('industri')) return 'industrie';
+  return 'autre';
+}
 import {
   resolveDecisions,
   type ResolvedDecision,
@@ -81,10 +92,14 @@ interface DbRuleRow {
   id: string;
   document_id: string | null;
   domain: string | null;
+  category: string | null;
   rule_type: string;
   confidence_score: number;
+  description: string | null;
   structured_data: {
     property?: string | null;
+    property_key?: string | null;
+    property_category?: string | null;
     operator?: string | null;
     value?: number | string | null;
     unit?: string | null;
@@ -96,7 +111,9 @@ interface DbRuleRow {
 // Rule types treated as actionable numeric constraints
 // ---------------------------------------------------------------------------
 
-const ACTIONABLE_RULE_TYPES = new Set(['constraint', 'requirement']);
+// 'formula' is included so Eurocode rules (all stored as formula type) flow
+// into buildDecisions and are filtered by the Eurocode-specific semantic checks.
+const ACTIONABLE_RULE_TYPES = new Set(['constraint', 'requirement', 'formula']);
 
 // ---------------------------------------------------------------------------
 // DB fetch
@@ -106,8 +123,8 @@ async function fetchRules(domains: string[]): Promise<RuleRow[]> {
   try {
     let query = supabase
       .from('rules')
-      .select('id, document_id, domain, rule_type, confidence_score, structured_data')
-      .in('rule_type', ['constraint', 'requirement'])
+      .select('id, document_id, domain, category, rule_type, confidence_score, description, structured_data')
+      .in('rule_type', ['constraint', 'requirement', 'formula'])
       .limit(500);
 
     if (domains.length > 0) {
@@ -130,18 +147,22 @@ async function fetchRules(domains: string[]): Promise<RuleRow[]> {
     return rows.map((row): RuleRow => {
       const sd = row.structured_data ?? {};
       return {
-        property: sd.property ?? null,
-        operator: sd.operator ?? null,
-        value: sd.value ?? null,
-        unit: sd.unit ?? null,
-        element: sd.element ?? null,
-        domain: row.domain ?? null,
+        property:          sd.property          ?? null,
+        property_key:      sd.property_key      ?? null,
+        property_category: sd.property_category ?? null,
+        operator:          sd.operator          ?? null,
+        value:             sd.value             ?? null,
+        unit:              sd.unit              ?? null,
+        element:           sd.element           ?? null,
+        domain:            row.domain           ?? null,
+        category:          row.category         ?? null,
+        description:       row.description      ?? null,
         // Map DB rule_type → classification understood by buildDecisions
         classification: ACTIONABLE_RULE_TYPES.has(row.rule_type)
           ? 'actionable_numeric'
           : row.rule_type,
-        confidence_score: row.confidence_score ?? null,
-        source_document_id: row.document_id ?? null,
+        confidence_score:  row.confidence_score ?? null,
+        source_document_id: row.document_id     ?? null,
       };
     });
   } catch (err) {
@@ -213,7 +234,15 @@ export async function runRuleEngine(
     // 2. Fetch → Build → Resolve
     const rawRules = await fetchRules(domains);
 
-    const decisions = buildDecisions(rawRules);
+    // Extract building type from project data for context-aware priority weighting
+    const decisionContext: DecisionContext = {
+      buildingType: normalizeBuildingType(
+        executionContext.projectData?.buildingType
+          ?? executionContext.projectData?.building_type
+      ),
+    };
+
+    const decisions = buildDecisions(rawRules, decisionContext);
     log(`[RuleEngine] Built ${decisions.length} proto-decisions`);
 
     const grouped = groupDecisionsByKey(decisions);

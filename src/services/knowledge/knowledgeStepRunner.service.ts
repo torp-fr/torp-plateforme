@@ -173,9 +173,11 @@ async function processDocument(doc: any) {
         );
       }
 
+      const storagePath = doc.file_path.replace(/^knowledge-documents\//, '');
+      log(`[INGESTION] Downloading from storage: ${storagePath}`);
       const { data: fileBlob, error: downloadError } = await supabase.storage
         .from(KNOWLEDGE_STORAGE_BUCKET)
-        .download(doc.file_path);
+        .download(storagePath);
 
       if (downloadError) {
         log(`[INGESTION] ❌ Storage download error object:`, downloadError);

@@ -188,6 +188,18 @@ const UNIT_EQUIVALENCE: Readonly<Record<string, string>> = {
 };
 
 // ---------------------------------------------------------------------------
+// Valid canonical unit set
+//
+// Derived from the right-hand side of UNIT_EQUIVALENCE: every string that is
+// a known physical unit. Strings that survive normalization but are NOT in
+// this set are parsing artifacts ("et", "fck", "VEd", "/", …).
+// ---------------------------------------------------------------------------
+
+const VALID_CANONICAL_UNITS: ReadonlySet<string> = new Set(
+  Object.values(UNIT_EQUIVALENCE),
+);
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -215,4 +227,20 @@ export function normalizeUnit(unit?: string): string | undefined {
   const step4 = normalizeDotSeparator(step3);
 
   return UNIT_EQUIVALENCE[step4] ?? step4;
+}
+
+/**
+ * Normalize a unit and validate it against the known physical unit set.
+ *
+ * Returns the canonical unit string when valid, or null when the input is
+ * blank, unmappable, or a parsing artifact (variable names, words, symbols
+ * like "et", "fck", "VEd", "/").
+ *
+ * Use this instead of normalizeUnit() when the caller must not persist
+ * unrecognized units to the database.
+ */
+export function sanitizeUnit(unit?: string): string | null {
+  const normalized = normalizeUnit(unit);
+  if (!normalized) return null;
+  return VALID_CANONICAL_UNITS.has(normalized) ? normalized : null;
 }

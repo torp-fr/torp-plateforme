@@ -137,7 +137,7 @@ export class KnowledgeHealthService {
 
   /**
    * 📊 GET VECTOR DIMENSION DIAGNOSTIC
-   * Validates all embeddings are exactly 1536-dimensional
+   * Validates all embeddings are exactly 384-dimensional
    */
   async getVectorDiagnostics(): Promise<VectorDimensionDiagnostic> {
     try {
@@ -451,7 +451,7 @@ export class KnowledgeHealthService {
     documentId: string,
     chunkId: string,
     embeddingTimeMs: number,
-    embeddingDimension: number = 1536,
+    embeddingDimension: number = 384,
     provider: string = 'openai'
   ): Promise<string | null> {
     try {

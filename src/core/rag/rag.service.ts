@@ -65,7 +65,7 @@ export type { GroundingResult };
 
 class RagService {
   private readonly ENABLE_VECTOR_SEARCH = true;
-  private readonly EMBEDDING_DIMENSION = 1536;
+  private readonly EMBEDDING_DIMENSION = 384;
   private readonly SIMILARITY_THRESHOLD = 0.5;
   private readonly healthService = new KnowledgeHealthService();
 

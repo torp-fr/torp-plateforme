@@ -264,7 +264,7 @@ section('8. Embedding dimension validation');
 try {
   const { data: efData, error: efErr } = await supabase.functions.invoke(
     'generate-embedding',
-    { body: { inputs: ['dimension check'], model: 'text-embedding-3-small', dimensions: 1536 } }
+    { body: { inputs: ['dimension check'], model: 'text-embedding-3-small', dimensions: 384 } }
   );
 
   if (efErr) {
@@ -274,12 +274,12 @@ try {
       JSON.stringify(efData).slice(0, 120));
   } else {
     const dims = efData.embeddings[0]?.length ?? 0;
-    if (dims === 1536) {
+    if (dims === 384) {
       record('embedding.dimensions', 'ok',
-        'Edge Function returns 1536-dim vectors — matches VECTOR(1536) schema (Phase 42)');
+        'Edge Function returns 384-dim vectors — matches VECTOR(384) schema');
     } else {
       record('embedding.dimensions', 'error',
-        `Edge Function returned ${dims}-dim vectors, expected 1536`,
+        `Edge Function returned ${dims}-dim vectors, expected 384`,
         'Run: supabase functions deploy generate-embedding');
     }
   }

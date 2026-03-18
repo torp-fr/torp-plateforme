@@ -13,7 +13,12 @@ import { resolveDecisions } from "./decisionResolver.js";
 
 const BASE: RuleRow = {
   classification: "actionable_numeric",
-  property: "épaisseur isolation",
+  // Use a recognized PROPERTY_REGISTRY key so F0 + F1 pass.
+  property:          "épaisseur isolation",
+  property_key:      "epaisseur",   // must be in PROPERTY_REGISTRY_KEYS
+  property_category: "dimension",   // keeps F5 (no_unit_non_dim) from firing
+  category:          "DTU",         // standard strategy — no Eurocode checks
+  description:       null,
   operator: ">=",
   value: 120,
   unit: "mm",
