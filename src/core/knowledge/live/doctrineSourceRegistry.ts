@@ -4,7 +4,7 @@
  * Defines source types, authority levels, legal weights
  */
 
-export type SourceType = 'DTU' | 'NORME' | 'GUIDE' | 'JURISPRUDENCE' | 'TECHNIQUE' | 'GUIDE_ADEME';
+export type SourceType = 'DTU' | 'NORMES' | 'GUIDE' | 'JURISPRUDENCE' | 'TECHNIQUE' | 'GUIDE_ADEME';
 
 export interface DoctrineSource {
   id: string;
@@ -69,7 +69,7 @@ export const DOCTRINE_SOURCES_REGISTRY: DoctrineSource[] = [
   {
     id: 'nfc-15-100',
     name: 'NF C 15-100 - Installations électriques basse tension',
-    sourceType: 'NORME',
+    sourceType: 'NORMES',
     description: 'Norme française pour installations électriques',
     authorityLevel: 5,
     legalWeight: 5,
@@ -81,7 +81,7 @@ export const DOCTRINE_SOURCES_REGISTRY: DoctrineSource[] = [
   {
     id: 'nfc-15-100-2',
     name: 'NF C 15-100 Amendement 2 - Mise à jour électrique',
-    sourceType: 'NORME',
+    sourceType: 'NORMES',
     description: 'Amendement technique à NF C 15-100',
     authorityLevel: 5,
     legalWeight: 5,

@@ -5,7 +5,7 @@
  */
 
 import { ENGINE_REGISTRY, EngineRegistryEntry } from '@/core/platform/engineRegistry';
-import { runContextEngine, ContextEngineResult } from '@/core/engines/context.engine';
+import { runContextEngine, ContextEngineResult } from '@/core/engines/lotContext.engine';
 import { runLotEngine, LotEngineResult } from '@/core/engines/lot.engine';
 import { runRuleEngine, RuleEngineResult } from '@/core/engines/rule.engine';
 import { runScoringEngine, ScoringEngineResult } from '@/core/engines/scoring.engine';

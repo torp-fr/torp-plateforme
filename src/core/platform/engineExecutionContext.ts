@@ -50,10 +50,17 @@ export interface EngineExecutionContext {
   lots?: any;
 
   /**
-   * Rule Engine Results (placeholder for future)
-   * Will contain rule evaluation results
+   * Rule Engine Results
+   * Contains rule evaluation results and resolved decisions from the DB
    */
   rules?: any;
+
+  /**
+   * Resolved Decisions — output of the Decision Builder + Resolver pipeline.
+   * One authoritative bound per (element, property, unit) key, derived from
+   * the DB rules table. Primary input for the quote audit layer.
+   */
+  resolvedDecisions?: import('@/core/decision/decisionResolver').ResolvedDecision[];
 
   /**
    * Enrichment Engine Results (placeholder for future)

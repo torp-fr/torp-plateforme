@@ -28,7 +28,7 @@ export const KNOWLEDGE_CATEGORY_LABELS: Record<DocumentCategory, { label: string
     label: 'Code de la construction',
     description: 'Textes réglementaires officiels (CCH, RE2020, arrêtés)',
   },
-  NORME: {
+  NORMES: {
     label: 'Normes (AFNOR / ISO)',
     description: 'Normes AFNOR, ISO et standards techniques (ex. NF EN ISO 6946)',
   },

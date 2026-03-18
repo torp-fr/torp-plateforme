@@ -48,6 +48,24 @@ export async function uploadDocumentToStorage(
 
   log('[RAG:Upload] ✅ File uploaded to Storage:', storagePath);
 
+  // Validate and normalize category before touching the DB
+  const ALLOWED_CATEGORIES = [
+    'DTU',
+    'EUROCODE',
+    'NORMES',
+    'GUIDE_TECHNIQUE',
+    'CODE_CONSTRUCTION',
+  ] as const;
+
+  const normalizedCategory = options.category.toUpperCase();
+
+  if (!(ALLOWED_CATEGORIES as readonly string[]).includes(normalizedCategory)) {
+    throw new Error(
+      `Invalid category: "${options.category}". ` +
+      `Allowed values: ${ALLOWED_CATEGORIES.join(', ')}`,
+    );
+  }
+
   // Create knowledge_documents record to trigger ingestion pipeline
   const documentId = crypto.randomUUID();
   const safeTitle = options.title?.trim() || file.name.replace(/\.[^/.]+$/, '');
@@ -60,7 +78,7 @@ export async function uploadDocumentToStorage(
       id: documentId,
       file_path: storagePath,
       title: safeTitle,
-      category: options.category,
+      category: normalizedCategory,
       source: options.source,
       file_size: file.size,
       mime_type: file.type,
@@ -79,7 +97,7 @@ export async function uploadDocumentToStorage(
     id: documentId,
     file_path: storagePath,
     title: safeTitle,
-    category: options.category,
+    category: normalizedCategory,
     source: options.source,
     file_size: file.size,
     mime_type: file.type,

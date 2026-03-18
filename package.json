@@ -32,7 +32,9 @@
     "reindex:embeddings": "tsx scripts/reindexEmbeddings.ts",
     "retry:ingestion": "tsx scripts/retryFailedIngestion.ts",
     "context:generate": "tsx scripts/generateProjectContext.ts",
-    "claude:bootstrap": "tsx scripts/claudeBootstrap.ts"
+    "claude:bootstrap": "tsx scripts/claudeBootstrap.ts",
+    "test:rules": "tsx --env-file=.env.local scripts/test-rule-extraction.ts",
+    "worker:rules": "tsx --env-file=.env.local scripts/run-rule-extraction.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.70.0",
