@@ -223,13 +223,18 @@ export async function runRuleEngine(
   try {
     log('[RuleEngine] Starting rule evaluation (v2.0 — DB-backed)');
 
-    // 1. Extract unique domains from lots produced by Lot Engine
+    // 1. Build domain list: lot-derived domains UNION implied domains from project type.
+    //    lot.domain  → exact DB domain mapped from detected lot type (e.g. 'électrique')
+    //    impliedDomains → domains deduced from project type via contextDeduction.service
+    //    Union ensures rules are loaded even when lots are unclassified ('autre'/'unknown').
     const normalizedLots: any[] = executionContext.lots?.normalizedLots ?? [];
-    const domains = [...new Set<string>(
-      normalizedLots
-        .map((lot) => lot.category as string | undefined)
-        .filter((c): c is string => !!c && c !== 'unknown' && c !== 'autre')
-    )];
+    const lotDomains = normalizedLots
+      .map((lot) => lot.domain as string | null | undefined)
+      .filter((d): d is string => !!d);
+
+    const impliedDomains: string[] = executionContext.impliedDomains ?? [];
+
+    const domains = [...new Set<string>([...lotDomains, ...impliedDomains])];
 
     // 2. Fetch → Build → Resolve
     const rawRules = await fetchRules(domains);

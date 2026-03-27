@@ -1,6 +1,19 @@
 import "./config/loadEnv.js";
 import "./config/validateEnv.js";
 
+// ── Global error guards ────────────────────────────────────────────────────────
+// Catch async errors thrown outside promise chains (e.g. google-auth-library).
+// These handlers prevent the process from crashing on uncaught exceptions.
+process.on('uncaughtException', (err) => {
+  console.error('[GLOBAL ERROR] uncaughtException:', err.message);
+  if (err.stack) console.error(err.stack);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[GLOBAL ERROR] unhandledRejection:', reason);
+});
+// ────────────────────────────────────────────────────────────────────────────────
+
 import path from "path";
 import { fileURLToPath } from "url";
 import { supabase } from "./core/supabaseClient.js";
@@ -9,7 +22,6 @@ import {
   detectSourceType,
 } from "./extractors/extractionService.js";
 import { cleanText, removeHeaders, normalizeLineEndings } from "./processors/cleanText.js";
-import { structureSections } from "./processors/structureSections.js";
 import { smartChunkText } from "./processors/smartChunker.js";
 import { generateBatchEmbeddings } from "./core/embeddingService.js";
 
@@ -26,7 +38,7 @@ const POLL_INTERVAL = 10000;
 
 async function downloadFile(storagePath) {
   const MAX_RETRIES = 3;
-  const bucket = "documents";
+  const bucket = "documents"; // STORAGE_BUCKETS.KNOWLEDGE — see src/constants/storage.ts
 
   // Defensive logging before attempting download
   console.log(`  [DOWNLOAD] ════════════════════════════════════════`);
@@ -166,16 +178,36 @@ async function processDocument(doc) {
   console.log(`Processing: ${documentId}`);
 
   try {
-    // Step 0: Idempotency guard — skip already completed documents that have chunks
-    // unless force_reprocess is explicitly set on the document row.
+    // Step 0: Idempotency guard
+    //   count > 10  → valid ingestion, skip
+    //   1–10 chunks → likely partial/broken OCR, delete and reprocess
+    //   0 chunks    → fresh document, process normally
     const { count } = await supabase
       .from("knowledge_chunks")
-      .select("id", { count: "exact", head: true })
+      .select("*", { count: "exact", head: true })
       .eq("document_id", documentId);
 
-    if (doc.ingestion_status === "completed" && count > 0 && !doc.force_reprocess) {
-      console.log(`[WORKER] Skipping completed document (${count} chunks exist): ${documentId}`);
+    if (count > 10) {
+      console.log(`[SKIP] Document already processed (${count} chunks)`);
+
+      await supabase
+        .from("knowledge_documents")
+        .update({
+          ingestion_status: "completed",
+          ingestion_progress: 100,
+        })
+        .eq("id", documentId);
+
       return;
+    }
+
+    if (count > 0 && count <= 10) {
+      console.log(`[REPROCESS] Low chunk count detected (${count} chunks) — deleting and reprocessing`);
+
+      await supabase
+        .from("knowledge_chunks")
+        .delete()
+        .eq("document_id", documentId);
     }
 
     // Step 1: Claim document (atomic pattern)
@@ -222,12 +254,25 @@ async function processDocument(doc) {
     const sourceType = detectSourceType(doc.mime_type, doc.file_path);
     const extractionConfidence = extractionResult.confidence;
     const authorityWeight = computeAuthorityWeight(doc.category);
+    // category is required for rule extraction — fail early if missing
+    if (!doc.category || typeof doc.category !== 'string' || doc.category.trim().length === 0) {
+      console.error(`[CATEGORY ERROR] Document ${documentId} has no category — cannot propagate to chunks. Aborting.`);
+      await supabase
+        .from("knowledge_documents")
+        .update({
+          ingestion_status: "failed",
+          last_ingestion_error: "Document has no category — required for chunk propagation",
+        })
+        .eq("id", documentId);
+      return;
+    }
+
     const documentMetadata = {
-      category: doc.category || null,
+      category: doc.category,
       documentVersion: doc.version_number || null,
       authorityWeight,
       metierTarget: doc.metier_target || null,
-      documentType: doc.category || null,
+      documentType: doc.category,
       effectiveDate: doc.effective_date || null,
       expirationDate: doc.expiration_date || null,
     };
@@ -237,18 +282,22 @@ async function processDocument(doc) {
     );
 
     // Step 5: Clean and normalize text
+    // Order: normalizeLineEndings → cleanText → removeHeaders
+    //   normalizeLineEndings  : \r\n / \r  → \n  (platform normalization)
+    //   cleanText             : collapse horizontal whitespace, preserve \n\n
+    //   removeHeaders         : collapse >2 consecutive blank lines
     console.log(`  🧹 Cleaning text...`);
     let cleanedText = normalizeLineEndings(rawText);
-    cleanedText = removeHeaders(cleanedText);
     cleanedText = cleanText(cleanedText);
+    cleanedText = removeHeaders(cleanedText);
 
     if (!cleanedText || cleanedText.trim().length < 200) {
-      console.warn(`  ⚠️ No usable text extracted (${cleanedText?.length || 0} chars) — skipping document`);
+      console.error(`[OCR REQUIRED] Document ${documentId} has no text — OCR needed (extracted ${cleanedText?.length || 0} chars)`);
       await supabase
         .from("knowledge_documents")
         .update({
-          ingestion_status: "completed",
-          ingestion_progress: 100,
+          ingestion_status: "failed",
+          ingestion_progress: 0,
           last_ingestion_error: "No extractable text",
         })
         .eq("id", documentId);
@@ -262,28 +311,24 @@ async function processDocument(doc) {
       .delete()
       .eq("document_id", documentId);
 
-    // Step 6: Structure text into sections
-    console.log(`  📚 Structuring sections...`);
-    const sections = structureSections(cleanedText);
-    console.log(`  ✅ Found ${sections.length} sections`);
-
-    // Step 7: Create smart chunks with metadata
+    // Step 6: Create smart chunks with metadata
+    // smartChunkText runs its own internal section detection (SECTION_HEADER_RE).
     // Note: Using semantic chunking (700-900 tokens per chunk, ~2800-3600 chars)
     console.log(`  ✂️ Creating semantic chunks...`);
 
-    let chunks = smartChunkText(cleanedText, sections);
+    let chunks = smartChunkText(cleanedText);
 
     if (chunks.length === 0) {
       console.log(`  ⚠️ Smart chunker returned 0 chunks, activating fallback chunking`);
       chunks = fallbackChunking(cleanedText, 2500);
 
       if (chunks.length === 0) {
-        console.warn(`  ⚠️ Fallback chunking also returned 0 chunks — skipping document`);
+        console.error(`[CHUNKING FAILED] Document ${documentId} — both smart and fallback chunkers returned 0 chunks`);
         await supabase
           .from("knowledge_documents")
           .update({
-            ingestion_status: "completed",
-            ingestion_progress: 100,
+            ingestion_status: "failed",
+            ingestion_progress: 0,
             last_ingestion_error: "Could not chunk document",
           })
           .eq("id", documentId);
@@ -319,7 +364,7 @@ async function processDocument(doc) {
         section_level: chunk.section_level || null,
         source_type: sourceType || null,
         extraction_confidence: extractionConfidence || null,
-        category: documentMetadata.category || null,
+        category: documentMetadata.category,
         document_version: documentMetadata.documentVersion || null,
         authority_weight: documentMetadata.authorityWeight || null,
         metier_target: documentMetadata.metierTarget || null,
@@ -342,6 +387,7 @@ async function processDocument(doc) {
     }
 
     console.log(`  ✅ Inserted ${insertedChunks} chunks`);
+    console.log(`  📊 Category distribution: { "${documentMetadata.category}": ${insertedChunks} }`);
 
     // Step 10: Update progress before embeddings
     await supabase
@@ -444,7 +490,12 @@ async function pollDocuments() {
     }
 
     if (documents && documents.length > 0) {
-      await processDocument(documents[0]);
+      try {
+        await processDocument(documents[0]);
+      } catch (err) {
+        console.error('[WORKER] Document processing failed:', err.message);
+        if (err.stack) console.error(err.stack);
+      }
     }
   } catch (error) {
     console.error(`Poll error: ${error.message}`);

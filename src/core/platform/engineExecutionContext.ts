@@ -130,11 +130,25 @@ export interface EngineExecutionContext {
   finalProfessionalGrade?: string;
 
   /**
+   * Rule Evaluation Results — output of decisionEngine.evaluateProject().
+   * Set by scoring.engine after evaluating resolvedDecisions against projectData.
+   * Contains compliance grade (A–E), violations, and coverage metrics.
+   */
+  ruleEvaluation?: import('@/core/rules/decisionEngine').EvaluationResult;
+
+  /**
    * Structural Consistency Results
    * Analytical detection of imbalances between pillars
    * Pure analysis - no impact on scoring or grading
    */
   structuralConsistency?: any;
+
+  /**
+   * Implied rule domains deduced from project type.
+   * Set by the orchestrator (via contextDeduction.service) before runLotEngine.
+   * Used by rule.engine as supplementary domain source alongside lot.domain.
+   */
+  impliedDomains?: string[];
 
   /**
    * Timestamp when execution started (ISO 8601)

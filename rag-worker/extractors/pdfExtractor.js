@@ -6,6 +6,7 @@ import { runGoogleVisionOCR, runOpenAIOCR } from "../services/ocrService.js";
 const MIN_NATIVE_CHARS = 1500;
 
 export async function extractPdfText(arrayBuffer) {
+  console.log("[TRACE] extractPdfText called");
   const buffer = Buffer.from(arrayBuffer);
 
   console.log(`  [PDF] Buffer size: ${buffer.length} bytes`);
@@ -44,6 +45,7 @@ export async function extractPdfText(arrayBuffer) {
   // ── Step 2a: Google Vision ───────────────────────────────────────────────
 
   try {
+    console.log("[TRACE] runGoogleVisionOCR called");
     console.log("[OCR] Running Google Vision OCR");
     const ocrText = await runGoogleVisionOCR(buffer);
     console.log("[OCR] Google Vision OCR success");

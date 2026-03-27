@@ -34,7 +34,8 @@
     "context:generate": "tsx scripts/generateProjectContext.ts",
     "claude:bootstrap": "tsx scripts/claudeBootstrap.ts",
     "test:rules": "tsx --env-file=.env.local scripts/test-rule-extraction.ts",
-    "worker:rules": "tsx --env-file=.env.local scripts/run-rule-extraction.ts"
+    "worker:rules": "tsx --env-file=.env.local src/workers/ruleExtraction.worker.ts",
+    "worker:rules:drain": "tsx --env-file=.env.local scripts/run-rule-extraction.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.70.0",

@@ -22,6 +22,7 @@ import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
 import { orchestrationService } from '@/core/jobs/orchestration.service';
 import { jobService } from '@/core/jobs/job.service';
+import { enrichWithImpliedDomains } from '@/core/reasoning/contextDeduction.service';
 
 /**
  * Statut d'orchestration
@@ -167,6 +168,15 @@ export async function runOrchestration(
         // Execute Lot Engine if active (depends on Context Engine)
         else if (engine.id === 'lotEngine') {
           log('[EngineOrchestrator] Executing Lot Engine');
+          // Deduce implied domains from project type and store on context
+          // so rule.engine can use them as domain source alongside lot.domain.
+          const enriched = enrichWithImpliedDomains(executionContext.projectData ?? {});
+          executionContext.impliedDomains = enriched.impliedDomains;
+          log('[EngineOrchestrator] Implied domains deduced', {
+            projectType: executionContext.projectData?.type,
+            impliedDomains: enriched.impliedDomains,
+            confidence: enriched.contextDeductionConfidence,
+          });
           const lotResult: LotEngineResult = await runLotEngine(executionContext);
           engineResults['lotEngine'] = lotResult;
 

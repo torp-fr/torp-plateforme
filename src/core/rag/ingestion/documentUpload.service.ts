@@ -6,6 +6,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { log } from '@/lib/logger';
+import { STORAGE_BUCKETS } from '@/constants/storage';
 
 function sanitizeFileName(name: string): string {
   return name
@@ -43,8 +44,7 @@ export async function uploadDocumentToStorage(
   const safeName = sanitizeFileName(file.name);
   const storagePath = `knowledge-documents/${timestamp}-${safeName}`;
 
-  // CRITICAL: Must match KNOWLEDGE_STORAGE_BUCKET = 'documents' in knowledgeStepRunner
-  const storageBucket = 'documents';
+  const storageBucket = STORAGE_BUCKETS.KNOWLEDGE;
   log('[RAG:Upload] Uploading to bucket:', storageBucket);
   log('[RAG:Upload] Storage path:', storagePath);
 

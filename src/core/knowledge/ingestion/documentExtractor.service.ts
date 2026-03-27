@@ -268,6 +268,8 @@ function extractPlain(buffer: Buffer): string {
   return cleanText(buffer.toString("utf-8"));
 }
 
+const MIN_TEXT_LENGTH = 500;
+
 export async function extractDocumentContent(
   buffer: Buffer,
   filename: string
@@ -280,24 +282,39 @@ export async function extractDocumentContent(
   console.log("[EXTRACT] Processing file:", filename);
   const ext = getFileExtension(filename);
 
+  let text: string;
+
   switch (ext) {
 
     case ".pdf":
-      return extractPdf(buffer);
+      text = await extractPdf(buffer);
+      break;
 
     case ".docx":
-      return extractDocx(buffer);
+      text = await extractDocx(buffer);
+      break;
 
     case ".xlsx":
     case ".xls":
-      return extractXlsx(buffer);
+      text = await extractXlsx(buffer);
+      break;
 
     case ".txt":
     case ".md":
     case ".csv":
-      return extractPlain(buffer);
+      text = extractPlain(buffer);
+      break;
 
     default:
       throw new Error(`Unsupported file type: ${ext}`);
   }
+
+  if (!text || text.length < MIN_TEXT_LENGTH) {
+    console.error("[EXTRACTION] Document has insufficient text:", text?.length ?? 0);
+    throw new Error(
+      `TEXT_EXTRACTION_FAILED: insufficient text (${text?.length ?? 0} chars)`
+    );
+  }
+
+  return text;
 }

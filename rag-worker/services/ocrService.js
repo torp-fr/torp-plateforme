@@ -2,29 +2,26 @@
  * OCR Service — dual-provider fallback
  *
  * Provider chain:
- *   1. Google Vision (documentTextDetection on PNG image)
- *   2. OpenAI Vision (gpt-4.1-mini on PNG image)
+ *   1. Google Vision (documentTextDetection on PNG images)
+ *   2. OpenAI Vision (gpt-4.1-mini on PNG images)
  *
- * PDFs are converted to a PNG image of the first page via pdf-poppler
- * (pure Node.js — no GraphicsMagick or Ghostscript required).
- * Both functions accept a Node.js Buffer and return a plain string.
+ * PDFs are converted to PNG images (up to MAX_PAGES pages) via pdftocairo.
+ * Both functions accept a Node.js Buffer and return a plain string (all pages
+ * concatenated in order).
  * All errors are thrown so the caller can handle the fallback chain.
  *
- * ── Poppler installation (required for pdf-poppler) ──────────────────────────
+ * ── Poppler installation (required for pdftocairo) ───────────────────────────
  *
- * pdf-poppler is a Node.js wrapper around the Poppler binary pdftoppm.
- * pdftoppm must be available in PATH before the worker can convert PDFs to PNG.
+ * pdftocairo must be available in the Poppler bin dir before the worker can
+ * convert PDFs to PNG.
  *
  * Windows — install via Chocolatey (recommended):
  *   choco install poppler -y
  *
- * Windows — alternative via winget:
- *   winget install --id=GnuWin32.Poppler
- *
  * Verify installation:
- *   pdftoppm -v
+ *   pdftocairo -v
  *
- * If pdftoppm is not found, pdf.convert() will throw and OCR will fail.
+ * If pdftocairo is not found, conversion will throw and OCR will fail.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -38,64 +35,90 @@ import OpenAI from "openai";
 
 const execFileAsync = promisify(execFile);
 
-const POPPLER_PATH = path.resolve(
-  process.cwd(),
-  "..",
-  "tools",
-  "poppler",
-  "poppler-25.12.0",
-  "Library",
-  "bin"
-);
+// Resolve Poppler bin dir relative to this file (rag-worker/services/ocrService.js).
+// ../../tools/ → monorepo root / tools — correct regardless of launch directory.
+// Override with POPPLER_PATH env var if needed.
+import { fileURLToPath } from "url";
+const __serviceDir = path.dirname(fileURLToPath(import.meta.url));
+const POPPLER_PATH = process.env.POPPLER_PATH
+  ? process.env.POPPLER_PATH
+  : path.resolve(__serviceDir, "../../tools/poppler/poppler-25.12.0/Library/bin");
 
-const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-const visionClient = new vision.ImageAnnotatorClient({ credentials });
+console.log("[OCR] Using Poppler path:", POPPLER_PATH);
+
+// Maximum pages to OCR per document. Prevents memory explosion on 200+ page PDFs.
+const MAX_PAGES = 20;
 
 // ────────────────────────────────────────────────────────────────────────────
-// PDF → PNG conversion
+// PDF → PNG conversion (multi-page)
 // ────────────────────────────────────────────────────────────────────────────
 
 /**
- * Convert the first page of a PDF buffer to a PNG Buffer.
- * Uses pdf-poppler (pure Node.js — no GraphicsMagick or Ghostscript).
+ * Convert up to MAX_PAGES pages of a PDF buffer to PNG Buffers.
  *
- * Writes a temporary PDF file, converts page 1 to PNG, reads the result.
- * Callers are responsible for deleting pdfPath and imagePath via try/finally.
+ * Writes a temporary PDF, runs pdftocairo to produce one PNG per page in a
+ * unique temp subdirectory, then reads all PNGs back as Buffers.
  *
  * @param {Buffer} pdfBuffer
- * @returns {Promise<{ buffer: Buffer, pdfPath: string, imagePath: string }>}
- * @throws if conversion fails or the expected output file is not produced
+ * @returns {Promise<{ pdfPath: string, outDir: string, pages: Array<{ buffer: Buffer, imagePath: string }> }>}
+ * @throws if pdftocairo is not found, conversion fails, or no PNGs are produced
  */
-async function convertPdfToImage(pdfBuffer) {
+async function convertPdfToImages(pdfBuffer) {
+  console.log("[TRACE] convertPdfToImages called");
   process.env.PATH = `${POPPLER_PATH};${process.env.PATH}`;
+
+  const popplerBin = path.join(POPPLER_PATH, "pdftocairo.exe");
+  if (!fs.existsSync(popplerBin)) {
+    throw new Error(
+      `[OCR] pdftocairo.exe not found at: ${popplerBin}\n` +
+      `  Expected Poppler bin dir: ${POPPLER_PATH}\n` +
+      `  Set POPPLER_PATH env var to override.`
+    );
+  }
 
   const tmpDir = os.tmpdir();
   const id = `ocr-${Date.now()}`;
   const pdfPath = path.join(tmpDir, `${id}.pdf`);
-  const outputBase = path.join(tmpDir, id);
-  const imagePath = `${outputBase}.png`;
+
+  // Unique subdirectory so readdirSync only finds our PNGs
+  const outDir = path.join(tmpDir, id);
+  fs.mkdirSync(outDir);
+
+  // pdftocairo names output files as: <outputBase>-<N>.png
+  const outputBase = path.join(outDir, "page");
 
   fs.writeFileSync(pdfPath, pdfBuffer);
 
-  console.log("[OCR] Converting PDF first page to PNG...");
+  console.log(`[OCR] Converting PDF to PNG (up to ${MAX_PAGES} pages)...`);
   console.log("[OCR] Using Poppler path:", POPPLER_PATH);
 
-  const conversionResult = await execFileAsync(
-    path.join(POPPLER_PATH, "pdftocairo.exe"),
-    ["-png", "-singlefile", "-f", "1", "-l", "1", pdfPath, outputBase]
+  await execFileAsync(
+    popplerBin,
+    ["-png", "-f", "1", "-l", String(MAX_PAGES), pdfPath, outputBase]
   );
 
-  console.log("[OCR] pdf-poppler conversion result:", conversionResult);
+  // Read all generated PNGs, sorted numerically by page number (robust to
+  // zero-padding differences across Poppler versions).
+  const allFiles = fs.readdirSync(outDir)
+    .filter(f => f.endsWith(".png"))
+    .sort((a, b) => {
+      const numA = parseInt(a.replace(/\D+/g, ""), 10);
+      const numB = parseInt(b.replace(/\D+/g, ""), 10);
+      return numA - numB;
+    });
 
-  if (!fs.existsSync(imagePath)) {
-    throw new Error(`[OCR] pdftocairo did not produce output at: ${imagePath}`);
+  if (allFiles.length === 0) {
+    throw new Error(`[OCR] pdftocairo produced no PNG files in: ${outDir}`);
   }
 
-  const buffer = fs.readFileSync(imagePath);
+  console.log(`[OCR] PDF → PNG: ${allFiles.length} page(s) generated`);
 
-  console.log("[OCR] PDF → PNG conversion complete:", buffer.length, "bytes");
+  const pages = allFiles.map(f => {
+    const imagePath = path.join(outDir, f);
+    return { buffer: fs.readFileSync(imagePath), imagePath };
+  });
 
-  return { buffer, pdfPath, imagePath };
+  return { pdfPath, outDir, pages };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -104,40 +127,80 @@ async function convertPdfToImage(pdfBuffer) {
 
 /**
  * Run Google Vision documentTextDetection on a PDF buffer.
- * Converts the first page to PNG before sending to the API.
+ * Converts up to MAX_PAGES pages to PNG and OCRs each in order.
  *
  * @param {Buffer} buffer - PDF buffer
- * @returns {Promise<string>} extracted text
+ * @returns {Promise<string>} extracted text (all pages concatenated)
  * @throws if credentials missing, conversion fails, API fails, or no text detected
  */
 export async function runGoogleVisionOCR(buffer) {
-  const { buffer: imageBuffer, pdfPath, imagePath } = await convertPdfToImage(buffer);
+  console.log("[TRACE] runGoogleVisionOCR called");
+  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
 
-  console.log("[OCR] Running Google Vision OCR");
-
-  let result;
-  try {
-    [result] = await visionClient.documentTextDetection({
-      image: { content: imageBuffer },
-    });
-  } catch (err) {
-    console.warn("[OCR] Google Vision failed:", err.message);
-    throw err;
-  } finally {
-    try { fs.unlinkSync(pdfPath); } catch (_) { /* non-critical */ }
-    try { fs.unlinkSync(imagePath); } catch (_) { /* non-critical */ }
+  if (!raw) {
+    throw new Error("[OCR] GOOGLE_SERVICE_ACCOUNT_JSON missing");
   }
 
-  const text = result.fullTextAnnotation?.text;
+  let credentials;
+  try {
+    credentials = JSON.parse(raw);
 
-  if (!text || text.trim().length === 0) {
+    if (credentials.private_key) {
+      credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+    }
+
+  } catch (e) {
+    throw new Error("[OCR] Invalid GOOGLE_SERVICE_ACCOUNT_JSON");
+  }
+
+  console.log("[OCR TRACE] project:", credentials?.project_id);
+  console.log("[OCR TRACE] Google Vision client init HERE");
+
+  const visionClient = new vision.ImageAnnotatorClient({
+    credentials: credentials,
+    projectId: credentials.project_id,
+  });
+
+  console.log("[OCR DEBUG] Using multi-page OCR");
+  const { pdfPath, outDir, pages } = await convertPdfToImages(buffer);
+  console.log(`[OCR DEBUG] Pages generated: ${pages.length}`);
+
+  console.log(`[OCR] Running Google Vision OCR on ${pages.length} page(s)`);
+
+  const pageTexts = [];
+  try {
+    for (let i = 0; i < pages.length; i++) {
+      let result;
+      try {
+        [result] = await visionClient.documentTextDetection({
+          image: { content: pages[i].buffer },
+        });
+      } catch (err) {
+        console.warn(`[OCR] Google Vision failed on page ${i + 1}: ${err.message}`);
+        throw err;
+      }
+
+      const text = result.fullTextAnnotation?.text;
+      const chars = text?.trim().length || 0;
+      console.log(`[OCR] Page ${i + 1}/${pages.length}: ${chars} chars`);
+
+      if (text && text.trim().length > 0) {
+        pageTexts.push(text.trim());
+      }
+    }
+  } finally {
+    try { fs.unlinkSync(pdfPath); } catch (_) { /* non-critical */ }
+    try { fs.rmSync(outDir, { recursive: true, force: true }); } catch (_) { /* non-critical */ }
+  }
+
+  if (pageTexts.length === 0) {
     throw new Error("[OCR] Google Vision returned no text");
   }
 
-  const trimmed = text.trim();
-  console.log("[OCR] Google Vision success:", trimmed.length, "chars");
+  const fullText = pageTexts.join("\n\n");
+  console.log(`[OCR] Google Vision success: ${fullText.length} chars across ${pageTexts.length} page(s)`);
 
-  return trimmed;
+  return fullText;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -146,10 +209,10 @@ export async function runGoogleVisionOCR(buffer) {
 
 /**
  * Run OpenAI Vision OCR on a PDF buffer (gpt-4.1-mini).
- * Converts the first page to PNG, encodes as base64 data URL.
+ * Converts up to MAX_PAGES pages to PNG and OCRs each in order.
  *
  * @param {Buffer} buffer - PDF buffer
- * @returns {Promise<string>} extracted text
+ * @returns {Promise<string>} extracted text (all pages concatenated)
  * @throws if API key missing, conversion fails, API fails, or no text returned
  */
 export async function runOpenAIOCR(buffer) {
@@ -159,45 +222,61 @@ export async function runOpenAIOCR(buffer) {
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-  const { buffer: imageBuffer, pdfPath, imagePath } = await convertPdfToImage(buffer);
+  console.log("[OCR DEBUG] Using multi-page OCR");
+  const { pdfPath, outDir, pages } = await convertPdfToImages(buffer);
+  console.log(`[OCR DEBUG] Pages generated: ${pages.length}`);
 
-  let response;
+  console.log(`[OCR] Falling back to OpenAI Vision on ${pages.length} page(s)`);
+
+  const pageTexts = [];
   try {
-    const base64 = imageBuffer.toString("base64");
+    for (let i = 0; i < pages.length; i++) {
+      const base64 = pages[i].buffer.toString("base64");
 
-    console.log("[OCR] Falling back to OpenAI Vision");
-
-    response = await openai.responses.create({
-      model: "gpt-4.1-mini",
-      input: [
-        {
-          role: "user",
-          content: [
+      let response;
+      try {
+        response = await openai.responses.create({
+          model: "gpt-4.1-mini",
+          input: [
             {
-              type: "input_text",
-              text: "Extract all readable text from this document.",
-            },
-            {
-              type: "input_image",
-              image_url: `data:image/png;base64,${base64}`,
+              role: "user",
+              content: [
+                {
+                  type: "input_text",
+                  text: "Extract all readable text from this document.",
+                },
+                {
+                  type: "input_image",
+                  image_url: `data:image/png;base64,${base64}`,
+                },
+              ],
             },
           ],
-        },
-      ],
-    });
+        });
+      } catch (err) {
+        console.warn(`[OCR] OpenAI Vision failed on page ${i + 1}: ${err.message}`);
+        throw err;
+      }
+
+      const text = response.output_text;
+      const chars = text?.trim().length || 0;
+      console.log(`[OCR] Page ${i + 1}/${pages.length}: ${chars} chars`);
+
+      if (text && text.trim().length > 0) {
+        pageTexts.push(text.trim());
+      }
+    }
   } finally {
     try { fs.unlinkSync(pdfPath); } catch (_) { /* non-critical */ }
-    try { fs.unlinkSync(imagePath); } catch (_) { /* non-critical */ }
+    try { fs.rmSync(outDir, { recursive: true, force: true }); } catch (_) { /* non-critical */ }
   }
 
-  const text = response.output_text;
-
-  if (!text || text.trim().length === 0) {
+  if (pageTexts.length === 0) {
     throw new Error("[OCR] OpenAI Vision returned no text");
   }
 
-  const trimmed = text.trim();
-  console.log("[OCR] OpenAI Vision success:", trimmed.length, "chars");
+  const fullText = pageTexts.join("\n\n");
+  console.log(`[OCR] OpenAI Vision success: ${fullText.length} chars across ${pageTexts.length} page(s)`);
 
-  return trimmed;
+  return fullText;
 }

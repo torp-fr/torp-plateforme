@@ -14,42 +14,24 @@ const MIME_TYPES = {
 };
 
 export async function extractDocumentText(arrayBuffer, fileName, mimeType) {
+  console.log("[TRACE] extractDocumentText called");
   console.log(`  📋 Extracting text from: ${fileName}`);
 
   const fileExt = getFileExtension(fileName).toLowerCase();
   const normalizedMimeType = (mimeType || "").toLowerCase();
 
-  // PDF with native extraction + OCR fallback for scanned documents
+  // PDF: native extraction → Google Vision OCR → OpenAI OCR (all handled inside pdfExtractor)
   if (
     fileExt === "pdf" ||
     normalizedMimeType === MIME_TYPES.pdf
   ) {
+    console.log("[TRACE] PDF branch → extractPdfText");
     console.log(`  📄 PDF detected - attempting native extraction...`);
 
     const result = await extractPdfText(arrayBuffer);
 
-    // Check if OCR fallback is needed
-    if (result.requiresOCR) {
-      console.log(`  🔄 OCR fallback triggered for PDF`);
-      console.log(`  🖼️ Attempting Google Vision OCR...`);
-
-      try {
-        const ocrResult = await extractImageText(arrayBuffer, fileName);
-        console.log(`  ✅ OCR fallback successful (${ocrResult.text?.length || 0} characters extracted)`);
-        return ocrResult;
-      } catch (ocrError) {
-        console.error(`  ❌ OCR fallback failed: ${ocrError.message}`);
-        return {
-          text: "",
-          confidence: "ocr_failed",
-          skipped: true,
-          reason: "ocr_extraction_error",
-          error: ocrError.message,
-        };
-      }
-    }
-
-    // Native extraction succeeded
+    // pdfExtractor handles all OCR internally — return result directly.
+    // requiresOCR: true means all providers failed; worker will mark document as failed.
     return result;
   }
 
@@ -77,7 +59,12 @@ export async function extractDocumentText(arrayBuffer, fileName, mimeType) {
     ["image/jpeg", "image/png"].includes(normalizedMimeType)
   ) {
     console.log(`  🖼️ Image detected - using OCR`);
-    return await extractImageText(arrayBuffer, fileName);
+    try {
+      return await extractImageText(arrayBuffer, fileName);
+    } catch (imgError) {
+      console.warn(`  [OCR] Image extraction failed, skipping: ${imgError.message}`);
+      return { text: "", confidence: "ocr_failed", skipped: true, reason: imgError.message };
+    }
   }
 
   // Plain text

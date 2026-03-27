@@ -5,6 +5,7 @@
 
 export const STORAGE_BUCKETS = {
   DEVIS: 'devis_uploads',
+  KNOWLEDGE: 'documents',
 } as const;
 
 export const STORAGE_PATHS = {

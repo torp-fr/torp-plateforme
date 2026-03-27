@@ -33,7 +33,18 @@ export async function extractImageText(arrayBuffer, fileName) {
 
     try {
       // Initialize Google Vision client with Service Account credentials
-      const client = new vision.ImageAnnotatorClient();
+      let client;
+      try {
+        client = new vision.ImageAnnotatorClient();
+      } catch (initErr) {
+        console.warn(`  [OCR] Google Vision client init failed: ${initErr.message}`);
+        return {
+          text: "",
+          confidence: "ocr_disabled",
+          skipped: true,
+          reason: "client_init_failed",
+        };
+      }
 
       console.log(`  🔍 Running Google Vision OCR on ${fileName}...`);
 
@@ -63,6 +74,12 @@ export async function extractImageText(arrayBuffer, fileName) {
       }
     }
   } catch (error) {
-    throw new Error(`Image OCR failed: ${error.message}`);
+    console.warn(`  [OCR] Image OCR failed, skipping: ${error.message}`);
+    return {
+      text: "",
+      confidence: "ocr_failed",
+      skipped: true,
+      reason: error.message,
+    };
   }
 }

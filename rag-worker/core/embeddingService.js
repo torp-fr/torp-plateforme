@@ -5,12 +5,39 @@ const openai = new OpenAI({
 });
 
 const EMBEDDING_DIMENSION = 384;
-const BATCH_SIZE = 20; // Process embeddings in batches
+// Max chunks per OpenAI request. 200 chunks × ~900 tokens = ~180k tokens,
+// safely below the 300k token limit per request.
+const BATCH_SIZE = 200;
 
 // Maximum characters allowed for embedding input.
 // Matches smartChunker target size (~2800 chars).
 // Prevents unnecessary trimming of valid chunks.
 const MAX_EMBEDDING_CHARS = 4000;
+
+/**
+ * Send a single batch of texts to OpenAI and return their embeddings.
+ * @param {string[]} batch - Pre-validated texts, max BATCH_SIZE items
+ * @returns {Promise<number[][]>}
+ */
+async function processBatch(batch) {
+  const response = await openai.embeddings.create({
+    model: "text-embedding-3-small",
+    input: batch,
+    dimensions: EMBEDDING_DIMENSION,
+  });
+
+  const embeddings = response.data.map((item) => item.embedding);
+
+  for (let i = 0; i < embeddings.length; i++) {
+    if (embeddings[i].length !== EMBEDDING_DIMENSION) {
+      throw new Error(
+        `Embedding ${i} has invalid dimension: ${embeddings[i].length} (expected ${EMBEDDING_DIMENSION})`
+      );
+    }
+  }
+
+  return embeddings;
+}
 
 export async function generateBatchEmbeddings(texts) {
   try {
@@ -29,26 +56,19 @@ export async function generateBatchEmbeddings(texts) {
       return text;
     });
 
-    console.log(`[EmbeddingService] Processing batch of ${safeTexts.length} chunks`);
+    const totalBatches = Math.ceil(safeTexts.length / BATCH_SIZE);
+    console.log(`[EmbeddingService] Processing ${safeTexts.length} chunks in ${totalBatches} batch(es) of ${BATCH_SIZE}`);
 
-    const response = await openai.embeddings.create({
-      model: "text-embedding-3-small",
-      input: safeTexts,
-      dimensions: EMBEDDING_DIMENSION,
-    });
+    const allEmbeddings = [];
 
-    const embeddings = response.data.map((item) => item.embedding);
-
-    // Validate all embeddings
-    for (let i = 0; i < embeddings.length; i++) {
-      if (embeddings[i].length !== EMBEDDING_DIMENSION) {
-        throw new Error(
-          `Embedding ${i} has invalid dimension: ${embeddings[i].length} (expected ${EMBEDDING_DIMENSION})`
-        );
-      }
+    for (let i = 0; i < safeTexts.length; i += BATCH_SIZE) {
+      const batch = safeTexts.slice(i, i + BATCH_SIZE);
+      console.log(`[Embedding] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${totalBatches} (${batch.length} chunks)`);
+      const batchEmbeddings = await processBatch(batch);
+      allEmbeddings.push(...batchEmbeddings);
     }
 
-    return embeddings;
+    return allEmbeddings;
   } catch (error) {
     throw new Error(`Embedding generation failed: ${error.message}`);
   }

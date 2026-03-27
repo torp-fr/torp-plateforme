@@ -8,12 +8,29 @@ import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
+ * Mapping from lot category to DB rules domain.
+ * Used by rule.engine.ts to fetch relevant rules from the `rules` table.
+ * trustCapping.engine.ts keeps using `category` (the trust framework key).
+ */
+const LOT_TO_DOMAIN: Record<string, string | null> = {
+  electricite: 'électrique',
+  plomberie:   'hydraulique',
+  toiture:     'structure',
+  structure:   'structure',
+  chauffage:   'thermique',
+  autre:       null,
+  unknown:     null,
+};
+
+/**
  * Normalized lot structure
  */
 export interface NormalizedLot {
   id: string;
   type: string;
-  category: 'electricite' | 'plomberie' | 'toiture' | 'autre' | 'unknown';
+  category: 'electricite' | 'plomberie' | 'toiture' | 'structure' | 'chauffage' | 'autre' | 'unknown';
+  /** DB rules domain — use this for rule fetching, not `category`. */
+  domain: string | null;
   originalType?: string;
 }
 
@@ -50,12 +67,16 @@ export async function runLotEngine(
     const detectedLots = executionContext.context?.detectedLots || [];
 
     // Normalize each lot
-    const normalizedLots: NormalizedLot[] = detectedLots.map((lot: any) => ({
-      id: lot.id || '',
-      type: (lot.type || '').toLowerCase(),
-      category: categorizeLot(lot.type),
-      originalType: lot.type,
-    }));
+    const normalizedLots: NormalizedLot[] = detectedLots.map((lot: any) => {
+      const category = categorizeLot(lot.type);
+      return {
+        id: lot.id || '',
+        type: (lot.type || '').toLowerCase(),
+        category,
+        domain: LOT_TO_DOMAIN[category] ?? null,
+        originalType: lot.type,
+      };
+    });
 
     // Identify primary lots (first 2 as most relevant)
     const primaryLots = normalizedLots.slice(0, 2);
@@ -116,28 +137,76 @@ export async function runLotEngine(
 }
 
 /**
- * Categorize lot by type string
- * Helper function for lot classification
+ * Categorize lot by type string.
+ * Exported for unit testing.
+ *
+ * Priority order matters — more specific checks first.
+ * All checks are case-insensitive via .toLowerCase().
  */
-function categorizeLot(
+export function categorizeLot(
   type: string
-): 'electricite' | 'plomberie' | 'toiture' | 'autre' | 'unknown' {
+): 'electricite' | 'plomberie' | 'toiture' | 'structure' | 'chauffage' | 'autre' | 'unknown' {
   if (!type) return 'unknown';
 
-  const lowerType = type.toLowerCase();
+  const t = type.toLowerCase();
 
-  if (lowerType.includes('elec') || lowerType.includes('électr')) {
+  // ── Électricité ───────────────────────────────────────────────────────────
+  if (
+    t.includes('elec') || t.includes('électr') ||
+    t.includes('câbl') || t.includes('cablag') ||
+    t.includes('tableau') || t.includes('circuit') ||
+    t.includes('prises') || t.includes('interrupteur')
+  ) {
     return 'electricite';
   }
-  if (lowerType.includes('plomb') || lowerType.includes('tuyau')) {
+
+  // ── Plomberie / hydraulique ───────────────────────────────────────────────
+  // Note: 'pompe' alone is too broad (thermopompe, pompe à chaleur → chauffage).
+  // Use 'circulation', 'relevage', etc. for specific hydraulic pumps.
+  if (
+    t.includes('plomb') || t.includes('tuyau') ||
+    t.includes('sanitair') || t.includes('robinet') ||
+    t.includes('filtr') || t.includes('circulation') ||
+    t.includes('assainissement') || t.includes('canalisation') ||
+    t.includes('eau chaude') || t.includes('eau froide') ||
+    t.includes('réseau eau') || t.includes('evacuation')
+  ) {
     return 'plomberie';
   }
+
+  // ── Toiture / couverture ──────────────────────────────────────────────────
   if (
-    lowerType.includes('toit') ||
-    lowerType.includes('couverture') ||
-    lowerType.includes('roof')
+    t.includes('toit') || t.includes('couverture') || t.includes('roof') ||
+    t.includes('zinguerie') || t.includes('ardoise') || t.includes('tuile')
   ) {
     return 'toiture';
+  }
+
+  // ── Structure / gros œuvre ────────────────────────────────────────────────
+  if (
+    t.includes('terrassement') || t.includes('terras') ||
+    t.includes('fouille') || t.includes('excavation') ||
+    t.includes('fondation') || t.includes('béton') || t.includes('beton') ||
+    t.includes('armature') || t.includes('ferraillage') || t.includes('ferrail') ||
+    t.includes('coffrage') || t.includes('dalle') ||
+    t.includes('maçon') || t.includes('macon') ||
+    t.includes('gros') || // gros oeuvre, gros œuvre
+    t.includes('structur') || // structure, structural
+    t.includes('mur porteur') || t.includes('voile')
+  ) {
+    return 'structure';
+  }
+
+  // ── Chauffage / thermique ─────────────────────────────────────────────────
+  if (
+    t.includes('chauffage') || t.includes('chauffant') ||
+    t.includes('climatisation') || t.includes('clim') ||
+    t.includes('ventilation') || t.includes('vmc') || t.includes('cvc') ||
+    t.includes('thermopompe') || t.includes('pompe') || t.includes('chaleur') ||
+    t.includes('chaudière') || t.includes('chaudiere') ||
+    t.includes('radiateur')
+  ) {
+    return 'chauffage';
   }
 
   return 'autre';

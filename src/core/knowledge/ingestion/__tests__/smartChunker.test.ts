@@ -20,7 +20,7 @@ import { chunkSmart } from '../smartChunker.service';
 // Helpers
 // ---------------------------------------------------------------------------
 
-const MAX_TOKENS = 500;
+const MAX_TOKENS = 1000;
 
 function tokEst(s: string) {
   return Math.ceil(s.length / 4);

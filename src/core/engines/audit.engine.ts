@@ -1,11 +1,21 @@
 /**
- * Audit Engine v1.0
- * Transform execution context into structured audit report
- * Pure data transformation without external dependencies
+ * Audit Engine v1.1
+ * Transform execution context into structured audit report.
+ * Includes coverage analysis (Étape 2B) via the reasoning layer.
  */
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 import { log, warn, error, time, timeEnd } from '@/lib/logger';
+import {
+  analyzeCoverage,
+  type DevisLine,
+  type RuleInput,
+} from '@/core/reasoning/coverageAnalyzer.service';
+import { generateRecommendations } from '@/core/reasoning/recommendationGenerator.service';
+import {
+  generateAuditReport,
+  type AuditReport as CoverageAuditReport,
+} from '@/core/reasoning/auditReportGenerator.service';
 
 /**
  * Audit report structure - Final deliverable from pipeline
@@ -79,6 +89,8 @@ export interface AuditReport {
  */
 export interface AuditEngineResult {
   report: AuditReport;
+  /** Coverage analysis — present when devis lines are available in projectData. */
+  coverageAudit?: CoverageAuditReport;
   status: 'completed' | 'partial' | 'error';
   warnings: string[];
   meta: {
@@ -257,12 +269,63 @@ export async function runAuditEngine(
       processingTime: report.meta.processingTime,
     });
 
+    // ── Coverage Analysis (Étape 2B) ─────────────────────────────────────────
+    let coverageAudit: CoverageAuditReport | undefined;
+    try {
+      // Extract devis lines from projectData (try common field names)
+      const pd = executionContext.projectData ?? {};
+      const rawLines: Array<{ description: string; amount?: number; category?: string }> =
+        pd.devisLines ?? pd.lines ?? pd.items ?? pd.quoteLines ?? [];
+
+      // Convert obligations to RuleInput (proxy for applicable rules)
+      const applicableRules: RuleInput[] = detailedObligations.map((o: any) => ({
+        id: o.id ?? '',
+        domain: o.category ?? 'unknown',
+        description: o.obligation ?? null,
+        property_key: null,
+        rule_type: o.ruleType ?? null,
+        risk_level: (['high', 'medium', 'low'].includes(o.severity) ? o.severity : undefined) as
+          | 'high'
+          | 'medium'
+          | 'low'
+          | undefined,
+        category: o.category ?? null,
+      }));
+
+      if (rawLines.length > 0 && applicableRules.length > 0) {
+        const devisLines: DevisLine[] = rawLines.map((l) => ({
+          description: l.description ?? '',
+          amount: l.amount,
+          category: l.category,
+        }));
+
+        const coverageReport = analyzeCoverage(devisLines, applicableRules);
+        const recommendations = generateRecommendations(coverageReport.top_gaps);
+        const projectName = pd.projectName ?? pd.name ?? executionContext.projectId;
+        const projectType = pd.projectType ?? pd.type ?? null;
+
+        coverageAudit = generateAuditReport(projectName, projectType, coverageReport, recommendations);
+
+        log('[AuditEngine] Coverage audit generated', {
+          coverage_pct: coverageReport.coverage_pct,
+          gaps: coverageReport.gaps,
+          recommendations: recommendations.length,
+          risk_level: coverageAudit.executive_summary.risk_level,
+        });
+      } else {
+        warnings.push('Coverage audit skipped — no devis lines or rules available in projectData');
+      }
+    } catch (coverageErr) {
+      warnings.push(`Coverage audit failed: ${coverageErr instanceof Error ? coverageErr.message : String(coverageErr)}`);
+    }
+
     const result: AuditEngineResult = {
       report,
+      coverageAudit,
       status: warnings.length === 0 ? 'completed' : 'partial',
       warnings,
       meta: {
-        engineVersion: '1.0',
+        engineVersion: '1.1',
         createdAt: new Date().toISOString(),
         processingTime: Date.now() - startTime,
       },
@@ -326,7 +389,7 @@ export async function runAuditEngine(
       status: 'error',
       warnings,
       meta: {
-        engineVersion: '1.0',
+        engineVersion: '1.1',
         createdAt: new Date().toISOString(),
         processingTime: Date.now() - startTime,
       },
@@ -341,7 +404,7 @@ export function getAuditEngineMetadata() {
   return {
     id: 'auditEngine',
     name: 'Audit Engine',
-    version: '1.0',
+    version: '1.1',
     description: 'Transform execution context into structured audit report',
     capabilities: [
       'Executive summary generation',

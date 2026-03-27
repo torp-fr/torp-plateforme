@@ -10,6 +10,7 @@ import { classifyDocument } from '@/core/knowledge/ingestion/documentClassifier.
 import { extractDocumentContent } from '@/core/knowledge/ingestion/documentExtractor.service';
 import { normalizeText } from '@/core/knowledge/ingestion/textNormalizer.service';
 import { sanitizeText } from '@/utils/text-sanitizer';
+import { STORAGE_BUCKETS } from '@/constants/storage';
 
 // ---------------------------------------------------------------------------
 // Embedding constants
@@ -27,16 +28,15 @@ const PIPELINE_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 const EMBEDDING_DIMENSIONS = 384;
 
 // Storage bucket used by uploadDocumentForServerIngestion
-const KNOWLEDGE_STORAGE_BUCKET = 'documents';
+// Source of truth: STORAGE_BUCKETS.KNOWLEDGE in src/constants/storage.ts
+const KNOWLEDGE_STORAGE_BUCKET = STORAGE_BUCKETS.KNOWLEDGE;
 
 // =======================================================
 // Public Entry Point
 // =======================================================
 
 export async function runKnowledgeIngestion(documentId: string) {
-  // PRODUCTION PROBE — search for this tag in Vercel / browser DevTools console.
-  // If absent after upload, the wrong pipeline is executing.
-  console.log('[INGESTION_PIPELINE_V2]', { documentId, pipeline: 'knowledgeStepRunner', ts: new Date().toISOString() });
+  log('[INGESTION_PIPELINE_V2]', { documentId, pipeline: 'knowledgeStepRunner', ts: new Date().toISOString() });
   log(`[INGESTION] Starting knowledge ingestion for document ${documentId}`);
 
   try {
@@ -299,7 +299,7 @@ async function processDocument(doc: any) {
       return split;
     });
 
-    console.log('[INGESTION_PIPELINE_V2]', {
+    log('[INGESTION_PIPELINE_V2]', {
       documentId: doc.id,
       totalChars: sanitized.length,
       chunks: safeChunks.length,
@@ -322,12 +322,15 @@ async function processDocument(doc: any) {
       .update({ ingestion_status: 'embedding', ingestion_progress: 75 })
       .eq('id', doc.id);
 
+    // category is required so every chunk can be routed to the correct extractor
+    if (!doc.category || typeof doc.category !== 'string' || doc.category.trim().length === 0) {
+      throw new Error(
+        `CATEGORY_MISSING: document ${doc.id} has no category — cannot propagate to chunks`
+      );
+    }
+
     log('[INGESTION] generating embeddings');
-    console.log(`\n\n⚠️  [CRITICAL] About to call processEmbeddingsInBatches()`);
-    console.log(`⚠️  [CRITICAL] documentId: ${doc.id}`);
-    console.log(`⚠️  [CRITICAL] chunks.length: ${safeChunks.length}`);
-    await processEmbeddingsInBatches(doc.id, safeChunks);
-    console.log(`⚠️  [CRITICAL] processEmbeddingsInBatches() completed\n\n`);
+    await processEmbeddingsInBatches(doc.id, safeChunks, doc.category);
 
     // ── Step 4: Mark as completed ────────────────────────────────────────────
     await markCompleted(doc.id, safeChunks.length);
@@ -350,33 +353,12 @@ async function processDocument(doc: any) {
  * CRITICAL: Must pass Authorization header (Bearer token) — Edge Function requires it.
  */
 async function generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
-  console.log(`[EMBEDDING:BATCH] ========== STARTING BATCH EMBEDDING GENERATION ==========`);
-  console.log(`[EMBEDDING:BATCH] Invoking Edge Function for ${texts.length} texts`);
-  console.log(`[EMBEDDING:BATCH] Request body:`, {
-    textCount: texts.length,
-    model: 'text-embedding-3-small',
-    dimensions: EMBEDDING_DIMENSIONS,
-    totalChars: texts.reduce((sum, t) => sum + t.length, 0),
-  });
-
-  // NOTE: The Supabase client is configured with credentials from environment
-  // (SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY).
-  // The JS SDK automatically includes the Authorization header.
-  console.log('[EMBEDDING:BATCH] Supabase client configured with:');
-  console.log('[EMBEDDING:BATCH]   SUPABASE_SERVICE_ROLE_KEY available:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
-  console.log('[EMBEDDING:BATCH]   VITE_SUPABASE_ANON_KEY available:', !!process.env.VITE_SUPABASE_ANON_KEY || !!process.env.SUPABASE_ANON_KEY);
-  console.log('[EMBEDDING:BATCH] Supabase JS SDK will automatically include correct Authorization header');
-
-  console.log(`[EMBEDDING:BATCH] About to invoke Edge Function 'generate-embedding'`);
-  console.log(`[EMBEDDING:BATCH] Supabase functions object exists:`, !!supabase.functions);
-  console.log(`[EMBEDDING:BATCH] Invoke method exists:`, typeof supabase.functions.invoke);
-  console.log(`[EMBEDDING:BATCH] Note: NOT passing custom Authorization header - letting Supabase client handle it`);
+  log(`[EMBEDDING:BATCH] invoking Edge Function for ${texts.length} texts (${texts.reduce((sum, t) => sum + t.length, 0)} chars)`);
 
   let data: any;
   let fnError: any;
 
   try {
-    console.log(`[EMBEDDING:BATCH] Calling supabase.functions.invoke() ...`);
     const result = await supabase.functions.invoke(
       'generate-embedding',
       {
@@ -389,39 +371,22 @@ async function generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
     );
     data = result.data;
     fnError = result.error;
-    console.log(`[EMBEDDING:BATCH] Invoke returned. Error present:`, !!fnError);
-    console.log(`[EMBEDDING:BATCH] Data present:`, !!data);
   } catch (invokeErr: any) {
-    console.error(`[EMBEDDING:BATCH] ❌ INVOKE THREW EXCEPTION (not just error response)`);
-    console.error(`[EMBEDDING:BATCH] Exception type:`, invokeErr?.constructor?.name);
-    console.error(`[EMBEDDING:BATCH] Exception message:`, invokeErr?.message);
-    console.error(`[EMBEDDING:BATCH] Exception details:`, invokeErr);
+    logError(`[EMBEDDING:BATCH] invoke threw exception:`, invokeErr?.message);
     throw invokeErr;
   }
 
   if (fnError) {
-    console.error(`[EMBEDDING:BATCH] Edge Function invocation failed`);
-    console.error(`[EMBEDDING:BATCH] Error type:`, fnError?.constructor?.name);
-    console.error(`[EMBEDDING:BATCH] Error message:`, fnError.message);
-    console.error(`[EMBEDDING:BATCH] Error status:`, fnError?.status);
-    console.error(`[EMBEDDING:BATCH] Full error:`, JSON.stringify(fnError, null, 2));
+    logError(`[EMBEDDING:BATCH] Edge Function error: ${fnError.message}`);
     throw new Error(`Edge Function error: ${fnError.message}`);
   }
 
-  console.log(`[EMBEDDING:BATCH] Edge Function returned successfully`);
-  console.log(`[EMBEDDING:BATCH] Response data type:`, typeof data);
-  console.log(`[EMBEDDING:BATCH] Response data keys:`, Object.keys(data || {}));
-  console.log(`[EMBEDDING:BATCH] Response data:`, JSON.stringify(data, null, 2));
-
   if (!data?.embeddings || !Array.isArray(data.embeddings)) {
-    console.error(`[EMBEDDING:BATCH] Invalid response structure`);
-    console.error(`[EMBEDDING:BATCH] data.embeddings exists:`, !!data?.embeddings);
-    console.error(`[EMBEDDING:BATCH] is array:`, Array.isArray(data?.embeddings));
+    logError(`[EMBEDDING:BATCH] invalid response — missing embeddings array`);
     throw new Error('Invalid Edge Function response — missing embeddings array');
   }
 
-  console.log(`[EMBEDDING:BATCH] Successfully parsed ${data.embeddings.length} embeddings`);
-  console.log(`[EMBEDDING:BATCH] First embedding dimensions:`, data.embeddings[0]?.length ?? 'N/A');
+  log(`[EMBEDDING:BATCH] received ${data.embeddings.length} embeddings (dim=${data.embeddings[0]?.length ?? 'N/A'})`);
   return data.embeddings as number[][];
 }
 
@@ -429,50 +394,24 @@ async function generateEmbeddingBatch(texts: string[]): Promise<number[][]> {
 // Embedding Batch Processor
 // =======================================================
 
-async function processEmbeddingsInBatches(documentId: string, chunks: Chunk[]) {
-  console.log(`\n\n🔴🔴🔴 [CRITICAL] ENTERED processEmbeddingsInBatches() 🔴🔴🔴`);
-  console.log(`\n\n========== [EMBEDDING] STARTING EMBEDDING GENERATION PHASE ==========`);
-  console.log(`[EMBEDDING] Document ID: ${documentId}`);
-  console.log(`[EMBEDDING] Total chunks to embed: ${chunks.length}`);
-  console.log(`[EMBEDDING] Batch size: ${EMBEDDING_BATCH_SIZE}`);
-  console.log(`[EMBEDDING] Will process in ${Math.ceil(chunks.length / EMBEDDING_BATCH_SIZE)} batches`);
-  console.log(`[EMBEDDING] Supabase instance available:`, !!supabase);
-  console.log(`[EMBEDDING] Environment: ${typeof window === 'undefined' ? 'SERVER/NODE.JS' : 'BROWSER'}`);
-
-  console.log(`\n🔴 [CRITICAL] FOR LOOP CHECK: chunks.length=${chunks.length}, EMBEDDING_BATCH_SIZE=${EMBEDDING_BATCH_SIZE}`);
-  console.log(`🔴 [CRITICAL] FOR LOOP will iterate: ${Math.ceil(chunks.length / EMBEDDING_BATCH_SIZE)} times`);
+async function processEmbeddingsInBatches(documentId: string, chunks: Chunk[], category: string) {
+  log(`[EMBEDDING] starting — doc=${documentId} chunks=${chunks.length} batches=${Math.ceil(chunks.length / EMBEDDING_BATCH_SIZE)}`);
 
   for (let i = 0; i < chunks.length; i += EMBEDDING_BATCH_SIZE) {
-    console.log(`\n🔴 [CRITICAL] INSIDE FOR LOOP at iteration i=${i}`);
     await ensureStillProcessing(documentId);
 
     const batch      = chunks.slice(i, i + EMBEDDING_BATCH_SIZE);
     const texts      = batch.map(c => c.content);
     const batchLabel = `batch ${Math.floor(i / EMBEDDING_BATCH_SIZE) + 1}`;
 
-    console.log(`🔴 [CRITICAL] About to call generateEmbeddingBatch with ${texts.length} texts`);
-    // Log batch information before embedding generation
-    console.log(`[EMBEDDING] ${batchLabel} starting`);
-    console.log(`[EMBEDDING] ${batchLabel} chunk count:`, batch.length);
-    console.log(`[EMBEDDING] ${batchLabel} total text length:`, texts.reduce((sum, t) => sum + t.length, 0), 'chars');
-    console.log(`[EMBEDDING] ${batchLabel} avg text length:`, Math.round(texts.reduce((sum, t) => sum + t.length, 0) / texts.length), 'chars');
-
     // Generate all embeddings for this batch in a single Edge Function call.
     // On failure, insert chunks with null embeddings rather than aborting the document.
     let embeddings: (number[] | null)[] = new Array(batch.length).fill(null);
     try {
-      console.log(`[EMBEDDING] ${batchLabel} calling Edge Function...`);
       const result = await generateEmbeddingBatch(texts);
-      console.log(`[EMBEDDING] ${batchLabel} received ${result.length} embeddings from OpenAI`);
       embeddings = result.map(e => (Array.isArray(e) && e.length > 0 ? e : null));
-      console.log(`[EMBEDDING] ${batchLabel} processed embeddings: ${embeddings.filter(e => e !== null).length} valid, ${embeddings.filter(e => e === null).length} null`);
     } catch (err: any) {
-      console.error(`[EMBEDDING] ❌ ${batchLabel} embedding call FAILED`);
-      console.error(`[EMBEDDING] ${batchLabel} error type:`, err?.constructor?.name);
-      console.error(`[EMBEDDING] ${batchLabel} error message:`, err?.message);
-      console.error(`[EMBEDDING] ${batchLabel} error details:`, err);
-      console.error(`[EMBEDDING] ${batchLabel} stack trace:`, err?.stack);
-      warn(`[EMBEDDING] ${batchLabel} embedding call failed: ${err.message} — chunks will be stored without vectors`);
+      warn(`[EMBEDDING] ${batchLabel} failed: ${err.message} — chunks will be stored without vectors`);
     }
 
     // Build insert records (skip empty-content chunks)
@@ -485,6 +424,7 @@ async function processEmbeddingsInBatches(documentId: string, chunks: Chunk[]) {
         token_count:      chunk.tokenCount,
         metadata:         chunk.metadata ?? {},
         embedding_vector: embeddings[idx] ?? null,
+        category,
       }));
 
     if (records.length === 0) {
@@ -506,9 +446,6 @@ async function processEmbeddingsInBatches(documentId: string, chunks: Chunk[]) {
     for (let j = 0; j < records.length; j += INSERT_BATCH_SIZE) {
       const insertSlice = records.slice(j, j + INSERT_BATCH_SIZE);
 
-      console.log("SUPABASE INSERT TABLE:", "knowledge_chunks");
-      console.log("SUPABASE INSERT PAYLOAD:", JSON.stringify(insertSlice, null, 2));
-
       let insertError: any;
 
       try {
@@ -516,22 +453,14 @@ async function processEmbeddingsInBatches(documentId: string, chunks: Chunk[]) {
         insertError = result.error;
 
         if (insertError) {
-          console.error(`[EMBEDDING] ❌ DATABASE ERROR (${batchLabel})`);
-          console.error('[EMBEDDING] Error message:', insertError.message);
-          console.error('[EMBEDDING] Error code:', (insertError as any).code);
-          console.error('[EMBEDDING] Error details:', JSON.stringify(insertError, null, 2));
-          console.error('[EMBEDDING] Document ID:', documentId);
-          console.error('[EMBEDDING] Batch label:', batchLabel);
-          console.error('[EMBEDDING] Chunks in batch:', insertSlice.length);
-          console.error('[EMBEDDING] First chunk:', JSON.stringify(insertSlice[0], null, 2));
+          logError(`[EMBEDDING] DB insert error (${batchLabel}): ${insertError.message}`, {
+            code: (insertError as any).code,
+            documentId,
+            chunkCount: insertSlice.length,
+          });
         }
       } catch (e) {
-        console.error(`[EMBEDDING] ❌ EXCEPTION THROWN (${batchLabel})`);
-        console.error('[EMBEDDING] Exception message:', e instanceof Error ? e.message : String(e));
-        console.error('[EMBEDDING] Exception type:', e?.constructor?.name);
-        console.error('[EMBEDDING] Stack trace:', e instanceof Error ? e.stack : 'N/A');
-        console.error('[EMBEDDING] Full exception:', e);
-        console.error('[EMBEDDING] Document ID:', documentId);
+        logError(`[EMBEDDING] insert threw exception (${batchLabel}):`, e instanceof Error ? e.message : String(e));
         insertError = e;
       }
 
@@ -542,8 +471,10 @@ async function processEmbeddingsInBatches(documentId: string, chunks: Chunk[]) {
     }
 
     const successCount = records.filter(r => r.embedding_vector !== null).length;
-    log(`[EMBEDDING] ${batchLabel} complete — ${successCount}/${records.length} chunks embedded`);
+    log(`[EMBEDDING] ${batchLabel} complete — ${successCount}/${records.length} chunks embedded, category=${category}`);
   }
+
+  log(`[EMBEDDING] complete — doc=${documentId} category=${category} totalChunks=${chunks.length}`);
 }
 
 // =======================================================

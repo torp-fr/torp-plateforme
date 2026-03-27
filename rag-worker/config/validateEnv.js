@@ -11,7 +11,7 @@ for (const key of required) {
 }
 
 if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-  console.warn("⚠️ GOOGLE_SERVICE_ACCOUNT_JSON not set — OCR fallback may fail");
+  console.error("[ENV] ERROR: GOOGLE_SERVICE_ACCOUNT_JSON is not set — scanned PDFs will fail with 'No extractable text' and be marked failed");
 }
 
 console.log("[ENV] Environment validation passed");
