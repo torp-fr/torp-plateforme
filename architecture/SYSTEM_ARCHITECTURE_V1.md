@@ -766,6 +766,60 @@ Production Environment:
 
 ---
 
+## PHASE 2: Coverage Analysis Reasoning Layer (2026-03-27)
+
+**Status:** Production — integrated in `audit.engine.ts` v1.1
+
+### New Component: Reasoning Layer
+
+```
+src/core/reasoning/
+├── contextDeduction.service.ts       projectType → impliedDomains (26 types)
+├── ruleKeywordExtractor.service.ts   rule text → keywords + coverageScore
+├── coverageAnalyzer.service.ts       devisLines + rules → CoverageReport
+├── recommendationGenerator.service.ts gaps → Recommendation[] (prioritized)
+└── auditReportGenerator.service.ts   CoverageReport → AuditReport (JSON)
+```
+
+### Analysis Pipeline (Phase 2)
+
+```
+projectType
+    ↓ [contextDeduction.service.ts]
+impliedDomains (e.g. piscine → structure, hydraulique, électrique, sécurité, thermique)
+    ↓ [lot.engine v2 + LOT_TO_DOMAIN map]
+detectedLots with domain field (UNION with impliedDomains in rule.engine)
+    ↓ [rule.engine v2: lotDomains UNION impliedDomains]
+applicableRules (from 78,857 rules in DB, filtered by domain)
+    ↓ [coverageAnalyzer.service.ts]
+CoverageReport { coverage_pct, explicit, implicit, gaps, top_gaps, risk_domains }
+    ↓ [recommendationGenerator.service.ts]
+Recommendation[] { priority: critical|high|medium|low, domain, action, rationale }
+    ↓ [auditReportGenerator.service.ts]
+AuditReport { executive_summary, risk_level, compliance_verdict, recommendations }
+```
+
+### Risk Level Mapping
+
+| coverage_pct | risk_level | compliance_verdict |
+|-------------|------------|-------------------|
+| < 50% | critical | critique |
+| 50–69% | high | non_conforme |
+| 70–84% | medium | attention |
+| ≥ 85% | low | conforme |
+
+### Integration in Engine Pipeline
+
+- **Moteur 2 (Lot Engine):** `LOT_TO_DOMAIN` maps categories to DB domains; new `domain` field on `NormalizedLot`
+- **Moteur 3 (Rule Engine):** Loads `lotDomains UNION impliedDomains` to prevent empty rule sets
+- **Moteur 6 (Audit Engine) v1.1:** Adds optional `coverageAudit?: CoverageAuditReport` to `AuditEngineResult`
+- **Orchestrator:** Calls `enrichWithImpliedDomains()` before `runLotEngine()`
+
+Full decision rationale: `decisions/DECISION_011_phase2_coverage_analysis.md`
+Developer guide: `guides/PHASE_2_INTEGRATION_GUIDE.md`
+
+---
+
 ## REFERENCE DOCUMENTATION
 
 See PROJECT_CONTEXT.md for product vision and roadmap.

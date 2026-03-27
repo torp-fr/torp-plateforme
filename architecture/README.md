@@ -289,6 +289,17 @@ If a decision is superseded:
 
 ---
 
-**Last Updated:** 28 février 2026
+**Last Updated:** 2026-03-27 (Phase 2 additions)
 **Status:** Active - Strategic Reference Document
 **Maintenance:** Quarterly review
+
+---
+
+## Phase 2 Additions (2026-03-27)
+
+| File | Purpose |
+|------|---------|
+| `decisions/DECISION_011_phase2_coverage_analysis.md` | Full ADR for Coverage Analysis & Recommendations Engine |
+| `guides/PHASE_2_INTEGRATION_GUIDE.md` | Developer guide for extending Phase 2 (Phase 3+) |
+
+Phase 2 adds a **reasoning layer** (`src/core/reasoning/`) with 4 services that analyse devis completeness against applicable regulatory rules. See DECISION 11 in `DECISIONS_LOG.md` for rationale and `PHASE_2_INTEGRATION_GUIDE.md` for code examples.

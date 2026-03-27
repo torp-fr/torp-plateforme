@@ -820,3 +820,50 @@ Use this template for future decisions:
 ### Related Decisions
 - DECISION X: [Related]
 ```
+
+---
+
+## DECISION 11: Phase 2 — Coverage Analysis & Recommendations Engine
+
+**Status:** ADOPTED (2026-03-27, implemented in production)
+**Date:** 2026-03-27
+
+### Context
+Phase 1 built the regulatory KB (258 docs, 78,857 rules). The gap: given a devis and projectType, which rules apply and which are missing? Prior to Phase 2, lot.engine categories didn't match DB domain names → 0 rules loaded. Coverage analysis was impossible.
+
+### Decision
+Implement 4-service reasoning pipeline in `src/core/reasoning/`:
+1. **ContextDeductionEngine** — projectType → impliedDomains (26 types, fallback: ['structure'])
+2. **RuleKeywordExtractor** — rule.description + property_key → keywords + coverageScore
+3. **CoverageAnalyzer** — devisLines vs. rules → explicit/implicit/gap (threshold: 0.25)
+4. **RecommendationGenerator** — gaps grouped by (domain × severity) → prioritized actions
+5. **AuditReportGenerator** — CoverageReport + Recs → AuditReport with risk_level + verdict
+
+Risk thresholds: coverage < 50% → critical, 50-69% → high, 70-84% → medium, ≥85% → low.
+Integration: `audit.engine.ts` v1.1 adds optional `coverageAudit` field in `AuditEngineResult`.
+
+### Implementation
+Full ADR: `architecture/decisions/DECISION_011_phase2_coverage_analysis.md`
+Integration guide: `architecture/guides/PHASE_2_INTEGRATION_GUIDE.md`
+Tests: 27/27 E2E passing (`scripts/test-full-audit.ts`), 0 TS errors.
+
+### Consequences
+**Positive:**
+- Coverage visibility: `coverage_pct` (0–100%) per devis
+- Actionable: prioritized recommendations with regulatory references
+- Resilient: `impliedDomains` UNION ensures rules load even when lot.engine weak
+
+**Negative:**
+- Keyword matching (not semantic) → false positives/negatives possible
+- 26 projectTypes hard-coded → requires manual updates for new types
+- `coverageAudit` conditional on `projectData.devisLines` → Phase 3 frontend required
+
+### Alternatives Considered
+1. LLM-based coverage: Too slow, costly, non-deterministic
+2. Semantic embeddings only: Deferred to Phase 3 (latency concern)
+3. Static compliance checklist: Not scalable (78k rules, 9 domains)
+
+### Related Decisions
+- DECISION 4: Dual Pipeline (Phase 2 is on the analysis side)
+- DECISION 8: Multi-Dimensional Compliance Scoring (Phase 2 adds coverage dimension)
+- DECISION 9: Context-Aware Analysis (Phase 2 implements projectType → domain deduction)
