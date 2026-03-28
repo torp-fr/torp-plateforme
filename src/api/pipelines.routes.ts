@@ -7,6 +7,12 @@ import { Router, type Request, type Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { PipelineOrchestrator } from '../core/orchestration/PipelineOrchestrator.js';
 import type { ProjectType } from '../core/pipelines/types/index.js';
+import { validateBody, validateParams, validateQuery } from '../utils/validation.utils.js';
+import { RegisterEntrepriseSchema } from '../schemas/entreprises.schemas.js';
+import { CreateClientSchema } from '../schemas/clients.schemas.js';
+import { CreateProjetSchema } from '../schemas/projets.schemas.js';
+import { UploadDevisSchema, DevisIdParamSchema, DevisStatusQuerySchema } from '../schemas/devis.schemas.js';
+import { AuditShortCodeParamSchema } from '../schemas/audit.schemas.js';
 
 const router = Router();
 
@@ -25,12 +31,8 @@ function getOrchestrator() {
 // POST /api/v1/entreprises/register
 // Create entreprise + trigger EnrichissementEntreprise pipeline
 // ─────────────────────────────────────────────────────────────────
-router.post('/entreprises/register', async (req: Request, res: Response) => {
+router.post('/entreprises/register', validateBody(RegisterEntrepriseSchema), async (req: Request, res: Response) => {
   const { siret, raison_sociale, contact_principal, email, telephone } = req.body as Record<string, string>;
-
-  if (!siret || !/^\d{14}$/.test(siret)) {
-    return res.status(400).json({ error: 'SIRET invalide (14 chiffres requis)' });
-  }
 
   const supabase = getSupabase();
 
@@ -71,12 +73,8 @@ router.post('/entreprises/register', async (req: Request, res: Response) => {
 // POST /api/v1/clients
 // Create client + trigger ClientLocalization pipeline
 // ─────────────────────────────────────────────────────────────────
-router.post('/clients', async (req: Request, res: Response) => {
+router.post('/clients', validateBody(CreateClientSchema), async (req: Request, res: Response) => {
   const { entreprise_id, nom, prenom, email, telephone, adresse } = req.body as Record<string, string>;
-
-  if (!entreprise_id || !nom || !telephone) {
-    return res.status(400).json({ error: 'entreprise_id, nom et telephone sont requis' });
-  }
 
   const supabase = getSupabase();
 
@@ -108,15 +106,11 @@ router.post('/clients', async (req: Request, res: Response) => {
 // POST /api/v1/projets
 // Create project + trigger ContextRegulation pipeline
 // ─────────────────────────────────────────────────────────────────
-router.post('/projets', async (req: Request, res: Response) => {
+router.post('/projets', validateBody(CreateProjetSchema), async (req: Request, res: Response) => {
   const {
     client_id, entreprise_id, type, description, adresse,
     lat, lng, code_postal, budget_estime,
   } = req.body as Record<string, unknown>;
-
-  if (!client_id || !entreprise_id || !type) {
-    return res.status(400).json({ error: 'client_id, entreprise_id et type sont requis' });
-  }
 
   const supabase = getSupabase();
 

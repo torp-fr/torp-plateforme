@@ -18,13 +18,11 @@ export default defineConfig({
       'node_modules/**',
       'dist/**',
       'e2e/**',
-      'tests/**',
       '**/*.spec.ts',
       '**/*.e2e.ts',
     ],
     watchExclude: [
       'e2e/**',
-      'tests/**',
     ],
     coverage: {
       provider: 'v8',

@@ -41,9 +41,20 @@ function envBool(key: string, fallback: boolean): boolean {
 export const config = {
   env: env('NODE_ENV', 'development') as 'development' | 'staging' | 'production',
 
+  server: {
+    port:      envNumber('PORT', 3001),
+    clientUrl: env('CLIENT_URL', 'http://localhost:3000'),
+  },
+
   supabase: {
     url:            env('SUPABASE_URL'),
+    anonKey:        env('SUPABASE_ANON_KEY'),
     serviceRoleKey: env('SUPABASE_SERVICE_ROLE_KEY'),
+  },
+
+  auth: {
+    jwtSecret:    env('JWT_SECRET', 'change-me-in-production'),
+    tokenExpiry:  envNumber('JWT_TOKEN_EXPIRY_SECONDS', 3600),
   },
 
   apis: {
@@ -124,9 +135,10 @@ export const config = {
  * Call once at application startup (before first DB or API call).
  */
 const REQUIRED: { key: string; description: string }[] = [
-  { key: 'SUPABASE_URL',            description: 'Supabase project URL' },
+  { key: 'SUPABASE_URL',              description: 'Supabase project URL' },
+  { key: 'SUPABASE_ANON_KEY',         description: 'Supabase anon key (used for auth token validation)' },
   { key: 'SUPABASE_SERVICE_ROLE_KEY', description: 'Supabase service role key (never expose to frontend)' },
-  { key: 'PUBLIC_BASE_URL',         description: 'Public base URL for QR code links (e.g. https://torp.fr)' },
+  { key: 'PUBLIC_BASE_URL',           description: 'Public base URL for QR code links (e.g. https://torp.fr)' },
 ];
 
 export function assertConfig(): void {
