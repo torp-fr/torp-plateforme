@@ -1,13 +1,14 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(npx tsx:*)",
+      "Bash(pnpm exec:*)"
+    ]
+  },
   "mcpServers": {
     "supabase": {
       "transport": "http",
       "url": "https://mcp.supabase.com/mcp?project_ref=zvxasiwahpraasjzfhhl"
     }
-  },
-  "permissions": {
-    "allow": [
-      "Bash(npx tsx:*)"
-    ]
   }
 }

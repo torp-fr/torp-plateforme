@@ -31,6 +31,31 @@ export const UpdateRateLimitSchema = z
     { message: 'Au moins un champ de limite est requis (requests_per_minute, requests_per_hour ou requests_per_day)' }
   );
 
+// ─── Platform Settings ────────────────────────────────────────────────────────
+
+export const PlatformSettingsSchema = z.object({
+  platform_name:                z.string().min(2).max(255),
+  platform_url:                 z.string().url(),
+  platform_description:         z.string().max(1000).optional(),
+  maintenance_mode:             z.boolean(),
+  maintenance_message:          z.string().max(500).optional(),
+  email_notifications_enabled:  z.boolean(),
+  daily_summary_enabled:        z.boolean(),
+  security_alerts_enabled:      z.boolean(),
+  session_timeout_minutes:      z.number().int().min(1).max(1440),
+  require_2fa_for_admins:       z.boolean(),
+  ip_whitelist_enabled:         z.boolean(),
+  ip_whitelist:                 z.string().optional(),
+  slack_webhook_url:            z.string().url().optional().or(z.literal('')),
+});
+
+export const UpdatePlatformSettingsSchema = PlatformSettingsSchema.partial();
+
+export type PlatformSettings       = z.infer<typeof PlatformSettingsSchema>;
+export type UpdatePlatformSettings = z.infer<typeof UpdatePlatformSettingsSchema>;
+
+// ─── Type exports (existing) ──────────────────────────────────────────────────
+
 export type ListUsersQuery       = z.infer<typeof ListUsersQuerySchema>;
 export type UserIdParam          = z.infer<typeof UserIdParamSchema>;
 export type UpdateRateLimitInput = z.infer<typeof UpdateRateLimitSchema>;

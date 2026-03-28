@@ -1,58 +1,39 @@
 /**
  * GET /api/v1/engine/orchestration
- * Returns orchestration status, engine execution flow, and last orchestration run.
+ * Last orchestration run from the database.
  *
- * Queries the `orchestration_runs` table for the latest run instead of reading
- * in-memory state (which does not persist across serverless invocations).
+ * Delegates to EngineService — same logic as the Express route.
+ * Auth: JWT Bearer token required.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { ENGINE_REGISTRY } from '../../../src/core/platform/engineRegistry.js';
 import { getServerSupabase } from '../../_lib/supabase.js';
+import { engineService } from '../../../src/core/services/EngineService.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
+  // ── Auth guard ──────────────────────────────────────────────────────────────
+  const token = (req.headers.authorization ?? '').replace('Bearer ', '').trim();
+  if (!token) {
+    return res.status(401).json({ success: false, error: 'Unauthorized', code: 'MISSING_TOKEN' });
+  }
+
+  const supabase = getServerSupabase();
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !user) {
+    return res.status(401).json({ success: false, error: 'Unauthorized', code: 'INVALID_TOKEN' });
+  }
+
+  // ── Handler ─────────────────────────────────────────────────────────────────
   try {
-    const supabase = getServerSupabase();
-
-    // Fetch the most recent orchestration run from the database.
-    const { data: runs, error: dbError } = await supabase
-      .from('orchestration_runs')
-      .select('id, status, started_at, completed_at, error')
-      .order('started_at', { ascending: false })
-      .limit(1);
-
-    if (dbError) {
-      console.error('[orchestration] DB error:', dbError.message);
-    }
-
-    const lastRun = runs?.[0] ?? null;
-    const currentStatus = lastRun?.status === 'running' ? 'running' : 'idle';
-
-    // Engine execution order derived from registry — no hardcoded metadata.
-    const flow = ENGINE_REGISTRY.map((engine) => engine.id);
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        status: currentStatus,
-        flow,
-        lastOrchestration: lastRun
-          ? {
-              id: lastRun.id,
-              status: lastRun.status,
-              startTime: lastRun.started_at,
-              endTime: lastRun.completed_at ?? null,
-              error: lastRun.error ?? null,
-            }
-          : null,
-      },
-    });
+    const data = await engineService.getLastOrchestration();
+    return res.status(200).json({ success: true, data });
   } catch (err) {
-    const error = err instanceof Error ? err : new Error(String(err));
-    return res.status(500).json({ success: false, error: 'Internal error', message: error.message });
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[/engine/orchestration]', message);
+    return res.status(500).json({ success: false, error: 'Internal error', code: 'ENGINE_ORCHESTRATION_ERROR' });
   }
 }

@@ -244,6 +244,44 @@ export class AuthService {
     return (data ?? []) as Array<RateLimitConfig & { profile: UserProfile | null }>;
   }
 
+  // ── Platform settings (admin) ────────────────────────────────────────────
+
+  static readonly SETTINGS_ID = '00000000-0000-0000-0000-000000000000';
+
+  async getSettings(): Promise<Record<string, unknown>> {
+    const { data, error } = await this.admin
+      .from('platform_settings')
+      .select('*')
+      .eq('id', AuthService.SETTINGS_ID)
+      .single();
+
+    if (error || !data) {
+      const err = new Error('Platform settings not found');
+      (err as NodeJS.ErrnoException).code = 'SETTINGS_NOT_FOUND';
+      throw err;
+    }
+
+    return data as Record<string, unknown>;
+  }
+
+  async updateSettings(
+    updates: Record<string, unknown>,
+    updatedBy: string,
+  ): Promise<Record<string, unknown>> {
+    const { data, error } = await this.admin
+      .from('platform_settings')
+      .update({ ...updates, updated_at: new Date().toISOString(), updated_by: updatedBy })
+      .eq('id', AuthService.SETTINGS_ID)
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Settings update failed: ${error?.message ?? 'no data returned'}`);
+    }
+
+    return data as Record<string, unknown>;
+  }
+
   // ── Email helpers ────────────────────────────────────────────────────────
 
   async sendPasswordResetEmail(email: string): Promise<void> {

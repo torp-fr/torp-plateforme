@@ -10,6 +10,7 @@ import { assertConfig, config } from '../config/index.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import authRoutes from './routes/auth.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import engineRoutes from './routes/engine.routes.js';
 import pipelineRoutes from './pipelines.routes.js';
 import healthRoutes from './pipeline-health.routes.js';
 
@@ -37,8 +38,9 @@ app.use(rateLimitMiddleware);
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
-app.use('/api/v1/auth',  authRoutes);    // Public + protected auth endpoints
-app.use('/api/v1/admin', adminRoutes);   // Admin-only endpoints
+app.use('/api/v1/auth',   authRoutes);    // Public + protected auth endpoints
+app.use('/api/v1/admin',  adminRoutes);   // Admin-only endpoints
+app.use('/api/v1/engine', engineRoutes);  // Engine metrics (JWT required)
 
 app.use('/api/v1', pipelineRoutes);      // Phase 3A pipeline routes
 app.use('/api/v1', healthRoutes);        // Pipeline health checks

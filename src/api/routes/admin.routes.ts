@@ -19,6 +19,7 @@ import {
   ListUsersQuerySchema,
   UserIdParamSchema,
   UpdateRateLimitSchema,
+  UpdatePlatformSettingsSchema,
 } from '../../schemas/admin.schemas.js';
 
 const router = Router();
@@ -131,6 +132,39 @@ router.delete('/users/:userId', validateParams(UserIdParamSchema), async (req: A
     res.status(500).json({ error: 'Internal Server Error', code: 'DELETE_USER_FAILED' });
   }
 });
+
+// ─── GET /admin/settings ──────────────────────────────────────────────────────
+
+router.get('/settings', async (_req: Request, res: Response) => {
+  try {
+    const data = await authService.getSettings();
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'SETTINGS_NOT_FOUND') {
+      res.status(404).json({ error: 'Settings not found', code: 'SETTINGS_NOT_FOUND' });
+      return;
+    }
+    console.error('[admin/settings GET]', err);
+    res.status(500).json({ error: 'Internal Server Error', code: 'GET_SETTINGS_ERROR' });
+  }
+});
+
+// ─── PUT /admin/settings ──────────────────────────────────────────────────────
+
+router.put(
+  '/settings',
+  validateBody(UpdatePlatformSettingsSchema),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const data = await authService.updateSettings(req.body, req.user!.id);
+      res.status(200).json({ success: true, message: 'Settings updated successfully', data });
+    } catch (err) {
+      console.error('[admin/settings PUT]', err);
+      res.status(500).json({ error: 'Internal Server Error', code: 'UPDATE_SETTINGS_ERROR' });
+    }
+  },
+);
 
 // ─── GET /admin/health ────────────────────────────────────────────────────────
 
