@@ -101,14 +101,18 @@ export function makeGeoplatformeHealthCheck(): () => Promise<void> {
   };
 }
 
-/** Validate BDNB API is reachable (open endpoint, no auth). */
+/** Validate BDNB API is reachable (open endpoint, no auth).
+ *  Without geo filter the endpoint returns 404 — that's fine, it means the API
+ *  is up and responding. Only 5xx signals a real outage.
+ */
 export function makeBdnbHealthCheck(): () => Promise<void> {
   return async () => {
     const resp = await fetch(
       'https://api.bdnb.io/v0.2/open/batiment_groupe_complet?limit=1',
       { signal: AbortSignal.timeout(TIMEOUT_MS) }
     );
-    if (!resp.ok) throw new Error(`BDNB returned ${resp.status}`);
+    // 404 = no records without filter (acceptable — API is up)
+    if (!resp.ok && resp.status !== 404) throw new Error(`BDNB returned ${resp.status}`);
   };
 }
 

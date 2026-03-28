@@ -749,10 +749,22 @@ describe('Data API health checks', () => {
   });
 
   describe('makeBdnbHealthCheck()', () => {
-    it('resolves when API returns OK', async () => {
+    it('resolves when API returns 200', async () => {
       const { makeBdnbHealthCheck } = await import('@/core/monitoring/AIAPIsHealthCheck.js');
       vi.stubGlobal('fetch', mockFetchOk([]));
       await expect(makeBdnbHealthCheck()()).resolves.not.toThrow();
+    });
+
+    it('resolves when API returns 404 (no results without filter — API is up)', async () => {
+      const { makeBdnbHealthCheck } = await import('@/core/monitoring/AIAPIsHealthCheck.js');
+      vi.stubGlobal('fetch', mockFetchFail(404));
+      await expect(makeBdnbHealthCheck()()).resolves.not.toThrow();
+    });
+
+    it('throws when API returns 500', async () => {
+      const { makeBdnbHealthCheck } = await import('@/core/monitoring/AIAPIsHealthCheck.js');
+      vi.stubGlobal('fetch', mockFetchFail(500));
+      await expect(makeBdnbHealthCheck()()).rejects.toThrow('500');
     });
   });
 
