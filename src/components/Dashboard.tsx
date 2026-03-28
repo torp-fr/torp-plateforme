@@ -70,8 +70,8 @@ export const Dashboard = () => {
 
         {/* Features Cards */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          {features.map((feature, index) => (
-            <Card key={index} variant="gradient" className="animate-fade-in">
+          {features.map((feature) => (
+            <Card key={`feature-${feature.title}`} variant="gradient" className="animate-fade-in">
               <CardHeader className="pb-2">
                 <feature.icon className="h-6 w-6 text-primary" />
               </CardHeader>
@@ -102,8 +102,8 @@ export const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-3 gap-6">
-              {advantages.map((advantage, index) => (
-                <div key={index} className="flex items-start gap-4 p-4 bg-background rounded-lg border">
+              {advantages.map((advantage) => (
+                <div key={`advantage-${advantage.title}`} className="flex items-start gap-4 p-4 bg-background rounded-lg border">
                   <div className="p-2 bg-primary/10 rounded-lg">
                     <advantage.icon className="h-5 w-5 text-primary" />
                   </div>

@@ -128,6 +128,12 @@ export function LandingPage() {
             >
               Avantages
             </a>
+            <a
+              href="#pricing"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
+            >
+              Tarifs
+            </a>
           </nav>
 
           <div className="hidden md:flex items-center gap-4">
@@ -326,6 +332,107 @@ export function LandingPage() {
                 </Card>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section id="pricing" className="py-20 px-6 bg-background">
+        <div className="container mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="font-display text-4xl md:text-5xl font-bold mb-4 text-foreground">
+              Tarifs simples et transparents
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto font-medium">
+              Choisissez le plan adapté à votre activité. Sans engagement.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+            {/* Starter */}
+            <Card className="border-border hover:shadow-lg transition-all">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-foreground font-display text-xl">Starter</CardTitle>
+                <CardDescription>Pour découvrir la plateforme</CardDescription>
+                <div className="pt-4">
+                  <span className="text-4xl font-bold text-foreground font-display">€99</span>
+                  <span className="text-muted-foreground ml-1">/mois</span>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <ul className="space-y-3 text-sm text-muted-foreground">
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-accent shrink-0" />50 analyses / mois</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-accent shrink-0" />Score A–E + rapport</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-accent shrink-0" />Export PDF</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-accent shrink-0" />Support email</li>
+                </ul>
+                <Button
+                  variant="outline"
+                  className="w-full mt-6"
+                  onClick={() => navigate('/register')}
+                >
+                  Commencer
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Professional — highlighted */}
+            <Card className="border-2 border-primary shadow-xl relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                <Badge className="bg-primary text-primary-foreground font-display px-3 py-1">
+                  Populaire
+                </Badge>
+              </div>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-foreground font-display text-xl">Professionnel</CardTitle>
+                <CardDescription>Pour les équipes actives</CardDescription>
+                <div className="pt-4">
+                  <span className="text-4xl font-bold text-foreground font-display">€299</span>
+                  <span className="text-muted-foreground ml-1">/mois</span>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <ul className="space-y-3 text-sm text-muted-foreground">
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-accent shrink-0" />Analyses illimitées</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-accent shrink-0" />Score avancé 12 moteurs</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-accent shrink-0" />Accès équipe (5 sièges)</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-accent shrink-0" />Enrichissement Pappers</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-accent shrink-0" />Support prioritaire</li>
+                </ul>
+                <Button
+                  className="w-full mt-6 gradient-primary text-primary-foreground border-0"
+                  onClick={() => navigate('/register')}
+                >
+                  Essai gratuit 7 jours
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Enterprise */}
+            <Card className="border-border hover:shadow-lg transition-all">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-foreground font-display text-xl">Entreprise</CardTitle>
+                <CardDescription>Pour les grands comptes</CardDescription>
+                <div className="pt-4">
+                  <span className="text-2xl font-bold text-foreground font-display">Sur devis</span>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <ul className="space-y-3 text-sm text-muted-foreground">
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-accent shrink-0" />Tout Professionnel inclus</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-accent shrink-0" />Sièges illimités</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-accent shrink-0" />Intégrations sur mesure</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-accent shrink-0" />SLA & support dédié</li>
+                </ul>
+                <Button
+                  variant="outline"
+                  className="w-full mt-6"
+                  onClick={() => navigate('/register')}
+                >
+                  Contacter l'équipe
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>

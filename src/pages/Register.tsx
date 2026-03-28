@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label';
 import { useApp } from '@/context/AppContext';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft } from 'lucide-react';
-import torpLogo from '@/assets/torp-logo-red.png';
+import { BRANDING } from '@/config/branding';
 import { authService } from '@/services/api';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export default function Register() {
   const [email, setEmail] = useState('');
@@ -18,18 +19,33 @@ export default function Register() {
   const [phone, setPhone] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+
+  const passwordStrength = (pwd: string): { score: number; label: string; color: string } => {
+    if (!pwd) return { score: 0, label: '', color: '' };
+    let score = 0;
+    if (pwd.length >= 8) score++;
+    if (pwd.length >= 12) score++;
+    if (/[A-Z]/.test(pwd)) score++;
+    if (/[0-9]/.test(pwd)) score++;
+    if (/[^A-Za-z0-9]/.test(pwd)) score++;
+    if (score <= 1) return { score, label: 'Faible', color: 'bg-red-500' };
+    if (score <= 3) return { score, label: 'Moyen', color: 'bg-amber-500' };
+    return { score, label: 'Fort', color: 'bg-emerald-500' };
+  };
+
+  const strength = passwordStrength(password);
   const { setUser } = useApp();
   const { toast } = useToast();
 
   const handleRegister = async (e: React.FormEvent) => {
-    console.log('[Register] Form submitted');
+    log('[Register] Form submitted');
     e.preventDefault();
 
     // Validation
-    console.log('[Register] Validating form:', { email, name, passwordLength: password.length });
+    log('[Register] Validating form:', { email, name, passwordLength: password.length });
 
     if (!email || !name || !password) {
-      console.log('[Register] Missing required fields');
+      log('[Register] Missing required fields');
       toast({
         title: 'Erreur',
         description: 'Veuillez remplir tous les champs obligatoires',
@@ -39,7 +55,7 @@ export default function Register() {
     }
 
     if (password !== confirmPassword) {
-      console.log('[Register] Passwords do not match');
+      log('[Register] Passwords do not match');
       toast({
         title: 'Erreur',
         description: 'Les mots de passe ne correspondent pas',
@@ -49,7 +65,7 @@ export default function Register() {
     }
 
     if (password.length < 8) {
-      console.log('[Register] Password too short');
+      log('[Register] Password too short');
       toast({
         title: 'Erreur',
         description: 'Le mot de passe doit contenir au moins 8 caractères',
@@ -58,12 +74,12 @@ export default function Register() {
       return;
     }
 
-    console.log('[Register] Validation passed, calling authService.register()');
+    log('[Register] Validation passed, calling authService.register()');
     setIsLoading(true);
 
     try {
       // Register with B2B as default (user can change in settings)
-      console.log('[Register] Starting registration...');
+      log('[Register] Starting registration...');
       const response = await authService.register({
         email,
         password,
@@ -72,7 +88,7 @@ export default function Register() {
         phone: phone || undefined,
       });
 
-      console.log('[Register] Registration successful:', response.user.email);
+      log('[Register] Registration successful:', response.user.email);
       setUser(response.user);
 
       toast({
@@ -81,7 +97,7 @@ export default function Register() {
       });
 
       // Redirect to dashboard (they can set role in settings)
-      console.log('[Register] Redirecting to dashboard');
+      log('[Register] Redirecting to dashboard');
       navigate('/dashboard');
     } catch (error) {
       console.error('[Register] Error:', error);
@@ -108,7 +124,7 @@ export default function Register() {
         <Card className="backdrop-blur-sm bg-white/95 shadow-strong">
           <CardHeader className="text-center">
             <div className="flex items-center justify-center gap-3 mb-4">
-              <img src={torpLogo} alt="TORP" className="h-12 w-auto" />
+              <img src={BRANDING.logoPrimary} alt="TORP" className="h-12 w-auto" />
               <div>
                 <CardTitle className="text-2xl font-bold text-primary">TORP</CardTitle>
                 <CardDescription>Créer votre compte</CardDescription>
@@ -164,7 +180,29 @@ export default function Register() {
                   required
                   minLength={8}
                 />
-                <p className="text-xs text-muted-foreground">Minimum 8 caractères</p>
+                {password && (
+                  <div className="space-y-1">
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <div
+                          key={i}
+                          className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+                            i <= strength.score ? strength.color : 'bg-border'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <p className={`text-xs font-medium ${
+                      strength.score <= 1 ? 'text-red-500' :
+                      strength.score <= 3 ? 'text-amber-500' : 'text-emerald-600'
+                    }`}>
+                      {strength.label} — min. 8 caractères, majuscules, chiffres
+                    </p>
+                  </div>
+                )}
+                {!password && (
+                  <p className="text-xs text-muted-foreground">Min. 8 caractères, mélange majuscules/chiffres</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -184,7 +222,7 @@ export default function Register() {
                 className="w-full"
                 disabled={isLoading}
                 onClick={(e) => {
-                  console.log('[Register] Button clicked:', { isLoading, email, name, passwordLength: password.length });
+                  log('[Register] Button clicked:', { isLoading, email, name, passwordLength: password.length });
                   if (isLoading) {
                     e.preventDefault();
                   }

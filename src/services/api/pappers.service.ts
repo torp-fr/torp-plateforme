@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Service d'accès à l'API Pappers
  * Documentation : https://www.pappers.fr/api/documentation
@@ -513,7 +515,7 @@ class PappersService {
         scoring: options.includeScoring ? 'true' : undefined,
       });
 
-      console.log('[Pappers] Fetching:', url.replace(this.apiKey, '***'));
+      log('[Pappers] Fetching:', url.replace(this.apiKey, '***'));
 
       const response = await fetch(url, {
         headers: this.getHeaders(),
@@ -540,7 +542,7 @@ class PappersService {
       }
 
       const data = await response.json() as PappersEntreprise;
-      console.log('[Pappers] Data received:', {
+      log('[Pappers] Data received:', {
         siren: data.siren,
         nom: data.nom_entreprise || data.denomination,
         hasFinances: !!data.finances?.length,
@@ -868,18 +870,18 @@ class PappersService {
     const cleanedSiret = siret.replace(/\s/g, '');
 
     // 1. Essayer d'abord l'API SIRENE gratuite (recherche-entreprises.api.gouv.fr)
-    console.log('[SIRENE] Recherche SIRET:', cleanedSiret);
+    log('[SIRENE] Recherche SIRET:', cleanedSiret);
     const sireneResult = await this.getEntrepriseFromSirene(cleanedSiret);
 
     if (sireneResult) {
-      console.log('[SIRENE] Entreprise trouvée:', sireneResult.nom);
+      log('[SIRENE] Entreprise trouvée:', sireneResult.nom);
       return sireneResult;
     }
 
     // 2. Fallback: API Pappers (payante) pour données enrichies ou si SIRENE échoue
     if (this.isConfigured()) {
       try {
-        console.log('[Pappers] Fallback - Fetching data for SIRET:', cleanedSiret);
+        log('[Pappers] Fallback - Fetching data for SIRET:', cleanedSiret);
 
         const result = await this.getEntreprise(cleanedSiret, {
           includeFinances: true,
@@ -888,7 +890,7 @@ class PappersService {
         });
 
         if (result.success && result.data) {
-          console.log('[Pappers] Data received:', {
+          log('[Pappers] Data received:', {
             nom: result.data.nom_entreprise,
             siret: result.data.siret_siege,
             hasFinancials: !!(result.data.finances?.length),
@@ -898,7 +900,7 @@ class PappersService {
         }
 
         if (result.notFound) {
-          console.warn('[Pappers] Entreprise non trouvée:', siret);
+          warn('[Pappers] Entreprise non trouvée:', siret);
         } else if (result.error) {
           console.error('[Pappers] API error:', result.error);
         }
@@ -907,7 +909,7 @@ class PappersService {
       }
     }
 
-    console.warn('[Entreprise] Aucune donnée trouvée pour SIRET:', cleanedSiret);
+    warn('[Entreprise] Aucune donnée trouvée pour SIRET:', cleanedSiret);
     return null;
   }
 
@@ -929,7 +931,7 @@ class PappersService {
       const data = await response.json();
 
       if (!data.results || data.results.length === 0) {
-        console.warn('[SIRENE] Pas de résultat exact, essai recherche libre...');
+        warn('[SIRENE] Pas de résultat exact, essai recherche libre...');
         return this.getEntrepriseFromSireneFallback(siret);
       }
 
@@ -947,7 +949,7 @@ class PappersService {
   private async getEntrepriseFromSireneFallback(siret: string): Promise<EnrichedEntrepriseData | null> {
     try {
       const siren = siret.substring(0, 9);
-      console.log('[SIRENE Fallback] Recherche par SIREN:', siren);
+      log('[SIRENE Fallback] Recherche par SIREN:', siren);
 
       const response = await fetch(
         `https://recherche-entreprises.api.gouv.fr/search?q=${siren}&page=1&per_page=5`,
@@ -1120,7 +1122,7 @@ class PappersService {
    */
   async getEntrepriseBySiren(siren: string): Promise<EnrichedEntrepriseData | null> {
     if (!this.isConfigured()) {
-      console.warn('[Pappers] API key not configured');
+      warn('[Pappers] API key not configured');
       return null;
     }
 
@@ -1137,7 +1139,7 @@ class PappersService {
       }
 
       if (result.notFound) {
-        console.warn('[Pappers] Entreprise non trouvée:', siren);
+        warn('[Pappers] Entreprise non trouvée:', siren);
       }
       return null;
     } catch (error) {

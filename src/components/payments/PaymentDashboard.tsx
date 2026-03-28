@@ -500,7 +500,7 @@ export function PaymentDashboard({ userId, userRole, contractId }: PaymentDashbo
           <CardContent>
             <div className="space-y-4">
               {Object.entries(stats.parStatut).map(([status, data]) => (
-                <div key={status} className="space-y-2">
+                <div key={`stat-${status}`} className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
                       {getStatusIcon(status as PaymentStatus)}
@@ -582,8 +582,8 @@ export function PaymentDashboard({ userId, userRole, contractId }: PaymentDashbo
                   <AlertTitle>Alertes de sécurité</AlertTitle>
                   <AlertDescription>
                     <ul className="list-disc list-inside text-sm mt-2">
-                      {selectedPayment.fraudAlerts.map((alert, i) => (
-                        <li key={i}>{alert}</li>
+                      {selectedPayment.fraudAlerts.map((alert, index) => (
+                        <li key={`fraud-alert-${index}`}>{alert}</li>
                       ))}
                     </ul>
                   </AlertDescription>
@@ -594,8 +594,8 @@ export function PaymentDashboard({ userId, userRole, contractId }: PaymentDashbo
               <div className="space-y-2">
                 <span className="text-sm font-medium">Historique</span>
                 <div className="space-y-2">
-                  {selectedPayment.statusHistory.map((change, i) => (
-                    <div key={i} className="flex items-center gap-3 text-sm">
+                  {selectedPayment.statusHistory.map((change, index) => (
+                    <div key={`status-change-${index}`} className="flex items-center gap-3 text-sm">
                       <span className="text-muted-foreground">
                         {new Date(change.changedAt).toLocaleString('fr-FR')}
                       </span>

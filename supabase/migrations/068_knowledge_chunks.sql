@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS knowledge_chunks (
   chunk_index INTEGER NOT NULL,                 -- Position in document (0-based)
   content TEXT NOT NULL,                        -- Chunk text content
   token_count INTEGER,                          -- Estimated token count for tracking
-  embedding VECTOR(1536) DEFAULT NULL,         -- Per-chunk embedding (pgvector)
+  embedding_vector VECTOR(1536) DEFAULT NULL,  -- Per-chunk embedding (pgvector) — matches code expectations
   embedding_generated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

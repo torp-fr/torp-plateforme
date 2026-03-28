@@ -3,39 +3,8 @@
  * Structures for domain knowledge storage and retrieval
  */
 
-/**
- * Document Classification Taxonomy
- */
-export enum DocumentCategory {
-  // Regulations
-  DTU = 'DTU',                           // Détails Techniques Unifiés
-  EUROCODE = 'EUROCODE',                 // European standards
-  NORM = 'NORM',                         // ISO, NF, EN norms
-  REGULATION = 'REGULATION',             // Building regulations
-
-  // Guidelines & Best Practices
-  GUIDELINE = 'GUIDELINE',               // Internal guidelines
-  BEST_PRACTICE = 'BEST_PRACTICE',       // Industry best practices
-  TECHNICAL_GUIDE = 'TECHNICAL_GUIDE',   // Technical documentation
-
-  // Training & Education
-  TRAINING = 'TRAINING',                 // Training materials
-  MANUAL = 'MANUAL',                     // Operation manuals
-  HANDBOOK = 'HANDBOOK',                 // Technical handbooks
-
-  // Environmental & Sustainability
-  SUSTAINABILITY = 'SUSTAINABILITY',     // Green building, eco-labels
-  ENERGY_EFFICIENCY = 'ENERGY_EFFICIENCY', // Energy standards
-
-  // Legal & Compliance
-  LEGAL = 'LEGAL',                       // Legal requirements
-  LIABILITY = 'LIABILITY',               // Insurance, liability
-  WARRANTY = 'WARRANTY',                 // Warranty standards
-
-  // Case Studies & Examples
-  CASE_STUDY = 'CASE_STUDY',             // Project examples
-  LESSONS_LEARNED = 'LESSONS_LEARNED',   // Past projects feedback
-}
+// Canonical taxonomy — imported from the single source of truth.
+export type { DocumentCategory } from '@/constants/documentCategories';
 
 /**
  * Work Type Categories for filtering knowledge
@@ -278,6 +247,26 @@ export interface DocumentIngestionConfig {
   shouldAutoClassify: boolean;
   requiresApproval: boolean;
   approvalThreshold: number;
+}
+
+/**
+ * Knowledge Base Chunk (search result from pgvector semantic search)
+ */
+export interface KBChunk {
+  id: string;
+  documentId: string;
+  content: string;
+  similarity?: number;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Knowledge Base Search Result
+ */
+export interface KBSearchResult {
+  chunks: KBChunk[];
+  distances: number[];
+  totalResults: number;
 }
 
 /**

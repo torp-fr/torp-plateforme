@@ -16,6 +16,7 @@ import { hybridAIService, AIGenerationOptions } from './hybrid-ai.service';
 import { secureAI } from './secure-ai.service';
 import { structuredLogger } from '@/services/observability/structured-logger';
 import { aiTelemetry } from './aiTelemetry.service';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -117,6 +118,8 @@ class AIOrchestrator {
   ): Promise<{ content: string; provider: string }> {
     const requestId = this.generateTraceId();
     const startTime = Date.now();
+    // Tracks the last provider attempted — visible to both try and catch.
+    let lastProvider: string = (options as any)?.preferredProvider ?? env.ai.primaryProvider;
 
     try {
       const result = await this.runLLMCompletion({
@@ -127,11 +130,13 @@ class AIOrchestrator {
         preferredProvider: (options as any)?.preferredProvider,
       });
 
+      lastProvider = result.provider;
+
       // Track successful completion
       aiTelemetry.trackAIRequest({
         requestId,
         operation: 'completion',
-        primaryProvider: env.ai.primaryProvider || 'unknown',
+        primaryProvider: env.ai.primaryProvider,
         providerUsed: result.provider,
         fallbackTriggered: result.retriesUsed > 0,
         latencyMs: Date.now() - startTime,
@@ -152,8 +157,8 @@ class AIOrchestrator {
       aiTelemetry.logAIError({
         requestId,
         operation: 'completion',
-        primaryProvider: env.ai.primaryProvider || 'unknown',
-        lastProviderTried: 'unknown',
+        primaryProvider: env.ai.primaryProvider,
+        lastProviderTried: lastProvider,
         retriesExhausted: true,
         errorCode: error instanceof AIOrchestrationError ? error.code : 'UNKNOWN',
         errorMessage: errorMsg,
@@ -178,6 +183,8 @@ class AIOrchestrator {
   ): Promise<{ data: T; error?: undefined }> {
     const requestId = this.generateTraceId();
     const startTime = Date.now();
+    // Tracks the last provider attempted — visible to both try and catch.
+    let lastProvider: string = (options as any)?.preferredProvider ?? env.ai.primaryProvider;
 
     try {
       const result = await this.runLLMCompletion({
@@ -187,6 +194,8 @@ class AIOrchestrator {
         maxTokens: (options as any)?.maxTokens || 8000,
         preferredProvider: (options as any)?.preferredProvider,
       });
+
+      lastProvider = result.provider;
 
       // Parse JSON from result
       try {
@@ -202,7 +211,7 @@ class AIOrchestrator {
         aiTelemetry.trackAIRequest({
           requestId,
           operation: 'json',
-          primaryProvider: env.ai.primaryProvider || 'unknown',
+          primaryProvider: env.ai.primaryProvider,
           providerUsed: result.provider,
           fallbackTriggered: result.retriesUsed > 0,
           latencyMs: Date.now() - startTime,
@@ -220,7 +229,7 @@ class AIOrchestrator {
         aiTelemetry.logAIError({
           requestId,
           operation: 'json',
-          primaryProvider: env.ai.primaryProvider || 'unknown',
+          primaryProvider: env.ai.primaryProvider,
           lastProviderTried: result.provider,
           retriesExhausted: false,
           errorCode: 'JSON_PARSE_ERROR',
@@ -249,8 +258,8 @@ class AIOrchestrator {
       aiTelemetry.logAIError({
         requestId,
         operation: 'json',
-        primaryProvider: env.ai.primaryProvider || 'unknown',
-        lastProviderTried: 'unknown',
+        primaryProvider: env.ai.primaryProvider,
+        lastProviderTried: lastProvider,
         retriesExhausted: true,
         errorCode: error instanceof AIOrchestrationError ? error.code : 'UNKNOWN',
         errorMessage: errorMsg,
@@ -337,6 +346,9 @@ class AIOrchestrator {
         );
       }
 
+      // PHASE 40: No window state checks (DB-driven)
+      // Let secureAI handle errors (retry logic via withRetry)
+
       // Attempt primary provider (secureAI via Edge Function)
       const primaryResult = await this.withRetry(
         () => this.tryPrimaryEmbedding(request),
@@ -373,64 +385,15 @@ class AIOrchestrator {
         return result;
       }
 
-      // Fallback: HybridAI completion with JSON extraction
+      // PHASE 17.5: No fallback embedding - fail fast
       retriesUsed += primaryResult.retriesUsed;
 
-      if (!this.config.fallbackEnabled) {
-        throw new AIOrchestrationError(
-          'Primary embedding failed and fallback disabled',
-          'PRIMARY_EMBEDDING_FAILED',
-          true,
-          primaryResult.lastError
-        );
-      }
-
-      structuredLogger.warn('[ORCHESTRATOR] Switching to fallback embedding', {
-        embeddingId,
-        primaryError: primaryResult.lastError?.message,
-      });
-
-      const fallbackResult = await this.withRetry(
-        () => this.tryFallbackEmbedding(request),
-        'fallback_embedding',
-        embeddingId
-      );
-
-      if (fallbackResult.success) {
-        const result = {
-          embedding: fallbackResult.data!,
-          dimension: fallbackResult.data!.length,
-          duration: Date.now() - startTime,
-          retriesUsed: retriesUsed + fallbackResult.retriesUsed,
-          source: 'fallback' as const,
-        };
-
-        // Track successful fallback embedding (synthetic LLM-based)
-        aiTelemetry.trackAIRequest({
-          requestId: embeddingId,
-          operation: 'embedding_fallback',
-          primaryProvider: 'secureAI',
-          providerUsed: 'hybridAI',
-          fallbackTriggered: true,
-          latencyMs: result.duration,
-          retriesUsed: result.retriesUsed,
-          inputLength: request.text.length,
-          outputLength: result.embedding.length,
-          embeddingDimension: result.dimension,
-          isSyntheticEmbedding: true,
-          timestamp: new Date().toISOString(),
-          success: true,
-        });
-
-        return result;
-      }
-
-      // Both failed
+      warn('[ORCHESTRATOR] 🚫 Fallback embedding disabled (PHASE 17.5)');
       throw new AIOrchestrationError(
-        'Both primary and fallback embeddings failed',
-        'EMBEDDING_EXHAUSTED',
+        'Primary embedding failed - fallback disabled to prevent loops',
+        'PRIMARY_EMBEDDING_FAILED',
         true,
-        fallbackResult.lastError
+        primaryResult.lastError
       );
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -447,7 +410,7 @@ class AIOrchestrator {
         requestId: embeddingId,
         operation: 'embedding',
         primaryProvider: 'secureAI',
-        lastProviderTried: 'hybridAI', // Tried both
+        lastProviderTried: 'secureAI', // Fallback disabled (Phase 17.5) — only primary is ever tried
         retriesExhausted: true,
         errorCode: error instanceof AIOrchestrationError ? error.code : 'UNKNOWN',
         errorMessage: errorMsg,
@@ -498,6 +461,17 @@ class AIOrchestrator {
           );
 
           retriesUsed = completion.retriesUsed;
+
+          // Throw here so the outer catch can emit proper telemetry instead of
+          // returning a ghost { provider: 'unknown' } that looks like a success.
+          if (!completion.success || !completion.data) {
+            throw completion.lastError ?? new AIOrchestrationError(
+              'LLM completion retries exhausted',
+              'LLM_RETRIES_EXHAUSTED',
+              true
+            );
+          }
+
           return completion.data;
         },
         controller
@@ -512,7 +486,7 @@ class AIOrchestrator {
 
       return {
         content: result?.content || '',
-        provider: result?.provider || 'unknown',
+        provider: result?.provider ?? env.ai.primaryProvider,
         duration: Date.now() - startTime,
         retriesUsed,
       };
@@ -611,48 +585,28 @@ class AIOrchestrator {
 
   /**
    * Try primary embedding via secureAI (Edge Function)
+   * PHASE 40: Added guard to prevent "s is not a function" error
    */
   private async tryPrimaryEmbedding(request: EmbeddingRequest): Promise<number[]> {
+    // Guard: Verify secureAI has generateEmbedding function
+    if (typeof secureAI?.generateEmbedding !== 'function') {
+      throw new AIOrchestrationError(
+        '[SECURITY] secureAI.generateEmbedding is not a function - initialization issue or circular dependency',
+        'ORCHESTRATOR_INIT_ERROR',
+        false
+      );
+    }
+
     return secureAI.generateEmbedding(request.text, request.model);
   }
 
   /**
-   * Try fallback embedding via hybridAI (generate JSON with embedding-like structure)
-   * This uses LLM to generate a semantic vector as fallback
+   * PHASE 17.5: Fallback embedding disabled to prevent infinite retry loops
+   * Claude/LLM-based embedding generation causes cascading failures
    */
   private async tryFallbackEmbedding(request: EmbeddingRequest): Promise<number[]> {
-    // Fallback: Use LLM to generate embedding-like vector
-    const systemPrompt = `You are a semantic embedding model. Generate a JSON array of 1536 numbers between -1 and 1 that represents the semantic meaning of the input text. Return ONLY the JSON array, nothing else.`;
-
-    const response = await hybridAIService.generateCompletion(
-      `Generate semantic embedding for: ${request.text.substring(0, 500)}`,
-      {
-        systemPrompt,
-        maxTokens: 4000,
-        temperature: 0,
-      } as AIGenerationOptions
-    );
-
-    try {
-      // Parse the JSON array from response
-      const jsonMatch = response.content.match(/\[\s*[\d\.\-,\s]+\]/);
-      if (!jsonMatch) {
-        throw new Error('Invalid embedding format from LLM');
-      }
-
-      const embedding = JSON.parse(jsonMatch[0]);
-      if (!Array.isArray(embedding) || embedding.length !== 1536) {
-        throw new Error('Embedding dimension mismatch');
-      }
-
-      return embedding;
-    } catch (parseError) {
-      throw new Error(
-        `Failed to parse LLM embedding: ${
-          parseError instanceof Error ? parseError.message : 'unknown'
-        }`
-      );
-    }
+    warn('[ORCHESTRATOR] 🚫 Fallback embedding disabled (PHASE 17.5)');
+    throw new Error('Fallback embedding disabled - primary edge function required');
   }
 
   /**

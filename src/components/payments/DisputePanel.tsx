@@ -802,7 +802,7 @@ export function DisputePanel({ contractId, userId, userRole }: DisputePanelProps
             {messageForm.files.length > 0 && (
               <div className="space-y-2">
                 {messageForm.files.map((file, index) => (
-                  <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
+                  <div key={`file-${file.name}-${index}`} className="flex items-center justify-between p-2 bg-muted rounded">
                     <div className="flex items-center gap-2">
                       {file.type.startsWith('image/') ? (
                         <Image className="h-4 w-4" />

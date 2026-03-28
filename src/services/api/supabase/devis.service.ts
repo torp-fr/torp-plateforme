@@ -19,6 +19,7 @@ import {
   type ComparisonResult,
 } from '@/services/ai/embeddings';
 import { analyzeDevisDomain } from '@/domain';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 type DbDevis = Database['public']['Tables']['devis']['Row'];
 type DbDevisInsert = Database['public']['Tables']['devis']['Insert'];
@@ -86,7 +87,7 @@ export class SupabaseDevisService {
     projectName: string,
     metadata?: DevisMetadata
   ): Promise<{ id: string; status: string }> {
-    console.log('[SAFE MODE] Upload START');
+    log('[SAFE MODE] Upload START');
 
     // Use the userId passed from the authenticated context
     if (!userId) {
@@ -110,26 +111,26 @@ export class SupabaseDevisService {
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
     const filePath = `${authenticatedUserId}/${timestamp}_${sanitizedFileName}`;
 
-    console.log('[SAFE MODE] Uploading to storage:', { filePath, fileSize: file.size });
+    log('[SAFE MODE] Uploading to storage:', { filePath, fileSize: file.size });
 
     try {
       // DIAGNOSTIC: Test bucket access
-      console.log('[SAFE MODE] Testing bucket access...');
+      log('[SAFE MODE] Testing bucket access...');
       const { data: testList, error: testError } = await supabase.storage
         .from(STORAGE_BUCKETS.DEVIS)
         .list('', { limit: 1 });
-      console.log('[SAFE MODE] Bucket test result:', {
+      log('[SAFE MODE] Bucket test result:', {
         testListCount: testList?.length ?? null,
         testError: testError?.message ?? null,
       });
 
       // STEP 1: Upload file to storage (NO timeout wrapper)
-      console.log('[SAFE MODE] About to call storage.upload()');
+      log('[SAFE MODE] About to call storage.upload()');
       const uploadStart = performance.now();
 
       // Detect if upload hangs
       const hangDetector = setTimeout(() => {
-        console.warn('[SAFE MODE] ⚠️ Upload still pending after 8 seconds - possible freeze');
+        warn('[SAFE MODE] ⚠️ Upload still pending after 8 seconds - possible freeze');
       }, 8000);
 
       const { data: uploadedFile, error: uploadError } = await supabase.storage
@@ -143,7 +144,7 @@ export class SupabaseDevisService {
       const uploadEnd = performance.now();
       const uploadDuration = uploadEnd - uploadStart;
 
-      console.log('[SAFE MODE] Upload finished in ms:', uploadDuration.toFixed(0));
+      log('[SAFE MODE] Upload finished in ms:', uploadDuration.toFixed(0));
 
       if (uploadError) {
         console.error('[SAFE MODE] Upload FULL ERROR:', uploadError);
@@ -155,7 +156,7 @@ export class SupabaseDevisService {
         throw uploadError;
       }
 
-      console.log('[SAFE MODE] Upload DONE');
+      log('[SAFE MODE] Upload DONE');
 
       // Get public URL for the file
       const { data: { publicUrl } } = supabase.storage
@@ -176,7 +177,7 @@ export class SupabaseDevisService {
         status: 'uploaded',
       };
 
-      console.log('[SAFE MODE] Inserting DB record');
+      log('[SAFE MODE] Inserting DB record');
 
       const { data: devisData, error: insertError } = await supabase
         .from('devis')
@@ -189,7 +190,7 @@ export class SupabaseDevisService {
         throw new Error(`Failed to create devis record: ${insertError.message}`);
       }
 
-      console.log('[SAFE MODE] DB INSERT DONE');
+      log('[SAFE MODE] DB INSERT DONE');
 
       // Return uploaded status (NO "analyzing")
       return {
@@ -210,12 +211,12 @@ export class SupabaseDevisService {
     const startTime = Date.now();
 
     try {
-      console.log(`[Devis] Starting analysis for ${devisId}...`);
+      log(`[Devis] Starting analysis for ${devisId}...`);
 
       // If file not provided, fetch it from storage
       let devisFile = file;
       if (!devisFile) {
-        console.log('[Devis] Fetching devis from database');
+        log('[Devis] Fetching devis from database');
         const { data: devisData, error: devisError } = await supabase
           .from('devis')
           .select('file_path, file_name, status')
@@ -228,7 +229,7 @@ export class SupabaseDevisService {
 
         // Safety guard: prevent re-analyzing
         if (devisData.status === 'analyzed') {
-          console.warn('[Devis] Devis already analyzed - returning early');
+          warn('[Devis] Devis already analyzed - returning early');
           return;
         }
 
@@ -237,7 +238,7 @@ export class SupabaseDevisService {
           throw new Error('Missing file_path in devis record - cannot download file');
         }
 
-        console.log('[Devis] Downloading file from storage:', devisData.file_path);
+        log('[Devis] Downloading file from storage:', devisData.file_path);
         const { data: fileData, error: downloadError } = await supabase.storage
           .from(STORAGE_BUCKETS.DEVIS)
           .download(devisData.file_path);
@@ -248,14 +249,14 @@ export class SupabaseDevisService {
         }
 
         devisFile = new File([fileData], devisData.file_name || 'devis.pdf', { type: 'application/pdf' });
-        console.log('[Devis] File downloaded successfully');
+        log('[Devis] File downloaded successfully');
       }
 
       // PHASE 37: Use Domain Layer for orchestration
-      console.log(`[Devis] Extracting text from PDF...`);
+      log(`[Devis] Extracting text from PDF...`);
       const devisText = await pdfExtractorService.extractText(devisFile);
 
-      console.log(`[Devis] Passing to domain layer for analysis orchestration...`);
+      log(`[Devis] Passing to domain layer for analysis orchestration...`);
       const analysisResult = await analyzeDevisDomain({
         devisText,
         devisId,
@@ -271,7 +272,7 @@ export class SupabaseDevisService {
       const analysis = analysisResult.torAnalysisResult;
 
       // Step 3: Save results to database
-      console.log(`[Devis] Saving analysis results...`);
+      log(`[Devis] Saving analysis results...`);
 
       // Use official Supabase SDK to update analysis results
       const analysisUpdate = {
@@ -311,7 +312,7 @@ export class SupabaseDevisService {
         throw new Error(`Failed to save analysis: ${updateError.message}`);
       }
 
-      console.log('[DevisService] Analysis results saved successfully');
+      log('[DevisService] Analysis results saved successfully');
 
       // Envoyer notification à l'utilisateur
       try {
@@ -330,7 +331,7 @@ export class SupabaseDevisService {
             .single();
 
           if (userInfo) {
-            console.log('[DevisService] Analyse complète pour l\'utilisateur');
+            log('[DevisService] Analyse complète pour l\'utilisateur');
           }
         }
       } catch (notifError) {
@@ -339,7 +340,7 @@ export class SupabaseDevisService {
       }
 
       const totalDuration = Math.round((Date.now() - startTime) / 1000);
-      console.log(`[Devis] Analysis complete for ${devisId} - ${totalDuration}s total - Score: ${analysis.scoreGlobal}/1000 (${analysis.grade})`);
+      log(`[Devis] Analysis complete for ${devisId} - ${totalDuration}s total - Score: ${analysis.scoreGlobal}/1000 (${analysis.grade})`);
     } catch (error) {
       console.error(`[Devis] Analysis failed for ${devisId}:`, error);
 
@@ -356,7 +357,7 @@ export class SupabaseDevisService {
         if (statusError) {
           console.error('[Devis] Failed to update status after error:', statusError);
         } else {
-          console.log('[Devis] Status reverted to uploaded after error');
+          log('[Devis] Status reverted to uploaded after error');
         }
       } catch (updateError) {
         console.error('[Devis] Failed to update status after error:', updateError);

@@ -5,6 +5,7 @@
  */
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Enterprise breakdown scores
@@ -46,7 +47,7 @@ function calculateLongevityScore(context: EngineExecutionContext): number {
     // No data = neutral
     return 2;
   } catch (error) {
-    console.warn('[EnterpriseEngine] Error calculating longevity score', error);
+    warn('[EnterpriseEngine] Error calculating longevity score', error);
     return 0;
   }
 }
@@ -59,7 +60,7 @@ function calculateInsuranceScore(context: EngineExecutionContext): number {
     const insuranceDeclared = context.context?.insuranceCovered === true;
     return insuranceDeclared ? 5 : 0;
   } catch (error) {
-    console.warn('[EnterpriseEngine] Error calculating insurance score', error);
+    warn('[EnterpriseEngine] Error calculating insurance score', error);
     return 0;
   }
 }
@@ -75,7 +76,7 @@ function calculateCertificationsScore(context: EngineExecutionContext): number {
     }
     return 0;
   } catch (error) {
-    console.warn('[EnterpriseEngine] Error calculating certifications score', error);
+    warn('[EnterpriseEngine] Error calculating certifications score', error);
     return 0;
   }
 }
@@ -93,7 +94,7 @@ function calculateStructureScore(context: EngineExecutionContext): number {
 
     return 2; // Partial score for unclear structure
   } catch (error) {
-    console.warn('[EnterpriseEngine] Error calculating structure score', error);
+    warn('[EnterpriseEngine] Error calculating structure score', error);
     return 0;
   }
 }
@@ -124,7 +125,7 @@ function calculateConsistencyScore(context: EngineExecutionContext): number {
 
     return 1;
   } catch (error) {
-    console.warn('[EnterpriseEngine] Error calculating consistency score', error);
+    warn('[EnterpriseEngine] Error calculating consistency score', error);
     return 0;
   }
 }
@@ -138,7 +139,7 @@ export async function runEnterpriseEngine(
   const startTime = Date.now();
 
   try {
-    console.log('[EnterpriseEngine] Starting enterprise evaluation');
+    log('[EnterpriseEngine] Starting enterprise evaluation');
 
     // Calculate individual scores
     const longevityScore = calculateLongevityScore(executionContext);
@@ -169,7 +170,7 @@ export async function runEnterpriseEngine(
       },
     };
 
-    console.log('[EnterpriseEngine] Evaluation complete', {
+    log('[EnterpriseEngine] Evaluation complete', {
       enterpriseScore: result.enterpriseScore,
       normalizedScore: result.normalizedScore,
       processingTime: Date.now() - startTime,

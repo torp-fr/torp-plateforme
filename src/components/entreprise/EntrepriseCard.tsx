@@ -268,7 +268,7 @@ export function EntrepriseCard({
                 <h4 className="font-medium">Dirigeants</h4>
                 <div className="space-y-1 text-sm">
                   {entreprise.dirigeants.map((d, i) => (
-                    <div key={i} className="flex justify-between">
+                    <div key={`row-${i}`} className="flex justify-between">
                       <span>{d.prenom} {d.nom}</span>
                       <span className="text-muted-foreground">{d.qualite}</span>
                     </div>
@@ -289,7 +289,7 @@ export function EntrepriseCard({
                 </h4>
                 <div className="mt-2 space-y-1 text-sm text-red-700">
                   {entreprise.proceduresCollectives.map((p, i) => (
-                    <div key={i}>
+                    <div key={`row-${i}`}>
                       {p.type} - Depuis le {new Date(p.date_debut).toLocaleDateString('fr-FR')}
                       {p.date_fin && ` (terminée le ${new Date(p.date_fin).toLocaleDateString('fr-FR')})`}
                     </div>

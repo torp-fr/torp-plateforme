@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { format, startOfWeek, endOfWeek, subDays, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 // =============================================================================
 // TYPES
@@ -178,7 +179,7 @@ export function useJournalEntries({
         if (!result.error && result.data?.length > 0) {
           data = result.data.map(mapSiteJournalToEntry);
         } else if (result.error) {
-          console.warn('[useJournalEntries] site_journal not found, trying phase2_journal_chantier');
+          warn('[useJournalEntries] site_journal not found, trying phase2_journal_chantier');
         }
       }
 
@@ -202,7 +203,7 @@ export function useJournalEntries({
         if (!result.error && result.data) {
           data = result.data.map(mapPhase2JournalToEntry);
         } else if (result.error) {
-          console.warn('[useJournalEntries] phase2_journal_chantier error:', result.error);
+          warn('[useJournalEntries] phase2_journal_chantier error:', result.error);
         }
       }
 

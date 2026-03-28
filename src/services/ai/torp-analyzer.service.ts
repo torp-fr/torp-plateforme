@@ -30,6 +30,7 @@ import { knowledgeBrainService } from './knowledge-brain.service';
 import { marketIntelligenceService } from './market-intelligence.service';
 // PHASE 36 Extension: Pricing Intelligence
 import { pricingExtractionService } from './pricing-extraction.service';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 // Statut de vérification du SIRET
 export interface SiretVerification {
@@ -100,7 +101,7 @@ export class TorpAnalyzerService {
    * PHASE 34.6: Generate safe fallback analysis - Never crash mode
    */
   private generateSafeFallbackAnalysis(montantTotal: number = 0): TorpAnalysisResult {
-    console.warn('[TORP HARDENING] Generating degraded analysis - system stayed alive ✓');
+    warn('[TORP HARDENING] Generating degraded analysis - system stayed alive ✓');
     return {
       id: `torp-fallback-${Date.now()}`,
       devisId: '',
@@ -139,35 +140,35 @@ export class TorpAnalyzerService {
 
     try {
       // Step 1: Extract structured data from devis
-      console.log('[TORP] Step 1/9: Extracting structured data...');
+      log('[TORP] Step 1/9: Extracting structured data...');
       const extractedData = await this.extractDevisData(devisText);
 
       const region = metadata?.region || 'Île-de-France';
       const typeTravaux = metadata?.typeTravaux || extractedData.travaux.type || 'rénovation';
 
       // Step 2: Analyze Entreprise (250 pts) + RGE data
-      console.log('[TORP] Step 2/9: Analyzing entreprise...');
+      log('[TORP] Step 2/9: Analyzing entreprise...');
       const { analysis: entrepriseAnalysis, rgeData } = await this.analyzeEntreprise(extractedData);
-      console.log('[TORP] RGE data retrieved:', rgeData ? (rgeData.estRGE ? 'CERTIFIED' : 'NOT RGE') : 'NO DATA');
+      log('[TORP] RGE data retrieved:', rgeData ? (rgeData.estRGE ? 'CERTIFIED' : 'NOT RGE') : 'NO DATA');
 
       // Step 3: Analyze Prix (300 pts)
-      console.log('[TORP] Step 3/9: Analyzing prix...');
+      log('[TORP] Step 3/9: Analyzing prix...');
       const prixAnalysis = await this.analyzePrix(extractedData, typeTravaux, region);
 
       // Step 4: Analyze Complétude (200 pts)
-      console.log('[TORP] Step 4/9: Analyzing complétude...');
+      log('[TORP] Step 4/9: Analyzing complétude...');
       const completudeAnalysis = await this.analyzeCompletude(extractedData, typeTravaux);
 
       // Step 5: Analyze Conformité (150 pts)
-      console.log('[TORP] Step 5/9: Analyzing conformité...');
+      log('[TORP] Step 5/9: Analyzing conformité...');
       const conformiteAnalysis = await this.analyzeConformite(extractedData, typeTravaux);
 
       // Step 6: Analyze Délais (100 pts)
-      console.log('[TORP] Step 6/9: Analyzing délais...');
+      log('[TORP] Step 6/9: Analyzing délais...');
       const delaisAnalysis = await this.analyzeDelais(extractedData, typeTravaux);
 
       // Step 7: Analyze Innovation & Développement Durable (50 pts)
-      console.log('[TORP] Step 7/9: Analyzing innovation & développement durable...');
+      log('[TORP] Step 7/9: Analyzing innovation & développement durable...');
       const innovationDurableScore = innovationDurableScoringService.calculateScore({
         devisText,
         devisExtrait: {
@@ -183,10 +184,10 @@ export class TorpAnalyzerService {
           distanceChantierKm: undefined, // Could be calculated from geo data
         },
       });
-      console.log(`[TORP] Innovation/Durable score: ${innovationDurableScore.total}/50 (Grade ${innovationDurableScore.grade})`);
+      log(`[TORP] Innovation/Durable score: ${innovationDurableScore.total}/50 (Grade ${innovationDurableScore.grade})`);
 
       // Step 8: Analyze Transparence (100 pts)
-      console.log('[TORP] Step 8/9: Analyzing transparence documentation...');
+      log('[TORP] Step 8/9: Analyzing transparence documentation...');
       const transparenceAnalysis = transparencyScoringService.analyzeTransparency({
         texteComplet: devisText,
         prestations: extractedData.travaux?.postes?.map(p => ({
@@ -203,11 +204,11 @@ export class TorpAnalyzerService {
         },
         hasImages: false, // PDF extraction doesn't currently support images
       });
-      console.log(`[TORP] Transparence score: ${transparenceAnalysis.scoreTotal}/100 (${transparenceAnalysis.niveau})`);
+      log(`[TORP] Transparence score: ${transparenceAnalysis.scoreTotal}/100 (${transparenceAnalysis.niveau})`);
 
       // Step 9: Generate synthesis and recommendations
       const userType = metadata?.userType || 'B2C';
-      console.log(`[TORP] Generating synthesis... (userType: ${userType})`);
+      log(`[TORP] Generating synthesis... (userType: ${userType})`);
       const synthesis = await this.generateSynthesis(
         entrepriseAnalysis,
         prixAnalysis,
@@ -404,7 +405,7 @@ export class TorpAnalyzerService {
         dureeAnalyse,
       };
 
-      console.log(`[TORP] Analysis complete in ${dureeAnalyse}s - Score: ${result.scoreGlobal}/1150 (${result.grade}) [Innovation/Durable: ${innovationDurableScore.total}/50, Transparence: ${transparenceAnalysis.scoreTotal}/100]`);
+      log(`[TORP] Analysis complete in ${dureeAnalyse}s - Score: ${result.scoreGlobal}/1150 (${result.grade}) [Innovation/Durable: ${innovationDurableScore.total}/50, Transparence: ${transparenceAnalysis.scoreTotal}/100]`);
 
       return result;
     } catch (error) {
@@ -424,7 +425,7 @@ export class TorpAnalyzerService {
 
       // Return degraded but valid analysis
       const fallbackAnalysis = this.generateSafeFallbackAnalysis(montantTotal);
-      console.warn('[TORP HARDENING] Returning degraded analysis - system stayed alive ✓');
+      warn('[TORP HARDENING] Returning degraded analysis - system stayed alive ✓');
       return fallbackAnalysis;
     }
   }
@@ -435,12 +436,12 @@ export class TorpAnalyzerService {
   private async extractDevisData(devisText: string): Promise<ExtractedDevisData> {
     // Log un échantillon du texte OCR pour debug (premiers 1500 caractères - en-tête)
     const headerSample = devisText.slice(0, 1500);
-    console.log('[TORP OCR] Échantillon en-tête (SIRET devrait être ici):');
-    console.log(headerSample);
+    log('[TORP OCR] Échantillon en-tête (SIRET devrait être ici):');
+    log(headerSample);
 
     // Chercher proactivement les mentions SIRET dans le texte brut
     const siretMentions = devisText.match(/siret[:\s]*[\d\s\.\-]+/gi);
-    console.log('[TORP OCR] Mentions SIRET trouvées dans texte brut:', siretMentions);
+    log('[TORP OCR] Mentions SIRET trouvées dans texte brut:', siretMentions);
 
     const prompt = buildExtractionPrompt(devisText);
 
@@ -449,7 +450,7 @@ export class TorpAnalyzerService {
       temperature: 0.2, // Low temperature for accurate extraction
     });
 
-    console.log('[TORP Extraction] SIRET brut retourné par IA:', data.entreprise?.siret);
+    log('[TORP Extraction] SIRET brut retourné par IA:', data.entreprise?.siret);
 
     // Valider et nettoyer le SIRET
     let siretFoundInDocument = false;
@@ -465,12 +466,12 @@ export class TorpAnalyzerService {
 
     if (!data.entreprise.siret) {
       // Si l'IA n'a pas trouvé de SIRET, essayer de le trouver directement dans le texte
-      console.log('[TORP Extraction] IA n\'a pas trouvé de SIRET, recherche directe...');
+      log('[TORP Extraction] IA n\'a pas trouvé de SIRET, recherche directe...');
       const directSearch = this.cleanAndValidateSiret('', devisText);
       if (directSearch) {
         data.entreprise.siret = directSearch;
         siretFoundInDocument = true;
-        console.log('[TORP Extraction] SIRET trouvé par recherche directe:', directSearch);
+        log('[TORP Extraction] SIRET trouvé par recherche directe:', directSearch);
       }
     }
 
@@ -484,7 +485,7 @@ export class TorpAnalyzerService {
       };
     } else {
       // FALLBACK: Recherche via Pappers par nom d'entreprise + adresse
-      console.log('[TORP SIRET] Tentative de recherche via Pappers...');
+      log('[TORP SIRET] Tentative de recherche via Pappers...');
       const pappersResult = await this.lookupSiretViaPappers(
         data.entreprise.nom,
         data.entreprise.adresse
@@ -504,8 +505,8 @@ export class TorpAnalyzerService {
             matchScore: pappersResult.matchScore
           }
         };
-        console.log('[TORP SIRET] ⚠️ SIRET trouvé via Pappers:', pappersResult.siret);
-        console.log('[TORP SIRET] Confiance:', pappersResult.confidence, '- Score:', pappersResult.matchScore);
+        log('[TORP SIRET] ⚠️ SIRET trouvé via Pappers:', pappersResult.siret);
+        log('[TORP SIRET] Confiance:', pappersResult.confidence, '- Score:', pappersResult.matchScore);
       } else {
         data.entreprise.siretVerification = {
           source: 'non_trouve',
@@ -513,19 +514,19 @@ export class TorpAnalyzerService {
           verified: false,
           message: 'SIRET non trouvé dans le document et recherche Pappers infructueuse. Vérification manuelle requise.'
         };
-        console.log('[TORP SIRET] ❌ SIRET non trouvé (document + Pappers)');
+        log('[TORP SIRET] ❌ SIRET non trouvé (document + Pappers)');
       }
     }
 
     // Log critical extraction data for debugging
-    console.log('[TORP Extraction] Entreprise:', data.entreprise.nom);
-    console.log('[TORP Extraction] SIRET final:', data.entreprise.siret || 'NON TROUVÉ');
-    console.log('[TORP Extraction] Source SIRET:', data.entreprise.siretVerification?.source);
-    console.log('[TORP Extraction] Adresse entreprise:', data.entreprise.adresse || 'NON TROUVÉE');
-    console.log('[TORP Extraction] Adresse client:', data.client?.adresse || 'NON TROUVÉE');
-    console.log('[TORP Extraction] Adresse chantier:', data.travaux?.adresseChantier || 'NON TROUVÉE');
-    console.log('[TORP Extraction] Certifications:', data.entreprise.certifications);
-    console.log('[TORP Extraction] Montant total:', data.devis.montantTotal);
+    log('[TORP Extraction] Entreprise:', data.entreprise.nom);
+    log('[TORP Extraction] SIRET final:', data.entreprise.siret || 'NON TROUVÉ');
+    log('[TORP Extraction] Source SIRET:', data.entreprise.siretVerification?.source);
+    log('[TORP Extraction] Adresse entreprise:', data.entreprise.adresse || 'NON TROUVÉE');
+    log('[TORP Extraction] Adresse client:', data.client?.adresse || 'NON TROUVÉE');
+    log('[TORP Extraction] Adresse chantier:', data.travaux?.adresseChantier || 'NON TROUVÉE');
+    log('[TORP Extraction] Certifications:', data.entreprise.certifications);
+    log('[TORP Extraction] Montant total:', data.devis.montantTotal);
 
     return data;
   }
@@ -547,11 +548,11 @@ export class TorpAnalyzerService {
     message: string;
   } | null> {
     // API key now protected server-side
-    console.log('[TORP SIRET Pappers] Pappers lookup currently disabled (moved to server-side proxy)');
+    log('[TORP SIRET Pappers] Pappers lookup currently disabled (moved to server-side proxy)');
     return null;
 
     if (!nomEntreprise || nomEntreprise.length < 3) {
-      console.log('[TORP SIRET Pappers] Nom d\'entreprise insuffisant pour recherche');
+      log('[TORP SIRET Pappers] Nom d\'entreprise insuffisant pour recherche');
       return null;
     }
 
@@ -560,7 +561,7 @@ export class TorpAnalyzerService {
       const codePostalMatch = adresseEntreprise?.match(/\b(\d{5})\b/);
       const codePostal = codePostalMatch ? codePostalMatch[1] : undefined;
 
-      console.log('[TORP SIRET Pappers] Recherche:', {
+      log('[TORP SIRET Pappers] Recherche:', {
         nom: nomEntreprise,
         codePostal: codePostal || 'non trouvé'
       });
@@ -574,11 +575,11 @@ export class TorpAnalyzerService {
       });
 
       if (!result.success || !result.data?.resultats?.length) {
-        console.log('[TORP SIRET Pappers] Aucun résultat trouvé');
+        log('[TORP SIRET Pappers] Aucun résultat trouvé');
         return null;
       }
 
-      console.log('[TORP SIRET Pappers] Résultats:', result.data.resultats.length);
+      log('[TORP SIRET Pappers] Résultats:', result.data.resultats.length);
 
       // Calculer un score de correspondance pour chaque résultat
       const scored = result.data.resultats.map(r => {
@@ -630,7 +631,7 @@ export class TorpAnalyzerService {
       scored.sort((a, b) => b.matchScore - a.matchScore);
       const best = scored[0];
 
-      console.log('[TORP SIRET Pappers] Meilleur match:', {
+      log('[TORP SIRET Pappers] Meilleur match:', {
         nom: best.nom_entreprise || best.denomination,
         siret: best.siret,
         score: best.matchScore,
@@ -649,7 +650,7 @@ export class TorpAnalyzerService {
         message = `SIRET possiblement trouvé via Pappers (score: ${best.matchScore}/100). ATTENTION: Le SIRET sur le devis semble incorrect ou absent. Vérifiez que "${best.nom_entreprise || best.denomination}" est bien l'entreprise du devis.`;
       } else {
         // Score trop bas, ne pas retourner de résultat
-        console.log('[TORP SIRET Pappers] Score trop bas, résultat ignoré');
+        log('[TORP SIRET Pappers] Score trop bas, résultat ignoré');
         return null;
       }
 
@@ -716,7 +717,7 @@ export class TorpAnalyzerService {
         if (fullNumber.length === 11) {
           const siren = fullNumber.slice(2); // Les 9 derniers chiffres sont le SIREN
           if (/^\d{9}$/.test(siren)) {
-            console.log('[TORP TVA] SIREN extrait du numéro TVA:', siren);
+            log('[TORP TVA] SIREN extrait du numéro TVA:', siren);
             return siren;
           }
         }
@@ -737,12 +738,12 @@ export class TorpAnalyzerService {
     // Si déjà 14 chiffres, valider avec Luhn
     if (/^\d{14}$/.test(cleaned)) {
       const isValid = this.validateLuhn(cleaned);
-      console.log('[TORP SIRET] 14 chiffres:', cleaned, '| Luhn:', isValid ? '✓' : '✗');
+      log('[TORP SIRET] 14 chiffres:', cleaned, '| Luhn:', isValid ? '✓' : '✗');
       if (isValid) {
         return cleaned;
       }
       // Si Luhn échoue, on continue quand même car certains SIRET ne passent pas Luhn
-      console.log('[TORP SIRET] Luhn invalide mais on continue avec ce SIRET');
+      log('[TORP SIRET] Luhn invalide mais on continue avec ce SIRET');
       return cleaned;
     }
 
@@ -752,7 +753,7 @@ export class TorpAnalyzerService {
     // Essayer d'extraire le SIREN depuis le numéro TVA si disponible
     const sirenFromTVA = this.extractSirenFromTVA(null, normalizedText);
     if (sirenFromTVA && !cleaned) {
-      console.log('[TORP SIRET] SIREN extrait du numéro TVA, recherche NIC...');
+      log('[TORP SIRET] SIREN extrait du numéro TVA, recherche NIC...');
       cleaned = sirenFromTVA;
     }
 
@@ -783,11 +784,11 @@ export class TorpAnalyzerService {
     };
 
     const allSirets = findAllSirets();
-    console.log('[TORP SIRET] SIRETs trouvés dans texte:', allSirets);
+    log('[TORP SIRET] SIRETs trouvés dans texte:', allSirets);
 
     // Si aucun SIRET fourni (recherche directe), utiliser le premier trouvé dans le texte
     if (!cleaned && allSirets.length > 0) {
-      console.log('[TORP SIRET] Recherche directe - utilisation du premier SIRET trouvé:', allSirets[0]);
+      log('[TORP SIRET] Recherche directe - utilisation du premier SIRET trouvé:', allSirets[0]);
       return allSirets[0];
     }
 
@@ -798,7 +799,7 @@ export class TorpAnalyzerService {
       // Chercher parmi les SIRETs complets trouvés
       for (const fullSiret of allSirets) {
         if (fullSiret.startsWith(sirenPart)) {
-          console.log('[TORP SIRET] Correspondance trouvée pour SIREN', sirenPart, ':', fullSiret);
+          log('[TORP SIRET] Correspondance trouvée pour SIREN', sirenPart, ':', fullSiret);
           return fullSiret;
         }
       }
@@ -812,7 +813,7 @@ export class TorpAnalyzerService {
       if (nicMatch) {
         const fullSiret = nicMatch[0].replace(/[\s\.\-]/g, '');
         if (/^\d{14}$/.test(fullSiret)) {
-          console.log('[TORP SIRET] SIREN + NIC reconstitué:', fullSiret);
+          log('[TORP SIRET] SIREN + NIC reconstitué:', fullSiret);
           return fullSiret;
         }
       }
@@ -820,7 +821,7 @@ export class TorpAnalyzerService {
 
     // Si 9 chiffres (SIREN seul), chercher avec patterns alternatifs
     if (/^\d{9}$/.test(cleaned)) {
-      console.log('[TORP SIRET] SIREN détecté (9 chiffres), recherche NIC...');
+      log('[TORP SIRET] SIREN détecté (9 chiffres), recherche NIC...');
 
       // Chercher si on trouve ce SIREN suivi de 5 chiffres n'importe où
       const nicSearchPatterns = [
@@ -835,7 +836,7 @@ export class TorpAnalyzerService {
           const nic = match[2] ? match[1] + match[2] : match[1];
           if (nic && /^\d{5}$/.test(nic.replace(/[\s\.\-]/g, ''))) {
             const fullSiret = cleaned + nic.replace(/[\s\.\-]/g, '');
-            console.log('[TORP SIRET] NIC trouvé, SIRET complet:', fullSiret);
+            log('[TORP SIRET] NIC trouvé, SIRET complet:', fullSiret);
             return fullSiret;
           }
         }
@@ -843,22 +844,22 @@ export class TorpAnalyzerService {
 
       // S'il y a un seul SIRET de 14 chiffres dans le texte, l'utiliser
       if (allSirets.length === 1) {
-        console.log('[TORP SIRET] Utilisation du seul SIRET trouvé dans texte:', allSirets[0]);
+        log('[TORP SIRET] Utilisation du seul SIRET trouvé dans texte:', allSirets[0]);
         return allSirets[0];
       }
 
       // Fallback: ajouter 00010 (siège social) - mieux que rien
-      console.log('[TORP SIRET] NIC non trouvé, utilisation NIC par défaut (00010)');
+      log('[TORP SIRET] NIC non trouvé, utilisation NIC par défaut (00010)');
       return cleaned + '00010';
     }
 
     // Si entre 10 et 13 chiffres, possiblement mal formaté
     if (/^\d{10,13}$/.test(cleaned)) {
-      console.log('[TORP SIRET] Incomplet (' + cleaned.length + ' chiffres):', cleaned, '- recherche élargie...');
+      log('[TORP SIRET] Incomplet (' + cleaned.length + ' chiffres):', cleaned, '- recherche élargie...');
 
       // S'il y a un seul SIRET complet dans le texte, l'utiliser
       if (allSirets.length === 1) {
-        console.log('[TORP SIRET] Utilisation du seul SIRET trouvé:', allSirets[0]);
+        log('[TORP SIRET] Utilisation du seul SIRET trouvé:', allSirets[0]);
         return allSirets[0];
       }
 
@@ -866,7 +867,7 @@ export class TorpAnalyzerService {
       const sirenPart = cleaned.slice(0, 9);
       for (const fullSiret of allSirets) {
         if (fullSiret.startsWith(sirenPart)) {
-          console.log('[TORP SIRET] Correspondance partielle trouvée:', fullSiret);
+          log('[TORP SIRET] Correspondance partielle trouvée:', fullSiret);
           return fullSiret;
         }
       }
@@ -882,13 +883,13 @@ export class TorpAnalyzerService {
       if (completionMatch) {
         const potential = cleaned.slice(0, 9) + completionMatch[1];
         if (/^\d{14}$/.test(potential)) {
-          console.log('[TORP SIRET] Complété à 14 chiffres:', potential);
+          log('[TORP SIRET] Complété à 14 chiffres:', potential);
           return potential;
         }
       }
     }
 
-    console.log('[TORP SIRET] Invalide, impossible de corriger:', siret);
+    log('[TORP SIRET] Invalide, impossible de corriger:', siret);
     return null;
   }
 
@@ -904,7 +905,7 @@ export class TorpAnalyzerService {
     rgeData: RGEVerificationData | null;
   }> {
     try {
-      console.log('[TORP] Step 2/9: Analyzing entreprise...');
+      log('[TORP] Step 2/9: Analyzing entreprise...');
 
       // 🔹 PHASE 34.7: Secure initialization - ALL variables declared upfront
       let enrichedData: EnrichedCompanyData | null = null;
@@ -916,18 +917,18 @@ export class TorpAnalyzerService {
       // 🔹 PHASE 34.7: Protected external API calls (optional)
       if (siret && this.ENABLE_EXTERNAL_APIS) {
         try {
-          console.log('[TORP Entreprise] Fetching RGE/ADEME data...');
+          log('[TORP Entreprise] Fetching RGE/ADEME data...');
           const results = await Promise.allSettled([
             rgeAdemeService.getQualificationsBySiret(siret),
           ]);
           rgeResult = results[0];
-          console.log('[TORP Entreprise] RGE/ADEME call completed with status:', rgeResult?.status);
+          log('[TORP Entreprise] RGE/ADEME call completed with status:', rgeResult?.status);
         } catch (apiError) {
-          console.warn('[TORP HARDENING] RGE/ADEME API error - continuing without enrichment:', apiError);
+          warn('[TORP HARDENING] RGE/ADEME API error - continuing without enrichment:', apiError);
           rgeResult = undefined;
         }
       } else {
-        console.log('[TORP Entreprise] Skipping RGE/ADEME - no SIRET or APIs disabled');
+        log('[TORP Entreprise] Skipping RGE/ADEME - no SIRET or APIs disabled');
       }
 
       // 🔹 PHASE 34.7: Safe RGE analysis - explicit null checks BEFORE property access
@@ -939,8 +940,8 @@ export class TorpAnalyzerService {
         rgeResult.value.data
       ) {
         const rge = rgeResult.value.data;
-        console.log('[TORP Entreprise] Données RGE ADEME récupérées:', rge.estRGE ? 'CERTIFIÉ' : 'NON RGE');
-        console.log('[TORP Entreprise] Score RGE:', rge.scoreRGE, '| Qualifications actives:', rge.nombreQualificationsActives);
+        log('[TORP Entreprise] Données RGE ADEME récupérées:', rge.estRGE ? 'CERTIFIÉ' : 'NON RGE');
+        log('[TORP Entreprise] Score RGE:', rge.scoreRGE, '| Qualifications actives:', rge.nombreQualificationsActives);
 
         // Build RGE data structure
         rgeData = {
@@ -969,11 +970,11 @@ export class TorpAnalyzerService {
       } else if (rgeResult && rgeResult.status === 'rejected') {
         console.error('[TORP Entreprise] Erreur vérification RGE:', rgeResult.reason);
       } else if (rgeResult && rgeResult.status === 'fulfilled' && rgeResult.value && !rgeResult.value.success) {
-        console.log('[TORP Entreprise] RGE non vérifié:', rgeResult.value.error);
+        log('[TORP Entreprise] RGE non vérifié:', rgeResult.value.error);
       }
 
       // 🔹 PHASE 34.7: Generate AI analysis (note: enrichedData remains null - Pappers disabled)
-      console.log('[TORP Entreprise] Generating AI analysis with RGE data:', !!rgeData);
+      log('[TORP Entreprise] Generating AI analysis with RGE data:', !!rgeData);
       const prompt = buildEntrepriseAnalysisPrompt(JSON.stringify(devisData, null, 2), enrichedData, rgeData);
 
       const { data } = await aiOrchestrator.generateJSON(prompt, {
@@ -1011,7 +1012,7 @@ export class TorpAnalyzerService {
         };
       }
 
-      console.log('[TORP Entreprise] Analysis completed safely ✓');
+      log('[TORP Entreprise] Analysis completed safely ✓');
       return { analysis: data, rgeData: rgeVerificationData };
     } catch (error) {
       // 🔹 PHASE 34.7: Fallback - never crash on internal error
@@ -1042,12 +1043,12 @@ export class TorpAnalyzerService {
    */
   private async analyzePrix(devisData: ExtractedDevisData, typeTravaux: string, region: string): Promise<any> {
     try {
-      console.log('[TORP Prix] Starting price analysis with knowledge context...');
+      log('[TORP Prix] Starting price analysis with knowledge context...');
 
       let prompt = buildPrixAnalysisPrompt(JSON.stringify(devisData, null, 2), typeTravaux, region);
 
       // PHASE 36 Extension: Prioritize PRICING_REFERENCE documents for context injection
-      console.log('[TORP Prix] 💰 Searching for PRICING_REFERENCE documents...');
+      log('[TORP Prix] 💰 Searching for PRICING_REFERENCE documents...');
       prompt = await knowledgeBrainService.injectKnowledgeContext(prompt, {
         category: 'PRICING_REFERENCE', // Prioritize pricing references first
         region,
@@ -1068,7 +1069,7 @@ export class TorpAnalyzerService {
           data.scoreTotal
         );
         data.scoreTotal = adjustedScore;
-        console.log('[TORP Prix] Score adjusted with market intelligence:', {
+        log('[TORP Prix] Score adjusted with market intelligence:', {
           original: data.scoreTotal,
           adjusted: adjustedScore,
         });
@@ -1078,7 +1079,7 @@ export class TorpAnalyzerService {
         if (pricingStats && pricingStats.total_references > 0) {
           const boostMultiplier = 1.2; // +20% boost
           const boostedScore = Math.min(100, adjustedScore * boostMultiplier);
-          console.log('[TORP Prix] 💰 Pricing references available - applying +20% boost:', {
+          log('[TORP Prix] 💰 Pricing references available - applying +20% boost:', {
             before_boost: adjustedScore,
             after_boost: boostedScore,
             total_references: pricingStats.total_references,
@@ -1106,7 +1107,7 @@ export class TorpAnalyzerService {
    */
   private async analyzeCompletude(devisData: ExtractedDevisData, typeTravaux: string): Promise<any> {
     try {
-      console.log('[TORP Complétude] Starting completeness analysis with knowledge context...');
+      log('[TORP Complétude] Starting completeness analysis with knowledge context...');
 
       let prompt = buildCompletudeAnalysisPrompt(JSON.stringify(devisData, null, 2), typeTravaux);
 
@@ -1134,7 +1135,7 @@ export class TorpAnalyzerService {
    */
   private async analyzeConformite(devisData: ExtractedDevisData, typeProjet: string): Promise<any> {
     try {
-      console.log('[TORP Conformité] Starting compliance analysis with regulatory context...');
+      log('[TORP Conformité] Starting compliance analysis with regulatory context...');
 
       let prompt = buildConformiteAnalysisPrompt(JSON.stringify(devisData, null, 2), typeProjet);
 
@@ -1162,7 +1163,7 @@ export class TorpAnalyzerService {
    */
   private async analyzeDelais(devisData: ExtractedDevisData, typeTravaux: string): Promise<any> {
     try {
-      console.log('[TORP Délais] Starting timeline analysis with industry benchmarks...');
+      log('[TORP Délais] Starting timeline analysis with industry benchmarks...');
 
       let prompt = buildDelaisAnalysisPrompt(JSON.stringify(devisData, null, 2), typeTravaux);
 

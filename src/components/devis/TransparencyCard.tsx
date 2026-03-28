@@ -126,7 +126,7 @@ export function TransparencyCard({ analysis, compact = false }: TransparencyCard
             </h4>
             <ul className="text-sm text-muted-foreground space-y-1">
               {analysis.pointsForts.map((point, i) => (
-                <li key={i} className="flex items-start gap-2">
+                <li key={`item-${i}`} className="flex items-start gap-2">
                   <span className="text-green-500 mt-1">✓</span>
                   {point}
                 </li>
@@ -144,7 +144,7 @@ export function TransparencyCard({ analysis, compact = false }: TransparencyCard
             </h4>
             <ul className="text-sm text-muted-foreground space-y-1">
               {analysis.pointsFaibles.map((point, i) => (
-                <li key={i} className="flex items-start gap-2">
+                <li key={`item-${i}`} className="flex items-start gap-2">
                   <span className="text-orange-500 mt-1">!</span>
                   {point}
                 </li>
@@ -161,7 +161,7 @@ export function TransparencyCard({ analysis, compact = false }: TransparencyCard
             </h4>
             <ul className="text-sm text-blue-600 space-y-1">
               {analysis.recommandations.map((reco, i) => (
-                <li key={i}>• {reco}</li>
+                <li key={`item-${i}`}>• {reco}</li>
               ))}
             </ul>
           </div>

@@ -7,7 +7,6 @@
 import React, { useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Upload,
@@ -17,24 +16,23 @@ import {
   FileText,
   X,
 } from 'lucide-react';
-import { KNOWLEDGE_CATEGORY_LABELS, getAllCategories } from '@/constants/knowledge-categories';
 import { knowledgeBrainService } from '@/services/ai/knowledge-brain.service';
+import { env } from '@/config/env';
+import { log } from '@/lib/logger';
+import {
+  DOCUMENT_CATEGORIES as CATEGORY_VALUES,
+  DOCUMENT_CATEGORY_LABELS,
+  type DocumentCategory,
+} from '@/constants/documentCategories';
 
-// Map of sources with French labels
-const SOURCES = {
-  internal: { label: 'Interne', reliability: 50 },
-  external: { label: 'Externe', reliability: 40 },
-  official: { label: 'Officiel', reliability: 95 },
-} as const;
-
-// Get all available categories with French labels
-const KNOWLEDGE_CATEGORIES = getAllCategories().map(cat => cat.id);
+const DOCUMENT_CATEGORIES = CATEGORY_VALUES.map(value => ({
+  value,
+  label: DOCUMENT_CATEGORY_LABELS[value],
+}));
 
 interface UploadState {
   file: File | null;
-  category: string;
-  source: 'internal' | 'external' | 'official';
-  region?: string;
+  category: DocumentCategory;
   loading: boolean;
   error: string | null;
   success: boolean;
@@ -44,9 +42,7 @@ export function KnowledgeBaseUpload() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<UploadState>({
     file: null,
-    category: 'GUIDELINE',
-    source: 'internal',
-    region: 'National',
+    category: 'DTU',
     loading: false,
     error: null,
     success: false,
@@ -58,20 +54,25 @@ export function KnowledgeBaseUpload() {
 
     const file = files[0];
 
-    // Validate file type
-    if (file.type !== 'application/pdf' && !file.name.endsWith('.txt')) {
+    // Validate file type - accept all supported formats
+    const supportedExtensions = ['.pdf', '.txt', '.md', '.docx', '.xlsx', '.csv'];
+    const fileName = file.name.toLowerCase();
+    const hasValidExtension = supportedExtensions.some(ext => fileName.endsWith(ext));
+
+    if (!hasValidExtension) {
       setState(prev => ({
         ...prev,
-        error: 'Seuls les fichiers PDF et TXT sont acceptés',
+        error: 'Formats acceptés: PDF, TXT, MD, DOCX, XLSX, CSV',
       }));
       return;
     }
 
-    // Validate file size (10MB max)
-    if (file.size > 10 * 1024 * 1024) {
+    // Validate file size (use configured max from env)
+    if (file.size > env.upload.maxFileSize) {
+      const maxSizeMB = (env.upload.maxFileSize / (1024 * 1024)).toFixed(0);
       setState(prev => ({
         ...prev,
-        error: 'Le fichier ne doit pas dépasser 10 MB',
+        error: `Le fichier ne doit pas dépasser ${maxSizeMB} MB`,
       }));
       return;
     }
@@ -84,7 +85,7 @@ export function KnowledgeBaseUpload() {
   }
 
   async function handleUpload() {
-    console.log('🧠 [UPLOAD] Handler called - START');
+    log('🧠 [UPLOAD] Handler called - START');
 
     if (!state.file || !state.category) {
       console.error('🧠 [UPLOAD] Missing required fields', { file: !!state.file, category: state.category });
@@ -96,47 +97,35 @@ export function KnowledgeBaseUpload() {
     }
 
     try {
-      console.log('🧠 [UPLOAD] Setting loading state...');
+      log('🧠 [UPLOAD] Setting loading state...');
       setState(prev => ({ ...prev, loading: true, error: null }));
 
-      // PHASE 36.11: Extract document text (PDF or plain text)
-      console.log('🧠 [UPLOAD] Extracting document text...');
-      const content = await knowledgeBrainService.extractDocumentTextFromFile(state.file);
-      console.log('🧠 [UPLOAD] Document text extracted:', { size: content.length });
-
-      if (!content || content.trim().length === 0) {
-        throw new Error('Impossible d\'extraire le texte du document');
-      }
-
-      // PHASE 36.3: Generate safe title from filename or category
+      // PHASE 42: Server-side ingestion (no extraction in browser)
+      log('🧠 [UPLOAD] Server-side ingestion: uploading file...');
       const finalTitle = state.file.name.replace(/\.[^/.]+$/, '') || `Document ${state.category}`;
-      console.log('🧠 [UPLOAD] Generated title:', finalTitle);
 
-      // PHASE 36.5: Use knowledgeBrainService with minimal schema-compliant payload
-      console.log('🧠 [UPLOAD] Calling knowledgeBrainService.addKnowledgeDocumentWithTimeout...');
-      const result = await knowledgeBrainService.addKnowledgeDocumentWithTimeout(
-        state.source, // source: 'internal', 'external', or 'official'
-        state.category, // category: matches KNOWLEDGE_CATEGORY_LABELS keys
-        content,
+      const result = await knowledgeBrainService.uploadDocumentForServerIngestion(
+        state.file,
         {
-          title: finalTitle,  // ✅ PHASE 36.3: Always provide title
-          // PHASE 36.5: Removed region, reliability_score, metadata (don't exist in schema)
+          title: finalTitle,
+          category: state.category,
+          source: 'official',
         }
       );
+
+      log('🧠 [UPLOAD] File uploaded - server will handle extraction/OCR/chunking');
 
       if (!result) {
         throw new Error('Document insertion failed');
       }
 
-      console.log('🧠 [UPLOAD] Document uploaded successfully:', { id: result.id });
+      log('🧠 [UPLOAD] Document uploaded successfully:', { id: result.id });
 
       // Success - reset form
       setState(prev => ({
         ...prev,
         file: null,
-        category: 'GUIDELINE',
-        source: 'internal',
-        region: 'National',
+        category: 'DTU',
         success: true,
         loading: false,
       }));
@@ -151,7 +140,7 @@ export function KnowledgeBaseUpload() {
         setState(prev => ({ ...prev, success: false }));
       }, 3000);
 
-      console.log('🧠 [UPLOAD] Handler completed successfully');
+      log('🧠 [UPLOAD] Handler completed successfully');
     } catch (err) {
       console.error('❌ [UPLOAD] Handler error:', err);
       setState(prev => ({
@@ -199,7 +188,7 @@ export function KnowledgeBaseUpload() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.txt"
+              accept=".pdf,.txt,.md,.docx,.xlsx,.csv"
               onChange={handleFileSelect}
               style={{ display: 'none' }}
             />
@@ -221,66 +210,27 @@ export function KnowledgeBaseUpload() {
             ) : (
               <div>
                 <Upload className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm">Cliquez pour sélectionner un fichier PDF ou TXT</p>
+                <p className="text-sm">Cliquez pour sélectionner un document (PDF, TXT, MD, DOCX, XLSX, CSV)</p>
               </div>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">Max 10MB. PDF ou TXT uniquement.</p>
+          <p className="text-xs text-muted-foreground">Max {(env.upload.maxFileSize / (1024 * 1024)).toFixed(0)}MB. Formats: PDF, TXT, MD, DOCX, XLSX, CSV</p>
         </div>
 
-        {/* Category - PHASE 36.2: Display French labels */}
+        {/* Category */}
         <div className="space-y-2">
           <label className="block text-sm font-semibold">Catégorie *</label>
           <select
             value={state.category}
-            onChange={e => setState(prev => ({ ...prev, category: e.target.value }))}
+            onChange={e => setState(prev => ({ ...prev, category: e.target.value as DocumentCategory }))}
             className="w-full px-3 py-2 border rounded-md text-sm"
           >
-            {KNOWLEDGE_CATEGORIES.map(catKey => (
-              <option key={catKey} value={catKey}>
-                {KNOWLEDGE_CATEGORY_LABELS[catKey]?.label || catKey}
+            {DOCUMENT_CATEGORIES.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
               </option>
             ))}
           </select>
-          {state.category && KNOWLEDGE_CATEGORY_LABELS[state.category]?.description && (
-            <p className="text-xs text-muted-foreground mt-1">
-              {KNOWLEDGE_CATEGORY_LABELS[state.category].description}
-            </p>
-          )}
-        </div>
-
-        {/* Source - PHASE 36.2: French labels with reliability info */}
-        <div className="space-y-2">
-          <label className="block text-sm font-semibold">Source *</label>
-          <div className="space-y-2">
-            {(Object.entries(SOURCES) as Array<[keyof typeof SOURCES, typeof SOURCES[keyof typeof SOURCES]]>).map(([sourceKey, sourceInfo]) => (
-              <label key={sourceKey} className="flex items-center gap-3 p-2 rounded border hover:bg-muted cursor-pointer">
-                <input
-                  type="radio"
-                  name="source"
-                  value={sourceKey}
-                  checked={state.source === sourceKey}
-                  onChange={() => setState(prev => ({ ...prev, source: sourceKey }))}
-                />
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{sourceInfo.label}</p>
-                  <p className="text-xs text-muted-foreground">Fiabilité: {sourceInfo.reliability}%</p>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Region */}
-        <div className="space-y-2">
-          <label className="block text-sm font-semibold">Région (optionnel)</label>
-          <input
-            type="text"
-            value={state.region || ''}
-            onChange={e => setState(prev => ({ ...prev, region: e.target.value || 'National' }))}
-            placeholder="Ex: Île-de-France, National..."
-            className="w-full px-3 py-2 border rounded-md text-sm"
-          />
         </div>
 
         {/* Upload Button */}
@@ -291,9 +241,7 @@ export function KnowledgeBaseUpload() {
               setState(prev => ({
                 ...prev,
                 file: null,
-                category: 'GUIDELINE',
-                source: 'internal',
-                region: 'National',
+                category: 'DTU',
               }));
               if (fileInputRef.current) fileInputRef.current.value = '';
             }}

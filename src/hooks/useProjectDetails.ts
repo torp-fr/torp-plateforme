@@ -7,6 +7,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 // =============================================================================
 // TYPES
@@ -108,7 +109,7 @@ export function useProjectDetails({
   const projectQuery = useQuery({
     queryKey: ['project-details', projectId],
     queryFn: async (): Promise<ProjectDetails | null> => {
-      console.warn('[useProjectDetails] This hook is deprecated. Phase 0 tables have been removed.');
+      warn('[useProjectDetails] This hook is deprecated. Phase 0 tables have been removed.');
       return null;
     },
     enabled: enabled && !!projectId,
@@ -122,7 +123,7 @@ export function useProjectDetails({
   const budgetQuery = useQuery({
     queryKey: ['project-budget', projectId],
     queryFn: async (): Promise<ProjectBudget> => {
-      console.warn('[useProjectDetails] Budget query is deprecated');
+      warn('[useProjectDetails] Budget query is deprecated');
       return {
         total: 0,
         spent: 0,
@@ -140,7 +141,7 @@ export function useProjectDetails({
   // NOTE: This mutation references phase0_projects which was removed in migration 034.
   const updateStatusMutation = useMutation({
     mutationFn: async (newStatus: string) => {
-      console.warn('[useProjectDetails] updateStatus mutation is disabled - phase0_projects table removed');
+      warn('[useProjectDetails] updateStatus mutation is disabled - phase0_projects table removed');
       throw new Error('Cette fonctionnalité n\'est plus disponible après la refonte de l\'architecture.');
     },
     onError: (error: Error) => {

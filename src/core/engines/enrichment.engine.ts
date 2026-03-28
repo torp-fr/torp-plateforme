@@ -5,6 +5,7 @@
  */
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Enrichment action types
@@ -69,7 +70,7 @@ export async function runEnrichmentEngine(
   const startTime = Date.now();
 
   try {
-    console.log('[EnrichmentEngine] Starting enrichment analysis');
+    log('[EnrichmentEngine] Starting enrichment analysis');
 
     // Extract data from execution context
     const typeBreakdown = executionContext.rules?.typeBreakdown || {
@@ -300,7 +301,7 @@ export async function runEnrichmentEngine(
       },
     };
 
-    console.log('[EnrichmentEngine] Enrichment analysis completed', {
+    log('[EnrichmentEngine] Enrichment analysis completed', {
       actionCount: result.actionCount,
       recommendationCount: result.recommendationCount,
       processingStrategy: result.processingStrategy,

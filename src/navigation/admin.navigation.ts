@@ -5,13 +5,13 @@
  */
 
 export const ADMIN_ROUTES = {
-  DASHBOARD: '/analytics',
-  SYSTEM: '/analytics/system',
-  INTELLIGENCE: '/analytics/intelligence',
-  ORCHESTRATIONS: '/analytics/orchestrations',
-  KNOWLEDGE: '/analytics/knowledge',
-  SECURITY: '/analytics/security',
-  SETTINGS: '/analytics/settings',
+  DASHBOARD:      '/admin',
+  SYSTEM:         '/admin/system',
+  INTELLIGENCE:   '/admin/intelligence',
+  ORCHESTRATIONS: '/admin/orchestrations',
+  KNOWLEDGE:      '/admin/knowledge',
+  SECURITY:       '/admin/security',
+  SETTINGS:       '/admin/settings',
 } as const;
 
 export const ADMIN_ROUTE_PATHS = Object.values(ADMIN_ROUTES);
@@ -21,7 +21,6 @@ export const ADMIN_ROUTE_PATHS = Object.values(ADMIN_ROUTES);
  */
 export function isAdminRoute(pathname: string): boolean {
   return ADMIN_ROUTE_PATHS.some(route => {
-    // Exact match or starts with for dynamic routes
     return pathname === route || pathname.startsWith(route + '/');
   });
 }

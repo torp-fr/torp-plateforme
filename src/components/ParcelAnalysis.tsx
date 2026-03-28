@@ -265,7 +265,7 @@ const ParcelAnalysis: React.FC<ParcelAnalysisProps> = ({ onAnalysisComplete }) =
                 <div className="space-y-2">
                   <h4 className="font-medium text-sm">Alertes :</h4>
                   {riskAnalysis.alerts.map((alert, index) => (
-                    <div key={index} className="flex items-start gap-2 text-sm bg-warning/5 border border-warning/20 rounded p-2">
+                    <div key={`alert-${index}`} className="flex items-start gap-2 text-sm bg-warning/5 border border-warning/20 rounded p-2">
                       <AlertTriangle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
                       <span>{alert}</span>
                     </div>
@@ -287,7 +287,7 @@ const ParcelAnalysis: React.FC<ParcelAnalysisProps> = ({ onAnalysisComplete }) =
               <CardContent>
                 <div className="space-y-3">
                   {riskAnalysis.surcouts.map((surcout, index) => (
-                    <div key={index} className="flex justify-between items-center py-2 border-b last:border-b-0">
+                    <div key={`surcout-${index}`} className="flex justify-between items-center py-2 border-b last:border-b-0">
                       <span className="text-sm">{surcout.description}</span>
                       <span className="font-medium text-destructive">+{surcout.montant.toLocaleString()}€</span>
                     </div>

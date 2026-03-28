@@ -6,6 +6,7 @@
 import { env } from '@/config/env';
 import { openAIService } from './openai.service';
 import { claudeService } from './claude.service';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export type AIProvider = 'openai' | 'claude';
 
@@ -79,7 +80,7 @@ export class HybridAIService {
 
     try {
       if (env.app.debugMode) {
-        console.log(`[HybridAI] Using ${primaryProvider} for text generation`);
+        log(`[HybridAI] Using ${primaryProvider} for text generation`);
       }
 
       const content = primaryProvider === 'openai'
@@ -98,7 +99,7 @@ export class HybridAIService {
         throw error;
       }
 
-      console.warn(`[HybridAI] ${primaryProvider} failed, falling back to ${fallbackProvider}`);
+      warn(`[HybridAI] ${primaryProvider} failed, falling back to ${fallbackProvider}`);
 
       try {
         const content = fallbackProvider === 'openai'
@@ -129,7 +130,7 @@ export class HybridAIService {
 
     try {
       if (env.app.debugMode) {
-        console.log(`[HybridAI] Using ${primaryProvider} for JSON generation`);
+        log(`[HybridAI] Using ${primaryProvider} for JSON generation`);
       }
 
       const data = primaryProvider === 'openai'
@@ -148,7 +149,7 @@ export class HybridAIService {
         throw error;
       }
 
-      console.warn(`[HybridAI] ${primaryProvider} JSON generation failed, falling back to ${fallbackProvider}`);
+      warn(`[HybridAI] ${primaryProvider} JSON generation failed, falling back to ${fallbackProvider}`);
 
       try {
         const data = fallbackProvider === 'openai'
@@ -192,7 +193,7 @@ export class HybridAIService {
   async generateEmbedding(text: string): Promise<{ data: number[] | null; error?: Error | null }> {
     try {
       if (env.app.debugMode) {
-        console.log('[HybridAI] Generating embedding via OpenAI');
+        log('[HybridAI] Generating embedding via OpenAI');
       }
 
       return await openAIService.generateEmbedding(text);

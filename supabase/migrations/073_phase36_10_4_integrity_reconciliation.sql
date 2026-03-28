@@ -74,9 +74,9 @@ BEGIN
   SELECT
     d.id,
     COUNT(c.id)::BIGINT as total_chunks,
-    COUNT(CASE WHEN c.embedding IS NOT NULL THEN 1 END)::BIGINT as embedded_chunks,
-    COUNT(CASE WHEN c.embedding IS NULL THEN 1 END)::BIGINT as missing_embeddings,
-    (COUNT(CASE WHEN c.embedding IS NULL THEN 1 END) = 0)::BOOLEAN as is_valid
+    COUNT(CASE WHEN c.embedding_vector IS NOT NULL THEN 1 END)::BIGINT as embedded_chunks,
+    COUNT(CASE WHEN c.embedding_vector IS NULL THEN 1 END)::BIGINT as missing_embeddings,
+    (COUNT(CASE WHEN c.embedding_vector IS NULL THEN 1 END) = 0)::BOOLEAN as is_valid
   FROM knowledge_documents d
   LEFT JOIN knowledge_chunks c ON d.id = c.document_id
   WHERE d.id = p_document_id
@@ -106,7 +106,7 @@ BEGIN
     d.ingestion_status,
     d.embedding_integrity_checked,
     COUNT(c.id)::BIGINT as total_chunks,
-    COUNT(CASE WHEN c.embedding IS NULL THEN 1 END)::BIGINT as missing_embeddings,
+    COUNT(CASE WHEN c.embedding_vector IS NULL THEN 1 END)::BIGINT as missing_embeddings,
     'INCOMPLETE_EMBEDDINGS'::TEXT as violation_type
   FROM knowledge_documents d
   LEFT JOIN knowledge_chunks c ON d.id = c.document_id
@@ -115,7 +115,7 @@ BEGIN
     SELECT 1
     FROM knowledge_chunks c2
     WHERE c2.document_id = d.id
-    AND c2.embedding IS NULL
+    AND c2.embedding_vector IS NULL
   )
   GROUP BY d.id, d.ingestion_status, d.embedding_integrity_checked;
 END;
@@ -241,15 +241,15 @@ BEGIN
     c.content,
     c.chunk_index,
     c.token_count,
-    (1.0 - (c.embedding <=> query_embedding))::float AS embedding_similarity,
+    (1.0 - (c.embedding_vector <=> query_embedding))::float AS embedding_similarity,
     d.title,
     d.category,
     d.source,
     d.created_at
   FROM knowledge_chunks_ready c
   INNER JOIN knowledge_documents_ready d ON d.id = c.document_id
-  WHERE c.embedding IS NOT NULL
-    AND (1.0 - (c.embedding <=> query_embedding)) > match_threshold
+  WHERE c.embedding_vector IS NOT NULL
+    AND (1.0 - (c.embedding_vector <=> query_embedding)) > match_threshold
   ORDER BY embedding_similarity DESC
   LIMIT match_count;
 END;
@@ -353,13 +353,13 @@ SELECT
   c.content,
   c.chunk_index,
   c.token_count,
-  c.embedding,
+  c.embedding_vector,
   c.created_at,
   c.updated_at,
   c.embedding_generated_at
 FROM knowledge_chunks c
 INNER JOIN knowledge_documents_ready d ON d.id = c.document_id
-WHERE c.embedding IS NOT NULL;
+WHERE c.embedding_vector IS NOT NULL;
 
 -- ============================================================================
 -- 1️⃣1️⃣ ENSURE TRIGGER EXISTS
@@ -409,8 +409,8 @@ WHERE ingestion_status = 'complete'
   AND is_active = TRUE;
 
 CREATE INDEX IF NOT EXISTS idx_chunks_ready_composite
-ON knowledge_chunks(document_id, embedding)
-WHERE embedding IS NOT NULL;
+ON knowledge_chunks(document_id, embedding_vector)
+WHERE embedding_vector IS NOT NULL;
 
 -- ============================================================================
 -- POST-MIGRATION: Verification Queries

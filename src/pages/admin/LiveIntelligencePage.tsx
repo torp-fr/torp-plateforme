@@ -9,6 +9,7 @@ import { TrendingUp, Users, FileText, Loader2 } from 'lucide-react';
 import { analyticsService } from '@/services/api/analytics.service';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface GlobalStats {
   userCount: number;
@@ -26,7 +27,7 @@ export function LiveIntelligencePage() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        setIsLoading(true);
+        if (!stats) setIsLoading(true);
         const data = await analyticsService.getGlobalStats();
         setStats(data);
         setError(null);
@@ -49,20 +50,64 @@ export function LiveIntelligencePage() {
     return () => clearInterval(interval);
   }, [toast]);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (error) {
+  if (error && !stats) {
     return (
       <EmptyState
         title="Impossible de charger les données"
         description={error}
       />
+    );
+  }
+
+  if (!stats && isLoading) {
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Live Intelligence</h1>
+          <p className="text-muted-foreground">Real-time platform analytics and insights</p>
+        </div>
+
+        {/* Skeleton Loaders */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardHeader className="space-y-2">
+              <Skeleton className="h-4 w-24" />
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Skeleton className="h-8 w-16" />
+              <Skeleton className="h-3 w-32" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="space-y-2">
+              <Skeleton className="h-4 w-32" />
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Skeleton className="h-8 w-20" />
+              <Skeleton className="h-3 w-24" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="space-y-2">
+              <Skeleton className="h-4 w-28" />
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Skeleton className="h-8 w-16" />
+              <Skeleton className="h-3 w-24" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="space-y-2">
+              <Skeleton className="h-4 w-16" />
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Skeleton className="h-8 w-12" />
+              <Skeleton className="h-3 w-32" />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     );
   }
 
@@ -78,9 +123,17 @@ export function LiveIntelligencePage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Live Intelligence</h1>
-        <p className="text-muted-foreground">Real-time platform analytics and insights</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Live Intelligence</h1>
+          <p className="text-muted-foreground">Real-time platform analytics and insights</p>
+        </div>
+        {isLoading && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Actualisation...</span>
+          </div>
+        )}
       </div>
 
       {/* Key Metrics */}
@@ -133,16 +186,92 @@ export function LiveIntelligencePage() {
       {/* Activity Info */}
       <Card>
         <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
-          <CardDescription>Latest platform events</CardDescription>
+          <CardTitle>Activité Récente</CardTitle>
+          <CardDescription>10 dernières analyses de la plateforme</CardDescription>
         </CardHeader>
         <CardContent>
-          <EmptyState
-            title="No activity yet"
-            description="Platform activity will appear here as users interact with the system"
-          />
+          <RecentActivitySection />
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// ─── Recent Activity ──────────────────────────────────────────────────────────
+
+interface AnalysisJob {
+  id: string;
+  status: string;
+  analysis_type?: string;
+  created_at: string;
+}
+
+function RecentActivitySection() {
+  const [jobs, setJobs] = useState<AnalysisJob[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await analyticsService.getRecentJobs(10);
+        setJobs(data as AnalysisJob[]);
+      } catch {
+        setJobs([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+    const interval = setInterval(load, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="space-y-2">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="flex items-center justify-between p-3 border rounded">
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-5 w-20" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (!jobs.length) {
+    return (
+      <EmptyState
+        title="Aucune activité"
+        description="Les analyses apparaîtront ici dès que la plateforme sera utilisée"
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {jobs.map(job => (
+        <div
+          key={job.id}
+          className="flex items-center justify-between p-3 border rounded hover:bg-muted/50 transition-colors"
+        >
+          <div>
+            <p className="text-sm font-medium">{job.analysis_type ?? 'Analyse'}</p>
+            <p className="text-xs text-muted-foreground">
+              {new Date(job.created_at).toLocaleString('fr-FR')}
+            </p>
+          </div>
+          <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+            job.status === 'completed' ? 'bg-green-100 text-green-800' :
+            job.status === 'failed'    ? 'bg-red-100 text-red-800' :
+            job.status === 'processing'? 'bg-blue-100 text-blue-800' :
+            'bg-yellow-100 text-yellow-800'
+          }`}>
+            {job.status}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

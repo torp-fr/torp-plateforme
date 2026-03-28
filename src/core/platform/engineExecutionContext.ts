@@ -50,10 +50,17 @@ export interface EngineExecutionContext {
   lots?: any;
 
   /**
-   * Rule Engine Results (placeholder for future)
-   * Will contain rule evaluation results
+   * Rule Engine Results
+   * Contains rule evaluation results and resolved decisions from the DB
    */
   rules?: any;
+
+  /**
+   * Resolved Decisions — output of the Decision Builder + Resolver pipeline.
+   * One authoritative bound per (element, property, unit) key, derived from
+   * the DB rules table. Primary input for the quote audit layer.
+   */
+  resolvedDecisions?: import('@/core/decision/decisionResolver').ResolvedDecision[];
 
   /**
    * Enrichment Engine Results (placeholder for future)
@@ -123,11 +130,25 @@ export interface EngineExecutionContext {
   finalProfessionalGrade?: string;
 
   /**
+   * Rule Evaluation Results — output of decisionEngine.evaluateProject().
+   * Set by scoring.engine after evaluating resolvedDecisions against projectData.
+   * Contains compliance grade (A–E), violations, and coverage metrics.
+   */
+  ruleEvaluation?: import('@/core/rules/decisionEngine').EvaluationResult;
+
+  /**
    * Structural Consistency Results
    * Analytical detection of imbalances between pillars
    * Pure analysis - no impact on scoring or grading
    */
   structuralConsistency?: any;
+
+  /**
+   * Implied rule domains deduced from project type.
+   * Set by the orchestrator (via contextDeduction.service) before runLotEngine.
+   * Used by rule.engine as supplementary domain source alongside lot.domain.
+   */
+  impliedDomains?: string[];
 
   /**
    * Timestamp when execution started (ISO 8601)

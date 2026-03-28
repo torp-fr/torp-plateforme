@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppProvider } from "@/context/AppContext";
 import { ErrorBoundary } from "@/components/error/ErrorBoundary";
 
@@ -38,14 +38,14 @@ import Results from "./pages/Results";
 import JobStatusPage from "./pages/analysis/JobStatusPage";
 
 // Admin Pages
-import Analytics from "./pages/Analytics";
-import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
+import { DashboardPage } from "./pages/admin/DashboardPage";
 import { SystemHealthPage } from "./pages/admin/SystemHealthPage";
 import { LiveIntelligencePage } from "./pages/admin/LiveIntelligencePage";
 import { OrchestrationsPage } from "./pages/admin/OrchestrationsPage";
 import { KnowledgeBasePage } from "./pages/admin/KnowledgeBasePage";
-import { SecurityPage } from "./pages/admin/SecurityPage";
+import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminSettingsPage } from "./pages/admin/AdminSettingsPage";
+import { KnowledgeControlCenter } from "./features/knowledge/KnowledgeControlCenter";
 
 const queryClient = new QueryClient();
 
@@ -73,15 +73,20 @@ const AppContent = () => {
           {/* ADMIN ROUTES - Admin-only protection */}
           {/* ============================================ */}
           <Route element={<AdminRoute><AdminLayout /></AdminRoute>}>
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/analytics/system" element={<SystemHealthPage />} />
-            <Route path="/analytics/intelligence" element={<LiveIntelligencePage />} />
-            <Route path="/analytics/orchestrations" element={<OrchestrationsPage />} />
-            <Route path="/analytics/knowledge" element={<KnowledgeBasePage />} />
-            <Route path="/analytics/security" element={<SecurityPage />} />
-            <Route path="/analytics/settings" element={<AdminSettingsPage />} />
-            <Route path="/analytics/users" element={<AdminUsersPage />} />
+            <Route path="/admin">
+              <Route index element={<DashboardPage />} />
+              <Route path="system" element={<SystemHealthPage />} />
+              <Route path="intelligence" element={<LiveIntelligencePage />} />
+              <Route path="orchestrations" element={<OrchestrationsPage />} />
+              <Route path="knowledge" element={<KnowledgeBasePage />} />
+              <Route path="knowledge-debug" element={<KnowledgeControlCenter />} />
+              <Route path="users" element={<AdminUsersPage />} />
+              <Route path="settings" element={<AdminSettingsPage />} />
+            </Route>
           </Route>
+
+          {/* Backward-compatibility redirect */}
+          <Route path="/analytics/*" element={<Navigate to="/admin" replace />} />
 
           {/* ============================================ */}
           {/* USER ROUTES - Authenticated user protection */}

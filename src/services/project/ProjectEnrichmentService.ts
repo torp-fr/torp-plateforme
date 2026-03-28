@@ -10,6 +10,7 @@ import { inseeService } from '@/services/external-apis/INSEEService';
 import { banService } from '@/services/external-apis/BANService';
 import { georisquesService } from '@/services/external-apis/GeorisquesService';
 import type { ProjectContext } from '@/types/ProjectContext';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface EnrichedProjectContext extends ProjectContext {
   enrichmentData: {
@@ -37,7 +38,7 @@ export class ProjectEnrichmentService {
    */
   async enrichProjectContext(context: ProjectContext): Promise<EnrichedProjectContext> {
     try {
-      console.log(`🔄 [P1] Enriching project context...`);
+      log(`🔄 [P1] Enriching project context...`);
 
       const enrichedContext: EnrichedProjectContext = {
         ...context,
@@ -59,7 +60,7 @@ export class ProjectEnrichmentService {
       // 3. Enrichir infos bâtiment
       enrichedContext.enrichmentData.buildingInfo = await this.enrichBuildingInfo(context.address);
 
-      console.log(`✅ Project enrichment complete`);
+      log(`✅ Project enrichment complete`);
       return enrichedContext;
     } catch (error) {
       console.error('❌ Enrichment error:', error);
@@ -83,7 +84,7 @@ export class ProjectEnrichmentService {
     region?: string;
   }> {
     try {
-      console.log(`📍 [P1] Enriching address: ${address}`);
+      log(`📍 [P1] Enriching address: ${address}`);
 
       // TODO: P1 Implementation
       // 1. Valider avec BAN
@@ -117,7 +118,7 @@ export class ProjectEnrichmentService {
     radonPotential?: string;
   }> {
     try {
-      console.log(`🌍 [P1] Enriching environmental data...`);
+      log(`🌍 [P1] Enriching environmental data...`);
 
       // TODO: P1 Implementation
       // 1. Récupérer zone climatique
@@ -143,7 +144,7 @@ export class ProjectEnrichmentService {
     previousRenovations?: string[];
   }> {
     try {
-      console.log(`🏢 [P1] Enriching building info for: ${address}`);
+      log(`🏢 [P1] Enriching building info for: ${address}`);
 
       // TODO: P1 Implementation
       // 1. Récupérer année construction via cadastre
@@ -169,7 +170,7 @@ export class ProjectEnrichmentService {
     solvencyScore?: number;
   }> {
     try {
-      console.log(`🏭 [P1] Enriching company data for SIRET: ${siret}`);
+      log(`🏭 [P1] Enriching company data for SIRET: ${siret}`);
 
       // TODO: P1 Implementation
       // 1. Récupérer INSEE
@@ -189,7 +190,7 @@ export class ProjectEnrichmentService {
    */
   async canEnrich(address: string): Promise<boolean> {
     try {
-      console.log(`❓ [P1] Checking if can enrich: ${address}`);
+      log(`❓ [P1] Checking if can enrich: ${address}`);
 
       // TODO: P1 Implementation
       // Stub pour MVP

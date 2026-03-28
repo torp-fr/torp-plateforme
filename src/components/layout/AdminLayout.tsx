@@ -9,7 +9,6 @@ import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import {
   BarChart3,
   Database,
-  Users,
   Settings,
   LogOut,
   Menu,
@@ -17,6 +16,11 @@ import {
   ChevronDown,
   User,
   Sparkles,
+  Zap,
+  TrendingUp,
+  Plug,
+  FlaskConical,
+  Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
@@ -30,7 +34,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import torpLogo from '@/assets/torp-logo-red.png';
+import { BRANDING } from '@/config/branding';
 
 interface AdminLayoutProps {
   children?: ReactNode;
@@ -44,48 +48,54 @@ interface NavItem {
   exact?: boolean;
 }
 
-// Navigation ADMIN - Ne change JAMAIS
+// Navigation ADMIN - Route-driven cockpit navigation
 const ADMIN_NAV_ITEMS: NavItem[] = [
   {
     id: 'dashboard',
-    href: '/analytics',
+    href: '/admin',
     icon: BarChart3,
     label: 'Dashboard',
     exact: true,
   },
   {
-    id: 'system',
-    href: '/analytics/system',
-    icon: Database,
-    label: 'System Health',
-  },
-  {
-    id: 'intelligence',
-    href: '/analytics/intelligence',
-    icon: BarChart3,
-    label: 'Live Intelligence',
+    id: 'users',
+    href: '/admin/users',
+    icon: Users,
+    label: 'Utilisateurs',
   },
   {
     id: 'orchestrations',
-    href: '/analytics/orchestrations',
-    icon: BarChart3,
-    label: 'Orchestrations',
+    href: '/admin/orchestrations',
+    icon: Zap,
+    label: "Cockpit d'Orchestration",
+  },
+  {
+    id: 'intelligence',
+    href: '/admin/intelligence',
+    icon: TrendingUp,
+    label: 'Adaptatif',
   },
   {
     id: 'knowledge',
-    href: '/analytics/knowledge',
+    href: '/admin/knowledge',
     icon: Database,
-    label: 'Knowledge Base',
+    label: 'Gestion des documents',
   },
   {
-    id: 'security',
-    href: '/analytics/security',
-    icon: Users,
-    label: 'Security',
+    id: 'knowledge-debug',
+    href: '/admin/knowledge-debug',
+    icon: FlaskConical,
+    label: 'Knowledge Debug',
+  },
+  {
+    id: 'system',
+    href: '/admin/system',
+    icon: Plug,
+    label: 'Santé & Sécurité',
   },
   {
     id: 'settings',
-    href: '/analytics/settings',
+    href: '/admin/settings',
     icon: Settings,
     label: 'Settings',
   },
@@ -145,8 +155,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     <>
       {/* Logo */}
       <div className="p-4 border-b border-sidebar-border">
-        <Link to="/analytics" className="flex items-center gap-3">
-          <img src={torpLogo} alt="TORP" className="h-10 w-auto" />
+        <Link to="/admin" className="flex items-center gap-3">
+          <img src={BRANDING.logoPrimary} alt="TORP" className="h-10 w-auto" />
           <div>
             <div className="flex items-center gap-2">
               <span className="font-bold text-lg text-sidebar-foreground">TORP</span>
@@ -216,8 +226,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             >
               {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
-            <Link to="/analytics" className="flex items-center gap-2">
-              <img src={torpLogo} alt="TORP" className="h-8 w-auto" />
+            <Link to="/admin" className="flex items-center gap-2">
+              <img src={BRANDING.logoPrimary} alt="TORP" className="h-8 w-auto" />
               <span className="font-bold">TORP</span>
             </Link>
           </div>
@@ -229,7 +239,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         </div>
       </header>
 
-      <div className="flex">
+      <div className="flex min-h-screen overflow-hidden">
         {/* Sidebar Desktop - FIXE */}
         <aside className="hidden md:flex md:flex-col w-64 bg-sidebar text-sidebar-foreground min-h-screen fixed left-0 top-0 border-r border-sidebar-border">
           <SidebarContent />
@@ -253,7 +263,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         )}
 
         {/* Main content */}
-        <main className="flex-1 md:ml-64 min-h-screen bg-background">
+        <main className="flex-1 md:ml-64 min-h-screen bg-background overflow-auto">
           {/* Header Desktop */}
           <header className="hidden md:flex bg-background border-b h-14 items-center justify-between px-6 sticky top-0 z-40">
             <div className="flex items-center gap-4">

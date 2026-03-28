@@ -182,7 +182,7 @@ export default function B2BPricing() {
           
           <div className="grid lg:grid-cols-3 gap-6">
             {getServicesForTier(selectedTier).map((service, index) => (
-              <Card key={index} className={`relative ${service.popular ? 'border-primary shadow-strong' : 'border-border'}`}>
+              <Card key={`service-${index}`} className={`relative ${service.popular ? 'border-primary shadow-strong' : 'border-border'}`}>
                 {service.popular && (
                   <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
                     <Badge className="bg-primary text-primary-foreground px-4 py-1">
