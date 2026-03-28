@@ -149,12 +149,8 @@ router.post('/projets', validateBody(CreateProjetSchema), async (req: Request, r
 // POST /api/v1/devis/upload
 // Upload devis file + trigger DevisParsing → AuditScoring pipeline chain
 // ─────────────────────────────────────────────────────────────────
-router.post('/devis/upload', async (req: Request, res: Response) => {
+router.post('/devis/upload', validateBody(UploadDevisSchema), async (req: Request, res: Response) => {
   const { projet_id, format, file_base64, file_name } = req.body as Record<string, string>;
-
-  if (!projet_id || !format || !file_base64) {
-    return res.status(400).json({ error: 'projet_id, format et file_base64 sont requis' });
-  }
 
   const supabase = getSupabase();
 
@@ -205,7 +201,7 @@ router.post('/devis/upload', async (req: Request, res: Response) => {
 // GET /api/v1/devis/:id/status
 // Poll parsing + scoring status
 // ─────────────────────────────────────────────────────────────────
-router.get('/devis/:id/status', async (req: Request, res: Response) => {
+router.get('/devis/:id/status', validateParams(DevisIdParamSchema), validateQuery(DevisStatusQuerySchema), async (req: Request, res: Response) => {
   const supabase = getSupabase();
 
   const { data: devis } = await supabase
@@ -234,7 +230,7 @@ router.get('/devis/:id/status', async (req: Request, res: Response) => {
 // GET /api/v1/audit/:short_code  (PUBLIC — no auth required)
 // Client-facing report via QR code scan
 // ─────────────────────────────────────────────────────────────────
-router.get('/audit/:short_code', async (req: Request, res: Response) => {
+router.get('/audit/:short_code', validateParams(AuditShortCodeParamSchema), async (req: Request, res: Response) => {
   const supabase = getSupabase();
 
   const { data: qr } = await supabase

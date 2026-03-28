@@ -19,6 +19,21 @@ export default function Register() {
   const [phone, setPhone] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+
+  const passwordStrength = (pwd: string): { score: number; label: string; color: string } => {
+    if (!pwd) return { score: 0, label: '', color: '' };
+    let score = 0;
+    if (pwd.length >= 8) score++;
+    if (pwd.length >= 12) score++;
+    if (/[A-Z]/.test(pwd)) score++;
+    if (/[0-9]/.test(pwd)) score++;
+    if (/[^A-Za-z0-9]/.test(pwd)) score++;
+    if (score <= 1) return { score, label: 'Faible', color: 'bg-red-500' };
+    if (score <= 3) return { score, label: 'Moyen', color: 'bg-amber-500' };
+    return { score, label: 'Fort', color: 'bg-emerald-500' };
+  };
+
+  const strength = passwordStrength(password);
   const { setUser } = useApp();
   const { toast } = useToast();
 
@@ -165,7 +180,29 @@ export default function Register() {
                   required
                   minLength={8}
                 />
-                <p className="text-xs text-muted-foreground">Minimum 8 caractères</p>
+                {password && (
+                  <div className="space-y-1">
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <div
+                          key={i}
+                          className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+                            i <= strength.score ? strength.color : 'bg-border'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <p className={`text-xs font-medium ${
+                      strength.score <= 1 ? 'text-red-500' :
+                      strength.score <= 3 ? 'text-amber-500' : 'text-emerald-600'
+                    }`}>
+                      {strength.label} — min. 8 caractères, majuscules, chiffres
+                    </p>
+                  </div>
+                )}
+                {!password && (
+                  <p className="text-xs text-muted-foreground">Min. 8 caractères, mélange majuscules/chiffres</p>
+                )}
               </div>
 
               <div className="space-y-2">

@@ -55,6 +55,14 @@ const PHASES = [
   { id: 5, name: 'Maintenance', icon: Wrench, color: 'text-purple-600', bg: 'bg-purple-50' },
 ];
 
+const GRADE_COLORS: Record<string, string> = {
+  A: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  B: 'bg-sky-50 text-sky-700 border-sky-200',
+  C: 'bg-amber-50 text-amber-700 border-amber-200',
+  D: 'bg-orange-50 text-orange-700 border-orange-200',
+  E: 'bg-red-50 text-red-700 border-red-200',
+};
+
 // Mock projects
 const MOCK_PROJECTS = [
   {
@@ -65,6 +73,8 @@ const MOCK_PROJECTS = [
     phase: 2,
     avancement: 45,
     budget: 85000,
+    score: 87,
+    grade: 'A' as const,
     createdAt: '2024-01-15',
     updatedAt: '2024-01-18',
     status: 'en_cours',
@@ -77,6 +87,8 @@ const MOCK_PROJECTS = [
     phase: 1,
     avancement: 20,
     budget: 120000,
+    score: 62,
+    grade: 'C' as const,
     createdAt: '2024-01-10',
     updatedAt: '2024-01-17',
     status: 'en_cours',
@@ -89,6 +101,8 @@ const MOCK_PROJECTS = [
     phase: 3,
     avancement: 70,
     budget: 250000,
+    score: 74,
+    grade: 'B' as const,
     createdAt: '2023-12-01',
     updatedAt: '2024-01-16',
     status: 'en_cours',
@@ -101,6 +115,8 @@ const MOCK_PROJECTS = [
     phase: 5,
     avancement: 100,
     budget: 350000,
+    score: 91,
+    grade: 'A' as const,
     createdAt: '2023-06-01',
     updatedAt: '2023-12-15',
     status: 'termine',
@@ -111,14 +127,26 @@ export function ProjetsListePage() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [phaseFilter, setPhaseFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'score'>('newest');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
 
-  const filteredProjects = MOCK_PROJECTS.filter(project => {
+  const filtered = MOCK_PROJECTS.filter(project => {
     const matchesSearch = project.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           project.adresse.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesPhase = phaseFilter === 'all' || project.phase.toString() === phaseFilter;
     return matchesSearch && matchesPhase;
   });
+
+  const sortedProjects = [...filtered].sort((a, b) => {
+    if (sortBy === 'score') return (b.score ?? 0) - (a.score ?? 0);
+    if (sortBy === 'oldest') return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+
+  const totalPages = Math.ceil(sortedProjects.length / PAGE_SIZE);
+  const filteredProjects = sortedProjects.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const enCours = MOCK_PROJECTS.filter(p => p.status === 'en_cours').length;
   const termines = MOCK_PROJECTS.filter(p => p.status === 'termine').length;
@@ -163,7 +191,7 @@ export function ProjetsListePage() {
                 className="pl-9"
               />
             </div>
-            <Select value={phaseFilter} onValueChange={setPhaseFilter}>
+            <Select value={phaseFilter} onValueChange={(v) => { setPhaseFilter(v); setPage(1); }}>
               <SelectTrigger className="w-[180px]">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Toutes les phases" />
@@ -175,6 +203,16 @@ export function ProjetsListePage() {
                     Phase {phase.id} - {phase.name}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+            <Select value={sortBy} onValueChange={(v) => { setSortBy(v as typeof sortBy); setPage(1); }}>
+              <SelectTrigger className="w-[170px]">
+                <SelectValue placeholder="Trier par" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Plus récents</SelectItem>
+                <SelectItem value="oldest">Plus anciens</SelectItem>
+                <SelectItem value="score">Meilleur score</SelectItem>
               </SelectContent>
             </Select>
             <div className="flex border rounded-lg">
@@ -246,7 +284,7 @@ export function ProjetsListePage() {
                               </span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-6">
+                          <div className="flex items-center gap-5">
                             <div className="text-right hidden md:block">
                               <Badge className={cn(phase?.bg, phase?.color, 'border-0')}>
                                 Phase {project.phase} - {phase?.name}
@@ -263,6 +301,14 @@ export function ProjetsListePage() {
                               <div className="font-medium">{project.budget.toLocaleString('fr-FR')} €</div>
                               <div className="text-xs text-gray-500">Budget</div>
                             </div>
+                            {project.score != null && (
+                              <div className="text-right hidden sm:block w-16">
+                                <div className="font-bold text-foreground">{project.score}</div>
+                                <Badge className={cn('text-xs border mt-0.5', GRADE_COLORS[project.grade])}>
+                                  {project.grade}
+                                </Badge>
+                              </div>
+                            )}
                           </div>
                         </Link>
                         <DropdownMenu>
@@ -345,6 +391,43 @@ export function ProjetsListePage() {
                   </Card>
                 );
               })}
+            </div>
+          )}
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 text-sm text-gray-500">
+              <span>
+                Affichage {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, sortedProjects.length)} sur {sortedProjects.length}
+              </span>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  Précédent
+                </Button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <Button
+                    key={p}
+                    variant={p === page ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="w-8 h-8 p-0"
+                    onClick={() => setPage(p)}
+                  >
+                    {p}
+                  </Button>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                >
+                  Suivant
+                </Button>
+              </div>
             </div>
           )}
         </TabsContent>
