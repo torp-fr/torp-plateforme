@@ -206,6 +206,29 @@ Deno.serve(async (req) => {
       console.log("[EMBEDDING] ✅ Padded embeddings array to", embeddings.length);
     }
 
+    // ── Fire-and-forget cost tracking ──────────────────────────────────────
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (supabaseUrl && supabaseKey && json.usage?.total_tokens) {
+      const tokensUsed = json.usage.total_tokens as number;
+      const costUsd    = (tokensUsed / 1_000) * 0.00002; // text-embedding-3-small: $0.02/1M tokens
+      fetch(`${supabaseUrl}/rest/v1/api_costs`, {
+        method: "POST",
+        headers: {
+          "Content-Type":  "application/json",
+          "apikey":        supabaseKey,
+          "Authorization": `Bearer ${supabaseKey}`,
+          "Prefer":        "return=minimal",
+        },
+        body: JSON.stringify({
+          api_name:    "openai-text-embedding-3-small",
+          cost_usd:    costUsd,
+          metrics:     { tokens_used: tokensUsed },
+          recorded_at: new Date().toISOString(),
+        }),
+      }).catch((e: unknown) => console.error("[CostTrack] generate-embedding:", e));
+    }
+
     // Batch callers (inputs or texts) get { embeddings: number[][] }.
     // Single-text legacy callers get { embedding: number[] }.
     if (Array.isArray(inputs) || Array.isArray(texts)) {

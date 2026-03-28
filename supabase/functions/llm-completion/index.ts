@@ -131,6 +131,49 @@ serve(async (req) => {
           provider: 'openai',
         }
 
+    // ── Fire-and-forget cost tracking ──────────────────────────────────────
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (supabaseUrl && supabaseKey && normalizedResponse.usage) {
+      const tokensUsed = provider === 'anthropic'
+        ? (result.usage?.input_tokens  ?? 0) + (result.usage?.output_tokens     ?? 0)
+        : (result.usage?.prompt_tokens ?? 0) + (result.usage?.completion_tokens ?? 0)
+
+      const modelName = normalizedResponse.model ?? ''
+      // Map model name to pricing key from api_pricing_config
+      const PRICING: Record<string, number> = {
+        'claude-haiku-4-5-20251001':  0.00025,
+        'claude-haiku':               0.00025,
+        'claude-sonnet-4-20250514':   0.003,
+        'claude-sonnet':              0.003,
+        'claude-opus-4-20250514':     0.015,
+        'claude-opus':                0.015,
+        'gpt-4o':                     0.005,
+        'gpt-4o-mini':                0.00015,
+      }
+      const pricePerK = PRICING[modelName] ?? (provider === 'anthropic' ? 0.003 : 0.005)
+      const costUsd   = (tokensUsed / 1_000) * pricePerK
+      const apiName   = provider === 'anthropic'
+        ? `anthropic-${modelName.includes('haiku') ? 'claude-haiku' : modelName.includes('opus') ? 'claude-opus' : 'claude-sonnet'}`
+        : `openai-${modelName || 'gpt-4o'}`
+
+      fetch(`${supabaseUrl}/rest/v1/api_costs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'apikey':        supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Prefer':        'return=minimal',
+        },
+        body: JSON.stringify({
+          api_name:    apiName,
+          cost_usd:    costUsd,
+          metrics:     { tokens_used: tokensUsed },
+          recorded_at: new Date().toISOString(),
+        }),
+      }).catch(e => console.error('[CostTrack] llm-completion:', e))
+    }
+
     return new Response(
       JSON.stringify(normalizedResponse),
       {

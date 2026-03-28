@@ -180,6 +180,29 @@ Réponds uniquement en JSON valide.`;
       });
     }
 
+    // ── Fire-and-forget cost tracking ──────────────────────────────────────
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (supabaseUrl && supabaseKey) {
+      const tokensUsed = (openaiData.usage?.prompt_tokens ?? 0) + (openaiData.usage?.completion_tokens ?? 0);
+      const costUsd    = (tokensUsed / 1_000) * 0.005; // gpt-4o: $5/1M tokens
+      fetch(`${supabaseUrl}/rest/v1/api_costs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'apikey':        supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Prefer':        'return=minimal',
+        },
+        body: JSON.stringify({
+          api_name:    'openai-gpt-4o-vision',
+          cost_usd:    costUsd,
+          metrics:     { tokens_used: tokensUsed, images_processed: 1 },
+          recorded_at: new Date().toISOString(),
+        }),
+      }).catch((e: unknown) => console.error('[CostTrack] analyze-construction-photo:', e));
+    }
+
     // Return the analysis
     return new Response(
       JSON.stringify({

@@ -6,6 +6,7 @@
 
 import express from 'express';
 import cors from 'cors';
+import { createClient } from '@supabase/supabase-js';
 import { assertConfig, config } from '../config/index.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import authRoutes from './routes/auth.routes.js';
@@ -13,6 +14,8 @@ import adminRoutes from './routes/admin.routes.js';
 import engineRoutes from './routes/engine.routes.js';
 import pipelineRoutes from './pipelines.routes.js';
 import healthRoutes from './pipeline-health.routes.js';
+import { APIHealthMonitor } from '../core/monitoring/APIHealthMonitor.js';
+import { registerAIAPIs } from '../core/monitoring/AIAPIsHealthCheck.js';
 
 // ─── Startup validation ───────────────────────────────────────────────────────
 
@@ -65,6 +68,18 @@ const PORT = config.server.port;
 app.listen(PORT, () => {
   console.log(`[server] TORP API running on port ${PORT} (${config.env})`);
   console.log(`[server] Client origin: ${config.server.clientUrl}`);
+
+  // ── AI API health monitoring ────────────────────────────────────────────
+  if (config.supabase.url && config.supabase.serviceRoleKey) {
+    const supabaseAdmin = createClient(
+      config.supabase.url,
+      config.supabase.serviceRoleKey
+    );
+    const aiMonitor = new APIHealthMonitor(supabaseAdmin);
+    registerAIAPIs(aiMonitor);
+  } else {
+    console.warn('[server] AI health monitoring disabled — Supabase credentials not set');
+  }
 });
 
 export default app;
