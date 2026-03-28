@@ -35,7 +35,9 @@
     "claude:bootstrap": "tsx scripts/claudeBootstrap.ts",
     "test:rules": "tsx --env-file=.env.local scripts/test-rule-extraction.ts",
     "worker:rules": "tsx --env-file=.env.local src/workers/ruleExtraction.worker.ts",
-    "worker:rules:drain": "tsx --env-file=.env.local scripts/run-rule-extraction.ts"
+    "worker:rules:drain": "tsx --env-file=.env.local scripts/run-rule-extraction.ts",
+    "worker:start": "tsx --env-file=.env.local src/workers/cron.ts",
+    "start": "tsx --env-file=.env.local src/api/server.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.70.0",
