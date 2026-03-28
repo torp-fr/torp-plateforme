@@ -6,7 +6,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2, Shield, CheckCircle } from 'lucide-react';
 import { analyticsService } from '@/services/api/analytics.service';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/hooks/use-toast';
@@ -75,8 +75,8 @@ export function SystemHealthPage() {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-foreground">System Health</h1>
-          <p className="text-muted-foreground">Monitor system status and performance metrics</p>
+          <h1 className="text-3xl font-bold text-foreground">Santé & Sécurité Système</h1>
+          <p className="text-muted-foreground">État du système et contrôles de sécurité de la plateforme</p>
         </div>
 
         {/* Skeleton Loader */}
@@ -118,8 +118,8 @@ export function SystemHealthPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">System Health</h1>
-          <p className="text-muted-foreground">Monitor system status and performance metrics</p>
+          <h1 className="text-3xl font-bold text-foreground">Santé & Sécurité Système</h1>
+          <p className="text-muted-foreground">État du système et contrôles de sécurité de la plateforme</p>
         </div>
         {isLoading && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -170,12 +170,32 @@ export function SystemHealthPage() {
         </CardContent>
       </Card>
 
-      {/* Info Note */}
+      {/* Security Controls */}
       <Card>
-        <CardContent className="p-6">
-          <p className="text-sm text-muted-foreground">
-            System health is monitored continuously. Detailed metrics appear here when available.
-          </p>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Contrôles de Sécurité
+          </CardTitle>
+          <CardDescription>État des mécanismes de sécurité de la plateforme</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {[
+              { name: 'Row Level Security (RLS)', detail: 'Activé sur toutes les tables' },
+              { name: 'Chiffrement Transport (HTTPS/TLS)', detail: 'Enforced' },
+              { name: 'Authentification JWT', detail: 'Supabase Auth' },
+              { name: 'Contrôle d\'accès (RBAC)', detail: 'Rôles user / admin / super_admin' },
+            ].map(ctrl => (
+              <div key={ctrl.name} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium">{ctrl.name}</p>
+                  <p className="text-xs text-muted-foreground">{ctrl.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
     </div>

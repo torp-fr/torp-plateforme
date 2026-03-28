@@ -186,16 +186,92 @@ export function LiveIntelligencePage() {
       {/* Activity Info */}
       <Card>
         <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
-          <CardDescription>Latest platform events</CardDescription>
+          <CardTitle>Activité Récente</CardTitle>
+          <CardDescription>10 dernières analyses de la plateforme</CardDescription>
         </CardHeader>
         <CardContent>
-          <EmptyState
-            title="No activity yet"
-            description="Platform activity will appear here as users interact with the system"
-          />
+          <RecentActivitySection />
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// ─── Recent Activity ──────────────────────────────────────────────────────────
+
+interface AnalysisJob {
+  id: string;
+  status: string;
+  analysis_type?: string;
+  created_at: string;
+}
+
+function RecentActivitySection() {
+  const [jobs, setJobs] = useState<AnalysisJob[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await analyticsService.getRecentJobs(10);
+        setJobs(data as AnalysisJob[]);
+      } catch {
+        setJobs([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+    const interval = setInterval(load, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="space-y-2">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="flex items-center justify-between p-3 border rounded">
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-5 w-20" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (!jobs.length) {
+    return (
+      <EmptyState
+        title="Aucune activité"
+        description="Les analyses apparaîtront ici dès que la plateforme sera utilisée"
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {jobs.map(job => (
+        <div
+          key={job.id}
+          className="flex items-center justify-between p-3 border rounded hover:bg-muted/50 transition-colors"
+        >
+          <div>
+            <p className="text-sm font-medium">{job.analysis_type ?? 'Analyse'}</p>
+            <p className="text-xs text-muted-foreground">
+              {new Date(job.created_at).toLocaleString('fr-FR')}
+            </p>
+          </div>
+          <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+            job.status === 'completed' ? 'bg-green-100 text-green-800' :
+            job.status === 'failed'    ? 'bg-red-100 text-red-800' :
+            job.status === 'processing'? 'bg-blue-100 text-blue-800' :
+            'bg-yellow-100 text-yellow-800'
+          }`}>
+            {job.status}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

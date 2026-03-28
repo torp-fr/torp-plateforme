@@ -1,155 +1,69 @@
 /**
- * Admin Settings Page - Platform configuration
- * Phase 32.2: Production-ready settings management
+ * Admin Settings Page — Phase 3B
+ * Configuration de la plateforme — à implémenter dans une version ultérieure
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
-import { Settings, Bell, Lock, Globe } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Settings, Globe, Bell, Lock } from 'lucide-react';
 
 export function AdminSettingsPage() {
-  const { toast } = useToast();
-  const [isSaving, setIsSaving] = useState(false);
-
-  const handleSaveSettings = async () => {
-    setIsSaving(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      toast({
-        title: 'Settings saved',
-        description: 'Your configuration changes have been saved.',
-      });
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to save settings',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Admin Settings</h1>
-        <p className="text-muted-foreground">Configure platform settings and preferences</p>
+        <h1 className="text-3xl font-bold text-foreground">Paramètres d'Administration</h1>
+        <p className="text-muted-foreground mt-1">Configuration globale de la plateforme</p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Globe className="h-5 w-5" />
-            General Settings
-          </CardTitle>
-          <CardDescription>Platform-wide configuration</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="platform-name">Platform Name</Label>
-            <Input
-              id="platform-name"
-              placeholder="TORP"
-              defaultValue="TORP"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="platform-url">Platform URL</Label>
-            <Input
-              id="platform-url"
-              placeholder="https://torp.example.com"
-              defaultValue="https://torp.example.com"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Maintenance Mode</Label>
-            <div className="flex items-center space-x-2">
-              <Switch />
-              <span className="text-sm text-muted-foreground">Enable maintenance mode</span>
-            </div>
-          </div>
+      {/* Coming Soon Banner */}
+      <Card className="border-2 border-dashed border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-700">
+        <CardContent className="p-8 text-center space-y-3">
+          <Settings className="h-12 w-12 mx-auto text-yellow-600 dark:text-yellow-500" />
+          <h2 className="text-xl font-semibold text-yellow-800 dark:text-yellow-400">
+            Bientôt disponible
+          </h2>
+          <p className="text-sm text-yellow-700 dark:text-yellow-500 max-w-sm mx-auto">
+            Cette section sera implémentée dans une version ultérieure. Elle permettra de
+            configurer les paramètres globaux de la plateforme.
+          </p>
+          <p className="text-xs text-yellow-600 dark:text-yellow-600 mt-2">
+            Fonctionnalités prévues : nom plateforme, URL, mode maintenance, timeout de session,
+            notifications, politiques d'accès.
+          </p>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Bell className="h-5 w-5" />
-            Notifications
-          </CardTitle>
-          <CardDescription>Configure notification preferences</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Email Notifications</Label>
-              <Switch defaultChecked />
-            </div>
-            <p className="text-xs text-muted-foreground">Receive email alerts for important events</p>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Daily Summary</Label>
-              <Switch defaultChecked />
-            </div>
-            <p className="text-xs text-muted-foreground">Receive daily platform summary</p>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Security Alerts</Label>
-              <Switch defaultChecked />
-            </div>
-            <p className="text-xs text-muted-foreground">Receive critical security alerts</p>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Preview of planned sections (disabled) */}
+      <div className="opacity-40 pointer-events-none space-y-4" aria-hidden="true">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Globe className="h-4 w-4" />
+              Général
+            </CardTitle>
+            <CardDescription>Configuration globale de la plateforme</CardDescription>
+          </CardHeader>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lock className="h-5 w-5" />
-            Security
-          </CardTitle>
-          <CardDescription>Security and data protection</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Two-Factor Authentication</Label>
-              <Switch defaultChecked />
-            </div>
-            <p className="text-xs text-muted-foreground">Require 2FA for admin access</p>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>IP Whitelist</Label>
-              <Switch />
-            </div>
-            <p className="text-xs text-muted-foreground">Restrict admin access to whitelisted IPs</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="session-timeout">Session Timeout (minutes)</Label>
-            <Input
-              id="session-timeout"
-              type="number"
-              placeholder="60"
-              defaultValue="60"
-            />
-          </div>
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Bell className="h-4 w-4" />
+              Notifications
+            </CardTitle>
+            <CardDescription>Alertes et résumés automatiques</CardDescription>
+          </CardHeader>
+        </Card>
 
-      <div className="flex gap-3">
-        <Button onClick={handleSaveSettings} disabled={isSaving}>
-          {isSaving ? 'Saving...' : 'Save Settings'}
-        </Button>
-        <Button variant="outline">Reset to Defaults</Button>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Lock className="h-4 w-4" />
+              Sécurité
+            </CardTitle>
+            <CardDescription>2FA, IP whitelist, timeout de session</CardDescription>
+          </CardHeader>
+        </Card>
       </div>
     </div>
   );

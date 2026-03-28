@@ -43,7 +43,7 @@ import { SystemHealthPage } from "./pages/admin/SystemHealthPage";
 import { LiveIntelligencePage } from "./pages/admin/LiveIntelligencePage";
 import { OrchestrationsPage } from "./pages/admin/OrchestrationsPage";
 import { KnowledgeBasePage } from "./pages/admin/KnowledgeBasePage";
-import { SecurityPage } from "./pages/admin/SecurityPage";
+import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminSettingsPage } from "./pages/admin/AdminSettingsPage";
 import { KnowledgeControlCenter } from "./features/knowledge/KnowledgeControlCenter";
 
@@ -80,7 +80,7 @@ const AppContent = () => {
               <Route path="orchestrations" element={<OrchestrationsPage />} />
               <Route path="knowledge" element={<KnowledgeBasePage />} />
               <Route path="knowledge-debug" element={<KnowledgeControlCenter />} />
-              <Route path="security" element={<SecurityPage />} />
+              <Route path="users" element={<AdminUsersPage />} />
               <Route path="settings" element={<AdminSettingsPage />} />
             </Route>
           </Route>

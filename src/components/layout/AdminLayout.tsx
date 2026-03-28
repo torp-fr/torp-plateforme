@@ -17,10 +17,10 @@ import {
   User,
   Sparkles,
   Zap,
-  AlertTriangle,
   TrendingUp,
   Plug,
   FlaskConical,
+  Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
@@ -58,16 +58,16 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
     exact: true,
   },
   {
+    id: 'users',
+    href: '/admin/users',
+    icon: Users,
+    label: 'Utilisateurs',
+  },
+  {
     id: 'orchestrations',
     href: '/admin/orchestrations',
     icon: Zap,
     label: "Cockpit d'Orchestration",
-  },
-  {
-    id: 'security',
-    href: '/admin/security',
-    icon: AlertTriangle,
-    label: 'Surveillance Fraude',
   },
   {
     id: 'intelligence',
@@ -91,7 +91,7 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
     id: 'system',
     href: '/admin/system',
     icon: Plug,
-    label: 'APIs',
+    label: 'Santé & Sécurité',
   },
   {
     id: 'settings',
