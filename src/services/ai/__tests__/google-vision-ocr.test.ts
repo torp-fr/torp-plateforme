@@ -42,20 +42,21 @@ function makeCacheMock(cacheData: { extracted_text: string; id: string } | null)
 // ── computeFileHash() ────────────────────────────────────────────────────────
 
 describe('computeFileHash()', () => {
-  it('returns a 64-char hex string (SHA-256)', () => {
-    const hash = computeFileHash(Buffer.from('hello'));
+  it('returns a 64-char hex string (SHA-256)', async () => {
+    const hash = await computeFileHash(Buffer.from('hello'));
     expect(hash).toHaveLength(64);
     expect(hash).toMatch(/^[0-9a-f]+$/);
   });
 
-  it('same buffer → same hash (deterministic)', () => {
+  it('same buffer → same hash (deterministic)', async () => {
     const buf = Buffer.from('test content');
-    expect(computeFileHash(buf)).toBe(computeFileHash(buf));
+    const [h1, h2] = await Promise.all([computeFileHash(buf), computeFileHash(buf)]);
+    expect(h1).toBe(h2);
   });
 
-  it('different buffers → different hashes', () => {
-    const h1 = computeFileHash(Buffer.from('file A'));
-    const h2 = computeFileHash(Buffer.from('file B'));
+  it('different buffers → different hashes', async () => {
+    const h1 = await computeFileHash(Buffer.from('file A'));
+    const h2 = await computeFileHash(Buffer.from('file B'));
     expect(h1).not.toBe(h2);
   });
 });

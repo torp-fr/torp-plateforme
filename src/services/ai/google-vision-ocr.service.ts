@@ -10,7 +10,6 @@
  * file twice (Google Vision: ~$1.50/1000 pages).
  */
 
-import { createHash } from 'crypto';
 import { supabase } from '@/lib/supabase';
 import { log, warn, error as logError } from '@/lib/logger';
 
@@ -24,9 +23,13 @@ export interface GoogleVisionOCRResult {
 
 /**
  * Compute SHA-256 hash of a Buffer (used as cache key).
+ * Uses Web Crypto API (works in browser and Node.js 16+).
  */
-export function computeFileHash(buffer: Buffer): string {
-  return createHash('sha256').update(buffer).digest('hex');
+export async function computeFileHash(buffer: Uint8Array): Promise<string> {
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 /**
@@ -103,7 +106,7 @@ export async function runGoogleVisionOCR(
   }
 
   // ── Cache lookup ────────────────────────────────────────────────────────
-  const fileHash = computeFileHash(buffer);
+  const fileHash = await computeFileHash(buffer);
   const cached   = await getCachedOCR(fileHash);
 
   if (cached !== null) {
