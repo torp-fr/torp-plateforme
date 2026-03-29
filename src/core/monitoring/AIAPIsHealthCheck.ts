@@ -243,3 +243,72 @@ export function registerDataAPIs(monitor: APIHealthMonitor): void {
 
   console.info(`[AIAPIsHealthCheck] Registered ${apis.length} data APIs for health monitoring`);
 }
+
+// ── Enrichment API health check functions ─────────────────────────────────────
+
+/** Validate Géorisques API is reachable (open endpoint, no auth). */
+export function makeGeorisquesHealthCheck(): () => Promise<void> {
+  return async () => {
+    // Use Paris coordinates — seismic zone endpoint is lightweight
+    const resp = await fetch(
+      'https://www.georisques.gouv.fr/api/v1/zonage_sismique?latlon=2.3522,48.8566',
+      { signal: AbortSignal.timeout(TIMEOUT_MS) }
+    );
+    if (!resp.ok) throw new Error(`Géorisques returned ${resp.status}`);
+  };
+}
+
+/** Validate ADEME RGE dataset is reachable (open endpoint, no auth). */
+export function makeRGEHealthCheck(): () => Promise<void> {
+  return async () => {
+    const resp = await fetch(
+      'https://data.ademe.fr/data-fair/api/v1/datasets/6x4i1u8yqh1sfhis83l1gw6f/lines?size=1',
+      { signal: AbortSignal.timeout(TIMEOUT_MS) }
+    );
+    if (!resp.ok) throw new Error(`ADEME RGE returned ${resp.status}`);
+  };
+}
+
+/** Validate ADEME DPE dataset is reachable (open endpoint, no auth). */
+export function makeDPEHealthCheck(): () => Promise<void> {
+  return async () => {
+    const resp = await fetch(
+      'https://data.ademe.fr/data-fair/api/v1/datasets/meg-83tjwtg8dyz4vv7h1dqe/lines?size=1',
+      { signal: AbortSignal.timeout(TIMEOUT_MS) }
+    );
+    if (!resp.ok) throw new Error(`ADEME DPE returned ${resp.status}`);
+  };
+}
+
+/**
+ * Register all enrichment APIs (Géorisques, RGE, DPE) for health monitoring.
+ * Call once at server startup alongside registerAIAPIs() and registerDataAPIs().
+ */
+export function registerEnrichmentAPIs(monitor: APIHealthMonitor): void {
+  const apis: APIConfig[] = [
+    {
+      name: 'Georisques',
+      healthCheckFn: makeGeorisquesHealthCheck(),
+      timeout_ms: TIMEOUT_MS,
+      health_check_interval_ms: INTERVAL_MS,
+    },
+    {
+      name: 'ADEME-RGE',
+      healthCheckFn: makeRGEHealthCheck(),
+      timeout_ms: TIMEOUT_MS,
+      health_check_interval_ms: INTERVAL_MS,
+    },
+    {
+      name: 'ADEME-DPE',
+      healthCheckFn: makeDPEHealthCheck(),
+      timeout_ms: TIMEOUT_MS,
+      health_check_interval_ms: INTERVAL_MS,
+    },
+  ];
+
+  for (const api of apis) {
+    monitor.registerAPI(api);
+  }
+
+  console.info(`[AIAPIsHealthCheck] Registered ${apis.length} enrichment APIs for health monitoring`);
+}
