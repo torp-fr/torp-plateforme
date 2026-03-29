@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Audit Snapshot Manager v1.0
  * Versioning system for audit reports - In-memory lifecycle management
@@ -117,7 +119,7 @@ export function createAuditSnapshot(
     // Store snapshot
     snapshotStore[projectId] = [...history, snapshot];
 
-    console.log('[AuditSnapshotManager] Snapshot created', {
+    log('[AuditSnapshotManager] Snapshot created', {
       projectId,
       snapshotId: snapshot.id,
       version,
@@ -138,13 +140,13 @@ export function createAuditSnapshot(
  */
 export function getAuditHistory(projectId: string): AuditSnapshot[] {
   if (!projectId) {
-    console.warn('[AuditSnapshotManager] projectId is required to get history');
+    warn('[AuditSnapshotManager] projectId is required to get history');
     return [];
   }
 
   const snapshots = snapshotStore[projectId] || [];
 
-  console.log('[AuditSnapshotManager] Retrieved audit history', {
+  log('[AuditSnapshotManager] Retrieved audit history', {
     projectId,
     snapshotCount: snapshots.length,
   });
@@ -174,7 +176,7 @@ export function getAuditHistoryWithMetadata(projectId: string): AuditHistory {
  */
 export function getSnapshotByVersion(projectId: string, version: number): AuditSnapshot | null {
   if (!projectId || typeof version !== 'number' || version < 1) {
-    console.warn('[AuditSnapshotManager] Invalid projectId or version');
+    warn('[AuditSnapshotManager] Invalid projectId or version');
     return null;
   }
 
@@ -182,7 +184,7 @@ export function getSnapshotByVersion(projectId: string, version: number): AuditS
   const snapshot = snapshots.find((s) => s.version === version);
 
   if (!snapshot) {
-    console.warn('[AuditSnapshotManager] Snapshot not found', { projectId, version });
+    warn('[AuditSnapshotManager] Snapshot not found', { projectId, version });
     return null;
   }
 
@@ -194,14 +196,14 @@ export function getSnapshotByVersion(projectId: string, version: number): AuditS
  */
 export function getLatestSnapshot(projectId: string): AuditSnapshot | null {
   if (!projectId) {
-    console.warn('[AuditSnapshotManager] projectId is required');
+    warn('[AuditSnapshotManager] projectId is required');
     return null;
   }
 
   const snapshots = snapshotStore[projectId] || [];
 
   if (snapshots.length === 0) {
-    console.warn('[AuditSnapshotManager] No snapshots found', { projectId });
+    warn('[AuditSnapshotManager] No snapshots found', { projectId });
     return null;
   }
 
@@ -226,7 +228,7 @@ export function compareSnapshots(
   const snapshot2 = getSnapshotByVersion(projectId, version2);
 
   if (!snapshot1 || !snapshot2) {
-    console.warn('[AuditSnapshotManager] One or both snapshots not found', {
+    warn('[AuditSnapshotManager] One or both snapshots not found', {
       projectId,
       version1,
       version2,
@@ -348,7 +350,7 @@ export function getSnapshotStatistics(projectId: string): SnapshotStatistics | n
   const snapshots = getAuditHistory(projectId);
 
   if (snapshots.length === 0) {
-    console.warn('[AuditSnapshotManager] No snapshots found for statistics', { projectId });
+    warn('[AuditSnapshotManager] No snapshots found for statistics', { projectId });
     return null;
   }
 
@@ -405,7 +407,7 @@ export function clearProjectSnapshots(projectId: string): void {
   if (snapshotStore[projectId]) {
     const count = snapshotStore[projectId].length;
     delete snapshotStore[projectId];
-    console.log('[AuditSnapshotManager] Cleared snapshots for project', { projectId, count });
+    log('[AuditSnapshotManager] Cleared snapshots for project', { projectId, count });
   }
 }
 
@@ -416,7 +418,7 @@ export function clearAllSnapshots(): void {
   const projectCount = Object.keys(snapshotStore).length;
   const totalSnapshots = Object.values(snapshotStore).reduce((sum, arr) => sum + arr.length, 0);
   Object.keys(snapshotStore).forEach((key) => delete snapshotStore[key]);
-  console.log('[AuditSnapshotManager] Cleared all snapshots', { projectCount, totalSnapshots });
+  log('[AuditSnapshotManager] Cleared all snapshots', { projectCount, totalSnapshots });
 }
 
 /**

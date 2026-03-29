@@ -5,6 +5,7 @@
  */
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Pricing breakdown scores
@@ -54,7 +55,7 @@ function calculateRatioScore(context: EngineExecutionContext): number {
 
     return 1;
   } catch (error) {
-    console.warn('[PricingEngine] Error calculating ratio score', error);
+    warn('[PricingEngine] Error calculating ratio score', error);
     return 0;
   }
 }
@@ -88,7 +89,7 @@ function calculateStructureScore(context: EngineExecutionContext): number {
 
     return 1;
   } catch (error) {
-    console.warn('[PricingEngine] Error calculating structure score', error);
+    warn('[PricingEngine] Error calculating structure score', error);
     return 0;
   }
 }
@@ -119,7 +120,7 @@ function calculateAnomalyPenalty(context: EngineExecutionContext): number {
 
     return 0;
   } catch (error) {
-    console.warn('[PricingEngine] Error calculating anomaly penalty', error);
+    warn('[PricingEngine] Error calculating anomaly penalty', error);
     return 0;
   }
 }
@@ -154,7 +155,7 @@ function calculateDecompositionScore(context: EngineExecutionContext): number {
 
     return 0;
   } catch (error) {
-    console.warn('[PricingEngine] Error calculating decomposition score', error);
+    warn('[PricingEngine] Error calculating decomposition score', error);
     return 0;
   }
 }
@@ -168,7 +169,7 @@ export async function runPricingEngine(
   const startTime = Date.now();
 
   try {
-    console.log('[PricingEngine] Starting pricing evaluation');
+    log('[PricingEngine] Starting pricing evaluation');
 
     // Calculate individual scores
     const ratioScore = calculateRatioScore(executionContext);
@@ -200,7 +201,7 @@ export async function runPricingEngine(
       },
     };
 
-    console.log('[PricingEngine] Evaluation complete', {
+    log('[PricingEngine] Evaluation complete', {
       pricingScore: result.pricingScore,
       normalizedScore: result.normalizedScore,
       anomalyPenalty,

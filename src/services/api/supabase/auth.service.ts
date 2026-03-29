@@ -8,6 +8,7 @@
 import { supabase } from '@/lib/supabase';
 import { User, UserType } from '@/context/AppContext';
 import type { Database } from '@/types/supabase';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface LoginCredentials {
   email: string;
@@ -92,7 +93,7 @@ export class SupabaseAuthService {
     }
 
     const mappedUser = mapDbProfileToAppUser(profileData);
-    console.log('✓ Login successful:', mappedUser.email, '- Admin:', mappedUser.isAdmin, '- Role:', mappedUser.role);
+    log('✓ Login successful:', mappedUser.email, '- Admin:', mappedUser.isAdmin, '- Role:', mappedUser.role);
 
     return {
       user: mappedUser,
@@ -120,7 +121,7 @@ export class SupabaseAuthService {
       email: data.email,
       password: data.password,
       options: {
-        emailRedirectTo: `${window.location.origin}/dashboard`,
+        emailRedirectTo: 'https://www.torp.fr/dashboard',
         data: {
           name: data.name,
         },
@@ -159,6 +160,55 @@ export class SupabaseAuthService {
   }
 
   /**
+   * Get current session (FAST - non-blocking bootstrap)
+   * Only checks auth status, does NOT fetch profile
+   */
+  async getSession() {
+    try {
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !authUser) {
+        log('[getSession] No active session');
+        return null;
+      }
+      log('[getSession] Session found for:', authUser.email);
+      return authUser;
+    } catch (error) {
+      log('[getSession] Error:', error instanceof Error ? error.message : 'Unknown error');
+      return null;
+    }
+  }
+
+  /**
+   * Get user profile from profiles table (ASYNC - background fetch)
+   */
+  async getUserProfile(userId: string): Promise<User | null> {
+    try {
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (profileError) {
+        log('[getUserProfile] Profile fetch error:', profileError.message);
+        return null;
+      }
+
+      if (!profileData) {
+        log('[getUserProfile] Profile data is empty');
+        return null;
+      }
+
+      const mappedUser = mapDbProfileToAppUser(profileData);
+      log('[getUserProfile] Profile loaded for:', mappedUser.email);
+      return mappedUser;
+    } catch (error) {
+      log('[getUserProfile] Exception:', error instanceof Error ? error.message : 'Unknown error');
+      return null;
+    }
+  }
+
+  /**
    * Get current user from profiles table
    */
   async getCurrentUser(): Promise<User | null> {
@@ -168,11 +218,11 @@ export class SupabaseAuthService {
 
       // If not authenticated (including 401 Unauthorized), just return null
       if (authError || !authUser) {
-        console.log('[getCurrentUser] Not authenticated (normal on public pages)');
+        log('[getCurrentUser] Not authenticated (normal on public pages)');
         return null;
       }
 
-      console.log('[getCurrentUser] Auth user found:', authUser.email);
+      log('[getCurrentUser] Auth user found:', authUser.email);
 
       // Only try to fetch profile if we have an authenticated user
       const { data: profileData, error: profileError } = await supabase
@@ -183,20 +233,20 @@ export class SupabaseAuthService {
 
       // If profile doesn't exist (e.g., user pending email confirmation), return null
       if (profileError) {
-        console.log('[getCurrentUser] Profile not found (user pending confirmation):', profileError.message);
+        log('[getCurrentUser] Profile not found (user pending confirmation):', profileError.message);
         return null;
       }
 
       if (!profileData) {
-        console.log('[getCurrentUser] Profile data is empty');
+        log('[getCurrentUser] Profile data is empty');
         return null;
       }
 
       const mappedUser = mapDbProfileToAppUser(profileData);
-      console.log('[getCurrentUser] Profile loaded:', mappedUser.email);
+      log('[getCurrentUser] Profile loaded:', mappedUser.email);
       return mappedUser;
     } catch (error) {
-      console.log('[getCurrentUser] Exception handled gracefully:', error instanceof Error ? error.message : 'Unknown error');
+      log('[getCurrentUser] Exception handled gracefully:', error instanceof Error ? error.message : 'Unknown error');
       return null;
     }
   }
@@ -231,7 +281,7 @@ export class SupabaseAuthService {
     }
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: 'https://www.torp.fr/reset-password',
     });
 
     if (error) {
@@ -298,7 +348,7 @@ export class SupabaseAuthService {
    */
   onAuthStateChange(callback: (user: User | null) => void) {
     return supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Auth State Change] Event:', event, 'Session:', !!session);
+      log('[Auth State Change] Event:', event, 'Session:', !!session);
 
       if (session?.user) {
         try {
@@ -315,7 +365,7 @@ export class SupabaseAuthService {
 
           if (data) {
             const mappedUser = mapDbProfileToAppUser(data);
-            console.log('[Auth State Change] User profile loaded:', mappedUser.email);
+            log('[Auth State Change] User profile loaded:', mappedUser.email);
             callback(mappedUser);
           } else {
             // Profile doesn't exist - create temporary user from auth metadata
@@ -327,7 +377,7 @@ export class SupabaseAuthService {
               company: session.user.user_metadata?.company,
               phone: session.user.user_metadata?.phone,
             };
-            console.log('[Auth State Change] No profile found, using temporary user:', tempUser.email);
+            log('[Auth State Change] No profile found, using temporary user:', tempUser.email);
             callback(tempUser);
           }
         } catch (error) {
@@ -341,11 +391,11 @@ export class SupabaseAuthService {
             company: session.user.user_metadata?.company,
             phone: session.user.user_metadata?.phone,
           };
-          console.log('[Auth State Change] Error occurred, using temporary user:', tempUser.email);
+          log('[Auth State Change] Error occurred, using temporary user:', tempUser.email);
           callback(tempUser);
         }
       } else {
-        console.log('[Auth State Change] No session, calling callback with null');
+        log('[Auth State Change] No session, calling callback with null');
         callback(null);
       }
     });

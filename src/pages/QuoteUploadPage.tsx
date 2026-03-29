@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Upload, FileText, AlertCircle, CheckCircle2, ChevronLeft, Loader2 } from 'lucide-react';
 import { auditService } from '@/services/audit';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export function QuoteUploadPage() {
   const navigate = useNavigate();
@@ -46,7 +47,7 @@ export function QuoteUploadPage() {
     // Validate file type
     if (!selectedFile.type.includes('pdf')) {
       setError('❌ Veuillez sélectionner un fichier PDF');
-      console.warn('Invalid file type:', selectedFile.type);
+      warn('Invalid file type:', selectedFile.type);
       return;
     }
 
@@ -56,7 +57,7 @@ export function QuoteUploadPage() {
       return;
     }
 
-    console.log('✅ File selected:', selectedFile.name, `(${(selectedFile.size / 1024 / 1024).toFixed(2)} MB)`);
+    log('✅ File selected:', selectedFile.name, `(${(selectedFile.size / 1024 / 1024).toFixed(2)} MB)`);
     setFile(selectedFile);
   };
 
@@ -70,13 +71,13 @@ export function QuoteUploadPage() {
     setError(null);
     setEnrichmentStatus(null);
     try {
-      console.log('📤 [QuoteUpload] Starting upload:', file.name);
+      log('📤 [QuoteUpload] Starting upload:', file.name);
 
       // Récupérer CCF ID depuis localStorage
       const ccfId = localStorage.getItem('currentCCFId');
       const ccfData = localStorage.getItem('currentCCF');
 
-      console.log('📋 [QuoteUpload] CCF ID from storage:', ccfId);
+      log('📋 [QuoteUpload] CCF ID from storage:', ccfId);
 
       if (!ccfId) {
         const errorMsg = '❌ CCF introuvable. Veuillez créer un CCF d\'abord.';
@@ -89,13 +90,13 @@ export function QuoteUploadPage() {
       // Upload vers Supabase (importé dynamiquement pour éviter les erreurs si Supabase ne configure)
       let uploadedQuoteId: string | null = null;
       try {
-        console.log('🔄 [QuoteUpload] Importing supabaseService...');
+        log('🔄 [QuoteUpload] Importing supabaseService...');
         const { uploadQuotePDF } = await import('@/services/supabaseService');
-        console.log('🔄 [QuoteUpload] Calling uploadQuotePDF...');
+        log('🔄 [QuoteUpload] Calling uploadQuotePDF...');
         uploadedQuoteId = await uploadQuotePDF(ccfId, file, 'user');
-        console.log('✅ [QuoteUpload] Supabase upload successful:', uploadedQuoteId);
+        log('✅ [QuoteUpload] Supabase upload successful:', uploadedQuoteId);
       } catch (supabaseError) {
-        console.warn('⚠️ [QuoteUpload] Supabase upload failed, using localStorage fallback:', supabaseError);
+        warn('⚠️ [QuoteUpload] Supabase upload failed, using localStorage fallback:', supabaseError);
       }
 
       // Extract SIRET from filename using regex
@@ -104,7 +105,7 @@ export function QuoteUploadPage() {
       const siret = siretMatch ? siretMatch[1] : null;
 
       if (siret) {
-        console.log(`🔍 [QuoteUpload] SIRET extracted: ${siret}`);
+        log(`🔍 [QuoteUpload] SIRET extracted: ${siret}`);
         setEnrichmentStatus(`📊 Données Pappers disponibles pour ${siret}...`);
 
         // Note: Pappers enrichment now done server-side via Edge Function
@@ -116,23 +117,23 @@ export function QuoteUploadPage() {
           });
 
           if (papperError) {
-            console.warn('⚠️ [QuoteUpload] Pappers Edge Function failed:', papperError);
+            warn('⚠️ [QuoteUpload] Pappers Edge Function failed:', papperError);
             setEnrichmentStatus('⚠️ Enrichissement Pappers indisponible');
           } else if (papperData && !papperData.error) {
-            console.log('✅ [QuoteUpload] Company data retrieved via proxy');
+            log('✅ [QuoteUpload] Company data retrieved via proxy');
             setEnrichmentStatus(`✅ Données d'entreprise chargées (SIRET: ${siret})`);
             // Store the raw Pappers response for later use
             localStorage.setItem('enrichedCompanyProfile', JSON.stringify({ papperData, siret }));
           } else {
-            console.warn('⚠️ [QuoteUpload] Pappers API error:', papperData?.error);
+            warn('⚠️ [QuoteUpload] Pappers API error:', papperData?.error);
             setEnrichmentStatus('⚠️ Entreprise non trouvée via Pappers');
           }
         } catch (proxyError) {
-          console.warn('⚠️ [QuoteUpload] Pappers proxy call failed:', proxyError);
+          warn('⚠️ [QuoteUpload] Pappers proxy call failed:', proxyError);
           setEnrichmentStatus('⚠️ Enrichissement Pappers échoué');
         }
       } else {
-        console.log('⚠️ [QuoteUpload] No SIRET found in filename');
+        log('⚠️ [QuoteUpload] No SIRET found in filename');
         setEnrichmentStatus('⚠️ SIRET non trouvé dans le nom du fichier');
       }
 
@@ -160,12 +161,12 @@ export function QuoteUploadPage() {
       };
 
       localStorage.setItem('uploadedQuote', JSON.stringify(uploadData));
-      console.log('✅ [QuoteUpload] Quote data saved to localStorage:', uploadData);
+      log('✅ [QuoteUpload] Quote data saved to localStorage:', uploadData);
 
       // Small delay to ensure state updates
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      console.log('✅ [QuoteUpload] Navigating to analysis...');
+      log('✅ [QuoteUpload] Navigating to analysis...');
       navigate('/quote-analysis');
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Erreur inconnue lors de l\'upload';

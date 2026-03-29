@@ -6,6 +6,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { structuredLogger } from '@/services/observability/structured-logger';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Global platform statistics
@@ -25,7 +26,7 @@ export async function getGlobalStats() {
     const previousMonthStart = new Date(thirtyDaysAgo);
     previousMonthStart.setDate(previousMonthStart.getDate() - 30);
 
-    console.log('[AnalyticsService] Fetching global stats with parallelized queries', {
+    log('[AnalyticsService] Fetching global stats with parallelized queries', {
       thirtyDaysAgo: thirtyDaysAgo.toISOString(),
       previousMonthStart: previousMonthStart.toISOString(),
     });
@@ -72,7 +73,7 @@ export async function getGlobalStats() {
       ? Math.round(((analysisLast30 - analysisPrevious30) / analysisPrevious30) * 100)
       : (analysisLast30 > 0 ? 100 : 0);  // 100% growth if previous was 0 and current > 0, else 0%
 
-    console.log('[AnalyticsService] Global stats fetched successfully', {
+    log('[AnalyticsService] Global stats fetched successfully', {
       userCount,
       analysisCount,
       analysisLast30,
@@ -177,7 +178,7 @@ export async function getJobStatusDistribution() {
 
     const statuses = ['pending', 'processing', 'completed', 'failed', 'cancelled'];
 
-    console.log('[AnalyticsService] Fetching job status distribution with parallelized queries');
+    log('[AnalyticsService] Fetching job status distribution with parallelized queries');
 
     // Parallelize all 5 status queries with Promise.all()
     const results = await Promise.all(
@@ -199,7 +200,7 @@ export async function getJobStatusDistribution() {
       distribution[status] = result.count || 0;
     });
 
-    console.log('[AnalyticsService] Job distribution fetched:', distribution);
+    log('[AnalyticsService] Job distribution fetched:', distribution);
     return distribution;
   } catch (error) {
     structuredLogger.error({

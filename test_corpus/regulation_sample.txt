@@ -1,0 +1,97 @@
+Article 1 — Objet et champ d'application
+
+Le présent règlement technique fixe les exigences minimales applicables aux
+installations de chauffage, ventilation et climatisation (CVC) dans les
+bâtiments tertiaires neufs ou faisant l'objet d'une rénovation lourde,
+conformément à la réglementation thermique en vigueur (RE 2020).
+
+Tout maître d'ouvrage soumis au présent règlement doit désigner un référent
+technique CVC dès la phase de programmation du projet.
+
+Article 2 — Exigences de performance énergétique
+
+Art. 2.1 — Les systèmes de chauffage doivent présenter un coefficient de
+performance (COP) minimal de 3,5 pour les pompes à chaleur air/air et de 4,0
+pour les pompes à chaleur eau/eau, mesurés selon la norme EN 14511.
+
+Art. 2.2 — Les équipements de ventilation double flux doivent garantir un
+rendement d'échange thermique supérieur ou égal à 85 % en conditions nominales,
+conformément à la norme NF EN 308.
+
+Art. 2.3 — Les systèmes de régulation doivent permettre un pilotage par zone
+thermique, avec une granularité maximale de 50 m² par zone de régulation.
+
+Article 3 — Obligations documentaires
+
+L'entrepreneur titulaire du lot CVC doit fournir, avant réception des travaux :
+
+1. Les fiches techniques et certificats de conformité de chaque équipement
+   installé, portant le marquage CE et, le cas échéant, le label Eurovent.
+
+2. Les plans de récolement (DOE) au format natif et PDF, incluant les schémas
+   hydrauliques et aérauliques mis à jour.
+
+3. Les résultats des mesures de réception : débit d'air, pression, bruit en
+   dB(A) à 1 mètre pour chaque unité terminale.
+
+4. Le carnet de maintenance préventive recommandée, avec les périodicités
+   d'intervention pour chaque équipement.
+
+Article 4 — Contrôle et réception des installations
+
+Section 4.1 — Essais de mise en service
+
+Les essais de mise en service sont conduits en présence du maître d'œuvre et
+donnent lieu à un procès-verbal signé par les deux parties. Les essais portent
+au minimum sur :
+
+- La vérification des débits d'air aux bouches et diffuseurs (tolérance ±10 %)
+- L'équilibrage du réseau hydraulique (tolérance ±15 % sur débit nominal)
+- Le fonctionnement des régulations et asservissements
+- La mesure des niveaux sonores
+
+Section 4.2 — Réserves et levée de réserves
+
+Les réserves émises lors de la réception doivent être levées dans un délai de
+21 jours calendaires. Passé ce délai, le maître d'ouvrage peut faire exécuter
+les travaux aux frais et risques de l'entrepreneur défaillant.
+
+Article 5 — Garanties et responsabilités
+
+Art. 5.1 — L'entrepreneur est tenu par la garantie de parfait achèvement pendant
+un an à compter de la réception, couvrant tout désordre signalé par écrit.
+
+Art. 5.2 — La garantie biennale couvre le bon fonctionnement des éléments
+d'équipement dissociables pendant deux ans à compter de la réception.
+
+Art. 5.3 — La garantie décennale s'applique aux désordres compromettant la
+solidité de l'ouvrage ou le rendant impropre à sa destination, pendant dix ans.
+
+Article 6 — Pénalités et sanctions
+
+En cas de non-respect du calendrier de levée de réserves, des pénalités de
+retard sont appliquées à hauteur de 1/3000 du montant HT du lot par jour
+calendaire de retard, plafonnées à 10 % du montant total HT du marché.
+
+En cas de défaut grave de performance énergétique constaté lors de la réception
+(écart supérieur à 20 % par rapport aux valeurs contractuelles), le maître
+d'ouvrage peut exiger une reprise complète du réglage aux frais de l'entrepreneur,
+sans préjudice des pénalités contractuelles.
+
+Chapitre II — Dispositions relatives à la sous-traitance
+
+Article 7 — Agrément des sous-traitants
+
+Tout recours à la sous-traitance est subordonné à l'accord préalable et écrit
+du maître d'ouvrage. Le sous-traitant pressenti doit justifier des mêmes
+qualifications et assurances que l'entrepreneur principal, notamment :
+
+- Certification RGE (Reconnu Garant de l'Environnement) en cours de validité
+  pour les travaux concernés par les dispositifs d'aide à la rénovation
+- Attestation d'assurance responsabilité civile professionnelle et décennale
+
+Article 8 — Responsabilité solidaire
+
+L'entrepreneur principal demeure responsable solidairement avec ses sous-traitants
+de la bonne exécution de l'ensemble des prestations, y compris celles sous-traitées,
+vis-à-vis du maître d'ouvrage.

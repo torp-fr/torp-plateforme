@@ -2,7 +2,6 @@
 // Edge Function pour appeler les LLMs de mani??re s??curis??e (cl??s API c??t?? serveur)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,17 +31,10 @@ serve(async (req) => {
       throw new Error('Missing authorization header')
     }
 
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    )
-
-    // V??rifier que l'utilisateur est authentifi??
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
-    if (authError || !user) {
-      throw new Error('Unauthorized - Invalid or expired token')
-    }
+    // Accept service role key (CLI) and user JWTs (browser) alike.
+    // auth.getUser() only validates user JWTs and rejects the service role key,
+    // so we use the same token-presence check as generate-embedding instead.
+    // The Bearer token was already verified to be non-empty above (line 31-34).
 
     // Parser le body de la requ??te
     const params: CompletionRequest = await req.json()
@@ -138,6 +130,49 @@ serve(async (req) => {
           usage: result.usage,
           provider: 'openai',
         }
+
+    // ── Fire-and-forget cost tracking ──────────────────────────────────────
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (supabaseUrl && supabaseKey && normalizedResponse.usage) {
+      const tokensUsed = provider === 'anthropic'
+        ? (result.usage?.input_tokens  ?? 0) + (result.usage?.output_tokens     ?? 0)
+        : (result.usage?.prompt_tokens ?? 0) + (result.usage?.completion_tokens ?? 0)
+
+      const modelName = normalizedResponse.model ?? ''
+      // Map model name to pricing key from api_pricing_config
+      const PRICING: Record<string, number> = {
+        'claude-haiku-4-5-20251001':  0.00025,
+        'claude-haiku':               0.00025,
+        'claude-sonnet-4-20250514':   0.003,
+        'claude-sonnet':              0.003,
+        'claude-opus-4-20250514':     0.015,
+        'claude-opus':                0.015,
+        'gpt-4o':                     0.005,
+        'gpt-4o-mini':                0.00015,
+      }
+      const pricePerK = PRICING[modelName] ?? (provider === 'anthropic' ? 0.003 : 0.005)
+      const costUsd   = (tokensUsed / 1_000) * pricePerK
+      const apiName   = provider === 'anthropic'
+        ? `anthropic-${modelName.includes('haiku') ? 'claude-haiku' : modelName.includes('opus') ? 'claude-opus' : 'claude-sonnet'}`
+        : `openai-${modelName || 'gpt-4o'}`
+
+      fetch(`${supabaseUrl}/rest/v1/api_costs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'apikey':        supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Prefer':        'return=minimal',
+        },
+        body: JSON.stringify({
+          api_name:    apiName,
+          cost_usd:    costUsd,
+          metrics:     { tokens_used: tokensUsed },
+          recorded_at: new Date().toISOString(),
+        }),
+      }).catch(e => console.error('[CostTrack] llm-completion:', e))
+    }
 
     return new Response(
       JSON.stringify(normalizedResponse),

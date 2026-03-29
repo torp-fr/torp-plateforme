@@ -50,7 +50,7 @@ export function ProtectedRoute({
       B2B: '/pro',
       B2G: '/dashboard',
       admin: '/admin-dashboard',
-      super_admin: '/admin/analytics',
+      super_admin: '/admin',
     };
 
     return <Navigate to={dashboardMap[userType] || '/'} replace />;
@@ -88,7 +88,7 @@ export function PublicOnlyRoute({
       B2B: '/pro',
       B2G: '/dashboard',
       admin: '/admin-dashboard',
-      super_admin: '/admin/analytics',
+      super_admin: '/admin',
     };
     return <Navigate to={dashboardMap[userType] || redirectTo} replace />;
   }

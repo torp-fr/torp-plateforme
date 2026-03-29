@@ -19,6 +19,7 @@ import {
   Map,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 import {
   geocodingService,
   GeocodingResult,
@@ -66,7 +67,7 @@ export function OngletLocalisation({
 
       // Géocoder l'adresse entreprise
       if (entrepriseAdresse) {
-        console.log('[OngletLocalisation] Géocodage entreprise:', entrepriseAdresse);
+        log('[OngletLocalisation] Géocodage entreprise:', entrepriseAdresse);
         const result = await geocodingService.geocode(entrepriseAdresse, { limit: 1 });
         if (result.success && result.bestMatch) {
           data.entreprise = result.bestMatch;
@@ -75,7 +76,7 @@ export function OngletLocalisation({
 
       // Géocoder l'adresse chantier
       if (chantierAdresse) {
-        console.log('[OngletLocalisation] Géocodage chantier:', chantierAdresse);
+        log('[OngletLocalisation] Géocodage chantier:', chantierAdresse);
         const result = await geocodingService.geocode(chantierAdresse, { limit: 1 });
         if (result.success && result.bestMatch) {
           data.chantier = result.bestMatch;
@@ -92,7 +93,7 @@ export function OngletLocalisation({
 
       // Calculer la distance si les deux adresses sont géocodées
       if (data.entreprise && data.chantier && entrepriseAdresse && chantierAdresse) {
-        console.log('[OngletLocalisation] Calcul distance');
+        log('[OngletLocalisation] Calcul distance');
         const distanceResult = await geocodingService.calculateDistance(
           entrepriseAdresse,
           chantierAdresse

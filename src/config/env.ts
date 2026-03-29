@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Environment Configuration
  * Centralized, type-safe access to environment variables
@@ -81,15 +83,18 @@ interface EnvConfig {
 /**
  * Get environment variable with fallback
  */
+// Safe accessor: works both in Vite (import.meta.env defined) and Node.js/tsx (undefined)
+const _env = (import.meta.env ?? {}) as Record<string, string | boolean | undefined>;
+
 const getEnv = (key: string, fallback: string = ''): string => {
-  return import.meta.env[key] || fallback;
+  return (_env[key] as string | undefined) || fallback;
 };
 
 /**
  * Get boolean environment variable
  */
 const getBoolEnv = (key: string, fallback: boolean = false): boolean => {
-  const value = import.meta.env[key];
+  const value = _env[key];
   if (value === undefined) return fallback;
   return value === 'true' || value === true;
 };
@@ -98,9 +103,9 @@ const getBoolEnv = (key: string, fallback: boolean = false): boolean => {
  * Get number environment variable
  */
 const getNumEnv = (key: string, fallback: number = 0): number => {
-  const value = import.meta.env[key];
+  const value = _env[key];
   if (value === undefined) return fallback;
-  const num = parseInt(value, 10);
+  const num = parseInt(value as string, 10);
   return isNaN(num) ? fallback : num;
 };
 
@@ -130,7 +135,7 @@ export const env: EnvConfig = {
   },
 
   upload: {
-    maxFileSize: getNumEnv('VITE_MAX_FILE_SIZE', 10485760), // 10MB default
+    maxFileSize: getNumEnv('VITE_MAX_FILE_SIZE', 100 * 1024 * 1024), // 100MB default (was 10MB)
     allowedTypes: getEnv('VITE_ALLOWED_FILE_TYPES', '.pdf,.jpg,.jpeg,.png,.doc,.docx').split(','),
   },
 
@@ -148,13 +153,12 @@ export const env: EnvConfig = {
   },
 
   ai: {
-    openai: getEnv('VITE_OPENAI_API_KEY') ? {
-      apiKey: getEnv('VITE_OPENAI_API_KEY'),
-    } : undefined,
-    anthropic: getEnv('VITE_ANTHROPIC_API_KEY') ? {
-      apiKey: getEnv('VITE_ANTHROPIC_API_KEY'),
-    } : undefined,
-    primaryProvider: (getEnv('VITE_AI_PRIMARY_PROVIDER', 'openai') as 'openai' | 'claude'),
+    // ⚠️ API keys are server-side only (Edge Functions / Express).
+    // NEVER read OPENAI_API_KEY or ANTHROPIC_API_KEY from VITE_ variables.
+    // All LLM calls go through: /api/v1/* → Edge Function (llm-completion / generate-embedding).
+    openai: undefined,
+    anthropic: undefined,
+    primaryProvider: (getEnv('VITE_AI_PRIMARY_PROVIDER', 'claude') as 'openai' | 'claude'),
     fallbackEnabled: getBoolEnv('VITE_AI_FALLBACK_ENABLED', true),
   },
 
@@ -218,14 +222,14 @@ export const validateEnv = (): void => {
  */
 export const logEnvInfo = (): void => {
   if (env.app.debugMode) {
-    console.log('🔧 Environment Configuration:');
-    console.log(`   App: ${env.app.name} v${env.app.version}`);
-    console.log(`   Environment: ${env.app.env}`);
-    console.log(`   API: ${env.api.baseUrl}`);
-    console.log(`   Auth Provider: ${env.auth.provider}`);
-    console.log(`   Mock API: ${env.api.useMock ? 'Yes' : 'No'}`);
-    console.log(`   Free Mode: ${env.freeMode.enabled ? 'Yes' : 'No'}${env.freeMode.enabled ? ` (${env.freeMode.defaultCredits} credits)` : ''}`);
-    console.log(`   Features: Payment=${env.features.paymentEnabled}, AI=${env.features.chatAIEnabled}, Marketplace=${env.features.marketplaceEnabled}`);
+    log('🔧 Environment Configuration:');
+    log(`   App: ${env.app.name} v${env.app.version}`);
+    log(`   Environment: ${env.app.env}`);
+    log(`   API: ${env.api.baseUrl}`);
+    log(`   Auth Provider: ${env.auth.provider}`);
+    log(`   Mock API: ${env.api.useMock ? 'Yes' : 'No'}`);
+    log(`   Free Mode: ${env.freeMode.enabled ? 'Yes' : 'No'}${env.freeMode.enabled ? ` (${env.freeMode.defaultCredits} credits)` : ''}`);
+    log(`   Features: Payment=${env.features.paymentEnabled}, AI=${env.features.chatAIEnabled}, Marketplace=${env.features.marketplaceEnabled}`);
   }
 };
 

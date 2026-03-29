@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 import type {
   ApiRequest,
   ApiRequestInput,
@@ -67,7 +68,7 @@ class AuditService {
       if (error) {
         console.error('❌ Failed to log API request:', error);
       } else {
-        console.log(`✅ API request logged: ${requestId}`);
+        log(`✅ API request logged: ${requestId}`);
       }
 
       return requestId;
@@ -99,7 +100,7 @@ class AuditService {
       if (error) {
         console.error('❌ Failed to log API response:', error);
       } else {
-        console.log(`✅ API response logged: ${requestId}`);
+        log(`✅ API response logged: ${requestId}`);
       }
     } catch (err) {
       console.error('❌ Error logging API response:', err);
@@ -148,7 +149,7 @@ class AuditService {
       if (insertError) {
         console.error(`❌ Failed to log external API call (${input.externalService}):`, insertError);
       } else {
-        console.log(`✅ External API call logged: ${input.externalService} (${response?.responseTimeMs}ms)`);
+        log(`✅ External API call logged: ${input.externalService} (${response?.responseTimeMs}ms)`);
       }
     } catch (err) {
       console.error('❌ Error logging external API call:', err);
@@ -188,7 +189,7 @@ class AuditService {
       if (error) {
         console.error('❌ Failed to log criteria evaluation:', error);
       } else {
-        console.log(`✅ Criteria evaluation logged: ${input.criterionName} (${score.percentage}%)`);
+        log(`✅ Criteria evaluation logged: ${input.criterionName} (${score.percentage}%)`);
       }
     } catch (err) {
       console.error('❌ Error logging criteria evaluation:', err);
@@ -235,7 +236,7 @@ class AuditService {
         return executionId;
       }
 
-      console.log(`✅ Execution context created: ${executionId}`);
+      log(`✅ Execution context created: ${executionId}`);
       return executionId;
     } catch (err) {
       console.error('❌ Error creating execution context:', err);
@@ -268,7 +269,7 @@ class AuditService {
       if (error) {
         console.error('❌ Failed to update execution context:', error);
       } else {
-        console.log(`✅ Execution context updated: ${executionId}`);
+        log(`✅ Execution context updated: ${executionId}`);
       }
     } catch (err) {
       console.error('❌ Error updating execution context:', err);
@@ -292,7 +293,7 @@ class AuditService {
       if (error) {
         console.error('❌ Failed to close execution context:', error);
       } else {
-        console.log(`✅ Execution context closed: ${executionId} (${totalDurationMs}ms)`);
+        log(`✅ Execution context closed: ${executionId} (${totalDurationMs}ms)`);
       }
     } catch (err) {
       console.error('❌ Error closing execution context:', err);
@@ -315,7 +316,7 @@ class AuditService {
       if (error) {
         console.error('❌ Failed to mark execution as failed:', error);
       } else {
-        console.log(`⚠️ Execution marked as failed: ${executionId}`);
+        log(`⚠️ Execution marked as failed: ${executionId}`);
       }
     } catch (err) {
       console.error('❌ Error marking execution as failed:', err);
@@ -355,7 +356,7 @@ class AuditService {
         return '';
       }
 
-      console.log(`✅ Score snapshot created: ${input.globalScore}/1000 (${input.grade})`);
+      log(`✅ Score snapshot created: ${input.globalScore}/1000 (${input.grade})`);
       return data?.id || '';
     } catch (err) {
       console.error('❌ Error creating score snapshot:', err);
@@ -538,7 +539,7 @@ class AuditService {
       if (error) {
         console.error('❌ Failed to cleanup logs:', error);
       } else {
-        console.log(`✅ Audit logs cleaned up (older than ${daysToKeep} days)`);
+        log(`✅ Audit logs cleaned up (older than ${daysToKeep} days)`);
       }
     } catch (err) {
       console.error('❌ Error cleaning up logs:', err);

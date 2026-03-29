@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export interface CompletionParams {
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
@@ -12,16 +13,75 @@ export interface CompletionParams {
 
 class SecureAIService {
 
+  private initialized = false;
+  private initializing: Promise<void> | null = null;
+  private accessToken: string | null = null;
+
   /**
-   * 🔥 WAIT SESSION — HARD STABLE
+   * Deterministic token resolution — no auth flow, no polling.
+   *
+   * Priority:
+   *   1. Existing Supabase user session (browser — user already logged in)
+   *   2. SUPABASE_SERVICE_ROLE_KEY env var (CLI / server — static admin JWT)
+   *   3. VITE_SUPABASE_ANON_KEY env var (fallback — public anon key)
+   *
+   * Anonymous sign-in is intentionally absent: it creates throwaway users,
+   * burns Supabase rate limits, and is unnecessary when a static key exists.
    */
-  private async waitForSession(): Promise<any> {
-    for (let i = 0; i < 20; i++) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) return session;
-      await new Promise(r => setTimeout(r, 150));
+  private async init(): Promise<void> {
+    // 1. Browser context: reuse the authenticated user's JWT
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      this.accessToken = session.access_token;
+      this.initialized = true;
+      return;
     }
-    throw new Error('SESSION_TIMEOUT');
+
+    // 2. CLI / server context: use the static key that supabase.ts already resolved.
+    //    Mirror the same resolution order as supabase.ts lines 74-78 so both always
+    //    agree on which credential is in use.
+    const _metaEnv = (typeof import.meta !== 'undefined' && import.meta.env)
+      ? import.meta.env as Record<string, string | undefined>
+      : {} as Record<string, string | undefined>;
+
+    const staticKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ??
+      _metaEnv.VITE_SUPABASE_ANON_KEY ??
+      process.env.VITE_SUPABASE_ANON_KEY ??
+      null;
+
+    if (staticKey) {
+      this.accessToken = staticKey;
+      this.initialized = true;
+      return;
+    }
+
+    throw new Error(
+      'SECURE_AI_NO_AUTH: No user session and no static Supabase key found.\n' +
+      'CLI: set SUPABASE_SERVICE_ROLE_KEY in .env.local\n' +
+      'Browser: ensure the user is logged in before calling generateEmbedding()'
+    );
+  }
+
+  /**
+   * Ensures init() runs exactly once, even under concurrent callers.
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (this.initialized) return;
+    if (!this.initializing) {
+      this.initializing = this.init();
+    }
+    await this.initializing;
+  }
+
+  /**
+   * Returns the resolved Bearer token.
+   * Triggers initialization on first call; subsequent calls are instant.
+   */
+  async getAccessToken(): Promise<string> {
+    await this.ensureInitialized();
+    if (!this.accessToken) throw new Error('SECURE_AI_NOT_INITIALIZED');
+    return this.accessToken;
   }
 
   /**
@@ -32,6 +92,8 @@ class SecureAIService {
     model: string = 'text-embedding-3-small'
   ): Promise<number[]> {
 
+    await this.ensureInitialized();
+
     if (!text || text.trim().length === 0) {
       throw new Error('EMPTY_TEXT');
     }
@@ -39,33 +101,35 @@ class SecureAIService {
     const truncatedText =
       text.length > 8000 ? text.substring(0, 8000) : text;
 
-    const session = await this.waitForSession();
+    const token = this.accessToken;
+    if (!token) {
+      throw new Error('SECURE_AI_NOT_INITIALIZED');
+    }
 
     // EDGE DEBUG — BEFORE INVOKE
-    const projectUrl = session?.user?.id ? 'authenticated' : 'guest';
-    const hasSession = !!session?.access_token;
+    const projectUrl = supabase.supabaseUrl;
     const payloadSize = JSON.stringify({ text: truncatedText, model }).length;
 
-    console.log('[EDGE DEBUG] invoking generate-embedding', {
+    log('[EDGE DEBUG] invoking generate-embedding', {
       projectUrl,
-      hasSession,
+      hasSession: true,
       payloadSize,
       textLength: truncatedText.length,
       model,
       timestamp: new Date().toISOString(),
-      sessionExpiresAt: session?.expires_at,
     });
 
     // CRITICAL: Verify supabase client URL (fixes edge invoke origin mismatch)
-    console.log('[EDGE DEBUG URL]', supabase.supabaseUrl);
-    console.log('[EDGE INVOKE FINAL]', supabase.supabaseUrl);
+    log('[EDGE CALL] projectUrl:', projectUrl);
+    log('[EDGE INVOKE FINAL]', supabase.supabaseUrl);
 
+    log('EDGE INVOKING VIA SDK');
     const invokeStart = Date.now();
     const { data, error } = await supabase.functions.invoke(
       'generate-embedding',
       {
         headers: {
-          Authorization: `Bearer ${session.access_token}`
+          Authorization: `Bearer ${token}`
         },
         body: {
           text: truncatedText,
@@ -76,7 +140,7 @@ class SecureAIService {
     const invokeDuration = Date.now() - invokeStart;
 
     // EDGE DEBUG — AFTER INVOKE
-    console.log('[EDGE DEBUG] response received', {
+    log('[EDGE DEBUG] response received', {
       error: error ? { message: error.message, context: error.context } : null,
       hasData: !!data,
       dataKeys: data ? Object.keys(data) : [],
@@ -86,7 +150,7 @@ class SecureAIService {
     });
 
     if (error) {
-      console.error('[SECURE AI] EDGE ERROR', {
+      console.error('[EDGE CALL FAILED]', {
         message: error.message,
         context: error.context,
         statusCode: error.status || 'unknown',
@@ -103,7 +167,7 @@ class SecureAIService {
       throw new Error('INVALID_EMBEDDING_RESPONSE');
     }
 
-    console.log('[EDGE DEBUG] embedding generated successfully', {
+    log('[EDGE DEBUG] embedding generated successfully', {
       embeddingDimension: data.embedding.length,
       totalDuration: invokeDuration,
       source: 'secure-ai.service',
@@ -117,14 +181,18 @@ class SecureAIService {
    */
   async complete(params: CompletionParams): Promise<string> {
 
-    const session = await this.waitForSession();
+    await this.ensureInitialized();
+
+    const token = this.accessToken;
+    if (!token) {
+      throw new Error('SECURE_AI_NOT_INITIALIZED');
+    }
 
     // EDGE DEBUG — BEFORE INVOKE
-    const hasSession = !!session?.access_token;
     const payloadSize = JSON.stringify(params).length;
 
-    console.log('[EDGE DEBUG] invoking llm-completion', {
-      hasSession,
+    log('[EDGE DEBUG] invoking llm-completion', {
+      hasSession: true,
       payloadSize,
       model: params.model,
       messagesCount: params.messages?.length,
@@ -132,15 +200,15 @@ class SecureAIService {
     });
 
     // CRITICAL: Verify supabase client URL (fixes edge invoke origin mismatch)
-    console.log('[EDGE DEBUG URL]', supabase.supabaseUrl);
-    console.log('[EDGE INVOKE FINAL]', supabase.supabaseUrl);
+    log('[EDGE DEBUG URL]', supabase.supabaseUrl);
+    log('[EDGE INVOKE FINAL]', supabase.supabaseUrl);
 
     const invokeStart = Date.now();
     const { data, error } = await supabase.functions.invoke(
       'llm-completion',
       {
         headers: {
-          Authorization: `Bearer ${session.access_token}`
+          Authorization: `Bearer ${token}`
         },
         body: params
       }
@@ -148,7 +216,7 @@ class SecureAIService {
     const invokeDuration = Date.now() - invokeStart;
 
     // EDGE DEBUG — AFTER INVOKE
-    console.log('[EDGE DEBUG] llm-completion response received', {
+    log('[EDGE DEBUG] llm-completion response received', {
       error: error ? { message: error.message, context: error.context } : null,
       hasData: !!data,
       contentLength: data?.content?.length || null,
@@ -166,6 +234,67 @@ class SecureAIService {
     }
 
     return data?.content || '';
+  }
+
+  /**
+   * ✅ LLM COMPLETION — JSON variant
+   * Same as complete() but parses the response as JSON and returns typed T.
+   * Adds response_format: json_object to the request so the model outputs valid JSON.
+   * Called by openai.service.ts generateJSON<T>().
+   */
+  async completeJSON<T>(params: CompletionParams): Promise<T> {
+
+    await this.ensureInitialized();
+
+    const token = this.accessToken;
+    if (!token) {
+      throw new Error('SECURE_AI_NOT_INITIALIZED');
+    }
+
+    const bodyWithFormat: CompletionParams = {
+      ...params,
+      response_format: { type: 'json_object' },
+    };
+
+    const invokeStart = Date.now();
+    const { data, error } = await supabase.functions.invoke(
+      'llm-completion',
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: bodyWithFormat
+      }
+    );
+    const invokeDuration = Date.now() - invokeStart;
+
+    log('[EDGE DEBUG] llm-completion (JSON) response received', {
+      error: error ? { message: error.message } : null,
+      hasData: !!data,
+      contentLength: data?.content?.length || null,
+      invokeDuration,
+    });
+
+    if (error) {
+      console.error('[SECURE AI] LLM JSON ERROR', {
+        message: error.message,
+        context: error.context,
+        statusCode: error.status || 'unknown',
+      });
+      throw new Error(error.message);
+    }
+
+    const content: string = data?.content || '';
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        throw new Error('No JSON object found in LLM response');
+      }
+      return JSON.parse(jsonMatch[0]) as T;
+    } catch (parseError) {
+      const msg = parseError instanceof Error ? parseError.message : String(parseError);
+      throw new Error(`SECURE_AI_JSON_PARSE_FAILED: ${msg}`);
+    }
   }
 }
 

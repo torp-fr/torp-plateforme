@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS knowledge_embedding_performance (
   document_id UUID NOT NULL REFERENCES knowledge_documents(id) ON DELETE CASCADE,
   chunk_id UUID NOT NULL REFERENCES knowledge_chunks(id) ON DELETE CASCADE,
   embedding_time_ms INTEGER NOT NULL,
-  embedding_dimension INTEGER NOT NULL DEFAULT 1536,
+  embedding_dimension INTEGER NOT NULL DEFAULT 384,
   provider TEXT DEFAULT 'openai',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -125,7 +125,7 @@ BEGIN
   WHERE d.ingestion_status = 'complete'
   AND EXISTS (
     SELECT 1 FROM knowledge_chunks c
-    WHERE c.document_id = d.id AND c.embedding IS NULL
+    WHERE c.document_id = d.id AND c.embedding_vector IS NULL
   );
 
   -- Calculate average chunks per document (for all documents)
@@ -135,12 +135,12 @@ BEGIN
   -- Verify vector dimension (all embeddings must be 1536)
   SELECT CASE
     WHEN COUNT(*) = 0 THEN TRUE
-    WHEN MAX(array_length(embedding, 1)) = 1536
-         AND MIN(array_length(embedding, 1)) = 1536 THEN TRUE
+    WHEN MAX(array_length(embedding_vector, 1)) = 384
+         AND MIN(array_length(embedding_vector, 1)) = 384 THEN TRUE
     ELSE FALSE
   END INTO v_vector_valid
   FROM knowledge_chunks
-  WHERE embedding IS NOT NULL;
+  WHERE embedding_vector IS NOT NULL;
 
   -- Detect stalled documents (stuck > 30 minutes in processing)
   SELECT COUNT(*) INTO v_stalled
@@ -202,28 +202,28 @@ DECLARE
 BEGIN
   -- Count chunks with embeddings
   SELECT COUNT(*) INTO v_total_chunks
-  FROM knowledge_chunks WHERE embedding IS NOT NULL;
+  FROM knowledge_chunks WHERE embedding_vector IS NOT NULL;
 
   -- Get dimension statistics
   SELECT
-    ROUND(AVG(array_length(embedding, 1))::NUMERIC, 2),
-    MIN(array_length(embedding, 1)),
-    MAX(array_length(embedding, 1))
+    ROUND(AVG(array_length(embedding_vector, 1))::NUMERIC, 2),
+    MIN(array_length(embedding_vector, 1)),
+    MAX(array_length(embedding_vector, 1))
   INTO v_avg_dim, v_min_dim, v_max_dim
-  FROM knowledge_chunks WHERE embedding IS NOT NULL;
+  FROM knowledge_chunks WHERE embedding_vector IS NOT NULL;
 
   -- Check uniformity
-  v_uniform := (v_min_dim = 1536 AND v_max_dim = 1536);
+  v_uniform := (v_min_dim = 384 AND v_max_dim = 384);
 
-  -- Count invalid (non-1536) embeddings
+  -- Count invalid (non-384) embeddings
   SELECT COUNT(*) INTO v_invalid
   FROM knowledge_chunks
-  WHERE embedding IS NOT NULL
-  AND array_length(embedding, 1) != 1536;
+  WHERE embedding_vector IS NOT NULL
+  AND array_length(embedding_vector, 1) != 384;
 
   -- Determine health status
   IF v_uniform THEN
-    v_health := 'HEALTHY - All embeddings 1536-dimensional';
+    v_health := 'HEALTHY - All embeddings 384-dimensional';
   ELSIF v_invalid > 0 THEN
     v_health := 'CRITICAL - ' || v_invalid || ' invalid embeddings detected';
   ELSE
@@ -303,9 +303,9 @@ BEGIN
     d.id,
     d.title,
     COUNT(c.id)::BIGINT as total_chunks,
-    COUNT(CASE WHEN c.embedding IS NULL THEN 1 END)::BIGINT as missing_embeddings,
+    COUNT(CASE WHEN c.embedding_vector IS NULL THEN 1 END)::BIGINT as missing_embeddings,
     ROUND(
-      (COUNT(CASE WHEN c.embedding IS NULL THEN 1 END)::NUMERIC / COUNT(c.id)::NUMERIC * 100),
+      (COUNT(CASE WHEN c.embedding_vector IS NULL THEN 1 END)::NUMERIC / COUNT(c.id)::NUMERIC * 100),
       2
     ) as gap_percentage,
     d.created_at
@@ -314,7 +314,7 @@ BEGIN
   WHERE d.ingestion_status = 'complete'
   AND EXISTS (
     SELECT 1 FROM knowledge_chunks c2
-    WHERE c2.document_id = d.id AND c2.embedding IS NULL
+    WHERE c2.document_id = d.id AND c2.embedding_vector IS NULL
   )
   GROUP BY d.id, d.title, d.created_at
   ORDER BY gap_percentage DESC;
@@ -497,7 +497,7 @@ CREATE OR REPLACE FUNCTION log_embedding_metric(
   p_document_id UUID,
   p_chunk_id UUID,
   p_embedding_time_ms INTEGER,
-  p_embedding_dimension INTEGER DEFAULT 1536,
+  p_embedding_dimension INTEGER DEFAULT 384,
   p_provider TEXT DEFAULT 'openai'
 )
 RETURNS UUID AS $$
@@ -579,7 +579,7 @@ WHERE ingestion_status IN ('processing', 'chunking', 'embedding');
 
 CREATE INDEX IF NOT EXISTS idx_chunks_embedding_null
 ON knowledge_chunks(document_id)
-WHERE embedding IS NULL;
+WHERE embedding_vector IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_documents_complete_no_integrity
 ON knowledge_documents(id)

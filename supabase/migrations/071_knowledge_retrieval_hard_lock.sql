@@ -47,13 +47,13 @@ SELECT
   c.content,
   c.chunk_index,
   c.token_count,
-  c.embedding,
+  c.embedding_vector,
   c.created_at,
   c.updated_at,
   c.embedding_generated_at
 FROM knowledge_chunks c
 INNER JOIN knowledge_documents_ready d ON d.id = c.document_id
-WHERE c.embedding IS NOT NULL;
+WHERE c.embedding_vector IS NOT NULL;
 
 -- ============================================================================
 -- 3️⃣ RPC FUNCTION: search_knowledge_by_embedding
@@ -63,7 +63,7 @@ WHERE c.embedding IS NOT NULL;
 -- Returns only verified documents with embeddings
 --
 CREATE OR REPLACE FUNCTION search_knowledge_by_embedding(
-  query_embedding vector(1536),
+  query_embedding vector(384),
   match_threshold float DEFAULT 0.5,
   match_count int DEFAULT 5
 )
@@ -87,15 +87,15 @@ BEGIN
     c.content,
     c.chunk_index,
     c.token_count,
-    (1.0 - (c.embedding <=> query_embedding))::float AS embedding_similarity,
+    (1.0 - (c.embedding_vector <=> query_embedding))::float AS embedding_similarity,
     d.title,
     d.category,
     d.source,
     d.created_at
   FROM knowledge_chunks_ready c
   INNER JOIN knowledge_documents_ready d ON d.id = c.document_id
-  WHERE c.embedding IS NOT NULL
-    AND (1.0 - (c.embedding <=> query_embedding)) > match_threshold
+  WHERE c.embedding_vector IS NOT NULL
+    AND (1.0 - (c.embedding_vector <=> query_embedding)) > match_threshold
   ORDER BY embedding_similarity DESC
   LIMIT match_count;
 END;
@@ -233,8 +233,8 @@ WHERE ingestion_status = 'complete'
 
 -- Index for chunks with embeddings ready
 CREATE INDEX IF NOT EXISTS idx_chunks_ready_composite
-ON knowledge_chunks(document_id, embedding)
-WHERE embedding IS NOT NULL;
+ON knowledge_chunks(document_id, embedding_vector)
+WHERE embedding_vector IS NOT NULL;
 
 -- ============================================================================
 -- 8️⃣ VERIFY DEPLOYMENT

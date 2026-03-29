@@ -6,6 +6,9 @@
  */
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
+import { log, warn, error } from '@/lib/logger';
+import { evaluateProject, type EvaluationResult } from '@/core/rules/decisionEngine';
+import { adaptResolvedDecisionsToRuleRecords } from '@/core/rules/ruleAdapter';
 
 /**
  * Scoring result structure with weighted scoring
@@ -14,6 +17,13 @@ export interface ScoringEngineResult {
   riskScore: number;
   complexityImpact: number;
   globalScore: number;
+  /** Rule-by-rule compliance evaluation against the devis projectData. */
+  ruleEvaluation?: {
+    grade:             'A' | 'B' | 'C' | 'D' | 'E';
+    compliance_score:  number;
+    violations:        EvaluationResult['violations'];
+    violation_summary: string;
+  };
   scoreBreakdown: {
     obligationCount: number;
     totalWeight: number; // Sum of all rule weights
@@ -39,6 +49,7 @@ export interface ScoringEngineResult {
     obligationWeight: number; // riskScore
     complexityWeight: number; // complexityImpact
     scoreReduction: number; // total reduction from 100
+    violationImpact: number; // penalty from decisionEngine violations (5 pts each)
   };
   riskLevel: 'low' | 'medium' | 'high' | 'critical';
   meta: {
@@ -59,7 +70,7 @@ export async function runScoringEngine(
   const startTime = Date.now();
 
   try {
-    console.log('[ScoringEngine] Starting project scoring with type-classified rules');
+    log('[ScoringEngine] Starting project scoring with type-classified rules');
 
     // Extract metrics from execution context
     const obligationCount = executionContext.rules?.obligationCount || 0;
@@ -78,6 +89,47 @@ export async function runScoringEngine(
     };
     const detailedObligations = executionContext.rules?.detailedObligations || [];
     const complexityScore = executionContext.lots?.complexityScore || 0;
+
+    // ── Decision Engine integration ───────────────────────────────────────────
+    // Evaluate resolvedDecisions against the actual devis values in projectData.
+    // Result enriches riskScore (violations add penalty) and globalScore
+    // (compliance_score acts as a multiplier).
+    let evaluationResult: EvaluationResult | null = null;
+    let violationCount   = 0;
+    let complianceScore  = 1.0;
+
+    try {
+      const resolvedDecisions = executionContext.resolvedDecisions ?? [];
+      if (resolvedDecisions.length > 0) {
+        const ruleRecords = adaptResolvedDecisionsToRuleRecords(resolvedDecisions);
+        // Only call evaluateProject when at least one evaluable rule remains
+        // (adapter may have filtered out all rules, e.g. if all are conflicting).
+        if (ruleRecords.length === 0) {
+          log('[ScoringEngine] no evaluable rules after adaptation — skipping decisionEngine');
+        } else {
+          evaluationResult = evaluateProject(
+            ruleRecords,
+            executionContext.projectData ?? {},
+            {
+              project_type:  executionContext.projectData?.project_type  ?? undefined,
+              building_type: executionContext.projectData?.building_type ?? undefined,
+            },
+          );
+          violationCount  = evaluationResult.violations.length;
+          complianceScore = evaluationResult.compliance_score;
+          log('[ScoringEngine] decisionEngine evaluation', {
+            grade:            evaluationResult.grade,
+            compliance_score: complianceScore,
+            violations:       violationCount,
+            coverage:         evaluationResult.coverage,
+          });
+        }
+      }
+    } catch (evalErr) {
+      warn('[ScoringEngine] decisionEngine evaluation failed (non-critical):', evalErr);
+    }
+
+    executionContext.ruleEvaluation = evaluationResult ?? undefined;
 
     // Calculate scoring components with type-based penalty/bonus system
     // legal + regulatory → full penalty (weight)
@@ -109,11 +161,14 @@ export async function runScoringEngine(
 
     // Calculate type-weighted risk score
     // legal (100%) + regulatory (100%) + advisory (50%) - commercial (30% bonus)
+    // + violation penalty: 5 pts per confirmed violation from decisionEngine
+    const violationImpact = violationCount * 5;
     const typeWeightedRisk =
       legalWeight +
       regulatoryWeight +
       advisoryWeight * 0.5 -
-      commercialWeight * 0.3;
+      commercialWeight * 0.3 +
+      violationImpact;
 
     // Risk score: type-weighted calculation
     const riskScore = Math.max(0, typeWeightedRisk);
@@ -121,10 +176,11 @@ export async function runScoringEngine(
     // Complexity impact: 2 points per lot (more lots = more complexity)
     const complexityImpact = complexityScore * 2;
 
-    // Global score: starts at 100, reduced by weighted risk and complexity
+    // Global score: starts at 100, reduced by weighted risk and complexity,
+    // then scaled by compliance_score from decisionEngine (1.0 = fully compliant).
     // Clamped to 0 minimum (no negative scores)
     const totalReduction = riskScore + complexityImpact;
-    const globalScore = Math.max(0, 100 - totalReduction);
+    const globalScore = Math.max(0, (100 - totalReduction) * complianceScore);
 
     // Determine risk level based on global score
     let riskLevel: 'low' | 'medium' | 'high' | 'critical';
@@ -144,6 +200,12 @@ export async function runScoringEngine(
       riskScore,
       complexityImpact,
       globalScore,
+      ruleEvaluation: evaluationResult ? {
+        grade:            evaluationResult.grade,
+        compliance_score: evaluationResult.compliance_score,
+        violations:       evaluationResult.violations.slice(0, 5),
+        violation_summary: `${violationCount} violation${violationCount !== 1 ? 's' : ''} detected`,
+      } : undefined,
       scoreBreakdown: {
         obligationCount,
         totalWeight,
@@ -159,6 +221,7 @@ export async function runScoringEngine(
         obligationWeight: riskScore,
         complexityWeight: complexityImpact,
         scoreReduction: totalReduction,
+        violationImpact,
       },
       riskLevel,
       meta: {
@@ -168,7 +231,7 @@ export async function runScoringEngine(
       },
     };
 
-    console.log('[ScoringEngine] Project scoring completed', {
+    log('[ScoringEngine] Project scoring completed', {
       globalScore: result.globalScore,
       riskLevel: result.riskLevel,
       obligationCount,
@@ -182,15 +245,16 @@ export async function runScoringEngine(
     });
 
     return result;
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[ScoringEngine] Error during project scoring', error);
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    error('[ScoringEngine] Error during project scoring', errorMessage);
 
     // Return graceful error result with neutral scoring
     return {
       riskScore: 0,
       complexityImpact: 0,
       globalScore: 100,
+      ruleEvaluation: undefined,
       scoreBreakdown: {
         obligationCount: 0,
         totalWeight: 0,
@@ -216,6 +280,7 @@ export async function runScoringEngine(
         obligationWeight: 0,
         complexityWeight: 0,
         scoreReduction: 0,
+        violationImpact: 0,
       },
       riskLevel: 'low',
       meta: {

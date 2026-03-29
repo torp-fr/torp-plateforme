@@ -13,6 +13,7 @@ import { performRagAnalysis } from '@/services/ragService';
 import type { RagContext } from '@/services/ragService';
 import type { CCFData } from '@/components/guided-ccf/GuidedCCF';
 import type { EnrichedClientData } from '@/types/enrichment';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 interface AnalysisResult {
   score: number;
@@ -93,9 +94,9 @@ export function QuoteAnalysisPage() {
               })),
             };
 
-            console.log('✅ RAG Analysis completed:', analysisResult);
+            log('✅ RAG Analysis completed:', analysisResult);
           } catch (ragError) {
-            console.warn('⚠️ RAG analysis failed, using basic analysis:', ragError);
+            warn('⚠️ RAG analysis failed, using basic analysis:', ragError);
           }
         }
 

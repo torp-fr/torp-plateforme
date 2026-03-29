@@ -5,7 +5,7 @@
  */
 
 import { ENGINE_REGISTRY, EngineRegistryEntry } from '@/core/platform/engineRegistry';
-import { runContextEngine, ContextEngineResult } from '@/core/engines/context.engine';
+import { runContextEngine, ContextEngineResult } from '@/core/engines/lotContext.engine';
 import { runLotEngine, LotEngineResult } from '@/core/engines/lot.engine';
 import { runRuleEngine, RuleEngineResult } from '@/core/engines/rule.engine';
 import { runScoringEngine, ScoringEngineResult } from '@/core/engines/scoring.engine';
@@ -19,6 +19,10 @@ import { runTrustCappingEngine, TrustCappingResult } from '@/core/trust/trustCap
 import { runStructuralConsistencyEngine, StructuralConsistencyResult } from '@/core/trust/structuralConsistency.engine';
 import { createAuditSnapshot } from '@/core/platform/auditSnapshot.manager';
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+import { orchestrationService } from '@/core/jobs/orchestration.service';
+import { jobService } from '@/core/jobs/job.service';
+import { enrichWithImpliedDomains } from '@/core/reasoning/contextDeduction.service';
 
 /**
  * Statut d'orchestration
@@ -41,6 +45,7 @@ export interface EngineExecutionResult {
  */
 export interface OrchestrationContext {
   projectId?: string;
+  jobId?: string;
   data?: Record<string, any>;
   options?: Record<string, any>;
 }
@@ -68,23 +73,34 @@ let lastOrchestration: OrchestrationResult | null = null;
 
 /**
  * Lance une orchestration
- * Version 1.0 : Structure seule, pas d'exécution réelle
+ * Version 2.0 : Avec persistance DB orchestration_runs et engine_executions
  */
 export async function runOrchestration(
   context: OrchestrationContext = {}
 ): Promise<OrchestrationResult> {
-  console.log('[EngineOrchestrator] Orchestration started', { context });
+  log('[EngineOrchestrator] Orchestration started', { context });
 
   const orchestrationId = generateOrchestrationId();
   const startTime = new Date().toISOString();
 
   orchestrationState = 'running';
 
+  // Create orchestration run in database
+  let dbOrchestrationId: string | null = null;
+  try {
+    const orchestrationRun = await orchestrationService.createOrchestrationRun(context.jobId);
+    dbOrchestrationId = orchestrationRun.id;
+    log('[EngineOrchestrator] Database orchestration run created:', dbOrchestrationId);
+  } catch (dbError) {
+    error('[EngineOrchestrator] Failed to create DB orchestration run (non-critical):', dbError);
+  }
+
   try {
     // Get active engines
     const activeEngines = getActiveEngines();
     const engineResults: Record<string, any> = {};
     const executedEngines: EngineExecutionResult[] = [];
+    const totalEngines = activeEngines.length;
 
     // Create shared execution context for sequential engine pipeline
     const executionContext: EngineExecutionContext = {
@@ -95,8 +111,10 @@ export async function runOrchestration(
     };
 
     // Execute each active engine
-    for (const engine of activeEngines) {
+    for (let engineIndex = 0; engineIndex < activeEngines.length; engineIndex++) {
+      const engine = activeEngines[engineIndex];
       const engineStartTime = new Date().toISOString();
+      const engineStartMs = Date.now();
       const engineExecutionResult: EngineExecutionResult = {
         engineId: engine.id,
         status: 'running',
@@ -106,7 +124,7 @@ export async function runOrchestration(
       try {
         // Execute Context Engine if active
         if (engine.id === 'contextEngine') {
-          console.log('[EngineOrchestrator] Executing Context Engine');
+          log('[EngineOrchestrator] Executing Context Engine');
           const contextResult: ContextEngineResult = await runContextEngine({
             projectId: context.projectId,
             data: context.data,
@@ -124,13 +142,41 @@ export async function runOrchestration(
 
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          const durationMs = Date.now() - engineStartMs;
+
+          // Record engine execution in database (non-blocking)
+          if (dbOrchestrationId) {
+            orchestrationService.recordEngineExecution(
+              dbOrchestrationId,
+              engine.id,
+              'completed',
+              durationMs,
+              { score: contextResult?.score }
+            ).catch(err => warn('[EngineOrchestrator] Failed to record engine execution:', err));
+          }
+
+          // Update job progress
+          if (context.jobId) {
+            const progressPercent = Math.round(((engineIndex + 1) / totalEngines) * 100);
+            jobService.updateProgress(context.jobId, progressPercent)
+              .catch(err => warn('[EngineOrchestrator] Failed to update job progress:', err));
+          }
+
           // Record snapshot (non-blocking)
-          recordEngineSnapshot('contextEngine', contextResult, 'completed',
-            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
+          recordEngineSnapshot('contextEngine', contextResult, 'completed', durationMs);
         }
         // Execute Lot Engine if active (depends on Context Engine)
         else if (engine.id === 'lotEngine') {
-          console.log('[EngineOrchestrator] Executing Lot Engine');
+          log('[EngineOrchestrator] Executing Lot Engine');
+          // Deduce implied domains from project type and store on context
+          // so rule.engine can use them as domain source alongside lot.domain.
+          const enriched = enrichWithImpliedDomains(executionContext.projectData ?? {});
+          executionContext.impliedDomains = enriched.impliedDomains;
+          log('[EngineOrchestrator] Implied domains deduced', {
+            projectType: executionContext.projectData?.type,
+            impliedDomains: enriched.impliedDomains,
+            confidence: enriched.contextDeductionConfidence,
+          });
           const lotResult: LotEngineResult = await runLotEngine(executionContext);
           engineResults['lotEngine'] = lotResult;
 
@@ -144,13 +190,32 @@ export async function runOrchestration(
 
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          const durationMs = Date.now() - engineStartMs;
+
+          // Record engine execution in database (non-blocking)
+          if (dbOrchestrationId) {
+            orchestrationService.recordEngineExecution(
+              dbOrchestrationId,
+              engine.id,
+              'completed',
+              durationMs,
+              { complexityScore: lotResult?.complexityScore }
+            ).catch(err => warn('[EngineOrchestrator] Failed to record engine execution:', err));
+          }
+
+          // Update job progress
+          if (context.jobId) {
+            const progressPercent = Math.round(((engineIndex + 1) / totalEngines) * 100);
+            jobService.updateProgress(context.jobId, progressPercent)
+              .catch(err => warn('[EngineOrchestrator] Failed to update job progress:', err));
+          }
+
           // Record snapshot (non-blocking)
-          recordEngineSnapshot('lotEngine', lotResult, 'completed',
-            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
+          recordEngineSnapshot('lotEngine', lotResult, 'completed', durationMs);
         }
         // Execute Rule Engine if active (depends on Lot Engine)
         else if (engine.id === 'ruleEngine') {
-          console.log('[EngineOrchestrator] Executing Rule Engine');
+          log('[EngineOrchestrator] Executing Rule Engine');
           const ruleResult: RuleEngineResult = await runRuleEngine(executionContext);
           engineResults['ruleEngine'] = ruleResult;
 
@@ -168,13 +233,32 @@ export async function runOrchestration(
 
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          const durationMs = Date.now() - engineStartMs;
+
+          // Record engine execution in database (non-blocking)
+          if (dbOrchestrationId) {
+            orchestrationService.recordEngineExecution(
+              dbOrchestrationId,
+              engine.id,
+              'completed',
+              durationMs,
+              { obligationCount: ruleResult?.obligationCount }
+            ).catch(err => warn('[EngineOrchestrator] Failed to record engine execution:', err));
+          }
+
+          // Update job progress
+          if (context.jobId) {
+            const progressPercent = Math.round(((engineIndex + 1) / totalEngines) * 100);
+            jobService.updateProgress(context.jobId, progressPercent)
+              .catch(err => warn('[EngineOrchestrator] Failed to update job progress:', err));
+          }
+
           // Record snapshot (non-blocking)
-          recordEngineSnapshot('ruleEngine', ruleResult, 'completed',
-            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
+          recordEngineSnapshot('ruleEngine', ruleResult, 'completed', durationMs);
         }
         // Execute Scoring Engine if active (depends on Rule Engine and Lot Engine)
         else if (engine.id === 'scoringEngine') {
-          console.log('[EngineOrchestrator] Executing Scoring Engine');
+          log('[EngineOrchestrator] Executing Scoring Engine');
           const scoringResult: ScoringEngineResult = await runScoringEngine(executionContext);
           engineResults['scoringEngine'] = scoringResult;
 
@@ -189,13 +273,32 @@ export async function runOrchestration(
 
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          const durationMs = Date.now() - engineStartMs;
+
+          // Record engine execution in database (non-blocking)
+          if (dbOrchestrationId) {
+            orchestrationService.recordEngineExecution(
+              dbOrchestrationId,
+              engine.id,
+              'completed',
+              durationMs,
+              { riskScore: scoringResult?.riskScore, globalScore: scoringResult?.globalScore }
+            ).catch(err => warn('[EngineOrchestrator] Failed to record engine execution:', err));
+          }
+
+          // Update job progress
+          if (context.jobId) {
+            const progressPercent = Math.round(((engineIndex + 1) / totalEngines) * 100);
+            jobService.updateProgress(context.jobId, progressPercent)
+              .catch(err => warn('[EngineOrchestrator] Failed to update job progress:', err));
+          }
+
           // Record snapshot (non-blocking)
-          recordEngineSnapshot('scoringEngine', scoringResult, 'completed',
-            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
+          recordEngineSnapshot('scoringEngine', scoringResult, 'completed', durationMs);
         }
         // Execute Enrichment Engine if active (depends on all prior engines)
         else if (engine.id === 'enrichmentEngine') {
-          console.log('[EngineOrchestrator] Executing Enrichment Engine');
+          log('[EngineOrchestrator] Executing Enrichment Engine');
           const enrichmentResult: EnrichmentEngineResult = await runEnrichmentEngine(executionContext);
           engineResults['enrichmentEngine'] = enrichmentResult;
 
@@ -211,13 +314,32 @@ export async function runOrchestration(
 
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          const durationMs = Date.now() - engineStartMs;
+
+          // Record engine execution in database (non-blocking)
+          if (dbOrchestrationId) {
+            orchestrationService.recordEngineExecution(
+              dbOrchestrationId,
+              engine.id,
+              'completed',
+              durationMs,
+              { actionCount: enrichmentResult?.actionCount, recommendationCount: enrichmentResult?.recommendationCount }
+            ).catch(err => warn('[EngineOrchestrator] Failed to record engine execution:', err));
+          }
+
+          // Update job progress
+          if (context.jobId) {
+            const progressPercent = Math.round(((engineIndex + 1) / totalEngines) * 100);
+            jobService.updateProgress(context.jobId, progressPercent)
+              .catch(err => warn('[EngineOrchestrator] Failed to update job progress:', err));
+          }
+
           // Record snapshot (non-blocking)
-          recordEngineSnapshot('enrichmentEngine', enrichmentResult, 'completed',
-            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
+          recordEngineSnapshot('enrichmentEngine', enrichmentResult, 'completed', durationMs);
         }
         // Execute Audit Engine if active (depends on all prior engines - final pipeline stage)
         else if (engine.id === 'auditEngine') {
-          console.log('[EngineOrchestrator] Executing Audit Engine');
+          log('[EngineOrchestrator] Executing Audit Engine');
           const auditResult: AuditEngineResult = await runAuditEngine(executionContext);
           engineResults['auditEngine'] = auditResult;
 
@@ -232,14 +354,14 @@ export async function runOrchestration(
                 auditResult.report
               );
               executionContext.auditSnapshot = snapshot;
-              console.log('[EngineOrchestrator] Audit snapshot created', {
+              log('[EngineOrchestrator] Audit snapshot created', {
                 projectId: executionContext.context.projectId,
                 snapshotId: snapshot.id,
                 version: snapshot.version,
               });
             } catch (snapshotError) {
               const errorMsg = snapshotError instanceof Error ? snapshotError.message : 'Unknown error';
-              console.warn('[EngineOrchestrator] Failed to create audit snapshot', {
+              warn('[EngineOrchestrator] Failed to create audit snapshot', {
                 projectId: executionContext.context.projectId,
                 error: errorMsg,
               });
@@ -249,61 +371,156 @@ export async function runOrchestration(
 
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          const durationMs = Date.now() - engineStartMs;
+
+          // Record engine execution in database (non-blocking)
+          if (dbOrchestrationId) {
+            orchestrationService.recordEngineExecution(
+              dbOrchestrationId,
+              engine.id,
+              'completed',
+              durationMs,
+              { reportGenerated: !!auditResult?.report }
+            ).catch(err => warn('[EngineOrchestrator] Failed to record engine execution:', err));
+          }
+
+          // Update job progress
+          if (context.jobId) {
+            const progressPercent = Math.round(((engineIndex + 1) / totalEngines) * 100);
+            jobService.updateProgress(context.jobId, progressPercent)
+              .catch(err => warn('[EngineOrchestrator] Failed to update job progress:', err));
+          }
+
           // Record snapshot (non-blocking)
-          recordEngineSnapshot('auditEngine', auditResult, 'completed',
-            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
+          recordEngineSnapshot('auditEngine', auditResult, 'completed', durationMs);
         }
         // Execute Enterprise Engine if active (global scoring pillar)
         else if (engine.id === 'enterpriseEngine') {
-          console.log('[EngineOrchestrator] Executing Enterprise Engine');
+          log('[EngineOrchestrator] Executing Enterprise Engine');
           const enterpriseResult: EnterpriseEngineResult = await runEnterpriseEngine(executionContext);
           engineResults['enterpriseEngine'] = enterpriseResult;
           executionContext.enterprise = enterpriseResult;
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          const durationMs = Date.now() - engineStartMs;
+
+          // Record engine execution in database (non-blocking)
+          if (dbOrchestrationId) {
+            orchestrationService.recordEngineExecution(
+              dbOrchestrationId,
+              engine.id,
+              'completed',
+              durationMs,
+              { score: enterpriseResult?.score }
+            ).catch(err => warn('[EngineOrchestrator] Failed to record engine execution:', err));
+          }
+
+          // Update job progress
+          if (context.jobId) {
+            const progressPercent = Math.round(((engineIndex + 1) / totalEngines) * 100);
+            jobService.updateProgress(context.jobId, progressPercent)
+              .catch(err => warn('[EngineOrchestrator] Failed to update job progress:', err));
+          }
+
           // Record snapshot (non-blocking)
-          recordEngineSnapshot('enterpriseEngine', enterpriseResult, 'completed',
-            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
+          recordEngineSnapshot('enterpriseEngine', enterpriseResult, 'completed', durationMs);
         }
         // Execute Pricing Engine if active (global scoring pillar)
         else if (engine.id === 'pricingEngine') {
-          console.log('[EngineOrchestrator] Executing Pricing Engine');
+          log('[EngineOrchestrator] Executing Pricing Engine');
           const pricingResult: PricingEngineResult = await runPricingEngine(executionContext);
           engineResults['pricingEngine'] = pricingResult;
           executionContext.pricing = pricingResult;
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          const durationMs = Date.now() - engineStartMs;
+
+          // Record engine execution in database (non-blocking)
+          if (dbOrchestrationId) {
+            orchestrationService.recordEngineExecution(
+              dbOrchestrationId,
+              engine.id,
+              'completed',
+              durationMs,
+              { score: pricingResult?.score }
+            ).catch(err => warn('[EngineOrchestrator] Failed to record engine execution:', err));
+          }
+
+          // Update job progress
+          if (context.jobId) {
+            const progressPercent = Math.round(((engineIndex + 1) / totalEngines) * 100);
+            jobService.updateProgress(context.jobId, progressPercent)
+              .catch(err => warn('[EngineOrchestrator] Failed to update job progress:', err));
+          }
+
           // Record snapshot (non-blocking)
-          recordEngineSnapshot('pricingEngine', pricingResult, 'completed',
-            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
+          recordEngineSnapshot('pricingEngine', pricingResult, 'completed', durationMs);
         }
         // Execute Quality Engine if active (global scoring pillar)
         else if (engine.id === 'qualityEngine') {
-          console.log('[EngineOrchestrator] Executing Quality Engine');
+          log('[EngineOrchestrator] Executing Quality Engine');
           const qualityResult: QualityEngineResult = await runQualityEngine(executionContext);
           engineResults['qualityEngine'] = qualityResult;
           executionContext.quality = qualityResult;
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          const durationMs = Date.now() - engineStartMs;
+
+          // Record engine execution in database (non-blocking)
+          if (dbOrchestrationId) {
+            orchestrationService.recordEngineExecution(
+              dbOrchestrationId,
+              engine.id,
+              'completed',
+              durationMs,
+              { score: qualityResult?.score }
+            ).catch(err => warn('[EngineOrchestrator] Failed to record engine execution:', err));
+          }
+
+          // Update job progress
+          if (context.jobId) {
+            const progressPercent = Math.round(((engineIndex + 1) / totalEngines) * 100);
+            jobService.updateProgress(context.jobId, progressPercent)
+              .catch(err => warn('[EngineOrchestrator] Failed to update job progress:', err));
+          }
+
           // Record snapshot (non-blocking)
-          recordEngineSnapshot('qualityEngine', qualityResult, 'completed',
-            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
+          recordEngineSnapshot('qualityEngine', qualityResult, 'completed', durationMs);
         }
         // Execute Global Scoring Engine if active (final scoring consolidation)
         else if (engine.id === 'globalScoringEngine') {
-          console.log('[EngineOrchestrator] Executing Global Scoring Engine');
+          log('[EngineOrchestrator] Executing Global Scoring Engine');
           const globalScoringResult: GlobalScoringEngineResult = await runGlobalScoringEngine(executionContext);
           engineResults['globalScoringEngine'] = globalScoringResult;
           executionContext.globalScore = globalScoringResult;
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          const durationMs = Date.now() - engineStartMs;
+
+          // Record engine execution in database (non-blocking)
+          if (dbOrchestrationId) {
+            orchestrationService.recordEngineExecution(
+              dbOrchestrationId,
+              engine.id,
+              'completed',
+              durationMs,
+              { globalScore: globalScoringResult?.globalScore }
+            ).catch(err => warn('[EngineOrchestrator] Failed to record engine execution:', err));
+          }
+
+          // Update job progress
+          if (context.jobId) {
+            const progressPercent = Math.round(((engineIndex + 1) / totalEngines) * 100);
+            jobService.updateProgress(context.jobId, progressPercent)
+              .catch(err => warn('[EngineOrchestrator] Failed to update job progress:', err));
+          }
+
           // Record snapshot (non-blocking)
-          recordEngineSnapshot('globalScoringEngine', globalScoringResult, 'completed',
-            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
+          recordEngineSnapshot('globalScoringEngine', globalScoringResult, 'completed', durationMs);
         }
         // Execute Trust Capping Engine if active (intelligent grade capping)
         else if (engine.id === 'trustCappingEngine') {
-          console.log('[EngineOrchestrator] Executing Trust Capping Engine');
+          log('[EngineOrchestrator] Executing Trust Capping Engine');
           const trustCappingResult: TrustCappingResult = await runTrustCappingEngine(executionContext);
           engineResults['trustCappingEngine'] = trustCappingResult;
           executionContext.trustCappingResult = trustCappingResult;
@@ -311,7 +528,7 @@ export async function runOrchestration(
           // Official grade authority: set finalProfessionalGrade from trust capping result
           if (trustCappingResult?.finalGrade) {
             executionContext.finalProfessionalGrade = trustCappingResult.finalGrade;
-            console.log('[EngineOrchestrator] Official grade set', {
+            log('[EngineOrchestrator] Official grade set', {
               finalGrade: trustCappingResult.finalGrade,
               originalGrade: trustCappingResult.originalGrade,
               cappingApplied: trustCappingResult.cappingApplied,
@@ -320,25 +537,76 @@ export async function runOrchestration(
 
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          const durationMs = Date.now() - engineStartMs;
+
+          // Record engine execution in database (non-blocking)
+          if (dbOrchestrationId) {
+            orchestrationService.recordEngineExecution(
+              dbOrchestrationId,
+              engine.id,
+              'completed',
+              durationMs,
+              { finalGrade: trustCappingResult?.finalGrade, cappingApplied: trustCappingResult?.cappingApplied }
+            ).catch(err => warn('[EngineOrchestrator] Failed to record engine execution:', err));
+          }
+
+          // Update job progress
+          if (context.jobId) {
+            const progressPercent = Math.round(((engineIndex + 1) / totalEngines) * 100);
+            jobService.updateProgress(context.jobId, progressPercent)
+              .catch(err => warn('[EngineOrchestrator] Failed to update job progress:', err));
+          }
+
           // Record snapshot (non-blocking)
-          recordEngineSnapshot('trustCappingEngine', trustCappingResult, 'completed',
-            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
+          recordEngineSnapshot('trustCappingEngine', trustCappingResult, 'completed', durationMs);
         }
         // Execute Structural Consistency Engine if active (analytical pillar balance)
         else if (engine.id === 'structuralConsistencyEngine') {
-          console.log('[EngineOrchestrator] Executing Structural Consistency Engine');
+          log('[EngineOrchestrator] Executing Structural Consistency Engine');
           const structuralConsistencyResult: StructuralConsistencyResult = await runStructuralConsistencyEngine(executionContext);
           engineResults['structuralConsistencyEngine'] = structuralConsistencyResult;
           executionContext.structuralConsistency = structuralConsistencyResult;
           engineExecutionResult.status = 'completed';
           engineExecutionResult.endTime = new Date().toISOString();
+          const durationMs = Date.now() - engineStartMs;
+
+          // Record engine execution in database (non-blocking)
+          if (dbOrchestrationId) {
+            orchestrationService.recordEngineExecution(
+              dbOrchestrationId,
+              engine.id,
+              'completed',
+              durationMs,
+              { consistencyScore: structuralConsistencyResult?.consistencyScore }
+            ).catch(err => warn('[EngineOrchestrator] Failed to record engine execution:', err));
+          }
+
+          // Update job progress
+          if (context.jobId) {
+            const progressPercent = Math.round(((engineIndex + 1) / totalEngines) * 100);
+            jobService.updateProgress(context.jobId, progressPercent)
+              .catch(err => warn('[EngineOrchestrator] Failed to update job progress:', err));
+          }
+
           // Record snapshot (non-blocking)
-          recordEngineSnapshot('structuralConsistencyEngine', structuralConsistencyResult, 'completed',
-            new Date(engineExecutionResult.endTime).getTime() - new Date(engineExecutionResult.startTime!).getTime());
+          recordEngineSnapshot('structuralConsistencyEngine', structuralConsistencyResult, 'completed', durationMs);
         } else {
           // Other engines not yet implemented
           engineExecutionResult.status = 'skipped';
           engineExecutionResult.endTime = new Date().toISOString();
+          const durationMs = Date.now() - engineStartMs;
+
+          // Record engine execution in database (non-blocking)
+          if (dbOrchestrationId) {
+            orchestrationService.recordEngineExecution(
+              dbOrchestrationId,
+              engine.id,
+              'skipped',
+              durationMs,
+              null,
+              'Engine not yet implemented'
+            ).catch(err => warn('[EngineOrchestrator] Failed to record engine execution:', err));
+          }
         }
       } catch (engineError) {
         const errorMessage = engineError instanceof Error ? engineError.message : 'Unknown error';
@@ -346,6 +614,19 @@ export async function runOrchestration(
         engineExecutionResult.status = 'failed';
         engineExecutionResult.error = errorMessage;
         engineExecutionResult.endTime = new Date().toISOString();
+        const durationMs = Date.now() - engineStartMs;
+
+        // Record engine execution failure in database (non-blocking)
+        if (dbOrchestrationId) {
+          orchestrationService.recordEngineExecution(
+            dbOrchestrationId,
+            engine.id,
+            'failed',
+            durationMs,
+            null,
+            errorMessage
+          ).catch(err => warn('[EngineOrchestrator] Failed to record engine failure:', err));
+        }
       }
 
       executedEngines.push(engineExecutionResult);
@@ -365,16 +646,40 @@ export async function runOrchestration(
       },
     };
 
+    // Update database orchestration run status
+    if (dbOrchestrationId) {
+      orchestrationService.completeOrchestrationRun(dbOrchestrationId, 'completed')
+        .catch(err => warn('[EngineOrchestrator] Failed to update orchestration run status:', err));
+    }
+
+    // Mark job as completed if jobId is provided
+    if (context.jobId) {
+      jobService.markCompleted(context.jobId)
+        .catch(err => warn('[EngineOrchestrator] Failed to mark job as completed:', err));
+    }
+
     lastOrchestration = result;
     orchestrationState = 'idle';
 
-    console.log('[EngineOrchestrator] Orchestration completed', result);
+    log('[EngineOrchestrator] Orchestration completed', result);
     return result;
   } catch (error) {
     orchestrationState = 'error';
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
     console.error('[EngineOrchestrator] Orchestration failed', error);
+
+    // Update database orchestration run status to failed
+    if (dbOrchestrationId) {
+      orchestrationService.completeOrchestrationRun(dbOrchestrationId, 'failed', errorMessage)
+        .catch(err => warn('[EngineOrchestrator] Failed to update orchestration run status to failed:', err));
+    }
+
+    // Mark job as failed if jobId is provided
+    if (context.jobId) {
+      jobService.markFailed(context.jobId, errorMessage)
+        .catch(err => warn('[EngineOrchestrator] Failed to mark job as failed:', err));
+    }
 
     return {
       id: orchestrationId,
@@ -430,7 +735,7 @@ export function getLastOrchestration(): OrchestrationResult | null {
 export function resetOrchestrationState(): void {
   orchestrationState = 'idle';
   lastOrchestration = null;
-  console.log('[EngineOrchestrator] State reset');
+  log('[EngineOrchestrator] State reset');
 }
 
 /**
@@ -439,7 +744,7 @@ export function resetOrchestrationState(): void {
 export function pauseOrchestration(): void {
   if (orchestrationState === 'running') {
     orchestrationState = 'paused';
-    console.log('[EngineOrchestrator] Orchestration paused');
+    log('[EngineOrchestrator] Orchestration paused');
   }
 }
 
@@ -449,7 +754,7 @@ export function pauseOrchestration(): void {
 export function resumeOrchestration(): void {
   if (orchestrationState === 'paused') {
     orchestrationState = 'running';
-    console.log('[EngineOrchestrator] Orchestration resumed');
+    log('[EngineOrchestrator] Orchestration resumed');
   }
 }
 
@@ -458,7 +763,7 @@ export function resumeOrchestration(): void {
  */
 export function stopOrchestration(): void {
   orchestrationState = 'idle';
-  console.log('[EngineOrchestrator] Orchestration stopped');
+  log('[EngineOrchestrator] Orchestration stopped');
 }
 
 /**
@@ -476,10 +781,10 @@ async function recordEngineSnapshot(engineId: string, result: any, status: strin
         duration_ms: durationMs,
         meta: result ?? {},
       }).catch((err: any) => {
-        console.warn(`[EngineOrchestrator] ⚠️ Score snapshot failed for ${engineId} (non-blocking):`, err);
+        warn(`[EngineOrchestrator] ⚠️ Score snapshot failed for ${engineId} (non-blocking):`, err);
       });
     } catch (e) {
-      console.warn(`[EngineOrchestrator] ⚠️ Snapshot error for ${engineId} (non-blocking):`, e);
+      warn(`[EngineOrchestrator] ⚠️ Snapshot error for ${engineId} (non-blocking):`, e);
     }
   }, 0);
 }

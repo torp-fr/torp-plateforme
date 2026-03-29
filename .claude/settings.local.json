@@ -1,4 +1,10 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(npx tsx:*)",
+      "Bash(pnpm exec:*)"
+    ]
+  },
   "mcpServers": {
     "supabase": {
       "transport": "http",

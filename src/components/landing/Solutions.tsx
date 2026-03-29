@@ -72,7 +72,7 @@ export const Solutions = () => {
         <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
           {solutions.map((solution, index) => (
             <Card
-              key={index}
+              key={`solution-${index}`}
               className={`relative border-2 hover:border-primary/50 transition-all hover:shadow-lg group ${
                 solution.popular ? 'border-primary' : ''
               }`}

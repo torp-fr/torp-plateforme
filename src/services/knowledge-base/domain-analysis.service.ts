@@ -5,6 +5,7 @@
  */
 
 import { ragOrchestratorService } from './rag-orchestrator.service';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 import type {
   DomainAnalysisRequest,
   DomainAnalysisResult,
@@ -23,7 +24,7 @@ export class DomainAnalysisService {
   async analyzeProposal(request: DomainAnalysisRequest): Promise<DomainAnalysisResult> {
     const startTime = Date.now();
 
-    console.log(`[Domain Analysis] Starting analysis for: ${request.proposalData.type}`);
+    log(`[Domain Analysis] Starting analysis for: ${request.proposalData.type}`);
 
     // Phase 1: Query knowledge base for relevant information
     const knowledgeSources = await this.queryKnowledgeBase(request);
@@ -56,8 +57,8 @@ export class DomainAnalysisService {
     const analysisDate = new Date();
     const analysisDurationMs = Date.now() - startTime;
 
-    console.log(`[Domain Analysis] Completed in ${analysisDurationMs}ms`);
-    console.log(`[Domain Analysis] Found ${issues.length} issues, ${recommendations.length} recommendations`);
+    log(`[Domain Analysis] Completed in ${analysisDurationMs}ms`);
+    log(`[Domain Analysis] Found ${issues.length} issues, ${recommendations.length} recommendations`);
 
     return {
       issues,
@@ -83,7 +84,7 @@ export class DomainAnalysisService {
     queries.push({
       query: `Best practices for ${request.proposalData.type} work`,
       context: request.proposalData.description,
-      categories: ['DTU' as DocumentCategory, 'GUIDELINE' as DocumentCategory, 'BEST_PRACTICE' as DocumentCategory],
+      categories: ['DTU' as DocumentCategory, 'GUIDE_TECHNIQUE' as DocumentCategory],
       maxResults: 5,
       includeRelated: true,
     });
@@ -91,7 +92,7 @@ export class DomainAnalysisService {
     // Query 2: Regulatory requirements
     queries.push({
       query: `Regulatory requirements and norms for ${request.proposalData.type}`,
-      categories: ['NORM' as DocumentCategory, 'REGULATION' as DocumentCategory, 'EUROCODE' as DocumentCategory],
+      categories: ['NORME' as DocumentCategory, 'CODE_CONSTRUCTION' as DocumentCategory, 'EUROCODE' as DocumentCategory],
       maxResults: 5,
     });
 
@@ -99,22 +100,22 @@ export class DomainAnalysisService {
     if (request.proposalData.materials?.length) {
       queries.push({
         query: `Specifications for ${request.proposalData.materials.join(', ')}`,
-        categories: ['TECHNICAL_GUIDE' as DocumentCategory, 'MANUAL' as DocumentCategory],
+        categories: ['GUIDE_TECHNIQUE' as DocumentCategory],
         maxResults: 5,
       });
     }
 
-    // Query 4: Quality standards
+    // Query 4: Legal obligations and construction code
     queries.push({
-      query: `Quality standards and guarantees for ${request.proposalData.type}`,
-      categories: ['WARRANTY' as DocumentCategory, 'LIABILITY' as DocumentCategory],
+      query: `Legal obligations and construction code for ${request.proposalData.type}`,
+      categories: ['CODE_CONSTRUCTION' as DocumentCategory, 'JURISPRUDENCE' as DocumentCategory],
       maxResults: 3,
     });
 
-    // Query 5: Sustainability considerations
+    // Query 5: Pricing references
     queries.push({
-      query: `Sustainability and energy efficiency for ${request.proposalData.type}`,
-      categories: ['SUSTAINABILITY' as DocumentCategory, 'ENERGY_EFFICIENCY' as DocumentCategory],
+      query: `Market pricing references for ${request.proposalData.type}`,
+      categories: ['PRIX_BTP' as DocumentCategory],
       maxResults: 3,
     });
 

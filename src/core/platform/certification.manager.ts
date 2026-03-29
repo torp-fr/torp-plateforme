@@ -5,6 +5,7 @@
  */
 
 import { AuditSnapshot } from '@/core/platform/auditSnapshot.manager';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Certification Record - Immutable official certification
@@ -93,7 +94,7 @@ const tokenIndex: Record<string, { projectId: string; certId: string }> = {};
  */
 export function mapScoreToGrade(score: number): 'A' | 'B' | 'C' | 'D' | 'E' {
   if (typeof score !== 'number' || isNaN(score)) {
-    console.warn('[CertificationManager] Invalid score for grading', score);
+    warn('[CertificationManager] Invalid score for grading', score);
     return 'E';
   }
 
@@ -203,7 +204,7 @@ export function createCertification(
       certId: certification.id,
     };
 
-    console.log('[CertificationManager] Certification created', {
+    log('[CertificationManager] Certification created', {
       projectId,
       certificationId: certification.id,
       grade,
@@ -276,7 +277,7 @@ export function verifyCertification(token: string): CertificationVerificationRes
     const remainingMs = expiresAt.getTime() - now.getTime();
     const remainingDays = Math.ceil(remainingMs / (1000 * 60 * 60 * 24));
 
-    console.log('[CertificationManager] Certification verified', {
+    log('[CertificationManager] Certification verified', {
       certificationId: certification.id,
       projectId: tokenInfo.projectId,
       grade: certification.grade,
@@ -456,7 +457,7 @@ export function revokeCertification(projectId: string, certificationId: string):
   const certification = certifications.find((c) => c.id === certificationId);
 
   if (!certification) {
-    console.warn('[CertificationManager] Certification not found for revocation', {
+    warn('[CertificationManager] Certification not found for revocation', {
       projectId,
       certificationId,
     });
@@ -467,7 +468,7 @@ export function revokeCertification(projectId: string, certificationId: string):
   certification.status = 'expired';
   certification.expiresAt = new Date().toISOString(); // Immediate expiration
 
-  console.log('[CertificationManager] Certification revoked', {
+  log('[CertificationManager] Certification revoked', {
     projectId,
     certificationId,
     revokedAt: new Date().toISOString(),
@@ -527,7 +528,7 @@ export function verifyCertificationIntegrity(
   const certification = getCertificationById(projectId, certificationId);
 
   if (!certification) {
-    console.warn('[CertificationManager] Certification not found for integrity check', {
+    warn('[CertificationManager] Certification not found for integrity check', {
       projectId,
       certificationId,
     });
@@ -536,7 +537,7 @@ export function verifyCertificationIntegrity(
 
   const isValid = certification.devisHash === devisHash;
 
-  console.log('[CertificationManager] Integrity check', {
+  log('[CertificationManager] Integrity check', {
     projectId,
     certificationId,
     isValid,
@@ -596,7 +597,7 @@ export function getCertificationVerificationReport(projectId: string): {
 export function clearAllCertifications(): void {
   Object.keys(certificationStore).forEach((key) => delete certificationStore[key]);
   Object.keys(tokenIndex).forEach((key) => delete tokenIndex[key]);
-  console.log('[CertificationManager] All certifications cleared');
+  log('[CertificationManager] All certifications cleared');
 }
 
 /**
@@ -609,7 +610,7 @@ export function clearProjectCertifications(projectId: string): void {
       delete tokenIndex[cert.publicToken];
     });
     delete certificationStore[projectId];
-    console.log('[CertificationManager] Project certifications cleared', { projectId });
+    log('[CertificationManager] Project certifications cleared', { projectId });
   }
 }
 

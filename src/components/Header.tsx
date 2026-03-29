@@ -3,12 +3,13 @@
  * Simplified navigation with clear user journey
  */
 
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { useApp } from "@/context/AppContext";
-import torpLogo from "@/assets/torp-logo-red.png";
+import { BRANDING } from "@/config/branding";
+import { log } from "@/lib/logger";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,10 +20,17 @@ import { authService } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 
 export const Header = () => {
-  const { user, userType, logout } = useApp();
+  const { user, userType, isLoading, logout } = useApp();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    log('[Header] Render state:', {
+      user: user ? user.email : 'null',
+      isLoading,
+    });
+  }, [user, isLoading]);
 
   // Détermine les liens dashboard selon le type d'utilisateur
   const isB2B = userType === 'B2B';
@@ -55,9 +63,9 @@ export const Header = () => {
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+          <Link to={user ? dashboardLink : "/"} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <img
-              src={torpLogo}
+              src={BRANDING.logoPrimary}
               alt="TORP"
               className="h-10 w-auto"
             />
@@ -139,7 +147,9 @@ export const Header = () => {
 
           {/* CTAs */}
           <div className="hidden lg:flex items-center gap-3">
-            {user ? (
+            {isLoading ? (
+              <div className="h-8 w-32 animate-pulse rounded-md bg-muted" />
+            ) : user ? (
               <>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

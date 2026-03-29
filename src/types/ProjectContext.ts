@@ -1,8 +1,26 @@
 /**
  * Project Context Types
  * Définit la structure du contexte projet avec pièces et travaux
+ *
+ * NOTE — Persistence layer types only.
+ *
+ * These enums represent the data model for persisted ProjectContext entities
+ * (room-by-room project structure stored in Supabase).
+ *
+ * For NEW code that deals with intent parsing, CCF analysis, or rule
+ * enforcement, use the string literal types from:
+ *   import { ... } from '@/services/ccfEngine.service'
+ *
+ * The enums below are kept for backward compatibility with:
+ *   src/api/analysis.ts
+ *   src/services/analysis/AnalysisCommands.ts
+ *   src/services/project/ProjectContextService.ts
  */
 
+/**
+ * @deprecated Use work_type string literals from ccfEngine.service.ts for
+ * new analysis code. This enum is for the persisted room-work data model only.
+ */
 export enum WorkType {
   PAINTING = 'peinture',
   FLOORING = 'revetement',
@@ -17,6 +35,10 @@ export enum WorkType {
   OTHER = 'autre',
 }
 
+/**
+ * @deprecated Use `'neuf' | 'renovation'` from ccfEngine.service.ts for
+ * new analysis code. This enum is for the persisted project data model only.
+ */
 export enum ProjectType {
   RENOVATION = 'renovation',
   NEW = 'neuf',

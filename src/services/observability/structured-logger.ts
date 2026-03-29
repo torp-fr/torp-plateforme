@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Structured Logger - Centralized logging service
  * Provides structured logging with context for debugging and monitoring
@@ -16,7 +18,7 @@ class StructuredLogger {
    * Log info level message
    */
   info(context: LogContext): void {
-    console.log(
+    log(
       `[${context.service || 'APP'}:${context.method || 'INFO'}]`,
       context.message,
       context
@@ -40,7 +42,7 @@ class StructuredLogger {
    * Log warning level message
    */
   warn(context: LogContext): void {
-    console.warn(
+    warn(
       `[${context.service || 'APP'}:${context.method || 'WARN'}]`,
       context.message,
       context

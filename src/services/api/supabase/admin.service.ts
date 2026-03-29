@@ -5,6 +5,7 @@
 
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/supabase';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 type DbProfile = Database['public']['Tables']['profiles']['Row'];
 
@@ -70,7 +71,7 @@ export class AdminService {
         return false;
       }
 
-      console.log('[AdminService] User promoted to admin:', userId);
+      log('[AdminService] User promoted to admin:', userId);
       return true;
     } catch (error) {
       console.error('[AdminService] Exception promoting user:', error);
@@ -92,7 +93,7 @@ export class AdminService {
         return false;
       }
 
-      console.log('[AdminService] Admin demoted to user:', userId);
+      log('[AdminService] Admin demoted to user:', userId);
       return true;
     } catch (error) {
       console.error('[AdminService] Exception demoting admin:', error);

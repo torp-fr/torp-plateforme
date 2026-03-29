@@ -6,6 +6,7 @@
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 import { TorpTestScenario, getScenario } from './torpScenarioLibrary';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Test scenario result
@@ -349,7 +350,7 @@ export async function runTorpScenario(scenarioName: string): Promise<TestScenari
   const startTime = Date.now();
 
   try {
-    console.log(`[TorpSimulator] Running scenario: ${scenarioName}`);
+    log(`[TorpSimulator] Running scenario: ${scenarioName}`);
 
     // Load scenario
     const scenario = getScenario(scenarioName);
@@ -399,7 +400,7 @@ export async function runTorpScenario(scenarioName: string): Promise<TestScenari
       },
     };
 
-    console.log(`[TorpSimulator] Scenario completed: ${scenario.name}`, {
+    log(`[TorpSimulator] Scenario completed: ${scenario.name}`, {
       finalGrade: result.outputSummary.finalProfessionalGrade,
       imbalance: result.outputSummary.imbalanceDetected,
       flags: result.flagsDetected.length,
@@ -444,7 +445,7 @@ export async function runAllTorpScenarios(): Promise<TestScenarioResult[]> {
   const { listAllScenarios } = await import('./torpScenarioLibrary');
   const scenarios = listAllScenarios();
 
-  console.log(`[TorpSimulator] Running ${scenarios.length} scenarios`);
+  log(`[TorpSimulator] Running ${scenarios.length} scenarios`);
 
   const results: TestScenarioResult[] = [];
 

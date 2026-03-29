@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Service d'accès à l'API Sirene de l'INSEE
  * Documentation : https://api.insee.fr/catalogue/
@@ -232,7 +234,7 @@ class SireneService {
 
     // Vérification Luhn optionnelle (avertissement seulement)
     if (!this.checkLuhn(cleaned)) {
-      console.warn('[Sirene] SIRET ne passe pas la validation Luhn (peut être une exception):', cleaned);
+      warn('[Sirene] SIRET ne passe pas la validation Luhn (peut être une exception):', cleaned);
     }
 
     return { valid: true };
@@ -251,7 +253,7 @@ class SireneService {
 
     // Vérification Luhn optionnelle (avertissement seulement)
     if (!this.checkLuhn(cleaned)) {
-      console.warn('[Sirene] SIREN ne passe pas la validation Luhn (peut être une exception):', cleaned);
+      warn('[Sirene] SIREN ne passe pas la validation Luhn (peut être une exception):', cleaned);
     }
 
     return { valid: true };
@@ -283,7 +285,7 @@ class SireneService {
     notFound?: boolean;
   }> {
     if (!this.isConfigured()) {
-      console.warn('[Sirene] API non configurée, utilisation du fallback recherche-entreprises');
+      warn('[Sirene] API non configurée, utilisation du fallback recherche-entreprises');
       return this.getEtablissementFromOpenAPI(siret);
     }
 
@@ -295,7 +297,7 @@ class SireneService {
     const cleanSiret = siret.replace(/\s/g, '');
 
     try {
-      console.log('[Sirene INSEE] Recherche SIRET:', cleanSiret);
+      log('[Sirene INSEE] Recherche SIRET:', cleanSiret);
 
       const response = await fetch(
         `${this.baseUrl}/siret/${cleanSiret}`,
@@ -303,7 +305,7 @@ class SireneService {
       );
 
       if (response.status === 404) {
-        console.warn('[Sirene INSEE] Établissement non trouvé, fallback vers API ouverte');
+        warn('[Sirene INSEE] Établissement non trouvé, fallback vers API ouverte');
         return this.getEtablissementFromOpenAPI(cleanSiret);
       }
 
@@ -312,7 +314,7 @@ class SireneService {
       }
 
       if (response.status === 429) {
-        console.warn('[Sirene INSEE] Quota dépassé, fallback vers API ouverte');
+        warn('[Sirene INSEE] Quota dépassé, fallback vers API ouverte');
         return this.getEtablissementFromOpenAPI(cleanSiret);
       }
 
@@ -325,7 +327,7 @@ class SireneService {
       const data = await response.json();
       const etablissement = data.etablissement as EtablissementSirene;
 
-      console.log('[Sirene INSEE] Entreprise trouvée:', etablissement.uniteLegale?.denominationUniteLegale);
+      log('[Sirene INSEE] Entreprise trouvée:', etablissement.uniteLegale?.denominationUniteLegale);
 
       return {
         success: true,
@@ -349,7 +351,7 @@ class SireneService {
     notFound?: boolean;
   }> {
     try {
-      console.log('[Sirene OpenAPI] Recherche SIRET:', siret);
+      log('[Sirene OpenAPI] Recherche SIRET:', siret);
 
       // Essayer d'abord la recherche exacte
       let response = await fetch(
@@ -367,7 +369,7 @@ class SireneService {
       // Si pas de résultat, essayer par SIREN
       if (!data.results || data.results.length === 0) {
         const siren = siret.substring(0, 9);
-        console.log('[Sirene OpenAPI] Pas de résultat exact, recherche par SIREN:', siren);
+        log('[Sirene OpenAPI] Pas de résultat exact, recherche par SIREN:', siren);
 
         response = await fetch(
           `https://recherche-entreprises.api.gouv.fr/search?q=${siren}&page=1&per_page=5`,
@@ -386,7 +388,7 @@ class SireneService {
 
         // Trouver l'entreprise avec le bon SIREN
         const entreprise = data.results.find((e: any) => e.siren === siren) || data.results[0];
-        console.log('[Sirene OpenAPI] Entreprise trouvée (via SIREN):', entreprise.nom_complet);
+        log('[Sirene OpenAPI] Entreprise trouvée (via SIREN):', entreprise.nom_complet);
 
         return {
           success: true,
@@ -395,7 +397,7 @@ class SireneService {
       }
 
       const entreprise = data.results[0];
-      console.log('[Sirene OpenAPI] Entreprise trouvée:', entreprise.nom_complet);
+      log('[Sirene OpenAPI] Entreprise trouvée:', entreprise.nom_complet);
 
       return {
         success: true,

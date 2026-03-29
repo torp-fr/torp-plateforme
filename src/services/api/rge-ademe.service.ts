@@ -1,3 +1,5 @@
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
+
 /**
  * Service API RGE ADEME
  *
@@ -140,7 +142,7 @@ class RGEAdemeService {
     }
 
     try {
-      console.log('[RGE ADEME] Recherche qualifications pour SIRET:', cleanSiret);
+      log('[RGE ADEME] Recherche qualifications pour SIRET:', cleanSiret);
 
       // Requête API - récupérer TOUTES les qualifications (actives et expirées)
       const params = new URLSearchParams({
@@ -182,7 +184,7 @@ class RGEAdemeService {
 
       const data = await response.json();
 
-      console.log('[RGE ADEME] Résultats:', data.results?.length || 0, 'qualifications');
+      log('[RGE ADEME] Résultats:', data.results?.length || 0, 'qualifications');
 
       // Pas de résultat = entreprise non RGE
       if (!data.results || data.results.length === 0) {
@@ -217,10 +219,10 @@ class RGEAdemeService {
       // Mapper les résultats
       const entreprise = this.mapToEntreprise(data.results, cleanSiret);
 
-      console.log('[RGE ADEME] Entreprise:', entreprise.nomEntreprise);
-      console.log('[RGE ADEME] Est RGE:', entreprise.estRGE);
-      console.log('[RGE ADEME] Qualifications actives:', entreprise.nombreQualificationsActives);
-      console.log('[RGE ADEME] Score RGE:', entreprise.scoreRGE);
+      log('[RGE ADEME] Entreprise:', entreprise.nomEntreprise);
+      log('[RGE ADEME] Est RGE:', entreprise.estRGE);
+      log('[RGE ADEME] Qualifications actives:', entreprise.nombreQualificationsActives);
+      log('[RGE ADEME] Score RGE:', entreprise.scoreRGE);
 
       return { success: true, data: entreprise };
 

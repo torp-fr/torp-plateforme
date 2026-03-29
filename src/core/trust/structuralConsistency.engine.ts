@@ -6,6 +6,7 @@
  */
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Structural flag - detected imbalance between two pillars
@@ -313,7 +314,7 @@ export async function runStructuralConsistencyEngine(
   const startTime = new Date().toISOString();
 
   try {
-    console.log('[StructuralConsistencyEngine] Starting structural analysis');
+    log('[StructuralConsistencyEngine] Starting structural analysis');
 
     // Extract scores from all pillars
     const complianceScore = getComplianceScore(executionContext);
@@ -357,7 +358,7 @@ export async function runStructuralConsistencyEngine(
       },
     };
 
-    console.log('[StructuralConsistencyEngine] Analysis complete', {
+    log('[StructuralConsistencyEngine] Analysis complete', {
       imbalanceDetected,
       consistencyScore,
       flagCount: Object.values(structuralFlags).filter((f) => f).length,

@@ -5,6 +5,7 @@
 
 import { supabase } from '@/lib/supabase';
 import type { DocumentUploadRequest, KBDocument, ProcessedDocument } from './types';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 export class DocumentUploadService {
   private readonly STORAGE_BUCKET = 'knowledge-base';
@@ -49,7 +50,7 @@ export class DocumentUploadService {
 
       if (dbError) throw dbError;
 
-      console.log(`✅ Document uploaded: ${docData.id}`);
+      log(`✅ Document uploaded: ${docData.id}`);
 
       return this.mapToKBDocument(docData);
     } catch (error) {
@@ -115,7 +116,7 @@ export class DocumentUploadService {
         .eq('id', docId);
 
       if (error) throw error;
-      console.log(`✅ Document status updated: ${docId} → ${status}`);
+      log(`✅ Document status updated: ${docId} → ${status}`);
     } catch (error) {
       console.error('❌ Update status error:', error);
       throw error;
@@ -142,7 +143,7 @@ export class DocumentUploadService {
         .delete()
         .eq('id', docId);
 
-      console.log(`✅ Document deleted: ${docId}`);
+      log(`✅ Document deleted: ${docId}`);
     } catch (error) {
       console.error('❌ Delete error:', error);
       throw error;

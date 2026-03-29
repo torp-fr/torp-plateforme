@@ -1,155 +1,218 @@
 /**
- * Admin Settings Page - Platform configuration
- * Phase 32.2: Production-ready settings management
+ * Admin Settings Page — Phase 3B Jalon 3
+ * Fully connected to GET/PUT /api/v1/admin/settings (JWT)
  */
 
-import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
-import { Settings, Bell, Lock, Globe } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Globe, Bell, Lock, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { adminSettingsService } from '@/services/api/adminSettings.service';
+
+type Settings = Record<string, unknown>;
 
 export function AdminSettingsPage() {
+  const navigate = useNavigate();
   const { toast } = useToast();
-  const [isSaving, setIsSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [settings, setSettings] = useState<Settings | null>(null);
 
-  const handleSaveSettings = async () => {
-    setIsSaving(true);
+  useEffect(() => {
+    adminSettingsService
+      .getSettings()
+      .then(setSettings)
+      .catch((err: unknown) => {
+        toast({
+          title: 'Erreur',
+          description: err instanceof Error ? err.message : 'Impossible de charger les paramètres',
+          variant: 'destructive',
+        });
+      })
+      .finally(() => setLoading(false));
+  }, [toast]);
+
+  const set = (key: string, value: unknown) =>
+    setSettings(prev => (prev ? { ...prev, [key]: value } : prev));
+
+  const handleSave = async () => {
+    if (!settings) return;
+    setSaving(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const updated = await adminSettingsService.updateSettings(settings);
+      setSettings(updated);
+      toast({ title: 'Paramètres enregistrés' });
+    } catch (err) {
       toast({
-        title: 'Settings saved',
-        description: 'Your configuration changes have been saved.',
-      });
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to save settings',
+        title: 'Erreur',
+        description: err instanceof Error ? err.message : 'Échec de la sauvegarde',
         variant: 'destructive',
       });
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!settings) {
+    return (
+      <div className="space-y-6 max-w-2xl">
+        <h1 className="text-3xl font-bold text-foreground">Paramètres d'Administration</h1>
+        <p className="text-destructive">Impossible de charger les paramètres.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Admin Settings</h1>
-        <p className="text-muted-foreground">Configure platform settings and preferences</p>
+        <h1 className="text-3xl font-bold text-foreground">Paramètres d'Administration</h1>
+        <p className="text-muted-foreground mt-1">Configuration globale de la plateforme</p>
       </div>
 
+      {/* ── Général ── */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Globe className="h-5 w-5" />
-            General Settings
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Globe className="h-4 w-4" />
+            Général
           </CardTitle>
-          <CardDescription>Platform-wide configuration</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="platform-name">Platform Name</Label>
-            <Input
-              id="platform-name"
-              placeholder="TORP"
-              defaultValue="TORP"
+        <CardContent className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Nom de la plateforme</label>
+            <input
+              type="text"
+              value={String(settings.platform_name ?? '')}
+              onChange={e => set('platform_name', e.target.value)}
+              className="w-full px-3 py-2 border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="platform-url">Platform URL</Label>
-            <Input
-              id="platform-url"
-              placeholder="https://torp.example.com"
-              defaultValue="https://torp.example.com"
+
+          <div>
+            <label className="block text-sm font-medium mb-1">URL de la plateforme</label>
+            <input
+              type="url"
+              value={String(settings.platform_url ?? '')}
+              onChange={e => set('platform_url', e.target.value)}
+              className="w-full px-3 py-2 border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
-          <div className="space-y-2">
-            <Label>Maintenance Mode</Label>
-            <div className="flex items-center space-x-2">
-              <Switch />
-              <span className="text-sm text-muted-foreground">Enable maintenance mode</span>
+
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={Boolean(settings.maintenance_mode)}
+                onChange={e => set('maintenance_mode', e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <span className="text-sm font-medium">Mode maintenance</span>
+            </label>
+          </div>
+
+          {Boolean(settings.maintenance_mode) && (
+            <div>
+              <label className="block text-sm font-medium mb-1">Message de maintenance</label>
+              <textarea
+                value={String(settings.maintenance_message ?? '')}
+                onChange={e => set('maintenance_message', e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 
+      {/* ── Notifications ── */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Bell className="h-5 w-5" />
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Bell className="h-4 w-4" />
             Notifications
           </CardTitle>
-          <CardDescription>Configure notification preferences</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Email Notifications</Label>
-              <Switch defaultChecked />
-            </div>
-            <p className="text-xs text-muted-foreground">Receive email alerts for important events</p>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Daily Summary</Label>
-              <Switch defaultChecked />
-            </div>
-            <p className="text-xs text-muted-foreground">Receive daily platform summary</p>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Security Alerts</Label>
-              <Switch defaultChecked />
-            </div>
-            <p className="text-xs text-muted-foreground">Receive critical security alerts</p>
-          </div>
+        <CardContent className="space-y-3">
+          {[
+            { key: 'email_notifications_enabled', label: 'Notifications email' },
+            { key: 'daily_summary_enabled',        label: 'Résumé quotidien' },
+            { key: 'security_alerts_enabled',      label: 'Alertes de sécurité' },
+          ].map(({ key, label }) => (
+            <label key={key} className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={Boolean(settings[key])}
+                onChange={e => set(key, e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <span className="text-sm">{label}</span>
+            </label>
+          ))}
         </CardContent>
       </Card>
 
+      {/* ── Sécurité ── */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lock className="h-5 w-5" />
-            Security
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Lock className="h-4 w-4" />
+            Sécurité
           </CardTitle>
-          <CardDescription>Security and data protection</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Two-Factor Authentication</Label>
-              <Switch defaultChecked />
-            </div>
-            <p className="text-xs text-muted-foreground">Require 2FA for admin access</p>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>IP Whitelist</Label>
-              <Switch />
-            </div>
-            <p className="text-xs text-muted-foreground">Restrict admin access to whitelisted IPs</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="session-timeout">Session Timeout (minutes)</Label>
-            <Input
-              id="session-timeout"
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Timeout de session (minutes)
+            </label>
+            <input
               type="number"
-              placeholder="60"
-              defaultValue="60"
+              min={1}
+              max={1440}
+              value={Number(settings.session_timeout_minutes ?? 60)}
+              onChange={e => set('session_timeout_minutes', parseInt(e.target.value, 10))}
+              className="w-32 px-3 py-2 border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={Boolean(settings.require_2fa_for_admins)}
+              onChange={e => set('require_2fa_for_admins', e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300"
+            />
+            <span className="text-sm font-medium">Exiger 2FA pour les admins</span>
+          </label>
         </CardContent>
       </Card>
 
-      <div className="flex gap-3">
-        <Button onClick={handleSaveSettings} disabled={isSaving}>
-          {isSaving ? 'Saving...' : 'Save Settings'}
-        </Button>
-        <Button variant="outline">Reset to Defaults</Button>
+      {/* ── Actions ── */}
+      <div className="flex gap-3 justify-end">
+        <button
+          type="button"
+          onClick={() => navigate('/admin')}
+          className="px-4 py-2 border rounded-md text-sm hover:bg-muted transition-colors"
+        >
+          Annuler
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center gap-2"
+        >
+          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+          {saving ? 'Enregistrement…' : 'Enregistrer'}
+        </button>
       </div>
     </div>
   );

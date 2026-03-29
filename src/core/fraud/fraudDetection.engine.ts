@@ -6,6 +6,7 @@
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 import { TORP_KNOWLEDGE_CORE } from '@/core/knowledge/knowledgeRegistry';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Risk indicator flags
@@ -49,12 +50,12 @@ function checkPricingFraud(context: EngineExecutionContext): { score: number; pa
       // Severe underpricing detected
       fraudScore += 30;
       patterns.push('fraud_001_severe_underpricing');
-      console.log('[FraudDetection] Severe underpricing detected (+30)');
+      log('[FraudDetection] Severe underpricing detected (+30)');
     } else if (pricingPenalty >= 5) {
       // Moderate underpricing
       fraudScore += 15;
       patterns.push('fraud_pricing_moderate');
-      console.log('[FraudDetection] Moderate underpricing detected (+15)');
+      log('[FraudDetection] Moderate underpricing detected (+15)');
     }
 
     // Check for extreme overpricing
@@ -67,7 +68,7 @@ function checkPricingFraud(context: EngineExecutionContext): { score: number; pa
       // Very expensive per-lot average
       fraudScore += 15;
       patterns.push('fraud_extreme_overpricing');
-      console.log('[FraudDetection] Extreme overpricing detected (+15)');
+      log('[FraudDetection] Extreme overpricing detected (+15)');
     }
 
     // Check for repeated pricing anomalies
@@ -81,14 +82,14 @@ function checkPricingFraud(context: EngineExecutionContext): { score: number; pa
         // Pricing anomaly on critical lots
         fraudScore += 20;
         patterns.push('fraud_critical_lot_pricing_anomaly');
-        console.log('[FraudDetection] Pricing anomaly on critical lots (+20)');
+        log('[FraudDetection] Pricing anomaly on critical lots (+20)');
       }
     }
 
     return { score: fraudScore, patterns };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.warn(`[FraudDetection] Error in pricing check: ${errorMessage}`);
+    warn(`[FraudDetection] Error in pricing check: ${errorMessage}`);
     return { score: 0, patterns: [] };
   }
 }
@@ -110,17 +111,17 @@ function checkComplianceFraud(context: EngineExecutionContext): { score: number;
       // Multiple critical violations
       fraudScore += 40;
       patterns.push('fraud_high_compliance_violation');
-      console.log('[FraudDetection] High compliance violation detected (+40)');
+      log('[FraudDetection] High compliance violation detected (+40)');
     } else if (normativePenalty >= 10) {
       // Some critical violations
       fraudScore += 25;
       patterns.push('fraud_compliance_violation');
-      console.log('[FraudDetection] Compliance violation detected (+25)');
+      log('[FraudDetection] Compliance violation detected (+25)');
     } else if (normativePenalty >= 5) {
       // Minor violations
       fraudScore += 10;
       patterns.push('fraud_minor_compliance_issue');
-      console.log('[FraudDetection] Minor compliance issue detected (+10)');
+      log('[FraudDetection] Minor compliance issue detected (+10)');
     }
 
     // Check for blocking obligation + high grade mismatch
@@ -134,7 +135,7 @@ function checkComplianceFraud(context: EngineExecutionContext): { score: number;
       // Blocking obligation but high grade = suspicious
       fraudScore += 20;
       patterns.push('fraud_blocking_obligation_mismatch');
-      console.log('[FraudDetection] Blocking obligation + high grade mismatch (+20)');
+      log('[FraudDetection] Blocking obligation + high grade mismatch (+20)');
     }
 
     // Check for critical incoherences
@@ -145,18 +146,18 @@ function checkComplianceFraud(context: EngineExecutionContext): { score: number;
       // Very low consistency score
       fraudScore += 30;
       patterns.push('fraud_critical_incoherence');
-      console.log('[FraudDetection] Critical incoherence detected (+30)');
+      log('[FraudDetection] Critical incoherence detected (+30)');
     } else if (consistencyScore < 60 && flagsDetected.length >= 3) {
       // Low consistency with multiple flags
       fraudScore += 20;
       patterns.push('fraud_multiple_incoherences');
-      console.log('[FraudDetection] Multiple incoherences detected (+20)');
+      log('[FraudDetection] Multiple incoherences detected (+20)');
     }
 
     return { score: fraudScore, patterns };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.warn(`[FraudDetection] Error in compliance check: ${errorMessage}`);
+    warn(`[FraudDetection] Error in compliance check: ${errorMessage}`);
     return { score: 0, patterns: [] };
   }
 }
@@ -177,15 +178,15 @@ function checkEnterpriseRisk(context: EngineExecutionContext): { score: number; 
     if (enterpriseScore < 30 && ['A', 'B'].includes(finalGrade)) {
       fraudScore += 35;
       patterns.push('fraud_weak_enterprise_high_grade');
-      console.log('[FraudDetection] Weak enterprise + high grade mismatch (+35)');
+      log('[FraudDetection] Weak enterprise + high grade mismatch (+35)');
     } else if (enterpriseScore < 30 && finalGrade === 'C') {
       fraudScore += 20;
       patterns.push('fraud_weak_enterprise');
-      console.log('[FraudDetection] Weak enterprise (+20)');
+      log('[FraudDetection] Weak enterprise (+20)');
     } else if (enterpriseScore < 50 && ['A', 'B'].includes(finalGrade)) {
       fraudScore += 15;
       patterns.push('fraud_medium_enterprise_high_grade');
-      console.log('[FraudDetection] Medium enterprise + high grade (+15)');
+      log('[FraudDetection] Medium enterprise + high grade (+15)');
     }
 
     // Check sector mismatch
@@ -202,7 +203,7 @@ function checkEnterpriseRisk(context: EngineExecutionContext): { score: number; 
       // Weak enterprise on critical work in complex sector
       fraudScore += 20;
       patterns.push('fraud_enterprise_sector_mismatch');
-      console.log('[FraudDetection] Enterprise-sector mismatch detected (+20)');
+      log('[FraudDetection] Enterprise-sector mismatch detected (+20)');
     }
 
     // Check for new enterprise (< 2 years) with no insurance
@@ -213,13 +214,13 @@ function checkEnterpriseRisk(context: EngineExecutionContext): { score: number; 
       // New, uninsured enterprise on critical work
       fraudScore += 25;
       patterns.push('fraud_new_uninsured_critical_work');
-      console.log('[FraudDetection] New uninsured enterprise on critical work (+25)');
+      log('[FraudDetection] New uninsured enterprise on critical work (+25)');
     }
 
     return { score: fraudScore, patterns };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.warn(`[FraudDetection] Error in enterprise check: ${errorMessage}`);
+    warn(`[FraudDetection] Error in enterprise check: ${errorMessage}`);
     return { score: 0, patterns: [] };
   }
 }
@@ -241,22 +242,22 @@ function checkStructuralIncoherence(context: EngineExecutionContext): { score: n
     if (consistencyScore < 40) {
       fraudScore += 35;
       patterns.push('fraud_critical_structural_issue');
-      console.log('[FraudDetection] Critical structural issue (+35)');
+      log('[FraudDetection] Critical structural issue (+35)');
     } else if (consistencyScore < 60) {
       fraudScore += 20;
       patterns.push('fraud_structural_incoherence');
-      console.log('[FraudDetection] Structural incoherence (+20)');
+      log('[FraudDetection] Structural incoherence (+20)');
     }
 
     // Multiple flag detection
     if (flagsDetected.length >= 4) {
       fraudScore += 25;
       patterns.push('fraud_multiple_red_flags');
-      console.log('[FraudDetection] Multiple red flags detected (+25)');
+      log('[FraudDetection] Multiple red flags detected (+25)');
     } else if (flagsDetected.length >= 2 && imbalanceDetected) {
       fraudScore += 15;
       patterns.push('fraud_multiple_imbalances');
-      console.log('[FraudDetection] Multiple imbalances detected (+15)');
+      log('[FraudDetection] Multiple imbalances detected (+15)');
     }
 
     // Check for specific high-risk patterns
@@ -268,13 +269,13 @@ function checkStructuralIncoherence(context: EngineExecutionContext): { score: n
       // Multiple correlated red flags = high fraud risk
       fraudScore += 20;
       patterns.push('fraud_correlated_red_flags');
-      console.log('[FraudDetection] Correlated red flags detected (+20)');
+      log('[FraudDetection] Correlated red flags detected (+20)');
     }
 
     return { score: fraudScore, patterns };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.warn(`[FraudDetection] Error in structural check: ${errorMessage}`);
+    warn(`[FraudDetection] Error in structural check: ${errorMessage}`);
     return { score: 0, patterns: [] };
   }
 }
@@ -296,7 +297,7 @@ export async function runFraudDetectionEngine(
   executionContext: EngineExecutionContext
 ): Promise<FraudDetectionResult> {
   try {
-    console.log('[FraudDetection] Starting fraud detection analysis');
+    log('[FraudDetection] Starting fraud detection analysis');
 
     // Initialize tracking
     let totalFraudScore = 0;
@@ -352,7 +353,7 @@ export async function runFraudDetectionEngine(
     // Enrich execution context
     (executionContext as any).fraudDetection = result;
 
-    console.log('[FraudDetection] Fraud detection complete', {
+    log('[FraudDetection] Fraud detection complete', {
       fraudScore: totalFraudScore,
       fraudLevel,
       patternCount: allPatterns.length,

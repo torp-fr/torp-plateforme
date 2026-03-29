@@ -6,6 +6,7 @@
 
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
 import { TORP_KNOWLEDGE_CORE } from '@/core/knowledge/knowledgeRegistry';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Doctrine insights
@@ -39,7 +40,7 @@ export async function runDoctrineActivationEngine(
   executionContext: EngineExecutionContext
 ): Promise<DoctrineInsights> {
   try {
-    console.log('[DoctrineActivation] Starting doctrine activation');
+    log('[DoctrineActivation] Starting doctrine activation');
 
     const insights: DoctrineInsights = {
       matchedNorms: [],
@@ -85,7 +86,7 @@ export async function runDoctrineActivationEngine(
     // Step 5: Enrich context
     (executionContext as any).doctrineInsights = insights;
 
-    console.log('[DoctrineActivation] Doctrine activation complete', {
+    log('[DoctrineActivation] Doctrine activation complete', {
       normsMatched: matchedNorms.length,
       pricingRefsFound: pricingRefs.length,
       jurisprudenceFound: jurisprudence.length,
@@ -129,10 +130,10 @@ function matchNormativeRules(lots: any[]): DoctrineInsights['matchedNorms'] {
       }
     }
 
-    console.log('[DoctrineActivation] Matched', matches.length, 'normative rules');
+    log('[DoctrineActivation] Matched', matches.length, 'normative rules');
     return matches;
   } catch (error) {
-    console.warn('[DoctrineActivation] Error matching norms:', error);
+    warn('[DoctrineActivation] Error matching norms:', error);
     return [];
   }
 }
@@ -162,10 +163,10 @@ function findPricingReferences(
       }
     }
 
-    console.log('[DoctrineActivation] Found', references.length, 'pricing references');
+    log('[DoctrineActivation] Found', references.length, 'pricing references');
     return references;
   } catch (error) {
-    console.warn('[DoctrineActivation] Error finding pricing refs:', error);
+    warn('[DoctrineActivation] Error finding pricing refs:', error);
     return [];
   }
 }
@@ -199,10 +200,10 @@ function findRelevantJurisprudence(lots: any[]): DoctrineInsights['jurisprudence
       }
     }
 
-    console.log('[DoctrineActivation] Found', references.length, 'jurisprudence references');
+    log('[DoctrineActivation] Found', references.length, 'jurisprudence references');
     return references;
   } catch (error) {
-    console.warn('[DoctrineActivation] Error finding jurisprudence:', error);
+    warn('[DoctrineActivation] Error finding jurisprudence:', error);
     return [];
   }
 }
@@ -229,7 +230,7 @@ function calculateConfidenceScore(normsCount: number, pricingCount: number, juri
 
     return Math.min(100, score);
   } catch (error) {
-    console.warn('[DoctrineActivation] Error calculating confidence:', error);
+    warn('[DoctrineActivation] Error calculating confidence:', error);
     return 0;
   }
 }

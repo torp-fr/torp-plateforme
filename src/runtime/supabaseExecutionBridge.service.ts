@@ -4,8 +4,9 @@
  * Loads quote data → builds context → executes all engines → persists results
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import { EngineExecutionContext } from '@/core/platform/engineExecutionContext';
+import { log, warn, error, time, timeEnd } from '@/lib/logger';
 
 /**
  * Execution bridge result
@@ -46,28 +47,14 @@ interface SupabaseDevis {
   updated_at: string;
 }
 
-/**
- * Initialize Supabase client
- */
-function getSupabaseClient() {
-  const supabaseUrl = process.env.SUPABASE_URL || '';
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase configuration (URL or SERVICE_ROLE_KEY)');
-  }
-
-  return createClient(supabaseUrl, supabaseKey);
-}
 
 /**
  * Load devis from Supabase
  */
 async function loadDevisFromSupabase(devisId: string): Promise<SupabaseDevis> {
   try {
-    console.log(`[Bridge] Loading devis: ${devisId}`);
+    log(`[Bridge] Loading devis: ${devisId}`);
 
-    const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from('devis')
       .select('*')
@@ -82,7 +69,7 @@ async function loadDevisFromSupabase(devisId: string): Promise<SupabaseDevis> {
       throw new Error(`Devis not found: ${devisId}`);
     }
 
-    console.log(`[Bridge] Devis loaded successfully`, {
+    log(`[Bridge] Devis loaded successfully`, {
       id: data.id,
       amount: data.montant_total,
       region: data.chantier_region_nom,
@@ -101,7 +88,7 @@ async function loadDevisFromSupabase(devisId: string): Promise<SupabaseDevis> {
  */
 function buildExecutionContextFromDevis(devis: SupabaseDevis): EngineExecutionContext {
   try {
-    console.log(`[Bridge] Building ExecutionContext`);
+    log(`[Bridge] Building ExecutionContext`);
 
     const context: EngineExecutionContext = {
       projectId: devis.project_id,
@@ -168,7 +155,7 @@ function buildExecutionContextFromDevis(devis: SupabaseDevis): EngineExecutionCo
       },
     };
 
-    console.log(`[Bridge] ExecutionContext built successfully`);
+    log(`[Bridge] ExecutionContext built successfully`);
     return context;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -183,7 +170,7 @@ function buildExecutionContextFromDevis(devis: SupabaseDevis): EngineExecutionCo
  */
 async function executeFullTorpPipeline(context: EngineExecutionContext): Promise<EngineExecutionContext> {
   try {
-    console.log(`[Bridge] Executing full TORP pipeline`);
+    log(`[Bridge] Executing full TORP pipeline`);
 
     // Import engines (lazy loading to ensure they exist)
     const { ContextEngine } = await import('@/core/engines/contextEngine');
@@ -217,17 +204,17 @@ async function executeFullTorpPipeline(context: EngineExecutionContext): Promise
 
     for (const { name, engine } of engines) {
       try {
-        console.log(`[Bridge] Executing ${name}`);
+        log(`[Bridge] Executing ${name}`);
         executionContext = await engine.execute(executionContext);
-        console.log(`[Bridge] ${name} completed`);
+        log(`[Bridge] ${name} completed`);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.warn(`[Bridge] ${name} warning:`, errorMessage);
+        warn(`[Bridge] ${name} warning:`, errorMessage);
         // Continue execution even if an engine fails (graceful degradation)
       }
     }
 
-    console.log(`[Bridge] Full pipeline executed successfully`);
+    log(`[Bridge] Full pipeline executed successfully`);
     return executionContext;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -279,12 +266,11 @@ async function persistResultsToSupabase(
   let snapshotId: string | undefined;
 
   try {
-    console.log(`[Bridge] Starting persistence to Supabase`);
-    const supabase = getSupabaseClient();
+    log(`[Bridge] Starting persistence to Supabase`);
 
     // Step 1: Update devis table
     try {
-      console.log(`[Bridge] Updating devis table`);
+      log(`[Bridge] Updating devis table`);
 
       const scoringV2 = {
         ...(context as any)?.scoring_v2,
@@ -317,7 +303,7 @@ async function persistResultsToSupabase(
         console.error(`[Bridge] ${errMsg}`);
         errors.push(errMsg);
       } else {
-        console.log(`[Bridge] Devis table updated successfully`);
+        log(`[Bridge] Devis table updated successfully`);
       }
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -327,7 +313,7 @@ async function persistResultsToSupabase(
 
     // Step 2: Insert into analysis_results
     try {
-      console.log(`[Bridge] Inserting analysis results`);
+      log(`[Bridge] Inserting analysis results`);
 
       const analysisResult = {
         devis_id: devisId,
@@ -358,7 +344,7 @@ async function persistResultsToSupabase(
         errors.push(errMsg);
       } else {
         analysisResultId = (insertData as any)?.id;
-        console.log(`[Bridge] Analysis results inserted: ${analysisResultId}`);
+        log(`[Bridge] Analysis results inserted: ${analysisResultId}`);
       }
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -368,7 +354,7 @@ async function persistResultsToSupabase(
 
     // Step 3: Insert into score_snapshots
     try {
-      console.log(`[Bridge] Creating score snapshot`);
+      log(`[Bridge] Creating score snapshot`);
 
       const snapshot = {
         devis_id: devisId,
@@ -397,7 +383,7 @@ async function persistResultsToSupabase(
         errors.push(errMsg);
       } else {
         snapshotId = (snapshotData as any)?.id;
-        console.log(`[Bridge] Snapshot created: ${snapshotId}`);
+        log(`[Bridge] Snapshot created: ${snapshotId}`);
       }
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -408,7 +394,7 @@ async function persistResultsToSupabase(
     const success = errors.length === 0;
     const status = errors.length === 0 ? 'success' : errors.length < 2 ? 'partial' : 'failed';
 
-    console.log(`[Bridge] Persistence complete`, {
+    log(`[Bridge] Persistence complete`, {
       success,
       status,
       errors: errors.length,
@@ -438,9 +424,9 @@ export async function executeFullTorpAnalysis(devisId: string): Promise<Executio
   const errors: string[] = [];
 
   try {
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`[Bridge] Starting TORP Analysis for devis: ${devisId}`);
-    console.log(`${'='.repeat(60)}\n`);
+    log(`\n${'='.repeat(60)}`);
+    log(`[Bridge] Starting TORP Analysis for devis: ${devisId}`);
+    log(`${'='.repeat(60)}\n`);
 
     // Step 1: Load devis
     let devis: SupabaseDevis;
@@ -491,11 +477,11 @@ export async function executeFullTorpAnalysis(devisId: string): Promise<Executio
     // Step 3: Execute full pipeline
     try {
       executionContext = await executeFullTorpPipeline(executionContext);
-      console.log(`[Bridge] Pipeline execution successful`);
+      log(`[Bridge] Pipeline execution successful`);
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : 'Unknown error';
       errors.push(`Pipeline execution failed: ${errMsg}`);
-      console.warn(`[Bridge] Pipeline warning: ${errMsg}`);
+      warn(`[Bridge] Pipeline warning: ${errMsg}`);
       // Continue with what we have - graceful degradation
     }
 
@@ -503,7 +489,7 @@ export async function executeFullTorpAnalysis(devisId: string): Promise<Executio
     const finalGrade = getOfficialGrade(executionContext);
     const finalScore = getOfficialScore(executionContext);
 
-    console.log(`[Bridge] Grade computed`, {
+    log(`[Bridge] Grade computed`, {
       grade: finalGrade,
       score: finalScore,
     });
@@ -539,13 +525,13 @@ export async function executeFullTorpAnalysis(devisId: string): Promise<Executio
       },
     };
 
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`[Bridge] Analysis Complete`);
-    console.log(`Status: ${success ? '✅ SUCCESS' : '⚠️ PARTIAL'}`);
-    console.log(`Grade: ${finalGrade} | Score: ${finalScore}`);
-    console.log(`Duration: ${durationMs}ms`);
-    console.log(`Snapshot ID: ${persistenceResult.snapshotId || 'N/A'}`);
-    console.log(`${'='.repeat(60)}\n`);
+    log(`\n${'='.repeat(60)}`);
+    log(`[Bridge] Analysis Complete`);
+    log(`Status: ${success ? '✅ SUCCESS' : '⚠️ PARTIAL'}`);
+    log(`Grade: ${finalGrade} | Score: ${finalScore}`);
+    log(`Duration: ${durationMs}ms`);
+    log(`Snapshot ID: ${persistenceResult.snapshotId || 'N/A'}`);
+    log(`${'='.repeat(60)}\n`);
 
     return result;
   } catch (error) {
