@@ -294,9 +294,11 @@ export async function vectorizeEnrichedData(
   // TODO: Intégrer OpenAI Embeddings ou autre service
   // Pour maintenant, retourner undefined
   try {
-    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    // ⚠️ Vectorization must go through Edge Function (generate-embedding), not frontend key.
+    // API keys are server-side only — never read OPENAI_API_KEY from VITE_ variables.
+    const apiKey = undefined;
     if (!apiKey) {
-      warn('⚠️ OpenAI API key not configured for vectorization');
+      warn('⚠️ Vectorization not available from frontend — use Edge Function generate-embedding');
       return undefined;
     }
 

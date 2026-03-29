@@ -11,7 +11,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
 import {
-  AlertOctagon, GraduationCap, Brain, RefreshCw, CheckCircle2, RotateCcw,
+  AlertOctagon, GraduationCap, Brain, RefreshCw, CheckCircle2, RotateCcw, Cpu,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -50,6 +50,28 @@ interface LearningData {
   }>;
 }
 
+interface PipelineRow {
+  pipeline_name: string;
+  total: number;
+  completed: number;
+  failed: number;
+  running: number;
+  success_rate: number;
+  avg_execution_ms: number | null;
+  last_run: string | null;
+  last_error: string | null;
+}
+
+interface ExecutionStats {
+  period_hours: number;
+  total: number;
+  completed: number;
+  failed: number;
+  success_rate: number;
+  avg_execution_ms: number | null;
+  pipelines: PipelineRow[];
+}
+
 // ── Grade color map ───────────────────────────────────────────────────────────
 
 const GRADE_COLORS: Record<string, string> = {
@@ -63,9 +85,10 @@ const GRADE_COLORS: Record<string, string> = {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function PipelineHealthPage() {
-  const [dlq, setDlq]       = useState<DLQItem[]>([]);
-  const [cert, setCert]     = useState<CertificationData | null>(null);
+  const [dlq, setDlq]           = useState<DLQItem[]>([]);
+  const [cert, setCert]         = useState<CertificationData | null>(null);
   const [learning, setLearning] = useState<LearningData | null>(null);
+  const [execStats, setExecStats] = useState<ExecutionStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const { toast } = useToast();
@@ -77,10 +100,11 @@ export function PipelineHealthPage() {
 
       const headers = { Authorization: `Bearer ${session.access_token}` };
 
-      const [dlqRes, certRes, learningRes] = await Promise.allSettled([
+      const [dlqRes, certRes, learningRes, execRes] = await Promise.allSettled([
         fetch('/api/v1/admin/dlq', { headers }),
         fetch('/api/v1/admin/pipeline/certification', { headers }),
         fetch('/api/v1/admin/pipeline/learning', { headers }),
+        fetch('/api/v1/admin/pipeline/executions', { headers }),
       ]);
 
       if (dlqRes.status === 'fulfilled' && dlqRes.value.ok) {
@@ -92,6 +116,9 @@ export function PipelineHealthPage() {
       }
       if (learningRes.status === 'fulfilled' && learningRes.value.ok) {
         setLearning(await learningRes.value.json());
+      }
+      if (execRes.status === 'fulfilled' && execRes.value.ok) {
+        setExecStats(await execRes.value.json());
       }
 
       setLastRefresh(new Date());
@@ -292,6 +319,73 @@ export function PipelineHealthPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Pipeline Execution Stats */}
+      {execStats && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Cpu className="h-5 w-5 text-blue-500" />
+              Exécutions Pipeline — 24h
+              <span className="ml-auto text-sm font-normal text-muted-foreground flex gap-4">
+                <span>{execStats.total} runs</span>
+                <span className={execStats.success_rate >= 90 ? 'text-green-600 font-semibold' : execStats.success_rate >= 70 ? 'text-yellow-600 font-semibold' : 'text-red-600 font-semibold'}>
+                  {execStats.success_rate}% succès
+                </span>
+                {execStats.avg_execution_ms !== null && (
+                  <span>{execStats.avg_execution_ms < 1000 ? `${execStats.avg_execution_ms}ms` : `${(execStats.avg_execution_ms / 1000).toFixed(1)}s`} moy.</span>
+                )}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {execStats.pipelines.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">
+                Aucune exécution dans les dernières 24h
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-muted-foreground">
+                      <th className="text-left py-2 font-medium">Pipeline</th>
+                      <th className="text-right py-2 font-medium">Total</th>
+                      <th className="text-right py-2 font-medium">Succès</th>
+                      <th className="text-right py-2 font-medium">Échecs</th>
+                      <th className="text-right py-2 font-medium">Taux</th>
+                      <th className="text-right py-2 font-medium">Temps moy.</th>
+                      <th className="text-left py-2 font-medium">Dernier run</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {execStats.pipelines.map(p => (
+                      <tr key={p.pipeline_name} className="border-b last:border-0 hover:bg-muted/30">
+                        <td className="py-2.5 font-medium font-mono text-xs">{p.pipeline_name}</td>
+                        <td className="py-2.5 text-right">{p.total}</td>
+                        <td className="py-2.5 text-right text-green-600">{p.completed}</td>
+                        <td className="py-2.5 text-right text-red-500">{p.failed}</td>
+                        <td className="py-2.5 text-right">
+                          <span className={p.success_rate >= 90 ? 'text-green-600 font-semibold' : p.success_rate >= 70 ? 'text-yellow-600' : 'text-red-600 font-semibold'}>
+                            {p.success_rate}%
+                          </span>
+                        </td>
+                        <td className="py-2.5 text-right font-mono text-xs text-muted-foreground">
+                          {p.avg_execution_ms !== null
+                            ? p.avg_execution_ms < 1000 ? `${p.avg_execution_ms}ms` : `${(p.avg_execution_ms / 1000).toFixed(1)}s`
+                            : '—'}
+                        </td>
+                        <td className="py-2.5 text-muted-foreground text-xs">
+                          {p.last_run ? new Date(p.last_run).toLocaleTimeString('fr-FR') : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Company Learning Table */}
       <Card>

@@ -32,10 +32,12 @@ import Dashboard from "./pages/Dashboard";
 import Settings from "./pages/Settings";
 import ProjetPage from "./pages/projet/ProjetPage";
 import ProjetsListePage from "./pages/projet/ProjetsListePage";
+import ProjetFormPage from "./pages/projet/ProjetFormPage";
 import Profile from "./pages/Profile";
 import Analyze from "./pages/Analyze";
 import Results from "./pages/Results";
 import JobStatusPage from "./pages/analysis/JobStatusPage";
+import CostDashboardPage from "./pages/CostDashboardPage";
 
 // Admin Pages
 import { DashboardPage } from "./pages/admin/DashboardPage";
@@ -105,11 +107,13 @@ const AppContent = () => {
             <Route path="/analyze" element={<Analyze />} />
             <Route path="/analysis/job/:jobId" element={<JobStatusPage />} />
             <Route path="/projects" element={<ProjetsListePage />} />
+            <Route path="/projects/new" element={<ProjetFormPage />} />
             <Route path="/project/:projectId" element={<ProjetPage />} />
             <Route path="/company" element={<Settings />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/results" element={<Results />} />
+            <Route path="/costs" element={<CostDashboardPage />} />
           </Route>
 
           {/* ============================================ */}

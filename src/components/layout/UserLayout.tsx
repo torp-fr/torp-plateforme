@@ -18,6 +18,7 @@ import {
   ChevronDown,
   User,
   Sparkles,
+  DollarSign,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
@@ -88,6 +89,12 @@ const USER_NAV_SECTIONS: NavSection[] = [
     id: 'account',
     title: 'Account',
     items: [
+      {
+        id: 'costs',
+        href: '/costs',
+        icon: DollarSign,
+        label: 'My Costs',
+      },
       {
         id: 'company',
         href: '/company',

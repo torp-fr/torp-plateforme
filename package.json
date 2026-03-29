@@ -27,6 +27,7 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:codegen": "playwright codegen",
+    "test:apis": "bash scripts/test-api-connectivity.sh all",
     "health:check": "tsx scripts/devHealthCheck.ts",
     "fix:pipeline": "tsx scripts/autoFixPipeline.ts",
     "reindex:embeddings": "tsx scripts/reindexEmbeddings.ts",

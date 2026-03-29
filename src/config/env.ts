@@ -153,13 +153,12 @@ export const env: EnvConfig = {
   },
 
   ai: {
-    openai: getEnv('VITE_OPENAI_API_KEY') ? {
-      apiKey: getEnv('VITE_OPENAI_API_KEY'),
-    } : undefined,
-    anthropic: getEnv('VITE_ANTHROPIC_API_KEY') ? {
-      apiKey: getEnv('VITE_ANTHROPIC_API_KEY'),
-    } : undefined,
-    primaryProvider: (getEnv('VITE_AI_PRIMARY_PROVIDER', 'openai') as 'openai' | 'claude'),
+    // ⚠️ API keys are server-side only (Edge Functions / Express).
+    // NEVER read OPENAI_API_KEY or ANTHROPIC_API_KEY from VITE_ variables.
+    // All LLM calls go through: /api/v1/* → Edge Function (llm-completion / generate-embedding).
+    openai: undefined,
+    anthropic: undefined,
+    primaryProvider: (getEnv('VITE_AI_PRIMARY_PROVIDER', 'claude') as 'openai' | 'claude'),
     fallbackEnabled: getBoolEnv('VITE_AI_FALLBACK_ENABLED', true),
   },
 
