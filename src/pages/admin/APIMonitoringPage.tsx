@@ -30,13 +30,13 @@ const API_DEFINITIONS = [
   { name: 'INSEE-SIRENE',          category: 'Données Entreprise',   type: 'SIRET Lookup' },
   { name: 'Pappers',               category: 'Données Entreprise',   type: 'Enterprise Data' },
   // Geolocation
-  { name: 'Geoplateforme-Geocoding', category: 'Géolocalisation',   type: 'Geocoding' },
+  { name: 'Geoplateforme',          category: 'Géolocalisation',      type: 'Geocoding' },
   { name: 'BDNB',                  category: 'Géolocalisation',      type: 'Bâtiments' },
   { name: 'API-Carto',             category: 'Géolocalisation',      type: 'Cadastre/PLU' },
   // Enrichment
-  { name: 'Géorisques',            category: 'Enrichissement',       type: 'Risques naturels' },
-  { name: 'RGE-Professionals',     category: 'Enrichissement',       type: 'Certifications' },
-  { name: 'DPE-Logements',         category: 'Enrichissement',       type: 'Performance Énergétique' },
+  { name: 'Georisques',            category: 'Enrichissement',       type: 'Risques naturels' },
+  { name: 'ADEME-RGE',             category: 'Enrichissement',       type: 'Certifications RGE' },
+  { name: 'ADEME-DPE',             category: 'Enrichissement',       type: 'Performance Énergétique' },
 ] as const;
 
 type APIName = typeof API_DEFINITIONS[number]['name'];

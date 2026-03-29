@@ -15,7 +15,11 @@ import engineRoutes from './routes/engine.routes.js';
 import pipelineRoutes from './pipelines.routes.js';
 import healthRoutes from './pipeline-health.routes.js';
 import { APIHealthMonitor } from '../core/monitoring/APIHealthMonitor.js';
-import { registerAIAPIs } from '../core/monitoring/AIAPIsHealthCheck.js';
+import {
+  registerAIAPIs,
+  registerDataAPIs,
+  registerEnrichmentAPIs,
+} from '../core/monitoring/AIAPIsHealthCheck.js';
 
 // ─── Startup validation ───────────────────────────────────────────────────────
 
@@ -77,6 +81,8 @@ app.listen(PORT, () => {
     );
     const aiMonitor = new APIHealthMonitor(supabaseAdmin);
     registerAIAPIs(aiMonitor);
+    registerDataAPIs(aiMonitor);
+    registerEnrichmentAPIs(aiMonitor);
   } else {
     console.warn('[server] AI health monitoring disabled — Supabase credentials not set');
   }
