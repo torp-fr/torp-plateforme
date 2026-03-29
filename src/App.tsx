@@ -4,7 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AppProvider, useApp } from "@/context/AppContext";
+import { AppProvider } from "@/context/AppContext";
 import { ErrorBoundary } from "@/components/error/ErrorBoundary";
 
 // Layouts - ISOLATED
@@ -53,26 +53,9 @@ import { PipelineHealthPage } from "./pages/admin/PipelineHealthPage";
 const queryClient = new QueryClient();
 
 const AppContent = () => {
-  const { isLoading } = useApp();
-
-  // Show a full-page spinner while auth initialises.
-  // This prevents route guards from redirecting to /login before the session
-  // has been read — which would cause a flash-of-unauthenticated-state.
-  if (isLoading) {
-    return (
-      <>
-        <Toaster />
-        <Sonner />
-        <div className="flex items-center justify-center h-screen bg-background">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
-            <p className="text-muted-foreground text-sm">Initialisation...</p>
-          </div>
-        </div>
-      </>
-    );
-  }
-
+  // Auth initialization is handled inside AdminRoute and ProtectedRoute —
+  // they each show a spinner while isLoading is true, then redirect if needed.
+  // Public routes (/, /login, /register, …) render immediately without gating.
   return (
     <>
       <Toaster />
