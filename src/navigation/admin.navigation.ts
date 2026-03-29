@@ -5,13 +5,20 @@
  */
 
 export const ADMIN_ROUTES = {
-  DASHBOARD:      '/admin',
-  SYSTEM:         '/admin/system',
-  INTELLIGENCE:   '/admin/intelligence',
-  ORCHESTRATIONS: '/admin/orchestrations',
-  KNOWLEDGE:      '/admin/knowledge',
-  SECURITY:       '/admin/security',
-  SETTINGS:       '/admin/settings',
+  DASHBOARD:       '/admin',
+  SYSTEM:          '/admin/system',
+  INTELLIGENCE:    '/admin/intelligence',
+  ORCHESTRATIONS:  '/admin/orchestrations',
+  KNOWLEDGE:       '/admin/knowledge',
+  SECURITY:        '/admin/security',
+  SETTINGS:        '/admin/settings',
+  // Phase 4 — PROMPT G
+  API_MONITORING:  '/admin/api-monitoring',
+  COST_TRACKING:   '/admin/costs',
+  PIPELINE_HEALTH: '/admin/pipeline-health',
+  // H3-ENRICHI — enrichment tools
+  RENOVATION_AIDS:  '/admin/aids',
+  NATURAL_HAZARDS:  '/admin/hazards',
 } as const;
 
 export const ADMIN_ROUTE_PATHS = Object.values(ADMIN_ROUTES);

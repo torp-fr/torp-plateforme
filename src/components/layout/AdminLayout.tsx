@@ -21,6 +21,12 @@ import {
   Plug,
   FlaskConical,
   Users,
+  Activity,
+  DollarSign,
+  HeartPulse,
+  Shield,
+  Euro,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
@@ -98,6 +104,44 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
     href: '/admin/settings',
     icon: Settings,
     label: 'Settings',
+  },
+  // Phase 4 — PROMPT G
+  {
+    id: 'api-monitoring',
+    href: '/admin/api-monitoring',
+    icon: Activity,
+    label: 'Surveillance API',
+  },
+  {
+    id: 'costs',
+    href: '/admin/costs',
+    icon: DollarSign,
+    label: 'Suivi des Coûts',
+  },
+  {
+    id: 'pipeline-health',
+    href: '/admin/pipeline-health',
+    icon: HeartPulse,
+    label: 'Santé Pipeline',
+  },
+  // H3-ENRICHI — enrichment tools
+  {
+    id: 'aids',
+    href: '/admin/aids',
+    icon: Euro,
+    label: 'Aides Rénovation',
+  },
+  {
+    id: 'hazards',
+    href: '/admin/hazards',
+    icon: AlertTriangle,
+    label: 'Risques Naturels',
+  },
+  {
+    id: 'security',
+    href: '/admin/security',
+    icon: Shield,
+    label: 'Sécurité',
   },
 ];
 
