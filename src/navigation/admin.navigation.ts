@@ -16,9 +16,6 @@ export const ADMIN_ROUTES = {
   API_MONITORING:  '/admin/api-monitoring',
   COST_TRACKING:   '/admin/costs',
   PIPELINE_HEALTH: '/admin/pipeline-health',
-  // H3-ENRICHI — enrichment tools
-  RENOVATION_AIDS:  '/admin/aids',
-  NATURAL_HAZARDS:  '/admin/hazards',
 } as const;
 
 export const ADMIN_ROUTE_PATHS = Object.values(ADMIN_ROUTES);

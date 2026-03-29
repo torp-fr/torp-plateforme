@@ -1,20 +1,16 @@
 /**
- * CostTrackingPage — Tab 10: API cost tracking with multi-currency support.
- * Shows global cost table, per-API breakdown + recharts bar chart.
- * Spend alerts at 80%, 95%, 100% of monthly budget.
+ * CostTrackingPage — API cost tracking with period + multi-currency support.
+ * Reads directly from api_costs table. Budget alerts at 80/95/100%.
  * Auto-refreshes every 60s.
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
+  PieChart, Pie, Cell,
 } from 'recharts';
-import {
-  DollarSign, TrendingUp, TrendingDown, Minus, AlertTriangle, RefreshCw,
-} from 'lucide-react';
+import { DollarSign, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -37,45 +33,84 @@ interface CostSummary {
   total_cost: number;
   total_cost_usd: number;
   cost_by_api: CostBreakdown[];
-  top_5: CostBreakdown[];
 }
 
 type Currency = 'EUR' | 'USD' | 'GBP' | 'JPY' | 'CHF';
-type Period = 'today' | 'month' | 'all_time';
+type Period   = 'today' | 'month' | 'all_time';
 
-const MONTHLY_BUDGET_EUR = 500; // Configurable default
+const MONTHLY_BUDGET_EUR = 500;
 const CURRENCY_SYMBOLS: Record<Currency, string> = {
   EUR: '€', USD: '$', GBP: '£', JPY: '¥', CHF: 'CHF ',
 };
+// Approximate EUR conversion rates (USD base → EUR)
+const EUR_RATES: Record<Currency, number> = {
+  USD: 1.08, EUR: 1.0, GBP: 0.86, JPY: 164, CHF: 0.97,
+};
 const CHART_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316'];
+
+function periodCutoff(period: Period): string {
+  if (period === 'today') {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString();
+  }
+  if (period === 'month') {
+    const d = new Date();
+    d.setDate(1);
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString();
+  }
+  return new Date(0).toISOString();
+}
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export function CostTrackingPage() {
-  const [summary, setSummary] = useState<CostSummary | null>(null);
-  const [currency, setCurrency] = useState<Currency>('EUR');
-  const [period, setPeriod] = useState<Period>('month');
+  const [summary, setSummary]     = useState<CostSummary | null>(null);
+  const [currency, setCurrency]   = useState<Currency>('EUR');
+  const [period, setPeriod]       = useState<Period>('month');
   const [isLoading, setIsLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
   const symbol = CURRENCY_SYMBOLS[currency];
-  const budget = MONTHLY_BUDGET_EUR * (currency === 'USD' ? 1.08 : currency === 'GBP' ? 0.86 : 1.0);
+  const budgetInCurrency = MONTHLY_BUDGET_EUR * (currency === 'EUR' ? 1 : EUR_RATES[currency] / EUR_RATES['EUR']);
 
   const fetchData = useCallback(async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      const { data: rows } = await supabase
+        .from('api_costs')
+        .select('api_name, cost_usd')
+        .gte('recorded_at', periodCutoff(period));
 
-      const headers = { Authorization: `Bearer ${session.access_token}` };
-      const res = await fetch(
-        `/api/v1/admin/costs/summary?period=${period}&currency=${currency}`,
-        { headers }
-      );
+      if (rows) {
+        // Aggregate by API
+        const byCost: Record<string, number> = {};
+        for (const row of rows) {
+          byCost[row.api_name] = (byCost[row.api_name] ?? 0) + (row.cost_usd as number);
+        }
 
-      if (res.ok) {
-        const json = await res.json();
-        setSummary(json);
+        const usdToTarget = 1 / EUR_RATES['USD'] * EUR_RATES[currency];
+        const totalUsd = Object.values(byCost).reduce((s, c) => s + c, 0);
+        const totalConverted = totalUsd * usdToTarget;
+
+        const costByApi: CostBreakdown[] = Object.entries(byCost)
+          .map(([api_name, cost_usd]) => ({
+            api_name,
+            cost_usd,
+            cost_in_currency: cost_usd * usdToTarget,
+            percentage: totalUsd > 0 ? (cost_usd / totalUsd) * 100 : 0,
+          }))
+          .sort((a, b) => b.cost_usd - a.cost_usd);
+
+        setSummary({
+          period,
+          currency,
+          total_cost: totalConverted,
+          total_cost_usd: totalUsd,
+          cost_by_api: costByApi,
+        });
       }
+
       setLastRefresh(new Date());
     } finally {
       setIsLoading(false);
@@ -89,7 +124,9 @@ export function CostTrackingPage() {
     return () => clearInterval(id);
   }, [fetchData]);
 
-  const budgetPct = summary ? (summary.total_cost / budget) * 100 : 0;
+  const budgetPct  = summary && period === 'month'
+    ? (summary.total_cost / budgetInCurrency) * 100
+    : 0;
   const alertLevel =
     budgetPct >= 100 ? 'exceeded'
     : budgetPct >= 95 ? 'critical'
@@ -100,7 +137,9 @@ export function CostTrackingPage() {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-64" />
-        <div className="grid grid-cols-2 gap-4"><Skeleton className="h-24" /><Skeleton className="h-24" /></div>
+        <div className="grid grid-cols-2 gap-4">
+          <Skeleton className="h-24" /><Skeleton className="h-24" />
+        </div>
         <Skeleton className="h-64" />
       </div>
     );
@@ -149,7 +188,7 @@ export function CostTrackingPage() {
         </div>
       </div>
 
-      {/* Spend Alert Banner */}
+      {/* Budget alert */}
       {alertLevel && (
         <div className={`flex items-center gap-3 p-4 rounded-lg border ${
           alertLevel === 'exceeded' ? 'bg-red-50 border-red-200 text-red-800'
@@ -158,25 +197,27 @@ export function CostTrackingPage() {
         }`}>
           <AlertTriangle className="h-5 w-5 flex-shrink-0" />
           <span className="font-medium">
-            {alertLevel === 'exceeded' && `Budget mensuel dépassé ! ${symbol}${summary?.total_cost.toFixed(2)} / ${symbol}${budget.toFixed(0)}`}
-            {alertLevel === 'critical' && `95% du budget mensuel atteint — ${symbol}${summary?.total_cost.toFixed(2)} / ${symbol}${budget.toFixed(0)}`}
-            {alertLevel === 'warning'  && `80% du budget mensuel atteint — ${symbol}${summary?.total_cost.toFixed(2)} / ${symbol}${budget.toFixed(0)}`}
+            {alertLevel === 'exceeded' && `Budget mensuel dépassé ! ${symbol}${summary?.total_cost.toFixed(2)} / ${symbol}${budgetInCurrency.toFixed(0)}`}
+            {alertLevel === 'critical' && `95% du budget mensuel atteint — ${symbol}${summary?.total_cost.toFixed(2)} / ${symbol}${budgetInCurrency.toFixed(0)}`}
+            {alertLevel === 'warning'  && `80% du budget mensuel atteint — ${symbol}${summary?.total_cost.toFixed(2)} / ${symbol}${budgetInCurrency.toFixed(0)}`}
           </span>
         </div>
       )}
 
-      {/* KPI Cards */}
+      {/* KPI cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Coût total ({period === 'today' ? "aujourd'hui" : period === 'month' ? 'ce mois' : 'total'})</p>
+            <p className="text-sm text-muted-foreground">
+              Coût total ({period === 'today' ? "aujourd'hui" : period === 'month' ? 'ce mois' : 'total'})
+            </p>
             <p className="text-3xl font-bold mt-1">
               {symbol}{(summary?.total_cost ?? 0).toFixed(2)}
             </p>
             {period === 'month' && (
               <div className="mt-2">
                 <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                  <span>Budget</span>
+                  <span>Budget {symbol}{budgetInCurrency.toFixed(0)}</span>
                   <span>{Math.round(budgetPct)}%</span>
                 </div>
                 <div className="h-2 rounded-full bg-muted overflow-hidden">
@@ -216,11 +257,9 @@ export function CostTrackingPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Cost Table */}
+        {/* Cost table */}
         <Card>
-          <CardHeader>
-            <CardTitle>Détail par API</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Détail par API</CardTitle></CardHeader>
           <CardContent>
             {apis.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">
@@ -263,24 +302,19 @@ export function CostTrackingPage() {
           </CardContent>
         </Card>
 
-        {/* Pie Chart */}
+        {/* Pie chart */}
         {apis.length > 0 && (
           <Card>
-            <CardHeader>
-              <CardTitle>Répartition des coûts</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Répartition des coûts</CardTitle></CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={260}>
                 <PieChart>
                   <Pie
                     data={apis.map(a => ({ name: a.api_name, value: a.cost_in_currency }))}
-                    cx="50%"
-                    cy="50%"
+                    cx="50%" cy="50%"
                     outerRadius={90}
                     dataKey="value"
-                    label={({ name, percent }) =>
-                      `${name} ${(percent * 100).toFixed(0)}%`
-                    }
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                   >
                     {apis.map((_, i) => (
                       <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
@@ -294,12 +328,10 @@ export function CostTrackingPage() {
         )}
       </div>
 
-      {/* Bar Chart — top 5 */}
+      {/* Bar chart — top 7 */}
       {apis.length > 1 && (
         <Card>
-          <CardHeader>
-            <CardTitle>Top APIs par coût</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Top APIs par coût</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={apis.slice(0, 7).map(a => ({ name: a.api_name, cost: a.cost_in_currency }))}>

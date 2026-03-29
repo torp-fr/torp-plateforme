@@ -24,9 +24,7 @@ import {
   Activity,
   DollarSign,
   HeartPulse,
-  Shield,
-  Euro,
-  AlertTriangle,
+
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
@@ -123,25 +121,6 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
     href: '/admin/pipeline-health',
     icon: HeartPulse,
     label: 'Santé Pipeline',
-  },
-  // H3-ENRICHI — enrichment tools
-  {
-    id: 'aids',
-    href: '/admin/aids',
-    icon: Euro,
-    label: 'Aides Rénovation',
-  },
-  {
-    id: 'hazards',
-    href: '/admin/hazards',
-    icon: AlertTriangle,
-    label: 'Risques Naturels',
-  },
-  {
-    id: 'security',
-    href: '/admin/security',
-    icon: Shield,
-    label: 'Sécurité',
   },
 ];
 

@@ -49,9 +49,6 @@ import { KnowledgeControlCenter } from "./features/knowledge/KnowledgeControlCen
 import { APIMonitoringPage } from "./pages/admin/APIMonitoringPage";
 import { CostTrackingPage } from "./pages/admin/CostTrackingPage";
 import { PipelineHealthPage } from "./pages/admin/PipelineHealthPage";
-import { SecurityPage } from "./pages/admin/SecurityPage";
-import RenovationAidsPage from "./pages/admin/RenovationAidsPage";
-import NaturalHazardsPage from "./pages/admin/NaturalHazardsPage";
 
 const queryClient = new QueryClient();
 
@@ -111,9 +108,6 @@ const AppContent = () => {
               <Route path="api-monitoring" element={<APIMonitoringPage />} />
               <Route path="costs" element={<CostTrackingPage />} />
               <Route path="pipeline-health" element={<PipelineHealthPage />} />
-              <Route path="security" element={<SecurityPage />} />
-              <Route path="aids" element={<RenovationAidsPage />} />
-              <Route path="hazards" element={<NaturalHazardsPage />} />
             </Route>
           </Route>
 
