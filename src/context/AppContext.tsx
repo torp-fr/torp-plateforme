@@ -142,12 +142,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const initAuth = async () => {
       try {
+        log('[AppContext] Starting auth initialization...');
+
         // STEP 1: Get session
         const { data } = await supabase.auth.getSession();
         const session = data?.session;
 
         if (!session) {
-          // No session → no user
+          log('[AppContext] No session found → user is null');
           if (isMounted) {
             setUser(null);
             setIsAuthenticated(false);
@@ -155,11 +157,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return;
         }
 
+        log('[AppContext] Session found, fetching profile for', session.user.id);
+
         // STEP 2: Fetch profile synchronously before rendering protected routes
         const userProfile = await authService.getUserProfile(session.user.id);
 
         if (!userProfile) {
-          // Session exists but no profile → no user
+          log('[AppContext] No profile found → user is null');
           if (isMounted) {
             setUser(null);
             setIsAuthenticated(false);
@@ -170,9 +174,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!isMounted) return;
 
         // STEP 3: Set complete user with isAdmin calculated
-        console.log('[Auth] Role received:', userProfile.role);
-        const isAdmin = userProfile.role?.toLowerCase() === 'admin';
-        console.log('[Auth] isAdmin calculated:', isAdmin);
+        log('[AppContext] Role received:', userProfile.role);
+        const isAdmin =
+          userProfile.role?.toLowerCase() === 'admin' ||
+          userProfile.role?.toLowerCase() === 'super_admin';
+        log('[AppContext] isAdmin calculated:', isAdmin);
+
+        log('[AppContext] Auth complete:', {
+          userId: session.user.id,
+          email: session.user.email,
+          role: userProfile.role,
+          isAdmin,
+        });
 
         setUser({
           id: session.user.id,
@@ -183,7 +196,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setUserType(userProfile.type);
         setIsAuthenticated(true);
       } catch (err) {
-        console.error('[Auth] Initialization error:', err);
+        console.error('[AppContext] Auth initialization error:', err);
         if (isMounted) {
           setUser(null);
           setIsAuthenticated(false);
@@ -191,6 +204,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } finally {
         // STEP 4: Always stop loading when initialization completes
         if (isMounted) {
+          log('[AppContext] setIsLoading(false)');
           setIsLoading(false);
         }
       }
@@ -206,12 +220,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         (_event, session) => {
           if (!isMounted) return;
 
+          log('[AppContext] onAuthStateChange:', _event);
+
           if (!session) {
-            // User logged out
+            log('[AppContext] onAuthStateChange: logged out');
             setUser(null);
             setIsAuthenticated(false);
             setProjects([]);
             setCurrentProject(null);
+          } else if (_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED') {
+            // Profile fetch on external login (e.g. second tab, OAuth callback)
+            authService.getUserProfile(session.user.id)
+              .then(profile => {
+                if (!isMounted || !profile) return;
+                const isAdm =
+                  profile.role?.toLowerCase() === 'admin' ||
+                  profile.role?.toLowerCase() === 'super_admin';
+                setUser({
+                  id: session.user.id,
+                  email: session.user.email || 'unknown',
+                  ...profile,
+                  isAdmin: isAdm,
+                });
+                setUserType(profile.type);
+                setIsAuthenticated(true);
+              })
+              .catch(err => {
+                console.error('[AppContext] onAuthStateChange profile fetch failed:', err);
+              });
           }
         }
       );

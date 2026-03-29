@@ -4,7 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AppProvider } from "@/context/AppContext";
+import { AppProvider, useApp } from "@/context/AppContext";
 import { ErrorBoundary } from "@/components/error/ErrorBoundary";
 
 // Layouts - ISOLATED
@@ -46,10 +46,33 @@ import { KnowledgeBasePage } from "./pages/admin/KnowledgeBasePage";
 import { AdminUsersPage } from "./pages/admin/AdminUsersPage";
 import { AdminSettingsPage } from "./pages/admin/AdminSettingsPage";
 import { KnowledgeControlCenter } from "./features/knowledge/KnowledgeControlCenter";
+import { APIMonitoringPage } from "./pages/admin/APIMonitoringPage";
+import { CostTrackingPage } from "./pages/admin/CostTrackingPage";
+import { PipelineHealthPage } from "./pages/admin/PipelineHealthPage";
 
 const queryClient = new QueryClient();
 
 const AppContent = () => {
+  const { isLoading } = useApp();
+
+  // Show a full-page spinner while auth initialises.
+  // This prevents route guards from redirecting to /login before the session
+  // has been read — which would cause a flash-of-unauthenticated-state.
+  if (isLoading) {
+    return (
+      <>
+        <Toaster />
+        <Sonner />
+        <div className="flex items-center justify-center h-screen bg-background">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
+            <p className="text-muted-foreground text-sm">Initialisation...</p>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <Toaster />
@@ -82,6 +105,9 @@ const AppContent = () => {
               <Route path="knowledge-debug" element={<KnowledgeControlCenter />} />
               <Route path="users" element={<AdminUsersPage />} />
               <Route path="settings" element={<AdminSettingsPage />} />
+              <Route path="api-monitoring" element={<APIMonitoringPage />} />
+              <Route path="costs" element={<CostTrackingPage />} />
+              <Route path="pipeline-health" element={<PipelineHealthPage />} />
             </Route>
           </Route>
 
